@@ -43,11 +43,17 @@ service cloud.firestore {
       // Only the user can create their own profile
       allow create: if isOwner(userId);
 
-      // Owner can update, OR anyone can update device token fields only
-      // (This is needed for logging out other device from login screen)
+      // Owner can update, OR anyone can update device-related fields only
+      // (This is needed for WhatsApp-style single device login: logout mechanism)
       allow update: if isOwner(userId) ||
-                       // Allow updating activeDeviceToken and deviceName (for logout mechanism)
-                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeDeviceToken', 'deviceName']));
+                       // Allow updating device fields for logout mechanism
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'activeDeviceToken',
+                         'deviceName',
+                         'deviceInfo',
+                         'forceLogout',
+                         'lastSessionUpdate'
+                       ]));
 
       // Only owner can delete their profile
       allow delete: if isOwner(userId);
