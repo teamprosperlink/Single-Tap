@@ -1014,7 +1014,7 @@ class AuthService {
       final deviceInfo = await _getDeviceInfo();
 
       print('[AuthService] Calling Cloud Function: forceLogoutOtherDevices');
-      print('[AuthService] New device token: ${localToken.substring(0, 8)}...');
+      print('[AuthService] New device token: ${localToken?.substring(0, 8) ?? "NULL"}...');
 
       // Call Callable Cloud Function to handle force logout securely
       // The Cloud Function runs with admin privileges, bypassing Firestore security rules
@@ -1028,13 +1028,18 @@ class AuthService {
           'deviceInfo': deviceInfo,
         });
 
-        if (result.data['success'] == true) {
-          print(
-            '[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!',
-          );
+        if (result.data != null) {
+          final data = result.data as Map<dynamic, dynamic>?;
+          if (data?['success'] == true) {
+            print(
+              '[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!',
+            );
+          } else {
+            throw Exception(
+                data?['message'] ?? 'Cloud Function returned error');
+          }
         } else {
-          throw Exception(
-              result.data['message'] ?? 'Cloud Function returned error');
+          throw Exception('No response from Cloud Function');
         }
       } catch (e) {
         print(
