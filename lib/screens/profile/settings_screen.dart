@@ -744,16 +744,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               TextButton(
                 onPressed: () async {
-                  // Capture navigator before popping dialog
-                  final navigator = Navigator.of(context, rootNavigator: true);
                   Navigator.pop(context);
+
+                  // Call signOut - this triggers StreamBuilder to detect logout
                   await authService.signOut();
-                  navigator.pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => const ChooseAccountTypeScreen(),
-                    ),
-                    (route) => false,
-                  );
+
+                  // StreamBuilder should rebuild and handle navigation
+                  // Give it time to detect the auth state change
+                  await Future.delayed(const Duration(milliseconds: 1000));
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Logout'),
@@ -910,6 +908,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const Divider(),
             ListTile(
+              leading: const Icon(Icons.devices_outlined, color: Colors.blue),
+              title: const Text(
+                'Manage Devices',
+                style: TextStyle(color: Colors.blue),
+              ),
+              subtitle: const Text(
+                'View and logout from devices',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_right, color: Colors.blue),
+              onTap: () {
+                Navigator.pop(context);
+                _showManageDevices(context, authService);
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.orange),
               title: const Text(
                 'Logout',
@@ -954,6 +969,260 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // Force logout another device by clearing its active device token
+  Future<void> _forceLogoutDevice(BuildContext context, String userId) async {
+    try {
+      // Delete the activeDeviceToken from Firestore
+      // This will trigger the Firestore listener on the other device
+      // and it will automatically logout
+      await _firestore.collection('users').doc(userId).update({
+        'activeDeviceToken': FieldValue.delete(),
+        'deviceInfo': FieldValue.delete(),
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Device has been logged out remotely'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to logout device: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Manage Devices - View all logged-in devices and logout from other devices
+  void _showManageDevices(BuildContext context, AuthService authService) {
+    final userId = _currentUserId;
+    if (userId == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manage Devices'),
+        content: FutureBuilder<String?>(
+          future: authService.getLocalDeviceToken(),
+          builder: (context, localTokenSnapshot) {
+            return StreamBuilder<DocumentSnapshot>(
+              stream: _firestore.collection('users').doc(userId).snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const SizedBox(
+                    height: 100,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                final userData =
+                    snapshot.data?.data() as Map<String, dynamic>?;
+                if (userData == null) {
+                  return const Text('Unable to load device information');
+                }
+
+                final deviceInfo =
+                    userData['deviceInfo'] as Map<String, dynamic>? ?? {};
+                final activeDeviceToken =
+                    userData['activeDeviceToken'] as String?;
+                final localToken = localTokenSnapshot.data;
+
+                // Determine if this is the current device
+                final isCurrentDevice = activeDeviceToken != null &&
+                    localToken != null &&
+                    activeDeviceToken == localToken;
+
+                final deviceName =
+                    deviceInfo['deviceName'] as String? ?? 'This Device';
+                final deviceModel =
+                    deviceInfo['deviceModel'] as String? ?? 'Unknown Model';
+                final platform =
+                    deviceInfo['platform'] as String? ?? 'Unknown';
+                final osVersion =
+                    deviceInfo['osVersion'] as String? ?? 'Unknown';
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Active Device',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.blue.withValues(alpha: 0.05),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                platform == 'android'
+                                    ? Icons.android
+                                    : Icons.phone_iphone,
+                                color: Colors.blue,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      deviceName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$deviceModel • $platform $osVersion',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isCurrentDevice)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'Current',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Last active: Just now',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (!isCurrentDevice)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await _forceLogoutDevice(context, userId);
+                              },
+                              icon: const Icon(Icons.logout),
+                              label: const Text('Logout This Device'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    const Text(
+                      'Security Info',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.amber[700],
+                            size: 18,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Only one device can be logged in at a time. Logging in on another device will automatically logout this device.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.amber[900],
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Logout confirmation dialog
   void _showLogoutDialog(BuildContext context, AuthService authService) {
     showDialog(
@@ -968,16 +1237,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              // Capture navigator before popping dialog
-              final navigator = Navigator.of(context, rootNavigator: true);
               Navigator.pop(context);
+
+              // Call signOut - this triggers StreamBuilder to detect logout
               await authService.signOut();
-              navigator.pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const ChooseAccountTypeScreen(),
-                ),
-                (route) => false,
-              );
+
+              // StreamBuilder should rebuild and handle navigation
+              // Give it time to detect the auth state change
+              await Future.delayed(const Duration(milliseconds: 1000));
             },
             style: TextButton.styleFrom(foregroundColor: Colors.orange),
             child: const Text('Logout'),

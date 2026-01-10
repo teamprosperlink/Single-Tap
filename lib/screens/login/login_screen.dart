@@ -1,15 +1,15 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_service.dart' show AuthService, ActiveDeviceInfo;
+import '../../services/auth_service.dart' show AuthService;
 import '../../services/professional_service.dart';
 import '../../services/business_service.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
 import '../../widgets/country_code_picker_sheet.dart';
+import '../../widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
 import '../professional/professional_setup_screen.dart';
 import '../business/business_setup_screen.dart';
@@ -46,6 +46,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isOtpSent = false;
   String? _verificationId;
   final _otpController = TextEditingController();
+
+  // Store user ID for device logout
+  String? _pendingUserId;
 
   // Country code data
   String _selectedCountryCode = '+91';
@@ -291,29 +294,7 @@ class _LoginScreenState extends State<LoginScreen>
             await _navigateAfterAuth(isNewUser: true);
           }
         } catch (e) {
-          // Check if it's an "already logged in" error
-          final errorStr = e.toString();
-          if (errorStr.contains('ALREADY_LOGGED_IN:') && mounted) {
-            // Parse: "Exception: ALREADY_LOGGED_IN:DeviceName:Timestamp:CredentialType:Credential:UID"
-            // After split: [Exception, ALREADY_LOGGED_IN, DeviceName, Timestamp, CredentialType, Credential, UID]
-            final parts = errorStr.split(':');
-            if (parts.length >= 4) {
-              final deviceName = parts[2].trim(); // DeviceName is at index 2
-              final loginTimeMs = int.tryParse(parts[3].replaceAll(')', '').trim()) ?? DateTime.now().millisecondsSinceEpoch;
-              final loginTime = DateTime.fromMillisecondsSinceEpoch(loginTimeMs);
-              final credentialType = parts.length >= 5 ? parts[4].trim() : 'phone';
-              final credential = parts.length >= 6 ? parts[5].replaceAll(')', '').trim() : _emailOrPhoneController.text.trim();
-              final uid = parts.length >= 7 ? parts[6].replaceAll(')', '').trim() : null;
-              final deviceInfo = ActiveDeviceInfo(
-                deviceName: deviceName,
-                deviceModel: 'Unknown',
-                loginTime: loginTime,
-              );
-              _showActiveSessionPopup(deviceInfo, credential: credential, credentialType: credentialType, uid: uid);
-              _resetOtpState();
-            }
-          }
-          // Other errors: Auto-verify failed, user will enter OTP manually
+          // Auto-verify failed, user will enter OTP manually
         }
       },
     );
@@ -348,37 +329,27 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       if (mounted) {
-        final errorStr = e.toString();
-        // Check if it's an "already logged in" error from phone OTP verification
-        if (errorStr.contains('ALREADY_LOGGED_IN:')) {
-          // Parse: "Exception: ALREADY_LOGGED_IN:DeviceName:Timestamp:CredentialType:Credential:UID"
-          // After split: [Exception, ALREADY_LOGGED_IN, DeviceName, Timestamp, CredentialType, Credential, UID]
-          final parts = errorStr.split(':');
-          if (parts.length >= 4) {
-            final deviceName = parts[2].trim(); // DeviceName is at index 2
-            final loginTimeMs = int.tryParse(parts[3].replaceAll(')', '').trim()) ?? DateTime.now().millisecondsSinceEpoch;
-            final loginTime = DateTime.fromMillisecondsSinceEpoch(loginTimeMs);
-            final credentialType = parts.length >= 5 ? parts[4].trim() : 'phone';
-            final credential = parts.length >= 6 ? parts[5].replaceAll(')', '').trim() : _emailOrPhoneController.text.trim();
-            final uid = parts.length >= 7 ? parts[6].replaceAll(')', '').trim() : null;
-            final deviceInfo = ActiveDeviceInfo(
-              deviceName: deviceName,
-              deviceModel: 'Unknown',
-              loginTime: loginTime,
-            );
-            _showActiveSessionPopup(deviceInfo, credential: credential, credentialType: credentialType, uid: uid);
-            // Reset OTP state so user can try again or use different number
-            _resetOtpState();
-          } else {
-            _showErrorSnackBar('This account is already logged in on another device.');
+        String errorMsg = e.toString().replaceAll('Exception: ', '');
+        if (errorMsg.contains('ALREADY_LOGGED_IN')) {
+          // Extract device name and user ID from error message
+          // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
+          final parts = errorMsg.split(':');
+          String deviceName = 'Another Device';
+          String? userId;
+
+          if (parts.length >= 2) {
+            deviceName = parts.sublist(1, parts.length - 1).join(':').trim();
           }
-        } else if (errorStr.contains('[SessionCheck]')) {
-          // Device session check error - likely network or Firestore issue
-          HapticFeedback.heavyImpact();
-          _showErrorSnackBar('Unable to verify device session. Please check your internet connection and try again.');
+          if (parts.length >= 3) {
+            userId = parts.last.trim();
+          }
+
+          // Store the user ID for logout
+          _pendingUserId = userId ?? _authService.currentUser?.uid;
+          _showDeviceLoginDialog(deviceName);
         } else {
           HapticFeedback.heavyImpact();
-          _showErrorSnackBar(errorStr.replaceAll('Exception: ', ''));
+          _showErrorSnackBar(errorMsg);
         }
       }
     } finally {
@@ -451,35 +422,27 @@ class _LoginScreenState extends State<LoginScreen>
         }
       } catch (e) {
         if (mounted) {
-          final errorStr = e.toString();
-          // Check if it's an "already logged in" error from email sign-in
-          if (errorStr.contains('ALREADY_LOGGED_IN:')) {
-            // Parse: "Exception: ALREADY_LOGGED_IN:DeviceName:Timestamp:CredentialType:Credential:UID"
-            // After split: [Exception, ALREADY_LOGGED_IN, DeviceName, Timestamp, CredentialType, Credential, UID]
-            final parts = errorStr.split(':');
-            if (parts.length >= 4) {
-              final deviceName = parts[2].trim(); // DeviceName is at index 2
-              final loginTimeMs = int.tryParse(parts[3].replaceAll(')', '').trim()) ?? DateTime.now().millisecondsSinceEpoch;
-              final loginTime = DateTime.fromMillisecondsSinceEpoch(loginTimeMs);
-              final credentialType = parts.length >= 5 ? parts[4].trim() : 'email';
-              final credential = parts.length >= 6 ? parts[5].replaceAll(')', '').trim() : _emailOrPhoneController.text.trim();
-              final uid = parts.length >= 7 ? parts[6].replaceAll(')', '').trim() : null;
-              final deviceInfo = ActiveDeviceInfo(
-                deviceName: deviceName,
-                deviceModel: 'Unknown',
-                loginTime: loginTime,
-              );
-              _showActiveSessionPopup(deviceInfo, credential: credential, credentialType: credentialType, uid: uid);
-            } else {
-              _showErrorSnackBar('This account is already logged in on another device.');
+          String errorMsg = e.toString().replaceAll('Exception: ', '');
+          if (errorMsg.contains('ALREADY_LOGGED_IN')) {
+            // Extract device name and user ID from error message
+            // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
+            final parts = errorMsg.split(':');
+            String deviceName = 'Another Device';
+            String? userId;
+
+            if (parts.length >= 2) {
+              deviceName = parts.sublist(1, parts.length - 1).join(':').trim();
             }
-          } else if (errorStr.contains('[SessionCheck]')) {
-            // Device session check error - likely network or Firestore issue
-            HapticFeedback.heavyImpact();
-            _showErrorSnackBar('Unable to verify device session. Please check your internet connection and try again.');
+            if (parts.length >= 3) {
+              userId = parts.last.trim();
+            }
+
+            // Store the user ID for logout
+            _pendingUserId = userId ?? _authService.currentUser?.uid;
+            _showDeviceLoginDialog(deviceName);
           } else {
             HapticFeedback.heavyImpact();
-            _showErrorSnackBar(errorStr.replaceAll('Exception: ', ''));
+            _showErrorSnackBar(errorMsg);
           }
         }
       } finally {
@@ -594,35 +557,27 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (e) {
       if (mounted) {
-        final errorStr = e.toString();
-        // Check if it's an "already logged in" error from Google sign-in
-        if (errorStr.contains('ALREADY_LOGGED_IN:')) {
-          // Parse: "Exception: ALREADY_LOGGED_IN:DeviceName:Timestamp:CredentialType:Credential:UID"
-          // After split: [Exception, ALREADY_LOGGED_IN, DeviceName, Timestamp, CredentialType, Credential, UID]
-          final parts = errorStr.split(':');
-          if (parts.length >= 4) {
-            final deviceName = parts[2].trim(); // DeviceName is at index 2
-            final loginTimeMs = int.tryParse(parts[3].replaceAll(')', '').trim()) ?? DateTime.now().millisecondsSinceEpoch;
-            final loginTime = DateTime.fromMillisecondsSinceEpoch(loginTimeMs);
-            final credentialType = parts.length >= 5 ? parts[4].trim() : 'email';
-            final credential = parts.length >= 6 ? parts[5].replaceAll(')', '').trim() : null;
-            final uid = parts.length >= 7 ? parts[6].replaceAll(')', '').trim() : null;
-            final deviceInfo = ActiveDeviceInfo(
-              deviceName: deviceName,
-              deviceModel: 'Unknown',
-              loginTime: loginTime,
-            );
-            _showActiveSessionPopup(deviceInfo, credential: credential, credentialType: credentialType, uid: uid);
-          } else {
-            _showErrorSnackBar('This account is already logged in on another device.');
+        String errorMsg = e.toString().replaceAll('Exception: ', '');
+        if (errorMsg.contains('ALREADY_LOGGED_IN')) {
+          // Extract device name and user ID from error message
+          // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
+          final parts = errorMsg.split(':');
+          String deviceName = 'Another Device';
+          String? userId;
+
+          if (parts.length >= 2) {
+            deviceName = parts.sublist(1, parts.length - 1).join(':').trim();
           }
-        } else if (errorStr.contains('[SessionCheck]')) {
-          // Device session check error - likely network or Firestore issue
-          HapticFeedback.heavyImpact();
-          _showErrorSnackBar('Unable to verify device session. Please check your internet connection and try again.');
+          if (parts.length >= 3) {
+            userId = parts.last.trim();
+          }
+
+          // Store the user ID for logout
+          _pendingUserId = userId ?? _authService.currentUser?.uid;
+          _showDeviceLoginDialog(deviceName);
         } else {
           HapticFeedback.heavyImpact();
-          _showErrorSnackBar(errorStr.replaceAll('Exception: ', ''));
+          _showErrorSnackBar(errorMsg);
         }
       }
     } finally {
@@ -638,6 +593,41 @@ class _LoginScreenState extends State<LoginScreen>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+    );
+  }
+
+  void _showDeviceLoginDialog(String deviceName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => DeviceLoginDialog(
+        deviceName: deviceName,
+        onLogoutOtherDevice: () async {
+          try {
+            print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
+            // Logout from other devices and keep current device logged in
+            await _authService.logoutFromOtherDevices(userId: _pendingUserId);
+
+            // Close dialog
+            if (mounted) {
+              Navigator.pop(context);
+            }
+
+            // Wait a moment for Firestore to sync
+            await Future.delayed(const Duration(milliseconds: 300));
+
+            // Navigate to main app
+            if (mounted) {
+              await _navigateAfterAuth(isNewUser: false);
+            }
+          } catch (e) {
+            if (mounted) {
+              HapticFeedback.heavyImpact();
+              _showErrorSnackBar('Failed to logout from other device: ${e.toString()}');
+            }
+          }
+        },
+      ),
     );
   }
 
@@ -769,413 +759,29 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  /// Show popup when user is already logged in on another device
-  /// [credential] is the email or phone number used for login (for remote logout)
-  /// [credentialType] is either 'email' or 'phone'
-  /// [uid] is the user's UID for direct Firestore update (preferred method)
-  void _showActiveSessionPopup(ActiveDeviceInfo deviceInfo, {String? credential, String? credentialType, String? uid}) {
-    // Format date and time
-    final loginDate = deviceInfo.loginTime;
-    final day = loginDate.day.toString().padLeft(2, '0');
-    final month = loginDate.month.toString().padLeft(2, '0');
-    final year = loginDate.year;
-    final hour = loginDate.hour > 12 ? loginDate.hour - 12 : (loginDate.hour == 0 ? 12 : loginDate.hour);
-    final minute = loginDate.minute.toString().padLeft(2, '0');
-    final period = loginDate.hour >= 12 ? 'PM' : 'AM';
-    final formattedDate = '$day/$month/$year';
-    final formattedTime = '$hour:$minute $period';
+  void _onOtpBoxChanged(String value, int index) {
+    // Update UI
+    setState(() {});
 
-    // Start token check timer immediately
-    Timer? tokenCheckTimer;
-    print('[Dialog]  Starting token deletion detector for uid: $uid');
-
-    if (uid != null && uid.isNotEmpty) {
-      tokenCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-        try {
-          // Check if user is authenticated before attempting Firestore read
-          final currentUser = FirebaseAuth.instance.currentUser;
-          if (currentUser == null) {
-            print('[Dialog]  User not authenticated yet, skipping token check');
-            return;
-          }
-
-          // Read from server to bypass cache
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .get(const GetOptions(source: Source.server))
-              .timeout(const Duration(seconds: 3));
-
-          final token = doc.data()?['activeDeviceToken'];
-          print('[Dialog]  Server token check: ${token == null ? "NULL " : "EXISTS"}');
-
-          // If token deleted, sign out immediately
-          if (token == null || token.toString().isEmpty) {
-            print('[Dialog]  TOKEN DELETED DETECTED!');
-            timer.cancel();
-
-            // Sign out - triggers logout flow
-            await FirebaseAuth.instance.signOut();
-            print('[Dialog]  Signed out');
-          }
-        } catch (e) {
-          print('[Dialog]  Check error: $e');
-          // Don't stop timer on error, keep checking
-        }
-      });
+    // Move to next box when digit entered
+    if (value.isNotEmpty && index < 5) {
+      _otpFocusNodes[index + 1].requestFocus();
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        bool isLoggingOut = false;
-        bool logoutSuccess = false;
+    // Move to previous box on backspace when empty
+    if (value.isEmpty && index > 0) {
+      _otpFocusNodes[index - 1].requestFocus();
+    }
 
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1a1a2e).withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                        // Warning icon or success icon
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: logoutSuccess
-                                ? Colors.green.withValues(alpha: 0.15)
-                                : Colors.orange.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            logoutSuccess ? Icons.check_circle_rounded : Icons.devices_other_rounded,
-                            color: logoutSuccess ? Colors.green : Colors.orange,
-                            size: 40,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+    // Update the main OTP controller with combined value
+    String otp = _otpBoxControllers.map((c) => c.text).join();
+    _otpController.text = otp;
 
-                        // Title
-                        Text(
-                          logoutSuccess ? 'Logged Out Successfully' : 'Already Logged In',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Description
-                        Text(
-                          logoutSuccess
-                              ? 'The other device has been logged out. You can now login on this device.'
-                              : 'This account is already logged in on another device. Please logout from that device first.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 14,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Device info card (hide after logout success)
-                        if (!logoutSuccess) ...[
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                // Device name row
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.phone_android,
-                                      color: Colors.blue.withValues(alpha: 0.8),
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Device',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            deviceInfo.deviceName,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Date row
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today_rounded,
-                                      color: Colors.green.withValues(alpha: 0.8),
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Login Date',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            formattedDate,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Time row
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.access_time_rounded,
-                                      color: Colors.purple.withValues(alpha: 0.8),
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Login Time',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            formattedTime,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // Buttons
-                        if (logoutSuccess) ...[
-                          // Go to Login Button (after successful logout)
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text(
-                                'Go to Login',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ] else ...[
-                          // Buttons in a row: Cancel and Logout Another Device
-                          Row(
-                            children: [
-                              // Cancel Button
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: isLoggingOut ? null : () => Navigator.pop(dialogContext),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.white70,
-                                    side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Cancel',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Logout Another Device Button
-                              if (uid != null || (credential != null && credentialType != null)) ...[
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: isLoggingOut ? null : () async {
-                                      print('[Button] Logout Other Device clicked');
-                                      setDialogState(() {
-                                        isLoggingOut = true;
-                                      });
-
-                                      try {
-                                        // Delete the OTHER device's token from Firestore
-                                        if (uid != null) {
-                                          print('[Button] Deleting token for uid: $uid');
-                                          await FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(uid)
-                                              .update({
-                                                'activeDeviceToken': FieldValue.delete(),
-                                                'deviceName': FieldValue.delete(),
-                                              });
-                                          print('[Button] Token deleted from Firestore');
-
-                                          // Wait for Firestore propagation
-                                          print('[Button] Waiting 2000ms for Firestore propagation...');
-                                          await Future.delayed(const Duration(milliseconds: 2000));
-                                          print('[Button]  Propagation wait complete');
-                                        }
-
-                                        // Now sign out THIS device
-                                        print('[Button]  Signing out THIS device...');
-                                        await _authService.signOut();
-                                        print('[Button]  Device signed out');
-
-                                        if (mounted) {
-                                          setDialogState(() {
-                                            isLoggingOut = false;
-                                            logoutSuccess = true;
-                                          });
-                                          print('[Button]  Dialog state updated - showing success');
-                                        }
-                                      } catch (e) {
-                                        print('[Button]  Error: $e');
-                                        if (mounted) {
-                                          setDialogState(() {
-                                            isLoggingOut = false;
-                                          });
-                                          ScaffoldMessenger.of(this.context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Error: ${e.toString()}'),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    child: isLoggingOut
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text(
-                                            'Logout Other Device',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    // Auto-verify when all 6 digits entered
+    if (otp.length == 6) {
+      // Hide keyboard
+      FocusScope.of(context).unfocus();
+    }
   }
 
   @override
@@ -1947,31 +1553,6 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       ),
     );
-  }
-
-  void _onOtpBoxChanged(String value, int index) {
-    // Update UI
-    setState(() {});
-
-    // Move to next box when digit entered
-    if (value.isNotEmpty && index < 5) {
-      _otpFocusNodes[index + 1].requestFocus();
-    }
-
-    // Move to previous box on backspace when empty
-    if (value.isEmpty && index > 0) {
-      _otpFocusNodes[index - 1].requestFocus();
-    }
-
-    // Update the main OTP controller with combined value
-    String otp = _otpBoxControllers.map((c) => c.text).join();
-    _otpController.text = otp;
-
-    // Auto-verify when all 6 digits entered
-    if (otp.length == 6) {
-      // Hide keyboard
-      FocusScope.of(context).unfocus();
-    }
   }
 
   void _clearOtpBoxes() {

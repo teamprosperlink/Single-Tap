@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supper/screens/login/onboarding_screen.dart';
 
 import 'firebase_options.dart';
@@ -334,6 +333,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   bool _hasInitializedServices = false;
   String? _lastInitializedUserId;
   bool _isInitializing = false;
+  bool _isPerformingLogout = false; // Prevent multiple logout calls
   StreamSubscription<List<Map<String, dynamic>>>? _notificationSubscription;
   StreamSubscription<dynamic>? _deviceSessionSubscription;
   Timer? _sessionCheckTimer;
@@ -342,6 +342,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _isPerformingLogout = false;
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -363,8 +364,6 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         if (_authService.currentUser != null) {
           _locationService.onAppResume();
-          // Validate device session when app resumes
-          _validateDeviceOnResume();
         }
         break;
       case AppLifecycleState.paused:
@@ -376,72 +375,145 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     }
   }
 
-  /// Validate device session when app resumes from background
-  Future<void> _validateDeviceOnResume() async {
-    // Validate session, but handle logout manually to show message
-    final isValid = await _authService.validateDeviceSession(autoLogout: false);
-    if (!isValid && mounted) {
-      await _performRemoteLogout();
+  /// Start real-time monitoring for device session changes (WhatsApp-style)
+  /// Automatically logs out user if another device logs in with same account
+  Future<void> _startDeviceSessionMonitoring(String userId) async {
+    // Cancel any existing subscription
+    _deviceSessionSubscription?.cancel();
+
+    try {
+      // Get local device token
+      final localToken = await _authService.getLocalDeviceToken();
+      if (localToken == null) {
+        print('[DeviceSession] No local token found, skipping listener');
+        return;
+      }
+
+      print('[DeviceSession] ✓ Starting real-time listener for user: $userId');
+
+      // Listen to user document changes in real-time
+      _deviceSessionSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots()
+          .listen(
+            (snapshot) async {
+              if (!snapshot.exists) {
+                print('[DeviceSession] User document deleted');
+                if (mounted) {
+                  await _performRemoteLogout(
+                      'Account was deleted or access revoked');
+                }
+                return;
+              }
+
+              // Get the server data
+              final forceLogout = snapshot.data()?['forceLogout'] as bool? ?? false;
+              final serverToken = snapshot.data()?['activeDeviceToken'] as String?;
+
+              print(
+                  '[DeviceSession] 📡 Snapshot - forceLogout: $forceLogout, Local: ${localToken.substring(0, 8)}..., Server: ${serverToken?.substring(0, 8) ?? 'NULL'}...');
+
+              // PRIORITY 1: Check forceLogout flag FIRST (instant logout signal - WhatsApp style!)
+              // This check does NOT wait for debounce flag!
+              if (forceLogout == true) {
+                print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out IMMEDIATELY (WhatsApp-style)...');
+                _isPerformingLogout = true; // Set immediately
+                await _performRemoteLogout(
+                    'Logged out: Account accessed on another device');
+                return; // Don't check further conditions
+              }
+
+              // Prevent multiple logout calls for other checks
+              if (_isPerformingLogout) {
+                print('[DeviceSession] ⏳ Logout already in progress, skipping...');
+                return;
+              }
+
+              // PRIORITY 2: Check if server token is null/empty (device logout signal)
+              if (serverToken == null || serverToken.isEmpty) {
+                print('[DeviceSession] ❌ TOKEN EMPTY/NULL! Another device logged in! Logging out...');
+                if (mounted && !_isPerformingLogout) {
+                  _isPerformingLogout = true;
+                  await _performRemoteLogout(
+                      'Logged out: Account accessed on another device');
+                }
+                return; // Don't check further conditions
+              }
+
+              // PRIORITY 3: If server token doesn't match our local token, another device logged in
+              if (serverToken != localToken) {
+                print(
+                    '[DeviceSession] ❌ TOKEN MISMATCH DETECTED! Another device has this account! Logging out...');
+
+                final deviceInfo = snapshot.data()?['deviceInfo'] as Map<String, dynamic>?;
+                final deviceName = deviceInfo?['deviceName'] ?? 'Another Device';
+
+                if (mounted && !_isPerformingLogout) {
+                  _isPerformingLogout = true;
+                  await _performRemoteLogout(
+                      'Logged out: Account accessed on $deviceName');
+                }
+                return; // Don't check further conditions
+              }
+
+              // If we reach here, our token matches server token - we're the active device
+              print('[DeviceSession] ✓ Token matches - we are the active device');
+            },
+            onError: (e) {
+              print('[DeviceSession] ❌ Listener error: $e');
+              // Reconnect on next resume if error occurs
+            },
+          );
+    } catch (e) {
+      print('[DeviceSession] Error starting listener: $e');
     }
   }
 
-  /// Direct logout detection - starts IMMEDIATELY when user logs in
-  void _startDirectLogoutDetection(String userId) {
-    // ignore: avoid_print
-    print(
-      '[DirectDetection] ✓ Starting direct logout detection for user: $userId',
-    );
+  /// Perform remote logout when another device logs in
+  Future<void> _performRemoteLogout(String message) async {
+    print('[RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========');
+    print('[RemoteLogout] Reason: $message');
 
-    // Cancel any existing timers
+    // Cancel subscriptions FIRST (before logout) so we don't listen to our own logout
+    _deviceSessionSubscription?.cancel();
+    _sessionCheckTimer?.cancel();
     _autoCheckTimer?.cancel();
+    print('[RemoteLogout] ✓ All subscriptions cancelled');
 
-    // Check very FREQUENTLY - every 100ms
-    // This is the MAIN logout detection mechanism
-    _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 100), (
-      timer,
-    ) async {
+    // Force logout from Firebase IMMEDIATELY - this is critical!
+    try {
+      print('[RemoteLogout] 🔴 Starting signOut() - THIS WILL TRIGGER UI REFRESH!');
+
+      // Sign out from Firebase
+      await _authService.signOut();
+      print('[RemoteLogout] ✓ Sign out completed');
+
+      // Force rebuild by clearing initialization flags
+      // This ensures the StreamBuilder immediately detects the null user state
+      _hasInitializedServices = false;
+      _lastInitializedUserId = null;
+      _isInitializing = false;
+
+      print('[RemoteLogout] 🔄 Auth state changed to null - StreamBuilder will now show login page');
+    } catch (e) {
+      print('[RemoteLogout] Error during signout: $e');
+      // Try emergency logout
       try {
-        final isValid = await _authService.validateDeviceSession(
-          autoLogout: true,
-        );
+        print('[RemoteLogout] ⚠️ Attempting emergency signOut()...');
+        await _authService.firebaseAuth.signOut();
+        print('[RemoteLogout] ✓ Emergency sign out completed');
 
-        // Debug log every 10th check (once per second) to avoid spam
-        if (timer.tick % 10 == 0) {
-          // ignore: avoid_print
-          print('[DirectDetection] ✓ Tick ${timer.tick}: Session valid = $isValid');
-        }
-
-        if (!isValid) {
-          // ignore: avoid_print
-          print('[DirectDetection] ❌ SESSION INVALID - LOGOUT TRIGGERED!');
-          // ignore: avoid_print
-          print('[DirectDetection] Cancelling all timers and subscriptions');
-          timer.cancel();
-          _sessionCheckTimer?.cancel();
-          _deviceSessionSubscription?.cancel();
-          _autoCheckTimer?.cancel();
-
-          // CRITICAL: Call _performRemoteLogout to show snackbar and redirect to login
-          // ignore: avoid_print
-          print('[DirectDetection] ✓ Calling _performRemoteLogout()');
-          if (mounted) {
-            await _performRemoteLogout();
-          } else {
-            // ignore: avoid_print
-            print('[DirectDetection] ⚠️ Widget not mounted, skipping logout UI');
-          }
-        }
-      } catch (e) {
-        // ignore: avoid_print
-        print('[DirectDetection] ⚠️ Error during validation: $e');
-        // Don't cancel timer on error, keep checking
+        // Also clear flags on emergency logout
+        _hasInitializedServices = false;
+        _lastInitializedUserId = null;
+        _isInitializing = false;
+      } catch (emergency_e) {
+        print('[RemoteLogout] ❌ Emergency sign out also failed: $emergency_e');
       }
-    });
+    }
 
-    // ignore: avoid_print
-    print(
-      '[DirectDetection] ✓ Direct detection timer started (100ms interval)',
-    );
+    print('[RemoteLogout] ========== LOGOUT COMPLETE - LOGIN PAGE SHOWING NOW ==========');
   }
 
   @override
@@ -468,9 +540,10 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           print('[BUILD] User logged in: ${snapshot.data!.uid}');
           String uid = snapshot.data!.uid;
 
-          // START LOGOUT DETECTION IMMEDIATELY - called from StreamBuilder
-          print('[BUILD]   STARTING LOGOUT DETECTION NOW');
-          _startDirectLogoutDetection(uid);
+          // Start real-time device session monitoring (WhatsApp-style auto-logout)
+          if (_lastInitializedUserId != uid) {
+            _startDeviceSessionMonitoring(uid);
+          }
 
           if (!_hasInitializedServices || _lastInitializedUserId != uid) {
             if (!_isInitializing) {
@@ -494,50 +567,15 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         _hasInitializedServices = false;
         _lastInitializedUserId = null;
         _isInitializing = false;
+        _isPerformingLogout = false; // Reset flag on logout
 
         return const OnboardingScreen();
       },
     );
   }
 
-  /// Wraps MainNavigationScreen with periodic session validation
+  /// Build main navigation screen
   Widget _buildMainScreenWithValidation() {
-    print('[MainScreen] BUILD CALLED - checking timer...');
-
-    // Start validation timer if not already running
-    if (_autoCheckTimer == null || !_autoCheckTimer!.isActive) {
-      print('[MainScreen]   STARTING session validation timer (500ms)');
-      _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (
-        timer,
-      ) async {
-        print('[Validation]  Checking session...');
-
-        if (!mounted) {
-          print('[Validation] Widget not mounted, cancelling');
-          timer.cancel();
-          return;
-        }
-
-        try {
-          final isValid = await _authService.validateDeviceSession(
-            autoLogout: true,
-          );
-          print('[Validation] Session valid=$isValid');
-
-          if (!isValid) {
-            print('[Validation] SESSION INVALID - LOGGING OUT!  ');
-            timer.cancel();
-            _sessionCheckTimer?.cancel();
-            _deviceSessionSubscription?.cancel();
-          }
-        } catch (e) {
-          print('[Validation]  Error: $e');
-        }
-      });
-    } else {
-      print('[MainScreen] Timer already running');
-    }
-
     return const MainNavigationScreen();
   }
 
@@ -620,54 +658,6 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _autoCheckTimer?.cancel();
       print('[Init] Old subscriptions cleaned');
 
-      // Validate device session - check if user logged in from another device
-      // Silently logout if invalid - no message shown
-      final isValidDevice = await _authService.validateDeviceSession();
-      print('[Init] Device session validation result: $isValidDevice');
-      if (!isValidDevice) {
-        print('[Init] Device session invalid, returning early');
-        return;
-      }
-
-      // Start aggressive session validation - check every 200ms while app is open
-      // This will catch ANY logout attempt from other devices
-      print('[Init]  Starting AGGRESSIVE session validation every 200ms...');
-      _autoCheckTimer?.cancel();
-      int checkCount = 0;
-      _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 200), (
-        timer,
-      ) async {
-        checkCount++;
-        if (checkCount % 10 == 0) {
-          // Log every 10 checks (every 2 seconds)
-          print(
-            '[AggressiveCheck]  Check #$checkCount - validating session...',
-          );
-        }
-
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-
-        final isValid = await _authService.validateDeviceSession(
-          autoLogout: true,
-        );
-        if (!isValid) {
-          print('[AggressiveCheck]  SESSION INVALID - LOGOUT TRIGGERED!  ');
-          timer.cancel();
-          _sessionCheckTimer?.cancel();
-          _deviceSessionSubscription?.cancel();
-        }
-      });
-
-      // Start real-time device session listener for instant remote logout
-      // This MUST complete setup before continuing
-      // Moved up to ensure session is monitored immediately
-      print('[Init] Starting device session listener...');
-      await _startDeviceSessionListener();
-      print('[Init] Device session listener started successfully');
-
       try {
         await _profileService.ensureProfileExists().timeout(
           const Duration(seconds: 10),
@@ -685,45 +675,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
       // Start listening for notifications from other users
       _startNotificationListener();
-
-      // Start automatic session validation check every 1 second
-      // This is a simple backup to ensure logout happens
-      _startAutoSessionCheck();
     } catch (e) {
       // User services init failed
     }
-  }
-
-  /// Automatic session check - simple backup to ensure logout works
-  void _startAutoSessionCheck() {
-    // Cancel any existing auto check timer first
-    _autoCheckTimer?.cancel();
-
-    // Simple timer that checks session validity every 300ms (faster backup)
-    _autoCheckTimer = Timer.periodic(const Duration(milliseconds: 300), (
-      timer,
-    ) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      try {
-        // Simple validateDeviceSession call
-        final isValid = await _authService.validateDeviceSession(
-          autoLogout: true,
-        );
-        if (!isValid && mounted) {
-          print('[AutoCheck] Session invalid - logging out');
-          timer.cancel();
-          _sessionCheckTimer?.cancel();
-          _deviceSessionSubscription?.cancel();
-          await _authService.forceLogout();
-        }
-      } catch (e) {
-        // Continue checking
-      }
-    });
   }
 
   /// Listen for notifications from Firestore and show them locally
@@ -753,327 +707,5 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         );
   }
 
-  /// Listen for device session changes in real-time
-  /// Instantly logout user when they're logged out from another device
-  Future<void> _startDeviceSessionListener() async {
-    final userId = _authService.currentUser?.uid;
-    if (userId == null) {
-      // ignore: avoid_print
-      print('[DeviceSession]  No user ID, skipping listener setup');
-      return;
-    }
 
-    // Get local token FIRST before setting up stream
-    final localToken = await _authService.getLocalDeviceToken();
-    print(
-      '[DeviceSession] Retrieved local token: ${localToken?.substring(0, 6) ?? 'NULL'}...',
-    );
-    if (localToken == null || localToken.isEmpty) {
-      // ignore: avoid_print
-      print('[DeviceSession]  No local token found, skipping listener setup');
-      return;
-    }
-
-    // Verify token was saved to Firestore by checking current value
-    final currentDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
-    final firestoreToken = currentDoc.data()?['activeDeviceToken'] as String?;
-    print(
-      '[DeviceSession] Current Firestore token: ${firestoreToken?.substring(0, 6) ?? 'NULL'}...',
-    );
-    print(
-      '[DeviceSession] Local and Firestore match: ${localToken == firestoreToken}',
-    );
-
-    // ignore: avoid_print
-    print(
-      '[DeviceSession] ✓ Setting up listener for user: $userId with token: ${localToken.substring(0, 6)}...',
-    );
-
-    // IMPORTANT: Don't cancel polling timer here - we need BOTH polling AND stream
-    // Stream might not fire on slow networks, so polling catches it
-    _deviceSessionSubscription?.cancel();
-
-    // Only cancel old polling if it exists AND is running
-    if (_sessionCheckTimer != null && _sessionCheckTimer!.isActive) {
-      print('[DeviceSession] Cancelling old polling timer');
-      _sessionCheckTimer!.cancel();
-    }
-
-    // Start ULTRA-AGGRESSIVE polling - check every 150ms for real device compatibility
-    // Real devices often have slower network, so check more frequently
-    print(
-      '[DeviceSession] ✓ Starting polling timer (150ms interval for real device)',
-    );
-    _sessionCheckTimer = Timer.periodic(const Duration(milliseconds: 150), (
-      timer,
-    ) {
-      if (!mounted) {
-        print('[Poll] Widget not mounted, cancelling timer');
-        timer.cancel();
-        return;
-      }
-
-      final currentUser = _authService.currentUser;
-      if (currentUser == null) {
-        print('[Poll] No current user, cancelling timer');
-        timer.cancel();
-        return;
-      }
-
-      // CRITICAL: Read fresh local token EVERY TIME
-      // Don't use cached token - it could be stale
-      _authService
-          .getLocalDeviceToken()
-          .then((freshToken) {
-            if (freshToken != null) {
-              // print('[Poll]   Fresh token from SharedPrefs: ${freshToken.substring(0, 6)}...');  // Too verbose
-              _checkDeviceSessionSync(currentUser.uid, freshToken);
-            } else {
-              print(
-                '[Poll]   Local token is NULL - user might have been logged out',
-              );
-              timer.cancel();
-            }
-          })
-          .catchError((e) {
-            print('[Poll]  ERROR getting local token: $e');
-          });
-    });
-
-    // ALSO listen to Firestore stream for INSTANT detection of token changes
-    // This is MUCH more reliable than polling
-    print('[Stream] Starting real-time Firestore listener for user: $userId with local token: ${localToken.substring(0, 6)}...');
-    _deviceSessionSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .listen(
-          (snapshot) async {
-            try {
-              // Log every snapshot received
-              print('[Stream] 📡 Snapshot received - exists: ${snapshot.exists}');
-
-              if (!snapshot.exists) {
-                print('[Stream] ❌ User document deleted!');
-                _performRemoteLogout();
-                return;
-              }
-
-              final data = snapshot.data();
-              final serverToken = data?['activeDeviceToken'] as String?;
-
-              // Get fresh local token in case it changed
-              final currentLocalToken = await _authService.getLocalDeviceToken();
-
-              print(
-                '[Stream] 📡 Firestore update - server token: ${serverToken?.substring(0, 6) ?? 'NULL'}..., local: ${currentLocalToken?.substring(0, 6) ?? 'NULL'}...',
-              );
-
-              // Token deleted or changed - logout immediately
-              if (serverToken == null ||
-                  serverToken.isEmpty ||
-                  (currentLocalToken != null && serverToken != currentLocalToken)) {
-                print(
-                  '[Stream] ❌ TOKEN MISMATCH/DELETED - LOGOUT IMMEDIATELY!',
-                );
-                print('[Stream]   Server: ${serverToken?.substring(0, 6) ?? 'NULL'}');
-                print('[Stream]   Local: ${currentLocalToken?.substring(0, 6) ?? 'NULL'}');
-
-                _sessionCheckTimer?.cancel();
-                _deviceSessionSubscription?.cancel();
-                _autoCheckTimer?.cancel();
-
-                if (mounted) {
-                  print('[Stream] Calling _performRemoteLogout()');
-                  await _performRemoteLogout();
-                } else {
-                  print('[Stream] ⚠️ Widget not mounted, cannot logout');
-                }
-              }
-            } catch (e) {
-              print('[Stream] ❌ Error: $e');
-            }
-          },
-          onError: (e) {
-            print('[Stream] ❌ Stream error: $e');
-          },
-        );
-
-    print('[DeviceSession] Polling + Stream setup complete');
-  }
-
-  /// Synchronously check device session without async overhead
-  /// This is called every 250ms to ensure logout detection
-  void _checkDeviceSessionSync(String userId, String localToken) {
-    // Use async operation but don't await in the timer
-    print(
-      '[Poll]   POLLING - Checking UID: $userId with token: ${localToken.substring(0, 6)}...',
-    );
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get(const GetOptions(source: Source.server))
-        .then((userDoc) {
-          if (!mounted) {
-            print('[Poll] Widget not mounted, skipping check');
-            return;
-          }
-
-          final serverToken = userDoc.data()?['activeDeviceToken'] as String?;
-          print(
-            '[Poll]   GOT FIRESTORE DATA - local=${localToken.substring(0, 6)}... server=${serverToken?.substring(0, 6) ?? 'NULL'}',
-          );
-
-          // Check if token was deleted or mismatched (remote logout detected)
-          if (serverToken == null ||
-              serverToken.isEmpty ||
-              serverToken != localToken) {
-            print('[Poll] *** LOGOUT DETECTED ***');
-            print(
-              '[Poll] Server token: ${serverToken?.substring(0, 6) ?? 'NULL'}...',
-            );
-            print('[Poll] Local token: ${localToken.substring(0, 6)}...');
-            print('[Poll] Match: ${serverToken == localToken}');
-            print('[Poll] Calling _performRemoteLogout()');
-
-            // CRITICAL: Cancel timers IMMEDIATELY to prevent double-calls
-            _sessionCheckTimer?.cancel();
-            _deviceSessionSubscription?.cancel();
-            _autoCheckTimer?.cancel();
-
-            if (mounted) {
-              print('[Poll] Proceeding with remote logout...');
-              // Important: await the logout so it fully completes
-              unawaited(_performRemoteLogout());
-            } else {
-              print('[Poll] Widget not mounted, cannot proceed with logout');
-            }
-          }
-        })
-        .catchError((e) {
-          print('[Poll]  Error checking device session: $e');
-          // Continue polling even on error
-        });
-  }
-
-  /// Perform remote logout - cancel subscriptions and force logout
-  Future<void> _performRemoteLogout() async {
-    // ignore: avoid_print
-    print('[Logout] ========== REMOTE LOGOUT INITIATED ==========');
-
-    // Cancel all subscriptions first
-    _deviceSessionSubscription?.cancel();
-    _sessionCheckTimer?.cancel();
-    _autoCheckTimer?.cancel();
-    print('[Logout] ✓ Cancelled all timers and subscriptions');
-
-    // CRITICAL: Clear local device token FIRST
-    print('[Logout] Clearing local device token from SharedPreferences...');
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('device_login_token');
-      print('[Logout] ✓ Local device token cleared');
-    } catch (e) {
-      print('[Logout] ⚠️ Error clearing token: $e');
-    }
-
-    // Show logout message - wrap in try-catch so it doesn't block logout
-    if (mounted) {
-      try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.lock_outline, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Logged out: Account accessed on another device',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFFE53935),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 8),
-            dismissDirection: DismissDirection.none,
-          ),
-        );
-        // ignore: avoid_print
-        print('[Logout] ✓ SNACKBAR SHOWN - USER CAN SEE NOTIFICATION');
-      } catch (e) {
-        // ignore: avoid_print
-        print('[Logout] ⚠️ Snackbar error (non-blocking): $e');
-      }
-    }
-
-    // Force logout from Firebase - this triggers StreamBuilder to rebuild
-    // ignore: avoid_print
-    print('[Logout] Step 1: Calling forceLogout()');
-    try {
-      await _authService.forceLogout();
-      // ignore: avoid_print
-      print('[Logout] ✓ Step 1: forceLogout() succeeded');
-    } catch (e) {
-      // ignore: avoid_print
-      print(
-        '[Logout] ⚠️ Step 1: forceLogout() failed: $e - attempting direct signout',
-      );
-      try {
-        await _authService.firebaseAuth.signOut();
-        // ignore: avoid_print
-        print('[Logout] ✓ Step 1: Direct signout succeeded');
-      } catch (e2) {
-        // ignore: avoid_print
-        print('[Logout] ❌ Step 1: Direct signout also failed: $e2');
-      }
-    }
-
-    // Wait for Firebase state to propagate
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    // Verify logout worked
-    final currentUser = _authService.currentUser;
-    // ignore: avoid_print
-    print(
-      '[Logout] Step 2: Verification - current user: ${currentUser?.uid ?? 'NULL (GOOD!)'}',
-    );
-
-    if (currentUser != null) {
-      // ignore: avoid_print
-      print('[Logout] ⚠️ Step 2: User still logged in! Attempting force signout...');
-      try {
-        await _authService.firebaseAuth.signOut();
-        // ignore: avoid_print
-        print('[Logout] ✓ Step 2: Force signout completed');
-        await Future.delayed(const Duration(milliseconds: 100));
-        final userAfterForce = _authService.currentUser;
-        // ignore: avoid_print
-        print(
-          '[Logout] Step 2: After force signout - user: ${userAfterForce?.uid ?? 'NULL (GOOD!)'}',
-        );
-      } catch (e) {
-        // ignore: avoid_print
-        print('[Logout] ❌ Step 2: Force signout failed: $e');
-      }
-    }
-
-    // ignore: avoid_print
-    print('[Logout] ========== LOGOUT PROCESS COMPLETE ==========');
-    // ignore: avoid_print
-    print('[Logout] ✓ StreamBuilder<User?> should now detect state change');
-    // ignore: avoid_print
-    print('[Logout] ✓ LoginScreen should appear in 1-2 seconds');
-  }
 }
