@@ -1,0 +1,108 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidImageSize() {
+      return request.resource.size < 50 * 1024 * 1024; // 50MB max
+    }
+    
+    function isValidVideoSize() {
+      return request.resource.size < 200 * 1024 * 1024; // 200MB max
+    }
+    
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+    
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+    
+    // Profile pictures - Global access for viewing, owner-only for writing
+    match /profiles/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && isImage() && isValidImageSize();
+      allow delete: if isOwner(userId);
+    }
+    
+    // User posts media - Global viewing, owner uploads
+    match /posts/{userId}/{postId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && 
+        ((isImage() && isValidImageSize()) || (isVideo() && isValidVideoSize()));
+      allow delete: if isOwner(userId);
+    }
+    
+    // Chat media - Authenticated users can share media
+    match /chats/{conversationId}/{messageId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        ((isImage() && isValidImageSize()) || 
+         (isVideo() && isValidVideoSize()) || 
+         (isAudio() && request.resource.size < 10 * 1024 * 1024));
+      allow update: if false;
+      allow delete: if isAuthenticated();
+    }
+    
+    // Chat Media (New Path) - Organized by User
+    match /chat_media/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    // Voice notes for calls and chats
+    match /voice_notes/{conversationId}/{messageId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        isAudio() && request.resource.size < 5 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if isAuthenticated();
+    }
+    
+    // Temporary uploads for processing
+    match /temp/{userId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+    }
+    
+    // Public assets accessible by everyone
+    match /public/{fileName} {
+      allow read: if true;
+      allow write: if false; // Admin only
+    }
+    
+    // User galleries - Private albums
+    match /galleries/{userId}/{albumId}/{fileName} {
+      allow read: if isOwner(userId) || isAuthenticated(); // Can be made public
+      allow write: if isOwner(userId) && isImage() && isValidImageSize();
+      allow delete: if isOwner(userId);
+    }
+    
+    // Call recordings (future feature)
+    match /call_recordings/{callId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Server-side only
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

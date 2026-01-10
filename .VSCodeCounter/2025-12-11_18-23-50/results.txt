@@ -1,0 +1,365 @@
+Date : 2025-12-11 18:23:50
+Directory : c:\Desktop\plink\flutter 11
+Total : 256 files,  87971 codes, 4355 comments, 9579 blanks, all 101905 lines
+
+Languages
++--------------+------------+------------+------------+------------+------------+
+| language     | files      | code       | comment    | blank      | total      |
++--------------+------------+------------+------------+------------+------------+
+| Dart         |        155 |     76,607 |      4,015 |      6,866 |     87,488 |
+| Markdown     |         32 |      8,026 |          0 |      2,173 |     10,199 |
+| JSON         |         12 |        715 |          0 |          6 |        721 |
+| C++          |         16 |        595 |        131 |        189 |        915 |
+| HTML         |          2 |        585 |         20 |        125 |        730 |
+| XML          |         12 |        517 |         62 |         23 |        602 |
+| CMake        |          8 |        478 |          0 |         92 |        570 |
+| Shell Script |          3 |        113 |         21 |         23 |        157 |
+| Swift        |          6 |        105 |          7 |         21 |        133 |
+| Batch        |          2 |         98 |          9 |         19 |        126 |
+| YAML         |          3 |         81 |         84 |         31 |        196 |
+| JavaScript   |          1 |         21 |          3 |          5 |         29 |
+| PowerShell   |          2 |         18 |          3 |          4 |         25 |
+| Properties   |          2 |         12 |          0 |          2 |         14 |
++--------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                         | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                            |        256 |     87,971 |      4,355 |      9,579 |    101,905 |
+| . (Files)                                                                                    |         39 |      8,002 |         90 |      2,075 |     10,167 |
+| .claude                                                                                      |          1 |         10 |          0 |          0 |         10 |
+| android                                                                                      |         13 |        729 |         62 |        136 |        927 |
+| android (Files)                                                                              |          1 |          7 |          0 |          1 |          8 |
+| android\app                                                                                  |         10 |        169 |         60 |         20 |        249 |
+| android\app (Files)                                                                          |          1 |         56 |          0 |          0 |         56 |
+| android\app\src                                                                              |          9 |        113 |         60 |         20 |        193 |
+| android\app\src\debug                                                                        |          1 |          3 |          4 |          1 |          8 |
+| android\app\src\main                                                                         |          7 |        107 |         52 |         18 |        177 |
+| android\app\src\main (Files)                                                                 |          1 |         67 |         24 |         10 |        101 |
+| android\app\src\main\res                                                                     |          6 |         40 |         28 |          8 |         76 |
+| android\app\src\main\res\drawable                                                            |          1 |          4 |          7 |          2 |         13 |
+| android\app\src\main\res\drawable-v21                                                        |          1 |          4 |          7 |          2 |         13 |
+| android\app\src\main\res\values                                                              |          2 |         16 |          7 |          2 |         25 |
+| android\app\src\main\res\values-night                                                        |          2 |         16 |          7 |          2 |         25 |
+| android\app\src\profile                                                                      |          1 |          3 |          4 |          1 |          8 |
+| android\build                                                                                |          1 |        548 |          2 |        114 |        664 |
+| android\build\reports                                                                        |          1 |        548 |          2 |        114 |        664 |
+| android\build\reports\problems                                                               |          1 |        548 |          2 |        114 |        664 |
+| android\gradle                                                                               |          1 |          5 |          0 |          1 |          6 |
+| android\gradle\wrapper                                                                       |          1 |          5 |          0 |          1 |          6 |
+| assets                                                                                       |          1 |          1 |          0 |          0 |          1 |
+| ios                                                                                          |          8 |        229 |          4 |         13 |        246 |
+| ios\Runner                                                                                   |          7 |        222 |          2 |          9 |        233 |
+| ios\Runner (Files)                                                                           |          2 |         13 |          0 |          3 |         16 |
+| ios\RunnerTests                                                                              |          1 |          7 |          2 |          4 |         13 |
+| ios\Runner\Assets.xcassets                                                                   |          3 |        148 |          0 |          4 |        152 |
+| ios\Runner\Assets.xcassets\AppIcon.appiconset                                                |          1 |        122 |          0 |          1 |        123 |
+| ios\Runner\Assets.xcassets\LaunchImage.imageset                                              |          2 |         26 |          0 |          3 |         29 |
+| ios\Runner\Base.lproj                                                                        |          2 |         61 |          2 |          2 |         65 |
+| lib                                                                                          |        153 |     76,631 |      3,988 |      6,898 |     87,517 |
+| lib (Files)                                                                                  |          6 |        452 |         38 |         78 |        568 |
+| lib\config                                                                                   |          1 |         34 |         12 |         11 |         57 |
+| lib\database                                                                                 |          1 |        318 |         44 |         45 |        407 |
+| lib\models                                                                                   |         11 |      2,863 |        123 |        241 |      3,227 |
+| lib\providers                                                                                |          9 |      2,031 |        300 |        376 |      2,707 |
+| lib\screens                                                                                  |         42 |     46,469 |      1,477 |      2,836 |     50,782 |
+| lib\screens (Files)                                                                          |         12 |     12,537 |        391 |        868 |     13,796 |
+| lib\screens\business                                                                         |          2 |      2,955 |         67 |        180 |      3,202 |
+| lib\screens\home                                                                             |          8 |     15,163 |        543 |        813 |     16,519 |
+| lib\screens\location                                                                         |          1 |        338 |         11 |         29 |        378 |
+| lib\screens\login                                                                            |          7 |      5,081 |        160 |        321 |      5,562 |
+| lib\screens\professional                                                                     |          6 |      5,347 |        131 |        353 |      5,831 |
+| lib\screens\profile                                                                          |          6 |      5,048 |        174 |        272 |      5,494 |
+| lib\services                                                                                 |         45 |     11,938 |      1,518 |      2,227 |     15,683 |
+| lib\utils                                                                                    |          9 |      1,124 |        119 |        197 |      1,440 |
+| lib\widgets                                                                                  |         29 |     11,402 |        357 |        887 |     12,646 |
+| lib\widgets (Files)                                                                          |         22 |      6,939 |        236 |        626 |      7,801 |
+| lib\widgets\business                                                                         |          1 |        690 |         23 |         38 |        751 |
+| lib\widgets\professional                                                                     |          6 |      3,773 |         98 |        223 |      4,094 |
+| linux                                                                                        |          9 |        345 |         37 |         92 |        474 |
+| linux (Files)                                                                                |          1 |        104 |          0 |         25 |        129 |
+| linux\flutter                                                                                |          4 |        125 |          9 |         27 |        161 |
+| linux\runner                                                                                 |          4 |        116 |         28 |         40 |        184 |
+| macos                                                                                        |          6 |        497 |          5 |         17 |        519 |
+| macos\Flutter                                                                                |          1 |         56 |          3 |          4 |         63 |
+| macos\Runner                                                                                 |          4 |        434 |          0 |          9 |        443 |
+| macos\Runner (Files)                                                                         |          2 |         23 |          0 |          7 |         30 |
+| macos\RunnerTests                                                                            |          1 |          7 |          2 |          4 |         13 |
+| macos\Runner\Assets.xcassets                                                                 |          1 |         68 |          0 |          1 |         69 |
+| macos\Runner\Assets.xcassets\AppIcon.appiconset                                              |          1 |         68 |          0 |          1 |         69 |
+| macos\Runner\Base.lproj                                                                      |          1 |        343 |          0 |          1 |        344 |
+| project_memory                                                                               |          2 |        186 |          0 |         51 |        237 |
+| scripts                                                                                      |          4 |        201 |         27 |         39 |        267 |
+| test                                                                                         |          3 |        320 |         27 |         53 |        400 |
+| test (Files)                                                                                 |          2 |        246 |         15 |         30 |        291 |
+| test\performance                                                                             |          1 |         74 |         12 |         23 |        109 |
+| web                                                                                          |          3 |         93 |         21 |         17 |        131 |
+| windows                                                                                      |         14 |        727 |         94 |        188 |      1,009 |
+| windows (Files)                                                                              |          1 |         89 |          0 |         20 |        109 |
+| windows\flutter                                                                              |          4 |        176 |          9 |         29 |        214 |
+| windows\runner                                                                               |          9 |        462 |         85 |        139 |        686 |
++----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+
+| filename                                                                                     | language     | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+
+| c:\Desktop\plink\flutter 11\.claude\settings.local.json                                      | JSON         |         10 |          0 |          0 |         10 |
+| c:\Desktop\plink\flutter 11\ACTION_ITEMS.md                                                  | Markdown     |        227 |          0 |         79 |        306 |
+| c:\Desktop\plink\flutter 11\CLAUDE.md                                                        | Markdown     |        269 |          0 |         67 |        336 |
+| c:\Desktop\plink\flutter 11\CREATE_FIRESTORE_INDEXES.md                                      | Markdown     |        193 |          0 |         73 |        266 |
+| c:\Desktop\plink\flutter 11\DATABASE_CLEANUP_FIX.md                                          | Markdown     |        138 |          0 |         42 |        180 |
+| c:\Desktop\plink\flutter 11\DATA_STORAGE_FIX_SUMMARY.md                                      | Markdown     |        315 |          0 |         86 |        401 |
+| c:\Desktop\plink\flutter 11\EDIT_PROFILE_UI_IMPROVEMENTS_COMPLETE.md                         | Markdown     |        494 |          0 |        114 |        608 |
+| c:\Desktop\plink\flutter 11\FIRESTORE_INDEXES.md                                             | Markdown     |         61 |          0 |         12 |         73 |
+| c:\Desktop\plink\flutter 11\FIRESTORE_INDEX_SETUP.md                                         | Markdown     |         54 |          0 |         11 |         65 |
+| c:\Desktop\plink\flutter 11\FIRESTORE_INDEX_SETUP_CONNECTION_REQUESTS.md                     | Markdown     |        190 |          0 |         80 |        270 |
+| c:\Desktop\plink\flutter 11\HYBRID_MESSAGING_COMPLETE.md                                     | Markdown     |        295 |          0 |         93 |        388 |
+| c:\Desktop\plink\flutter 11\HYBRID_MESSAGING_IMPLEMENTATION.md                               | Markdown     |        395 |          0 |         86 |        481 |
+| c:\Desktop\plink\flutter 11\IMPLEMENTATION_COMPLETE.md                                       | Markdown     |        351 |          0 |        110 |        461 |
+| c:\Desktop\plink\flutter 11\LIVE_CONNECT_DOCUMENTATION.md                                    | Markdown     |        595 |          0 |        131 |        726 |
+| c:\Desktop\plink\flutter 11\LOCATION_FIX_COMPLETE.md                                         | Markdown     |        206 |          0 |         65 |        271 |
+| c:\Desktop\plink\flutter 11\MATCHING_LOGIC_FIX_SUMMARY.md                                    | Markdown     |        443 |          0 |        127 |        570 |
+| c:\Desktop\plink\flutter 11\MESSAGING_STORAGE_STRATEGY.md                                    | Markdown     |        549 |          0 |        115 |        664 |
+| c:\Desktop\plink\flutter 11\PERFORMANCE_TESTING_GUIDE.md                                     | Markdown     |        244 |          0 |         58 |        302 |
+| c:\Desktop\plink\flutter 11\QUICK_START.md                                                   | Markdown     |        191 |          0 |         47 |        238 |
+| c:\Desktop\plink\flutter 11\QUICK_START_GUIDE.md                                             | Markdown     |        273 |          0 |         76 |        349 |
+| c:\Desktop\plink\flutter 11\README.md                                                        | Markdown     |         10 |          0 |          7 |         17 |
+| c:\Desktop\plink\flutter 11\REFRESH_FUNCTIONALITY_ADDED.md                                   | Markdown     |        272 |          0 |         93 |        365 |
+| c:\Desktop\plink\flutter 11\SMART_MATCHING_EXPLAINED.md                                      | Markdown     |         98 |          0 |         25 |        123 |
+| c:\Desktop\plink\flutter 11\UX_IMPROVEMENTS_GLOBAL_LAUNCH.md                                 | Markdown     |        290 |          0 |         87 |        377 |
+| c:\Desktop\plink\flutter 11\VERIFICATION_REPORT.md                                           | Markdown     |        225 |          0 |         71 |        296 |
+| c:\Desktop\plink\flutter 11\VERSION.md                                                       | Markdown     |        100 |          0 |         26 |        126 |
+| c:\Desktop\plink\flutter 11\WHATSAPP_IMPROVEMENTS_ANALYSIS.md                                | Markdown     |        593 |          0 |        151 |        744 |
+| c:\Desktop\plink\flutter 11\WORKING_FEATURES.md                                              | Markdown     |        347 |          0 |         87 |        434 |
+| c:\Desktop\plink\flutter 11\analysis_options.yaml                                            | YAML         |          3 |         22 |          4 |         29 |
+| c:\Desktop\plink\flutter 11\android\app\google-services.json                                 | JSON         |         56 |          0 |          0 |         56 |
+| c:\Desktop\plink\flutter 11\android\app\src\debug\AndroidManifest.xml                        | XML          |          3 |          4 |          1 |          8 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\AndroidManifest.xml                         | XML          |         67 |         24 |         10 |        101 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\drawable-v21\launch_background.xml      | XML          |          4 |          7 |          2 |         13 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\drawable\launch_background.xml          | XML          |          4 |          7 |          2 |         13 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\values-night\colors.xml                 | XML          |          4 |          0 |          1 |          5 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\values-night\styles.xml                 | XML          |         12 |          7 |          1 |         20 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\values\colors.xml                       | XML          |          4 |          0 |          1 |          5 |
+| c:\Desktop\plink\flutter 11\android\app\src\main\res\values\styles.xml                       | XML          |         12 |          7 |          1 |         20 |
+| c:\Desktop\plink\flutter 11\android\app\src\profile\AndroidManifest.xml                      | XML          |          3 |          4 |          1 |          8 |
+| c:\Desktop\plink\flutter 11\android\build\reports\problems\problems-report.html              | HTML         |        548 |          2 |        114 |        664 |
+| c:\Desktop\plink\flutter 11\android\gradle.properties                                        | Properties   |          7 |          0 |          1 |          8 |
+| c:\Desktop\plink\flutter 11\android\gradle\wrapper\gradle-wrapper.properties                 | Properties   |          5 |          0 |          1 |          6 |
+| c:\Desktop\plink\flutter 11\assets\animation.json                                            | JSON         |          1 |          0 |          0 |          1 |
+| c:\Desktop\plink\flutter 11\cors.json                                                        | JSON         |         15 |          0 |          0 |         15 |
+| c:\Desktop\plink\flutter 11\deploy_intent_indexes.sh                                         | Shell Script |         10 |          3 |          3 |         16 |
+| c:\Desktop\plink\flutter 11\devtools_options.yaml                                            | YAML         |          3 |          0 |          1 |          4 |
+| c:\Desktop\plink\flutter 11\firebase.json                                                    | JSON         |          6 |          0 |          0 |          6 |
+| c:\Desktop\plink\flutter 11\firebase_rules.md                                                | Markdown     |         75 |          0 |         16 |         91 |
+| c:\Desktop\plink\flutter 11\firestore.indexes.json                                           | JSON         |        207 |          0 |          1 |        208 |
+| c:\Desktop\plink\flutter 11\firestore_indexes.json                                           | JSON         |         71 |          0 |          1 |         72 |
+| c:\Desktop\plink\flutter 11\firestore_intents.indexes.json                                   | JSON         |        101 |          0 |          0 |        101 |
+| c:\Desktop\plink\flutter 11\fix_issues.ps1                                                   | PowerShell   |          9 |          1 |          2 |         12 |
+| c:\Desktop\plink\flutter 11\fix_print.ps1                                                    | PowerShell   |          9 |          2 |          2 |         13 |
+| c:\Desktop\plink\flutter 11\ios\RunnerTests\RunnerTests.swift                                | Swift        |          7 |          2 |          4 |         13 |
+| c:\Desktop\plink\flutter 11\ios\Runner\AppDelegate.swift                                     | Swift        |         12 |          0 |          2 |         14 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Assets.xcassets\AppIcon.appiconset\Contents.json      | JSON         |        122 |          0 |          1 |        123 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Assets.xcassets\LaunchImage.imageset\Contents.json    | JSON         |         23 |          0 |          1 |         24 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Assets.xcassets\LaunchImage.imageset\README.md        | Markdown     |          3 |          0 |          2 |          5 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Base.lproj\LaunchScreen.storyboard                    | XML          |         36 |          1 |          1 |         38 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Base.lproj\Main.storyboard                            | XML          |         25 |          1 |          1 |         27 |
+| c:\Desktop\plink\flutter 11\ios\Runner\Runner-Bridging-Header.h                              | C++          |          1 |          0 |          1 |          2 |
+| c:\Desktop\plink\flutter 11\lib\config\api_config.dart                                       | Dart         |         34 |         12 |         11 |         57 |
+| c:\Desktop\plink\flutter 11\lib\database\message_database.dart                               | Dart         |        318 |         44 |         45 |        407 |
+| c:\Desktop\plink\flutter 11\lib\firebase_options.dart                                        | Dart         |         74 |          5 |          8 |         87 |
+| c:\Desktop\plink\flutter 11\lib\fix_platform_view_registry.dart                              | Dart         |          2 |          4 |          2 |          8 |
+| c:\Desktop\plink\flutter 11\lib\main.dart                                                    | Dart         |        330 |         22 |         56 |        408 |
+| c:\Desktop\plink\flutter 11\lib\main_web.dart                                                | Dart         |         40 |          0 |          7 |         47 |
+| c:\Desktop\plink\flutter 11\lib\models\business_model.dart                                   | Dart         |        593 |         16 |         52 |        661 |
+| c:\Desktop\plink\flutter 11\lib\models\conversation_model.dart                               | Dart         |        179 |          1 |         14 |        194 |
+| c:\Desktop\plink\flutter 11\lib\models\extended_user_profile.dart                            | Dart         |        184 |         15 |         22 |        221 |
+| c:\Desktop\plink\flutter 11\lib\models\inquiry_model.dart                                    | Dart         |        331 |         18 |         27 |        376 |
+| c:\Desktop\plink\flutter 11\lib\models\live_connect_filter.dart                              | Dart         |         61 |          6 |         11 |         78 |
+| c:\Desktop\plink\flutter 11\lib\models\message_model.dart                                    | Dart         |        140 |          0 |          8 |        148 |
+| c:\Desktop\plink\flutter 11\lib\models\portfolio_item_model.dart                             | Dart         |        248 |         11 |         14 |        273 |
+| c:\Desktop\plink\flutter 11\lib\models\post_model.dart                                       | Dart         |        236 |         21 |         22 |        279 |
+| c:\Desktop\plink\flutter 11\lib\models\review_model.dart                                     | Dart         |        201 |         13 |         21 |        235 |
+| c:\Desktop\plink\flutter 11\lib\models\service_model.dart                                    | Dart         |        270 |          9 |         20 |        299 |
+| c:\Desktop\plink\flutter 11\lib\models\user_profile.dart                                     | Dart         |        420 |         13 |         30 |        463 |
+| c:\Desktop\plink\flutter 11\lib\platform_view_registry_fix.dart                              | Dart         |          4 |          4 |          3 |         11 |
+| c:\Desktop\plink\flutter 11\lib\providers\app_providers.dart                                 | Dart         |         84 |         27 |         18 |        129 |
+| c:\Desktop\plink\flutter 11\lib\providers\connection_providers.dart                          | Dart         |        183 |         27 |         39 |        249 |
+| c:\Desktop\plink\flutter 11\lib\providers\conversation_providers.dart                        | Dart         |        201 |         37 |         49 |        287 |
+| c:\Desktop\plink\flutter 11\lib\providers\discovery_providers.dart                           | Dart         |        285 |         52 |         64 |        401 |
+| c:\Desktop\plink\flutter 11\lib\providers\live_connect_providers.dart                        | Dart         |        301 |         35 |         60 |        396 |
+| c:\Desktop\plink\flutter 11\lib\providers\pagination_provider.dart                           | Dart         |        228 |         42 |         46 |        316 |
+| c:\Desktop\plink\flutter 11\lib\providers\service_providers.dart                             | Dart         |         62 |         40 |         26 |        128 |
+| c:\Desktop\plink\flutter 11\lib\providers\theme_provider.dart                                | Dart         |        440 |          9 |         21 |        470 |
+| c:\Desktop\plink\flutter 11\lib\providers\user_provider.dart                                 | Dart         |        247 |         31 |         53 |        331 |
+| c:\Desktop\plink\flutter 11\lib\screens\business\business_dashboard_screen.dart              | Dart         |      1,948 |         41 |         88 |      2,077 |
+| c:\Desktop\plink\flutter 11\lib\screens\business\business_setup_screen.dart                  | Dart         |      1,007 |         26 |         92 |      1,125 |
+| c:\Desktop\plink\flutter 11\lib\screens\connection_requests_screen.dart                      | Dart         |        315 |          4 |         15 |        334 |
+| c:\Desktop\plink\flutter 11\lib\screens\conversations_screen.dart                            | Dart         |      1,157 |         22 |         78 |      1,257 |
+| c:\Desktop\plink\flutter 11\lib\screens\create_group_screen.dart                             | Dart         |        366 |          5 |         26 |        397 |
+| c:\Desktop\plink\flutter 11\lib\screens\enhanced_chat_screen.dart                            | Dart         |      3,041 |        100 |        243 |      3,384 |
+| c:\Desktop\plink\flutter 11\lib\screens\group_chat_screen.dart                               | Dart         |      2,444 |         51 |        127 |      2,622 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\conversations_screen.dart                       | Dart         |      1,156 |         30 |         79 |      1,265 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\home_screen.dart                                | Dart         |      5,189 |        157 |        197 |      5,543 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\live_connect_tab_screen.dart                    | Dart         |      3,340 |        155 |        174 |      3,669 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\main_navigation_screen.dart                     | Dart         |        547 |         41 |         65 |        653 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\messageser_screen.dart                          | Dart         |        634 |          6 |         30 |        670 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\messenger_chat_screen.dart                      | Dart         |      1,188 |         40 |         95 |      1,323 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\product_detail_screen.dart                      | Dart         |        938 |         14 |         47 |        999 |
+| c:\Desktop\plink\flutter 11\lib\screens\home\profile_with_history_screen.dart                | Dart         |      2,171 |        100 |        126 |      2,397 |
+| c:\Desktop\plink\flutter 11\lib\screens\live_connect_tab_screen.dart                         | Dart         |      2,937 |        151 |        174 |      3,262 |
+| c:\Desktop\plink\flutter 11\lib\screens\location\location_settings_screen.dart               | Dart         |        338 |         11 |         29 |        378 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\change_password_screen.dart                    | Dart         |        314 |          9 |         24 |        347 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\choose_account_type_screen.dart                | Dart         |        364 |         10 |         19 |        393 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\forgot_password_screen.dart                    | Dart         |      1,332 |         27 |         63 |      1,422 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\login_screen.dart                              | Dart         |      1,566 |         60 |         93 |      1,719 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\onboarding_screen.dart                         | Dart         |        535 |         18 |         40 |        593 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\profile_setup_screen.dart                      | Dart         |        694 |         20 |         54 |        768 |
+| c:\Desktop\plink\flutter 11\lib\screens\login\splash_screen.dart                             | Dart         |        276 |         16 |         28 |        320 |
+| c:\Desktop\plink\flutter 11\lib\screens\main_navigation_screen.dart                          | Dart         |        360 |         16 |         46 |        422 |
+| c:\Desktop\plink\flutter 11\lib\screens\my_connections_screen.dart                           | Dart         |        667 |         10 |         45 |        722 |
+| c:\Desktop\plink\flutter 11\lib\screens\performance_debug_screen.dart                        | Dart         |        516 |          7 |         35 |        558 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\inquiries_screen.dart                   | Dart         |      1,151 |         24 |         83 |      1,258 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\portfolio_detail_screen.dart            | Dart         |        559 |         12 |         26 |        597 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\professional_dashboard_screen.dart      | Dart         |        921 |         16 |         49 |        986 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\professional_setup_screen.dart          | Dart         |        781 |         18 |         69 |        868 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\public_professional_profile_screen.dart | Dart         |        969 |         29 |         62 |      1,060 |
+| c:\Desktop\plink\flutter 11\lib\screens\professional\service_detail_screen.dart              | Dart         |        966 |         32 |         64 |      1,062 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\privacy_policy_screen.dart                   | Dart         |        115 |          0 |          4 |        119 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\profile_edit_screen.dart                     | Dart         |        723 |         32 |         55 |        810 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\profile_view_screen.dart                     | Dart         |        561 |         16 |         26 |        603 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\profile_with_history_screen.dart             | Dart         |      2,168 |         90 |        121 |      2,379 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\settings_screen.dart                         | Dart         |      1,386 |         36 |         62 |      1,484 |
+| c:\Desktop\plink\flutter 11\lib\screens\profile\terms_of_service_screen.dart                 | Dart         |         95 |          0 |          4 |         99 |
+| c:\Desktop\plink\flutter 11\lib\screens\theme_settings_screen.dart                           | Dart         |        382 |          8 |         30 |        420 |
+| c:\Desktop\plink\flutter 11\lib\screens\video_player_screen.dart                             | Dart         |         58 |          0 |          9 |         67 |
+| c:\Desktop\plink\flutter 11\lib\screens\voice_assistant_screen.dart                          | Dart         |        294 |         17 |         40 |        351 |
+| c:\Desktop\plink\flutter 11\lib\services\MIGRATION_GUIDE.md                                  | Markdown     |        344 |          0 |         85 |        429 |
+| c:\Desktop\plink\flutter 11\lib\services\account_type_service.dart                           | Dart         |        249 |         20 |         41 |        310 |
+| c:\Desktop\plink\flutter 11\lib\services\activity_migration_service.dart                     | Dart         |        131 |          8 |         23 |        162 |
+| c:\Desktop\plink\flutter 11\lib\services\analytics_service.dart                              | Dart         |        215 |         18 |         19 |        252 |
+| c:\Desktop\plink\flutter 11\lib\services\auth_service.dart                                   | Dart         |        560 |         45 |         61 |        666 |
+| c:\Desktop\plink\flutter 11\lib\services\block_report_service.dart                           | Dart         |        215 |         22 |         37 |        274 |
+| c:\Desktop\plink\flutter 11\lib\services\business_service.dart                               | Dart         |        441 |         61 |         87 |        589 |
+| c:\Desktop\plink\flutter 11\lib\services\cache_service.dart                                  | Dart         |        251 |         47 |         51 |        349 |
+| c:\Desktop\plink\flutter 11\lib\services\chat_service.dart                                   | Dart         |        142 |        105 |         42 |        289 |
+| c:\Desktop\plink\flutter 11\lib\services\connection_service.dart                             | Dart         |        309 |         41 |         67 |        417 |
+| c:\Desktop\plink\flutter 11\lib\services\connectivity_service.dart                           | Dart         |        102 |          1 |         13 |        116 |
+| c:\Desktop\plink\flutter 11\lib\services\conversation_migration_service.dart                 | Dart         |        158 |         29 |         33 |        220 |
+| c:\Desktop\plink\flutter 11\lib\services\conversation_service.dart                           | Dart         |        438 |         89 |         89 |        616 |
+| c:\Desktop\plink\flutter 11\lib\services\database_cleanup_service.dart                       | Dart         |        157 |         33 |         37 |        227 |
+| c:\Desktop\plink\flutter 11\lib\services\embedding_cache_service.dart                        | Dart         |        168 |          4 |         32 |        204 |
+| c:\Desktop\plink\flutter 11\lib\services\error_handler.dart                                  | Dart         |        289 |         23 |         46 |        358 |
+| c:\Desktop\plink\flutter 11\lib\services\error_tracking_service.dart                         | Dart         |        178 |         23 |         28 |        229 |
+| c:\Desktop\plink\flutter 11\lib\services\firebase_storage_service.dart                       | Dart         |        111 |         10 |         27 |        148 |
+| c:\Desktop\plink\flutter 11\lib\services\gemini_service.dart                                 | Dart         |        118 |          3 |         24 |        145 |
+| c:\Desktop\plink\flutter 11\lib\services\geocoding_service.dart                              | Dart         |        331 |         41 |         60 |        432 |
+| c:\Desktop\plink\flutter 11\lib\services\group_chat_service.dart                             | Dart         |        637 |         59 |        131 |        827 |
+| c:\Desktop\plink\flutter 11\lib\services\hybrid_chat_service.dart                            | Dart         |        426 |         88 |         85 |        599 |
+| c:\Desktop\plink\flutter 11\lib\services\inquiry_service.dart                                | Dart         |        314 |         32 |         69 |        415 |
+| c:\Desktop\plink\flutter 11\lib\services\intent_clarification_service.dart                   | Dart         |        216 |          9 |         25 |        250 |
+| c:\Desktop\plink\flutter 11\lib\services\location_service.dart                               | Dart         |        622 |         97 |        105 |        824 |
+| c:\Desktop\plink\flutter 11\lib\services\migration_service.dart                              | Dart         |        184 |         26 |         40 |        250 |
+| c:\Desktop\plink\flutter 11\lib\services\notification_service.dart                           | Dart         |        274 |         78 |         51 |        403 |
+| c:\Desktop\plink\flutter 11\lib\services\optimized_firestore_service.dart                    | Dart         |        256 |         27 |         46 |        329 |
+| c:\Desktop\plink\flutter 11\lib\services\photo_cache_service.dart                            | Dart         |         82 |         12 |         25 |        119 |
+| c:\Desktop\plink\flutter 11\lib\services\presence_service.dart                               | Dart         |        113 |         17 |         28 |        158 |
+| c:\Desktop\plink\flutter 11\lib\services\professional_service.dart                           | Dart         |        398 |         54 |         79 |        531 |
+| c:\Desktop\plink\flutter 11\lib\services\profile_service.dart                                | Dart         |        132 |         13 |         22 |        167 |
+| c:\Desktop\plink\flutter 11\lib\services\realtime_matching_service.dart                      | Dart         |        280 |         30 |         50 |        360 |
+| c:\Desktop\plink\flutter 11\lib\services\review_service.dart                                 | Dart         |        276 |         35 |         63 |        374 |
+| c:\Desktop\plink\flutter 11\lib\services\safe_firestore_service.dart                         | Dart         |        102 |          0 |         12 |        114 |
+| c:\Desktop\plink\flutter 11\lib\services\safe_network_service.dart                           | Dart         |         68 |         11 |         19 |         98 |
+| c:\Desktop\plink\flutter 11\lib\services\smart_prompt_parser.dart                            | Dart         |        182 |         18 |         27 |        227 |
+| c:\Desktop\plink\flutter 11\lib\services\unified_intent_processor.dart                       | Dart         |        279 |         19 |         35 |        333 |
+| c:\Desktop\plink\flutter 11\lib\services\unified_matching_service.dart                       | Dart         |        658 |         66 |        124 |        848 |
+| c:\Desktop\plink\flutter 11\lib\services\unified_post_service.dart                           | Dart         |        390 |         44 |         58 |        492 |
+| c:\Desktop\plink\flutter 11\lib\services\universal_intent_service.dart                       | Dart         |        441 |         57 |         86 |        584 |
+| c:\Desktop\plink\flutter 11\lib\services\user_manager.dart                                   | Dart         |        166 |         25 |         35 |        226 |
+| c:\Desktop\plink\flutter 11\lib\services\user_migration_service.dart                         | Dart         |        144 |         22 |         32 |        198 |
+| c:\Desktop\plink\flutter 11\lib\services\vector_service.dart                                 | Dart         |        296 |         41 |         60 |        397 |
+| c:\Desktop\plink\flutter 11\lib\services\video_preload_service.dart                          | Dart         |         95 |         15 |         18 |        128 |
+| c:\Desktop\plink\flutter 11\lib\utils\api_error_handler.dart                                 | Dart         |         59 |          0 |         11 |         70 |
+| c:\Desktop\plink\flutter 11\lib\utils\app_optimizer.dart                                     | Dart         |        184 |         26 |         29 |        239 |
+| c:\Desktop\plink\flutter 11\lib\utils\firestore_error_handler.dart                           | Dart         |        134 |          0 |         15 |        149 |
+| c:\Desktop\plink\flutter 11\lib\utils\keyboard_helper.dart                                   | Dart         |        154 |          4 |         15 |        173 |
+| c:\Desktop\plink\flutter 11\lib\utils\memory_manager.dart                                    | Dart         |         47 |         12 |         13 |         72 |
+| c:\Desktop\plink\flutter 11\lib\utils\network_utils.dart                                     | Dart         |         35 |          0 |          5 |         40 |
+| c:\Desktop\plink\flutter 11\lib\utils\performance_monitor.dart                               | Dart         |        191 |         13 |         34 |        238 |
+| c:\Desktop\plink\flutter 11\lib\utils\photo_url_helper.dart                                  | Dart         |         89 |         32 |         25 |        146 |
+| c:\Desktop\plink\flutter 11\lib\utils\post_validator.dart                                    | Dart         |        231 |         32 |         50 |        313 |
+| c:\Desktop\plink\flutter 11\lib\web_platform_fix.dart                                        | Dart         |          2 |          3 |          2 |          7 |
+| c:\Desktop\plink\flutter 11\lib\widgets\account_badges.dart                                  | Dart         |        474 |         13 |         34 |        521 |
+| c:\Desktop\plink\flutter 11\lib\widgets\animated_gradient_background.dart                    | Dart         |         62 |          0 |         10 |         72 |
+| c:\Desktop\plink\flutter 11\lib\widgets\audio_visualizer.dart                                | Dart         |        106 |          2 |         16 |        124 |
+| c:\Desktop\plink\flutter 11\lib\widgets\aurora_background.dart                               | Dart         |        218 |         17 |         34 |        269 |
+| c:\Desktop\plink\flutter 11\lib\widgets\business\business_card.dart                          | Dart         |        690 |         23 |         38 |        751 |
+| c:\Desktop\plink\flutter 11\lib\widgets\conversational_clarification_dialog.dart             | Dart         |        359 |          8 |         16 |        383 |
+| c:\Desktop\plink\flutter 11\lib\widgets\edit_profile_bottom_sheet.dart                       | Dart         |        954 |         33 |         65 |      1,052 |
+| c:\Desktop\plink\flutter 11\lib\widgets\edit_profile_bottom_sheet_backup.dart                | Dart         |        530 |         19 |         36 |        585 |
+| c:\Desktop\plink\flutter 11\lib\widgets\edit_profile_bottom_sheet_new.dart                   | Dart         |        928 |         27 |         66 |      1,021 |
+| c:\Desktop\plink\flutter 11\lib\widgets\floating_particles.dart                              | Dart         |        108 |          4 |         22 |        134 |
+| c:\Desktop\plink\flutter 11\lib\widgets\glassmorphic_container.dart                          | Dart         |        283 |          0 |         20 |        303 |
+| c:\Desktop\plink\flutter 11\lib\widgets\liquid_wave_orb.dart                                 | Dart         |        199 |         20 |         43 |        262 |
+| c:\Desktop\plink\flutter 11\lib\widgets\match_card_with_actions.dart                         | Dart         |        270 |         18 |         28 |        316 |
+| c:\Desktop\plink\flutter 11\lib\widgets\offline_indicator.dart                               | Dart         |        197 |          4 |         18 |        219 |
+| c:\Desktop\plink\flutter 11\lib\widgets\optimized_conversation_list.dart                     | Dart         |        491 |         13 |         58 |        562 |
+| c:\Desktop\plink\flutter 11\lib\widgets\performance_overlay_widget.dart                      | Dart         |        245 |          2 |         41 |        288 |
+| c:\Desktop\plink\flutter 11\lib\widgets\persistent_keyboard_wrapper.dart                     | Dart         |         64 |          2 |          8 |         74 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\add_portfolio_sheet.dart                | Dart         |        925 |         23 |         57 |      1,005 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\add_service_sheet.dart                  | Dart         |        878 |         21 |         52 |        951 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\portfolio_card.dart                     | Dart         |        599 |         16 |         26 |        641 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\send_inquiry_sheet.dart                 | Dart         |        440 |         10 |         30 |        480 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\service_card.dart                       | Dart         |        480 |         17 |         26 |        523 |
+| c:\Desktop\plink\flutter 11\lib\widgets\professional\write_review_sheet.dart                 | Dart         |        451 |         11 |         32 |        494 |
+| c:\Desktop\plink\flutter 11\lib\widgets\profile_detail_bottom_sheet.dart                     | Dart         |        829 |         37 |         50 |        916 |
+| c:\Desktop\plink\flutter 11\lib\widgets\safe_circle_avatar.dart                              | Dart         |         95 |          6 |          8 |        109 |
+| c:\Desktop\plink\flutter 11\lib\widgets\shimmer_effect.dart                                  | Dart         |         58 |          0 |         10 |         68 |
+| c:\Desktop\plink\flutter 11\lib\widgets\simple_voice_orb.dart                                | Dart         |        135 |          1 |         13 |        149 |
+| c:\Desktop\plink\flutter 11\lib\widgets\user_avatar.dart                                     | Dart         |         91 |          4 |          6 |        101 |
+| c:\Desktop\plink\flutter 11\lib\widgets\voice_orb.dart                                       | Dart         |        243 |          6 |         24 |        273 |
+| c:\Desktop\plink\flutter 11\linux\CMakeLists.txt                                             | CMake        |        104 |          0 |         25 |        129 |
+| c:\Desktop\plink\flutter 11\linux\flutter\CMakeLists.txt                                     | CMake        |         79 |          0 |         10 |         89 |
+| c:\Desktop\plink\flutter 11\linux\flutter\generated_plugin_registrant.cc                     | C++          |         19 |          4 |          5 |         28 |
+| c:\Desktop\plink\flutter 11\linux\flutter\generated_plugin_registrant.h                      | C++          |          5 |          5 |          6 |         16 |
+| c:\Desktop\plink\flutter 11\linux\flutter\generated_plugins.cmake                            | CMake        |         22 |          0 |          6 |         28 |
+| c:\Desktop\plink\flutter 11\linux\runner\CMakeLists.txt                                      | CMake        |         21 |          0 |          6 |         27 |
+| c:\Desktop\plink\flutter 11\linux\runner\main.cc                                             | C++          |          5 |          0 |          2 |          7 |
+| c:\Desktop\plink\flutter 11\linux\runner\my_application.cc                                   | C++          |         83 |         21 |         27 |        131 |
+| c:\Desktop\plink\flutter 11\linux\runner\my_application.h                                    | C++          |          7 |          7 |          5 |         19 |
+| c:\Desktop\plink\flutter 11\macos\Flutter\GeneratedPluginRegistrant.swift                    | Swift        |         56 |          3 |          4 |         63 |
+| c:\Desktop\plink\flutter 11\macos\RunnerTests\RunnerTests.swift                              | Swift        |          7 |          2 |          4 |         13 |
+| c:\Desktop\plink\flutter 11\macos\Runner\AppDelegate.swift                                   | Swift        |         11 |          0 |          3 |         14 |
+| c:\Desktop\plink\flutter 11\macos\Runner\Assets.xcassets\AppIcon.appiconset\Contents.json    | JSON         |         68 |          0 |          1 |         69 |
+| c:\Desktop\plink\flutter 11\macos\Runner\Base.lproj\MainMenu.xib                             | XML          |        343 |          0 |          1 |        344 |
+| c:\Desktop\plink\flutter 11\macos\Runner\MainFlutterWindow.swift                             | Swift        |         12 |          0 |          4 |         16 |
+| c:\Desktop\plink\flutter 11\project_memory\PROJECT_MEMORY.md                                 | Markdown     |        120 |          0 |         32 |        152 |
+| c:\Desktop\plink\flutter 11\project_memory\README.md                                         | Markdown     |         66 |          0 |         19 |         85 |
+| c:\Desktop\plink\flutter 11\pubspec.yaml                                                     | YAML         |         75 |         62 |         26 |        163 |
+| c:\Desktop\plink\flutter 11\scripts\performance_test.bat                                     | Batch        |         49 |          0 |          6 |         55 |
+| c:\Desktop\plink\flutter 11\scripts\performance_test.sh                                      | Shell Script |         51 |          8 |          9 |         68 |
+| c:\Desktop\plink\flutter 11\scripts\update_version.bat                                       | Batch        |         49 |          9 |         13 |         71 |
+| c:\Desktop\plink\flutter 11\scripts\update_version.sh                                        | Shell Script |         52 |         10 |         11 |         73 |
+| c:\Desktop\plink\flutter 11\test\performance\scroll_performance_test.dart                    | Dart         |         74 |         12 |         23 |        109 |
+| c:\Desktop\plink\flutter 11\test\test_helpers.dart                                           | Dart         |         62 |          5 |         10 |         77 |
+| c:\Desktop\plink\flutter 11\test\widget_test.dart                                            | Dart         |        184 |         10 |         20 |        214 |
+| c:\Desktop\plink\flutter 11\web\firebase-messaging-sw.js                                     | JavaScript   |         21 |          3 |          5 |         29 |
+| c:\Desktop\plink\flutter 11\web\index.html                                                   | HTML         |         37 |         18 |         11 |         66 |
+| c:\Desktop\plink\flutter 11\web\manifest.json                                                | JSON         |         35 |          0 |          1 |         36 |
+| c:\Desktop\plink\flutter 11\windows\CMakeLists.txt                                           | CMake        |         89 |          0 |         20 |        109 |
+| c:\Desktop\plink\flutter 11\windows\flutter\CMakeLists.txt                                   | CMake        |         98 |          0 |         12 |        110 |
+| c:\Desktop\plink\flutter 11\windows\flutter\generated_plugin_registrant.cc                   | C++          |         42 |          4 |          5 |         51 |
+| c:\Desktop\plink\flutter 11\windows\flutter\generated_plugin_registrant.h                    | C++          |          5 |          5 |          6 |         16 |
+| c:\Desktop\plink\flutter 11\windows\flutter\generated_plugins.cmake                          | CMake        |         31 |          0 |          6 |         37 |
+| c:\Desktop\plink\flutter 11\windows\runner\CMakeLists.txt                                    | CMake        |         34 |          0 |          7 |         41 |
+| c:\Desktop\plink\flutter 11\windows\runner\flutter_window.cpp                                | C++          |         49 |          7 |         16 |         72 |
+| c:\Desktop\plink\flutter 11\windows\runner\flutter_window.h                                  | C++          |         20 |          5 |          9 |         34 |
+| c:\Desktop\plink\flutter 11\windows\runner\main.cpp                                          | C++          |         30 |          4 |         10 |         44 |
+| c:\Desktop\plink\flutter 11\windows\runner\resource.h                                        | C++          |          9 |          6 |          2 |         17 |
+| c:\Desktop\plink\flutter 11\windows\runner\utils.cpp                                         | C++          |         54 |          2 |         10 |         66 |
+| c:\Desktop\plink\flutter 11\windows\runner\utils.h                                           | C++          |          8 |          6 |          6 |         20 |
+| c:\Desktop\plink\flutter 11\windows\runner\win32_window.cpp                                  | C++          |        210 |         24 |         55 |        289 |
+| c:\Desktop\plink\flutter 11\windows\runner\win32_window.h                                    | C++          |         48 |         31 |         24 |        103 |
+| Total                                                                                        |              |     87,971 |      4,355 |      9,579 |    101,905 |
++----------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+

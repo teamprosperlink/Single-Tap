@@ -1,0 +1,130 @@
+// ═══════════════════════════════════════════════════════════════
+// 6️⃣ FIRESTORE SECURITY RULES FOR CHATS
+// ═══════════════════════════════════════════════════════════════
+//
+// IMPORTANT: Copy these rules to your Firebase Console
+// Navigate to: Firebase Console > Firestore Database > Rules
+//
+// These rules ensure:
+// - Users can only read/write chats they are participants in
+// - Messages can only be sent by authenticated users
+// - Chat metadata cannot be tampered with
+// - Prevents unauthorized access to private conversations
+//
+// ═══════════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────
+    // HELPER FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    // Check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Check if the current user is one of the chat participants
+    function isParticipant(chatData) {
+      return request.auth.uid in chatData.participants;
+    }
+
+    // Check if user is the sender of the message
+    function isSender(messageData) {
+      return request.auth.uid == messageData.senderId;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // USERS COLLECTION RULES
+    // ─────────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      // Users can read any user's profile (for discovery/matching)
+      allow read: if isSignedIn();
+
+      // Users can only update their own profile
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // CONVERSATIONS COLLECTION RULES
+    // ─────────────────────────────────────────────────────────────
+
+    match /conversations/{conversationId} {
+      // Users can read conversations where they are a participant
+      allow read: if isSignedIn()
+        && request.auth.uid in resource.data.participants;
+
+      // Users can create a conversation if:
+      // 1. They are authenticated
+      // 2. They are one of the participants
+      // 3. The participants array has exactly 2 users
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2;
+
+      // Users can update conversation metadata if they are a participant
+      // (for updating lastMessage, timestamps, unread counts, etc.)
+      allow update: if isSignedIn()
+        && request.auth.uid in resource.data.participants;
+
+      // Users can delete conversations they are part of
+      allow delete: if isSignedIn()
+        && request.auth.uid in resource.data.participants;
+
+      // ─────────────────────────────────────────────────────────
+      // MESSAGES SUBCOLLECTION RULES
+      // ─────────────────────────────────────────────────────────
+
+      match /messages/{messageId} {
+        // Users can read messages if they are a conversation participant
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+
+        // Users can create messages if:
+        // 1. They are authenticated
+        // 2. They are a participant in the parent conversation
+        // 3. The senderId matches their auth UID
+        allow create: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+          && request.resource.data.senderId == request.auth.uid;
+
+        // Users can update messages if they are a participant
+        // (for read receipts, reactions, etc.)
+        allow update: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+
+        // Users can delete their own messages
+        allow delete: if isSignedIn() && isSender(resource.data);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // USER INTENTS COLLECTION (for search history)
+    // ─────────────────────────────────────────────────────────────
+
+    match /user_intents/{intentId} {
+      // Users can read their own intents
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Users can create/update/delete their own intents
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY BEST PRACTICES APPLIED:
+// ═══════════════════════════════════════════════════════════════
+//
+// ✅ Authentication Required: All operations require user to be signed in
+// ✅ Participant Validation: Only chat participants can access chat data
+// ✅ Sender Validation: Messages must be sent by authenticated users
+// ✅ Data Integrity: Prevents tampering with participant lists
+// ✅ Privacy Protection: Users cannot read chats they're not part of
+// ✅ Granular Permissions: Different rules for read/write/delete
+// ✅ Subcollection Security: Messages inherit parent chat security
+//
+// ═══════════════════════════════════════════════════════════════

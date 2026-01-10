@@ -1,0 +1,44 @@
+// Firestore Security Rules for Universal Intent Matching System
+// Add these rules to your existing Firestore rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User intents collection
+    match /user_intents/{intentId} {
+      // Allow users to read all active intents (for matching)
+      allow read: if request.auth != null 
+        && resource.data.status == 'active';
+      
+      // Allow users to create their own intents
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId
+        && request.resource.data.status == 'active';
+      
+      // Allow users to update their own intents
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      
+      // Allow users to delete their own intents
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+    }
+    
+    // Intent matches collection (for storing successful matches)
+    match /intent_matches/{matchId} {
+      // Users can read matches they're involved in
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.userId1 
+            || request.auth.uid == resource.data.userId2);
+      
+      // System can create matches (via Cloud Functions)
+      allow create: if request.auth != null;
+      
+      // Users can update match status if they're involved
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.userId1 
+            || request.auth.uid == resource.data.userId2);
+    }
+  }
+}
