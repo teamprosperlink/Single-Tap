@@ -16,7 +16,9 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
+const { getAuth } = require("firebase-admin/auth");
 
 // Initialize Firebase Admin
 initializeApp();
@@ -469,5 +471,92 @@ exports.onConnectionRequestCreated = onDocumentCreated(
       `Connection request notification sent to ${recipientId} from ${senderId}`
     );
     return null;
+  }
+);
+
+/**
+ * FORCE LOGOUT FUNCTION - Device Login Collision Handler
+ *
+ * Handles the WhatsApp-style single device login by triggering force logout
+ * on other devices when a new device logs in with the same account.
+ *
+ * Called from: lib/services/auth_service.dart logoutFromOtherDevices()
+ *
+ * Security:
+ * - Only authenticated users can call this
+ * - A user can only logout from their own account
+ * - Cloud Function runs with admin privileges for secure Firestore writes
+ */
+exports.forceLogoutOtherDevices = onCall(
+  { enforceAppCheck: false, requiresAuthentication: true },
+  async (request) => {
+    const userId = request.auth.uid;
+    const data = request.data;
+
+    // Verify user is authenticated
+    if (!userId) {
+      throw new Error("Unauthorized: User not authenticated");
+    }
+
+    // Get parameters
+    const localToken = data.localToken;
+    const deviceInfo = data.deviceInfo;
+
+    if (!localToken) {
+      throw new Error("Missing required parameter: localToken");
+    }
+
+    logger.info(
+      `Force logout called for user ${userId} with token ${localToken.substring(0, 8)}...`
+    );
+
+    try {
+      // STEP 1: Set force logout flag + clear token (INSTANT logout for other devices)
+      logger.info(
+        `Step 1: Setting forceLogout=true for user ${userId} to trigger instant logout on old devices...`
+      );
+      await db.collection("users").doc(userId).set(
+        {
+          forceLogout: true, // Signal to other devices: LOGOUT NOW!
+          activeDeviceToken: "", // Clear token so old device sees mismatch
+          lastSessionUpdate: new (require("firebase-admin/firestore").FieldValue).serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      logger.info(`forceLogout signal sent for user ${userId}`);
+
+      // Wait to ensure old device receives and processes logout signal
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // STEP 2: Set new device as the active device and clear logout flag
+      logger.info(
+        `Step 2: Setting new device as active for user ${userId}...`
+      );
+      await db.collection("users").doc(userId).set(
+        {
+          activeDeviceToken: localToken,
+          deviceInfo: deviceInfo || {},
+          forceLogout: false, // Clear the logout flag now that old device should be logged out
+          lastSessionUpdate: new (require("firebase-admin/firestore").FieldValue).serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      logger.info(
+        `Successfully forced logout on other devices for user ${userId}`
+      );
+
+      return {
+        success: true,
+        message: "Force logout completed",
+      };
+    } catch (error) {
+      logger.error(
+        `Error during force logout for user ${userId}:`,
+        error
+      );
+      throw new Error(`Force logout failed: ${error.message}`);
+    }
   }
 );

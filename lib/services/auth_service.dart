@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -1012,39 +1013,65 @@ class AuthService {
       // Get current device info
       final deviceInfo = await _getDeviceInfo();
 
-      print('[AuthService]  Force logout other devices (WhatsApp-style)');
+      print('[AuthService] Calling Cloud Function: forceLogoutOtherDevices');
       print('[AuthService] New device token: ${localToken.substring(0, 8)}...');
 
-      // STEP 1: Set force logout flag + clear token (INSTANT logout for other devices)
-      print(
-        '[AuthService] Step 1: Setting forceLogout=true to trigger instant logout on old devices...',
-      );
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'forceLogout': true, // Signal to other devices: LOGOUT NOW!
-        'activeDeviceToken': '', // Clear token so old device sees mismatch
-        'lastSessionUpdate': FieldValue.serverTimestamp(),
-      });
+      // Call Callable Cloud Function to handle force logout securely
+      // The Cloud Function runs with admin privileges, bypassing Firestore security rules
+      // This ensures permission-denied errors don't block the logout process
+      final callable = FirebaseFunctions.instance
+          .httpsCallable('forceLogoutOtherDevices');
 
-      print(
-        '[AuthService]  forceLogout signal sent! Waiting for old device to logout...',
-      );
+      try {
+        final result = await callable.call({
+          'localToken': localToken,
+          'deviceInfo': deviceInfo,
+        });
 
-      // Wait longer to ensure old device receives and processes logout signal
-      await Future.delayed(const Duration(milliseconds: 500));
+        if (result.data['success'] == true) {
+          print(
+            '[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!',
+          );
+        } else {
+          throw Exception(
+              result.data['message'] ?? 'Cloud Function returned error');
+        }
+      } catch (e) {
+        print(
+          '[AuthService] Cloud Function error: $e. Attempting direct Firestore write as fallback...',
+        );
+        // Fallback: Try direct Firestore write if Cloud Function fails
+        // This handles cases where Cloud Function isn't deployed yet
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .set({
+            'forceLogout': true,
+            'activeDeviceToken': '',
+            'lastSessionUpdate': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
-      // STEP 2: Set new device as the active device and clear logout flag
-      print('[AuthService] Step 2: Setting new device as active...');
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'activeDeviceToken': localToken,
-        'deviceInfo': deviceInfo,
-        'forceLogout':
-            false, // Clear the logout flag now that old device should be logged out
-        'lastSessionUpdate': FieldValue.serverTimestamp(),
-      });
+          await Future.delayed(const Duration(milliseconds: 500));
 
-      print(
-        '[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!',
-      );
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .set({
+            'activeDeviceToken': localToken,
+            'deviceInfo': deviceInfo,
+            'forceLogout': false,
+            'lastSessionUpdate': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          print(
+            '[AuthService] ✓ Fallback write succeeded - forced logout completed',
+          );
+        } catch (fallbackError) {
+          print('[AuthService] Fallback write also failed: $fallbackError');
+          rethrow;
+        }
+      }
     } catch (e) {
       print('[AuthService] Error logging out from other devices: $e');
       rethrow;
