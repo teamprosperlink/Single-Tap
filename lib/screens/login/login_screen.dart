@@ -615,6 +615,9 @@ class _LoginScreenState extends State<LoginScreen>
   /// Device B is already logged in, just need to logout Device A
   Future<void> _automaticallyLogoutOtherDevice() async {
     try {
+      print('[LoginScreen] ========== AUTO LOGOUT START ==========');
+      print('[LoginScreen] Pending User ID: $_pendingUserId');
+      print('[LoginScreen] Current Firebase User: ${_authService.currentUser?.uid}');
       print('[LoginScreen] Starting automatic logout of other device...');
 
       // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
@@ -625,10 +628,12 @@ class _LoginScreenState extends State<LoginScreen>
       print('[LoginScreen] Listener initialized, now logging out other device...');
 
       // Logout from other devices and keep current device (Device B) logged in
+      print('[LoginScreen] Calling logoutFromOtherDevices()...');
       await _authService.logoutFromOtherDevices(userId: _pendingUserId);
       print('[LoginScreen] ✓ Other device logout command sent');
 
       // Wait a moment for Firestore to sync
+      print('[LoginScreen] Waiting 300ms for Firestore sync...');
       await Future.delayed(const Duration(milliseconds: 300));
 
       // Navigate to main app - Device B should now be the only device logged in
@@ -636,8 +641,11 @@ class _LoginScreenState extends State<LoginScreen>
         print('[LoginScreen] ✓ Navigating Device B to main app...');
         await _navigateAfterAuth(isNewUser: false);
       }
+      print('[LoginScreen] ========== AUTO LOGOUT END SUCCESS ==========');
     } catch (e) {
+      print('[LoginScreen] ========== AUTO LOGOUT END ERROR ==========');
       print('[LoginScreen] ❌ Error during automatic logout: $e');
+      print('[LoginScreen] StackTrace: ${StackTrace.current}');
       if (mounted) {
         HapticFeedback.heavyImpact();
         _showErrorSnackBar('Error: ${e.toString()}');

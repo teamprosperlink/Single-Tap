@@ -1027,8 +1027,14 @@ class AuthService {
   /// 2. Then set new device as active
   Future<void> logoutFromOtherDevices({String? userId}) async {
     try {
+      print('[AuthService] ========== LOGOUT OTHER DEVICES START ==========');
+      print('[AuthService] userId parameter: $userId');
+      print('[AuthService] currentUser?.uid: ${currentUser?.uid}');
+
       // Get user ID from parameter or current user
       final uid = userId ?? currentUser?.uid;
+      print('[AuthService] Final uid to use: $uid');
+
       if (uid == null) {
         throw Exception('No user ID available');
       }
@@ -1139,7 +1145,9 @@ class AuthService {
           rethrow;
         }
       }
+      print('[AuthService] ========== LOGOUT OTHER DEVICES END SUCCESS ==========');
     } catch (e) {
+      print('[AuthService] ========== LOGOUT OTHER DEVICES END ERROR ==========');
       print('[AuthService] Error logging out from other devices: $e');
       rethrow;
     }
