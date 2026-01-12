@@ -340,8 +340,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   StreamSubscription<User?>? _authStateSubscription;
   Timer? _sessionCheckTimer;
   Timer? _autoCheckTimer;
-  bool _hasReceivedFirstSnapshot = false; // Track if we've seen the first listener update
-  int _snapshotCount = 0; // Count snapshots to wait for full initialization
+  DateTime? _listenerStartTime; // Track when listener started for initialization timeout
 
 
   @override
@@ -388,8 +387,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     try {
       // Cancel any existing subscription
       _deviceSessionSubscription?.cancel();
-      _hasReceivedFirstSnapshot = false; // Reset for new listener
-      _snapshotCount = 0; // Reset snapshot counter for new listener
+      _listenerStartTime = DateTime.now(); // Track when listener started
 
       // Get local device token - CRITICAL for device comparison
       final localToken = await _authService.getLocalDeviceToken();
@@ -436,29 +434,21 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   return;
                 }
 
-                // CRITICAL: Skip ALL logout checks during the FIRST SNAPSHOT WINDOW
-                // New devices don't have their token set yet, so we must skip ALL checks
-                // until we know the device has properly initialized
-                if (!_hasReceivedFirstSnapshot) {
-                  _hasReceivedFirstSnapshot = true;
-                  print('[DeviceSession] ℹ️ FIRST SNAPSHOT RECEIVED - SKIPPING ALL CHECKS');
-                  print('[DeviceSession] Server token: ${snapshotData['activeDeviceToken']?.toString().substring(0, 8) ?? "NONE"}...');
-                  print('[DeviceSession] Local token: ${localToken.substring(0, 8)}...');
-                  // Return immediately - don't check anything on first snapshot
-                  return;
+                // CRITICAL: Skip ALL logout checks for the first 3 seconds after listener starts
+                // This gives the device time to fully initialize and sync its token to Firestore
+                final now = DateTime.now();
+                final secondsSinceListenerStart = _listenerStartTime != null
+                    ? now.difference(_listenerStartTime!).inSeconds
+                    : 0;
+
+                if (secondsSinceListenerStart < 3) {
+                  print('[DeviceSession] ⏳ INITIALIZATION PHASE (${3 - secondsSinceListenerStart}s remaining) - skipping all logout checks');
+                  return; // Skip all checks during initialization window
                 }
 
-                // WAIT FOR SECOND SNAPSHOT BEFORE CHECKING - ensures token is synced
-                // Count snapshots to be extra safe
-                _snapshotCount++;
-                if (_snapshotCount <= 2) {
-                  print('[DeviceSession] 📸 Snapshot #$_snapshotCount received - still initializing, waiting for full sync...');
-                  return; // Skip checks until at least 3rd snapshot
-                }
+                print('[DeviceSession] ✅ INITIALIZATION COMPLETE - NOW checking logout signals');
 
-                print('[DeviceSession] 📸 Snapshot #$_snapshotCount - NOW checking logout signals');
-
-                // ONLY CHECK LOGOUT SIGNALS AFTER FULL INITIALIZATION
+                // ONLY CHECK LOGOUT SIGNALS AFTER 3 SECOND INITIALIZATION WINDOW
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
                 final forceLogoutRaw = snapshotData['forceLogout'];
@@ -538,8 +528,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _hasInitializedServices = false;
       _lastInitializedUserId = null;
       _isInitializing = false;
-      _hasReceivedFirstSnapshot = false; // Reset snapshot flag for next login
-      _snapshotCount = 0; // Reset snapshot counter for next login
+      _listenerStartTime = null; // Reset listener timer for next login
       // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
