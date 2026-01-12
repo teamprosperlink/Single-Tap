@@ -1,0 +1,60 @@
+================================================================================
+                    DEPLOY NOW - QUICK REFERENCE
+================================================================================
+
+ALL CODE FIXES ARE COMPLETE ✅
+
+Current Status:
+- Dialog bug fixed (all auth paths)
+- Listener restart logic fixed
+- Comprehensive logging added
+- Ready for Cloud Function deployment
+
+================================================================================
+                          DEPLOYMENT COMMANDS
+================================================================================
+
+1. OPEN COMMAND PROMPT:
+   Windows Key + R → Type: cmd → Enter
+
+2. NAVIGATE TO PROJECT:
+   cd c:/Users/csp/Documents/plink-live
+
+3. LOGIN TO FIREBASE:
+   npx firebase login
+   (Browser opens → Login → Return to Command Prompt)
+
+4. DEPLOY:
+   DEPLOY.bat
+
+Wait for "DEPLOYMENT COMPLETE!" message.
+
+================================================================================
+                            THEN TEST
+================================================================================
+
+TERMINAL 1 (Device A):
+   flutter run -d emulator-5554
+   Login: test@example.com / password123
+   Wait 30 seconds
+
+TERMINAL 2 (Device B):
+   flutter run -d emulator-5556
+   Login: test@example.com / password123 (SAME account)
+
+EXPECTED:
+   Device A: Automatically logs out → Login screen
+   Device B: Loading spinner → Main app
+
+If both stay logged in:
+   - Check Device B logs for: "✓ Successfully forced logout"
+   - Check Device A logs for: "FORCE LOGOUT SIGNAL DETECTED"
+   - Wait 10+ seconds (protection window)
+
+================================================================================
+                       TOTAL TIME: ~15 MINUTES
+================================================================================
+
+Just run DEPLOY.bat and test with two emulators.
+
+That's it! Feature will be production-ready. 🚀

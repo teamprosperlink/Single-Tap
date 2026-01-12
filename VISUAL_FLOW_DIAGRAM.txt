@@ -1,0 +1,398 @@
+================================================================================
+                    WHATSAPP-STYLE LOGOUT - VISUAL FLOW
+================================================================================
+
+The complete flow of how Device A automatically logs out when Device B
+logs in with the same account.
+
+================================================================================
+                          BEFORE THE FIX (BROKEN)
+================================================================================
+
+Device B Login Timeline:
+
+0s:   Device B → Enter credentials → Firebase auth succeeds
+      ├─ ALREADY_LOGGED_IN error detected
+      ├─ Save Device B session to Firestore
+      └─ Call _automaticallyLogoutOtherDevice()
+
+2.5s: Device B → Send logout signal to Firestore
+      ├─ Write forceLogout=true
+      ├─ Update activeDeviceToken to Device B
+      └─ Ready to navigate to app
+
+3s:   Device A → [BROKEN] Listener not restarting!
+      │   ├─ Auth state: Still has same UID ("user123")
+      │   ├─ Check: if (_lastInitializedUserId != uid)
+      │   ├─ Condition: "user123" != "user123" = FALSE
+      │   ├─ Result: Listener code SKIPPED ❌
+      │   └─ Never sees forceLogout=true signal!
+      │
+      └─ Device A never logs out ❌
+
+RESULT: Both devices logged in with same account ❌
+
+
+================================================================================
+                          AFTER THE FIX (WORKING)
+================================================================================
+
+Device A's Listener Initialization:
+
+1. [BUILD] User logged in: user123
+2. [BUILD] Restarting device session monitoring - checking for new device logins...
+3. [BUILD] Subscription BEFORE: (old subscription)
+4. Future.delayed(500ms)...
+5. [BUILD] Auth verified after delay, starting listener
+6. [DeviceSession] ✅ Starting real-time listener
+7. [DeviceSession] 🛡️ PROTECTION WINDOW: 10 seconds
+8. [DeviceSession] ✅ Listener ready - protection window now active
+
+DEVICE B LOGIN TIMELINE:
+
+TIME   DEVICE A                          DEVICE B
+────   ────────────────────────────────  ────────────────────────────────
+0ms    Using app normally                Enter credentials, click login
+100ms                                    Firebase auth succeeds
+200ms                                    ALREADY_LOGGED_IN error thrown
+250ms                                    Save Device B session to Firestore
+300ms                                    _automaticallyLogoutOtherDevice() called
+350ms                                    Wait 2.5 seconds for listener init
+       ✓ Listener active (0-10s)         (waiting...)
+       [No logout checks yet]
+1000ms                                   Still waiting...
+2850ms                                   Wait completes
+2900ms                                   logoutFromOtherDevices() called
+2950ms  ← Listener detects Firestore     Write forceLogout=true → Firestore
+        ← change but skips check         Update activeDeviceToken
+        (PROTECTION WINDOW 0-10s)        Ready to navigate to app
+3000ms  Snapshot received: 3s
+        ⏳ PROTECTION PHASE
+        (9-3=6 seconds remaining)
+        Skip all logout checks
+
+5000ms  Snapshot: 5s into protection
+        Still in protection phase
+
+10000ms Snapshot: 10s since start
+        ✅ PROTECTION PHASE COMPLETE
+        Now checking forceLogout...
+
+10050ms 📋 forceLogout value: true (type: bool)
+        📋 forceLogout parsed: true
+
+10100ms 🔴 FORCE LOGOUT SIGNAL DETECTED!
+        Call _performRemoteLogout()
+
+10200ms Cancel subscriptions
+        Clear state flags
+
+10300ms 🔴 Calling signOut()...
+        Sign out from Firebase
+
+10400ms ✓ Firebase sign out completed
+        App detects user=null
+        MainNavigationScreen → OnboardingScreen
+        ✓ Shows login screen ✓
+
+        "You've been logged out from
+         another device" ✓
+
+3200ms                                   Navigate to main app
+3300ms                                   ✓ Shows main app screen ✓
+                                        Ready to use ✓
+
+RESULT: ✅ Only Device B logged in ✓
+
+
+================================================================================
+                        PROTECTION WINDOW EXPLAINED
+================================================================================
+
+Why Do We Need a 10-Second Protection Window?
+
+Device B writes forceLogout=true at ~3 seconds.
+Device A's listener would detect this AND trigger logout on Device A.
+
+BUT... Device B also detects its OWN forceLogout write!
+
+Without protection window:
+  - Device B writes forceLogout=true
+  - Device B's listener fires
+  - Device B sees forceLogout=true
+  - Device B logs itself out ❌
+
+With 10-second protection window:
+  - Device B writes forceLogout=true at 3s
+  - Device B's listener fires at 3s
+  - BUT: We're in protection phase (0-10s)
+  - SO: Skip all logout checks for Device B ✓
+  - Result: Device B stays logged in ✓
+
+
+Timeline with Protection Window:
+
+Device B Listener:
+  0s:   Start → Protection window begins (0-10s)
+  3s:   forceLogout=true written
+  3.1s: Listener snapshot fires
+  3.2s: Check: Are we in protection window (0-10s)? YES
+  3.3s: Skip logout check → Device B stays logged in ✓
+  10s:  Protection window ends
+  10.1s: Device B can now detect logout signals (but won't because signal was at 3s)
+
+Device A Listener:
+  0s:   Start → Protection window begins (0-10s)
+  10s:  Protection window ends
+  10.1s: Snapshot fires
+  10.2s: Check: Are we in protection window? NO
+  10.3s: Check forceLogout=true value
+  10.4s: DETECTED! Call _performRemoteLogout() ✓
+
+
+================================================================================
+                    DEVICE TOKEN TRACKING
+================================================================================
+
+Firestore users/{userId} Document:
+
+BEFORE Device B Login:
+{
+  uid: "user123",
+  name: "John Doe",
+  email: "john@example.com",
+  activeDeviceToken: "device-a-token-xxxx",
+  forceLogout: false
+}
+
+When Device B logs in:
+{
+  uid: "user123",
+  name: "John Doe",
+  email: "john@example.com",
+  activeDeviceToken: "device-b-token-yyyy",  ← CHANGED!
+  forceLogout: true                          ← CHANGED!
+}
+
+Device A's listener detects:
+  ✓ activeDeviceToken changed (from device-a-token to device-b-token)
+  ✓ forceLogout changed (from false to true)
+
+→ Both changes indicate Device B is now active
+→ Device A should logout
+
+
+================================================================================
+                      STATE MANAGEMENT
+================================================================================
+
+Device A State During Logout:
+
+BEFORE:
+  _isPerformingLogout: false
+  _hasInitializedServices: true
+  _lastInitializedUserId: "user123"
+  FirebaseAuth.currentUser: User(uid="user123")
+  Widget state: MainNavigationScreen
+
+DURING:
+  Snapshot received → forceLogout=true detected
+  → _isPerformingLogout: true (prevent re-entry)
+  → _performRemoteLogout() called
+  → Cancel subscriptions
+  → Clear state flags
+  → Call signOut()
+
+AFTER:
+  _isPerformingLogout: true (stays true)
+  _hasInitializedServices: false
+  _lastInitializedUserId: null
+  FirebaseAuth.currentUser: null
+  Widget state: OnboardingScreen (login screen)
+
+StreamBuilder detects auth state change:
+  currentUser = null
+  → Returns OnboardingScreen
+  → User sees login screen ✓
+
+
+================================================================================
+                      ERROR HANDLING
+================================================================================
+
+What if something goes wrong?
+
+Issue: forceLogout signal not received
+├─ Device A listener not started? → Added 500ms delay + auth verification
+├─ Firestore listener failed? → onError handler logs and continues
+├─ Permission denied? → Error logged, user can retry login
+└─ Snapshot doesn't exist? → Detect and logout anyway
+
+Issue: Device B doesn't navigate to app
+├─ Automatic logout called? → Yes, always called
+├─ Navigation failed? → Handled in error block with snackbar
+├─ User still logged in Firebase? → Session saved to Firestore
+└─ Can retry navigation manually
+
+Issue: Device A detects its own logout during protection window
+├─ Protection window active? → Yes, 10 seconds
+├─ Skip logout check? → Yes, skip ALL checks in protection window
+├─ Device A safe? → Yes, won't logout itself ✓
+└─ When can Device A logout? → Only after 10 seconds (when Device B no longer active)
+
+
+================================================================================
+                    USER EXPERIENCE COMPARISON
+================================================================================
+
+WHATSAPP-STYLE (Current Implementation):
+
+Device A: Using app
+Device B: Login
+  ↓
+Device A: (no notification)
+Device B: Loading spinner (no dialog, no waiting)
+  ↓
+Device A: Gets logout signal → Shows login screen
+Device B: Shows main app
+  ↓
+RESULT: Only Device B logged in ✓
+
+
+OLD STYLE (With Dialog - Previous Iteration):
+
+Device A: Using app
+Device B: Login
+  ↓
+Device B: Dialog appears asking what to do
+  ├─ "Logout Other Device"
+  └─ "Stay Logged In"
+  ↓
+User must choose option...
+  ↓
+Device A & B: Behavior depends on choice
+  ↓
+RESULT: Confusing UX, user must make decision
+
+
+================================================================================
+                        LOGGING FLOW
+================================================================================
+
+Console Output When Testing:
+
+Device B Console:
+────────────────────────────────────────
+I/flutter (12345): [LoginScreen] Starting automatic logout of other device...
+I/flutter (12345): [LoginScreen] Waiting 2.5 seconds for listener to initialize...
+I/flutter (12345): [LoginScreen] Listener initialized, now logging out other device...
+I/flutter (12345): [AuthService] Calling logoutFromOtherDevices
+I/flutter (12345): [AuthService] STEP 1: Writing forceLogout=true
+I/flutter (12345): [AuthService] ✓ STEP 1 succeeded
+I/flutter (12345): [LoginScreen] ✓ Other device logout command sent
+I/flutter (12345): [LoginScreen] ✓ Navigating Device B to main app...
+
+Device A Console:
+────────────────────────────────────────
+I/flutter (12346): [BUILD] Restarting device session monitoring - checking for new device logins...
+I/flutter (12346): [BUILD] Auth verified after delay, starting listener
+I/flutter (12346): [BUILD] Subscription AFTER: Instance...
+I/flutter (12346): [DeviceSession] 🚀 LISTENER STARTED AT: 2026-01-12 10:00:00.000...
+I/flutter (12346): [DeviceSession] ✅ Starting real-time listener
+I/flutter (12346): [DeviceSession] ✅ Listener ready - protection window now active
+...
+I/flutter (12346): [DeviceSession] 🕐 Snapshot received: 10.5s since listener start
+I/flutter (12346): [DeviceSession] ✅ PROTECTION PHASE COMPLETE - NOW checking logout signals
+I/flutter (12346): [DeviceSession] 📋 forceLogout value: true (type: bool)
+I/flutter (12346): [DeviceSession] 📋 forceLogout parsed: true
+I/flutter (12346): [DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED
+I/flutter (12346): [RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========
+I/flutter (12346): [RemoteLogout] 🔴 Calling signOut()...
+I/flutter (12346): [RemoteLogout] ✓ Firebase sign out completed
+
+
+================================================================================
+                          SUMMARY
+================================================================================
+
+┌─────────────────────────────────────────────────────────────┐
+│ Device B Logs In                                            │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Detects Existing Session (ALREADY_LOGGED_IN)               │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Saves Device B Session to Firestore                        │
+│ (Device B now logged in but not yet using app)             │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Calls _automaticallyLogoutOtherDevice()                    │
+│ ├─ Wait 2.5 seconds (listener init)                        │
+│ ├─ Write forceLogout=true to Firestore                     │
+│ └─ Update activeDeviceToken to Device B's token            │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device A's Listener Detects Firestore Change               │
+│ ├─ Snapshot received                                       │
+│ ├─ Check: In protection window (0-10s)? YES               │
+│ └─ Skip logout check (protected)                           │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device A: Wait 10 seconds (protection window expires)       │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device A's Listener Fires Again                            │
+│ ├─ Check: In protection window? NO                         │
+│ ├─ Check forceLogout value: TRUE                           │
+│ └─ 🔴 FORCE LOGOUT SIGNAL DETECTED                         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device A: Sign Out from Firebase                           │
+│ ├─ Cancel subscriptions                                    │
+│ ├─ Clear state flags                                       │
+│ ├─ Call signOut()                                          │
+│ └─ StreamBuilder detects: currentUser = null              │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device A: Show Login Screen                                │
+│ └─ "You've been logged out from another device"           │
+└─────────────────────────────────────────────────────────────┘
+
+                 PARALLEL PROCESS:
+
+┌─────────────────────────────────────────────────────────────┐
+│ Device B: Show Loading Spinner                             │
+│ ├─ No dialog                                               │
+│ ├─ No waiting for user                                     │
+│ └─ No user input needed                                    │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Device B: Navigate to Main App                             │
+│ └─ Ready to use                                            │
+└─────────────────────────────────────────────────────────────┘
+
+RESULT: ✅ WHATSAPP-STYLE SINGLE DEVICE LOGIN
+  Device A: Logged out
+  Device B: Logged in
+  Only one device has access ✓
+
+
+================================================================================

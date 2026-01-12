@@ -330,6 +330,11 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       if (mounted) {
         String errorMsg = e.toString().replaceAll('Exception: ', '');
+        print('[LoginScreen] ===== OTP VERIFICATION ERROR =====');
+        print('[LoginScreen] Error: $errorMsg');
+        print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+        print('[LoginScreen] =====================================');
+
         if (errorMsg.contains('ALREADY_LOGGED_IN')) {
           // Extract device name and user ID from error message
           // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
@@ -344,13 +349,17 @@ class _LoginScreenState extends State<LoginScreen>
             userId = parts.last.trim();
           }
 
+          print('[LoginScreen] Device Name: $deviceName');
+          print('[LoginScreen] User ID: $userId');
+
           // Store the user ID for logout
           _pendingUserId = userId ?? _authService.currentUser?.uid;
 
           // Show device login dialog to user - let them decide
-          print('[LoginScreen] Another device detected, showing device login dialog...');
+          print('[LoginScreen] 🔔 Showing device login dialog...');
           _showDeviceLoginDialog(deviceName);
         } else {
+          print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
         }
@@ -426,6 +435,11 @@ class _LoginScreenState extends State<LoginScreen>
       } catch (e) {
         if (mounted) {
           String errorMsg = e.toString().replaceAll('Exception: ', '');
+          print('[LoginScreen] ===== EMAIL/PASSWORD AUTH ERROR =====');
+          print('[LoginScreen] Error: $errorMsg');
+          print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+          print('[LoginScreen] ========================================');
+
           if (errorMsg.contains('ALREADY_LOGGED_IN')) {
             // Extract device name and user ID from error message
             // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
@@ -440,13 +454,17 @@ class _LoginScreenState extends State<LoginScreen>
               userId = parts.last.trim();
             }
 
+            print('[LoginScreen] Device Name: $deviceName');
+            print('[LoginScreen] User ID: $userId');
+
             // Store the user ID for logout
             _pendingUserId = userId ?? _authService.currentUser?.uid;
 
             // Show device login dialog to user - let them decide
-            print('[LoginScreen] Another device detected, showing device login dialog...');
+            print('[LoginScreen] 🔔 Showing device login dialog...');
             _showDeviceLoginDialog(deviceName);
           } else {
+            print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
             HapticFeedback.heavyImpact();
             _showErrorSnackBar(errorMsg);
           }
@@ -564,6 +582,11 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       if (mounted) {
         String errorMsg = e.toString().replaceAll('Exception: ', '');
+        print('[LoginScreen] ===== GOOGLE SIGN-IN ERROR =====');
+        print('[LoginScreen] Error: $errorMsg');
+        print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+        print('[LoginScreen] ======================================');
+
         if (errorMsg.contains('ALREADY_LOGGED_IN')) {
           // Extract device name and user ID from error message
           // Format: ALREADY_LOGGED_IN:Device Name:userIdToPass
@@ -578,13 +601,17 @@ class _LoginScreenState extends State<LoginScreen>
             userId = parts.last.trim();
           }
 
+          print('[LoginScreen] Device Name: $deviceName');
+          print('[LoginScreen] User ID: $userId');
+
           // Store the user ID for logout
           _pendingUserId = userId ?? _authService.currentUser?.uid;
 
           // Show device login dialog to user - let them decide
-          print('[LoginScreen] Another device detected, showing device login dialog...');
+          print('[LoginScreen] 🔔 Showing device login dialog...');
           _showDeviceLoginDialog(deviceName);
         } else {
+          print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
         }
@@ -608,66 +635,74 @@ class _LoginScreenState extends State<LoginScreen>
   /// Show device login dialog when another device is detected
   /// Gives user the option to logout the other device or stay logged in on both
   void _showDeviceLoginDialog(String deviceName) {
+    print('[LoginScreen] 🔴 _showDeviceLoginDialog CALLED');
+    print('[LoginScreen] 🔴 Device Name: $deviceName');
+    print('[LoginScreen] 🔴 Context mounted: $mounted');
+    print('[LoginScreen] 🔴 About to call showDialog...');
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => DeviceLoginDialog(
-        deviceName: deviceName,
-        // Option 1: User clicks "Logout Other Device"
-        onLogoutOtherDevice: () async {
-          try {
-            print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
+      builder: (dialogContext) {
+        print('[LoginScreen] 🔴 Dialog builder called');
+        return DeviceLoginDialog(
+          deviceName: deviceName,
+          // Option 1: User clicks "Logout Other Device"
+          onLogoutOtherDevice: () async {
+            try {
+              print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
 
-            // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
-            // The listener needs time to initialize (500ms auth delay + listener setup)
-            // If we call logoutFromOtherDevices() too early, the listener won't be ready
-            // and won't properly handle the forceLogout signal
-            // Extended to 2.5s to ensure we're well within protection window
-            print('[LoginScreen] Waiting 2.5 seconds for listener to initialize...');
-            await Future.delayed(const Duration(milliseconds: 2500));
-            print('[LoginScreen] Listener should be initialized now, proceeding with logout');
+              // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
+              // The listener needs time to initialize (500ms auth delay + listener setup)
+              // If we call logoutFromOtherDevices() too early, the listener won't be ready
+              // and won't properly handle the forceLogout signal
+              // Extended to 2.5s to ensure we're well within protection window
+              print('[LoginScreen] Waiting 2.5 seconds for listener to initialize...');
+              await Future.delayed(const Duration(milliseconds: 2500));
+              print('[LoginScreen] Listener should be initialized now, proceeding with logout');
 
-            // Logout from other devices and keep current device logged in
-            await _authService.logoutFromOtherDevices(userId: _pendingUserId);
+              // Logout from other devices and keep current device logged in
+              await _authService.logoutFromOtherDevices(userId: _pendingUserId);
 
-            // Close dialog - use mounted check before accessing context
-            // The dialog context may not be valid after long async operations
-            if (mounted && dialogContext.mounted) {
-              Navigator.pop(dialogContext);
+              // Close dialog - use mounted check before accessing context
+              // The dialog context may not be valid after long async operations
+              if (mounted && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+
+              // Wait a moment for Firestore to sync
+              await Future.delayed(const Duration(milliseconds: 300));
+
+              // Navigate to main app - use the screen's context (self) for navigation
+              if (mounted) {
+                await _navigateAfterAuth(isNewUser: false);
+              }
+            } catch (e) {
+              if (mounted) {
+                HapticFeedback.heavyImpact();
+                _showErrorSnackBar('Failed to logout from other device: ${e.toString()}');
+              }
             }
+          },
+          // Option 2: User clicks "Stay Logged In" - Device B stays logged in without logging out Device A
+          onCancel: () async {
+            try {
+              print('[LoginScreen] User chose to stay logged in on this device - navigating to main app');
 
-            // Wait a moment for Firestore to sync
-            await Future.delayed(const Duration(milliseconds: 300));
-
-            // Navigate to main app - use the screen's context (self) for navigation
-            if (mounted) {
-              await _navigateAfterAuth(isNewUser: false);
+              // Device B is already logged in (saved in auth_service)
+              // Just navigate to main app without logging out Device A
+              if (mounted) {
+                await _navigateAfterAuth(isNewUser: false);
+              }
+            } catch (e) {
+              if (mounted) {
+                HapticFeedback.heavyImpact();
+                _showErrorSnackBar('Error: ${e.toString()}');
+              }
             }
-          } catch (e) {
-            if (mounted) {
-              HapticFeedback.heavyImpact();
-              _showErrorSnackBar('Failed to logout from other device: ${e.toString()}');
-            }
-          }
-        },
-        // Option 2: User clicks "Stay Logged In" - Device B stays logged in without logging out Device A
-        onCancel: () async {
-          try {
-            print('[LoginScreen] User chose to stay logged in on this device - navigating to main app');
-
-            // Device B is already logged in (saved in auth_service)
-            // Just navigate to main app without logging out Device A
-            if (mounted) {
-              await _navigateAfterAuth(isNewUser: false);
-            }
-          } catch (e) {
-            if (mounted) {
-              HapticFeedback.heavyImpact();
-              _showErrorSnackBar('Error: ${e.toString()}');
-            }
-          }
-        },
-      ),
+          },
+        );
+      },
     );
   }
 

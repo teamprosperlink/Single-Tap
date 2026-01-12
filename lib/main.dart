@@ -436,8 +436,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // Get snapshot data safely
                 final snapshotData = snapshot.data();
                 if (snapshotData == null) {
+                  print('[DeviceSession] ⚠️ Snapshot data is NULL, skipping');
                   return;
                 }
+
+                // DIAGNOSTIC: Log all snapshot data
+                print('[DeviceSession] 📊 Full snapshot data: $snapshotData');
 
                 // Already performing logout - skip
                 if (_isPerformingLogout) {

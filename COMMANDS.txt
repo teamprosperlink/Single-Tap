@@ -1,0 +1,96 @@
+================================================================================
+                    EXACT COMMANDS TO RUN
+================================================================================
+
+COPY AND PASTE THESE COMMANDS IN ORDER
+
+================================================================================
+                    STEP 1: OPEN COMMAND PROMPT
+================================================================================
+
+Windows Key + R
+Type: cmd
+Press Enter
+
+================================================================================
+                  STEP 2: NAVIGATE TO PROJECT
+================================================================================
+
+Copy this command:
+
+cd c:/Users/csp/Documents/plink-live
+
+Paste into Command Prompt
+Press Enter
+
+================================================================================
+             STEP 3: LOGIN TO FIREBASE (ONE-TIME)
+================================================================================
+
+Copy this command:
+
+npx firebase login
+
+Paste into Command Prompt
+Press Enter
+
+What happens:
+1. Browser window opens automatically
+2. You'll see Firebase login page
+3. Login with your Firebase account
+4. Click "Allow" for permissions
+5. Browser shows: "You are logged in as..."
+6. Return to Command Prompt (says "✓ Logged in as...")
+
+================================================================================
+                  STEP 4: DEPLOY CLOUD FUNCTIONS
+================================================================================
+
+Copy this command:
+
+DEPLOY.bat
+
+Paste into Command Prompt
+Press Enter
+
+Wait for: "DEPLOYMENT COMPLETE!" message
+
+This deploys:
+- Cloud Functions (forceLogoutOtherDevices)
+- Firestore Security Rules
+- Time: ~5-10 minutes
+
+================================================================================
+                   STEP 5: TEST WITH TWO EMULATORS
+================================================================================
+
+After deployment completes, open TWO separate Command Prompt windows:
+
+TERMINAL 1 (Device A):
+  cd c:/Users/csp/Documents/plink-live
+  flutter run -d emulator-5554
+  Wait for app to fully load (30 seconds)
+  Login: test@example.com / password123
+
+TERMINAL 2 (Device B) - After 30 seconds:
+  cd c:/Users/csp/Documents/plink-live
+  flutter run -d emulator-5556
+  Login: test@example.com / password123 (SAME account)
+
+EXPECTED RESULT:
+  Device A: Shows login screen (logged out) ✓
+  Device B: Shows main app (logged in) ✓
+
+================================================================================
+                      SUMMARY OF ALL COMMANDS
+================================================================================
+
+1. cd c:/Users/csp/Documents/plink-live
+2. npx firebase login
+3. DEPLOY.bat
+4. flutter run -d emulator-5554  (Terminal 1, wait 30 seconds)
+5. flutter run -d emulator-5556  (Terminal 2, after 30 seconds)
+
+Total time: ~15 minutes
+
+================================================================================
