@@ -346,7 +346,12 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Store the user ID for logout
           _pendingUserId = userId ?? _authService.currentUser?.uid;
-          _showDeviceLoginDialog(deviceName);
+
+          // CRITICAL: Automatically logout other device (WhatsApp-style)
+          // Device B is now logged in and saved to Firestore
+          // No dialog needed - just logout the old device automatically
+          print('[LoginScreen] Another device detected, automatically logging it out...');
+          await _automaticallyLogoutOtherDevice();
         } else {
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
@@ -594,6 +599,40 @@ class _LoginScreenState extends State<LoginScreen>
       context,
       MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
     );
+  }
+
+  /// Automatically logout other device when new device logs in (WhatsApp-style)
+  /// Device B is already logged in, just need to logout Device A
+  Future<void> _automaticallyLogoutOtherDevice() async {
+    try {
+      print('[LoginScreen] Starting automatic logout of other device...');
+
+      // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
+      // The listener needs time to initialize (500ms auth delay + listener setup)
+      // Extended to 2.5s to ensure we're well within protection window
+      print('[LoginScreen] Waiting 2.5 seconds for listener to initialize...');
+      await Future.delayed(const Duration(milliseconds: 2500));
+      print('[LoginScreen] Listener initialized, now logging out other device...');
+
+      // Logout from other devices and keep current device (Device B) logged in
+      await _authService.logoutFromOtherDevices(userId: _pendingUserId);
+      print('[LoginScreen] ✓ Other device logout command sent');
+
+      // Wait a moment for Firestore to sync
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Navigate to main app - Device B should now be the only device logged in
+      if (mounted) {
+        print('[LoginScreen] ✓ Navigating Device B to main app...');
+        await _navigateAfterAuth(isNewUser: false);
+      }
+    } catch (e) {
+      print('[LoginScreen] ❌ Error during automatic logout: $e');
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        _showErrorSnackBar('Error: ${e.toString()}');
+      }
+    }
   }
 
   void _showDeviceLoginDialog(String deviceName) {
