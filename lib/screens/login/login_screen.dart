@@ -357,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Show device login dialog to user - let them decide
           print('[LoginScreen] 🔔 Showing device login dialog...');
-          _showDeviceLoginDialog(deviceName);
+          await _showDeviceLoginDialog(deviceName);
         } else {
           print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
           HapticFeedback.heavyImpact();
@@ -609,7 +609,7 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Show device login dialog to user - let them decide
           print('[LoginScreen] 🔔 Showing device login dialog...');
-          _showDeviceLoginDialog(deviceName);
+          await _showDeviceLoginDialog(deviceName);
         } else {
           print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
           HapticFeedback.heavyImpact();
@@ -634,13 +634,14 @@ class _LoginScreenState extends State<LoginScreen>
 
   /// Show device login dialog when another device is detected
   /// Gives user the option to logout the other device or stay logged in on both
-  void _showDeviceLoginDialog(String deviceName) {
+  /// Returns a Future that completes when the user makes a choice
+  Future<void> _showDeviceLoginDialog(String deviceName) async {
     print('[LoginScreen] 🔴 _showDeviceLoginDialog CALLED');
     print('[LoginScreen] 🔴 Device Name: $deviceName');
     print('[LoginScreen] 🔴 Context mounted: $mounted');
     print('[LoginScreen] 🔴 About to call showDialog...');
 
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
