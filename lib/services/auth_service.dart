@@ -1048,32 +1048,49 @@ class AuthService {
         // Fallback: Try direct Firestore write if Cloud Function fails
         // This handles cases where Cloud Function isn't deployed yet
         try {
+          print('[AuthService] STEP 1: Writing forceLogout=true to user doc: $uid');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
               .set({
             'forceLogout': true,
-            'activeDeviceToken': '',
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+          print('[AuthService] ✓ STEP 1 succeeded - forceLogout signal sent');
 
-          await Future.delayed(const Duration(milliseconds: 500));
+          await Future.delayed(const Duration(milliseconds: 200));
+          print('[AuthService] ⏳ Waited 200ms for Firestore to sync...');
 
+          print('[AuthService] STEP 2: Writing activeDeviceToken=${localToken.substring(0, 8)}... to user doc: $uid');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
               .set({
             'activeDeviceToken': localToken,
             'deviceInfo': deviceInfo,
-            'forceLogout': false,
+            // DO NOT set forceLogout: false here! Let Device A handle cleanup
+            // Setting it to false here creates a race condition where the signal
+            // is immediately cleared before Device A can react
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+          print('[AuthService] ✓ STEP 2 succeeded - new device set as active');
+
+          // STEP 3: Clear the forceLogout flag AFTER new device is active
+          await Future.delayed(const Duration(milliseconds: 100));
+          print('[AuthService] STEP 3: Clearing forceLogout flag');
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .update({
+            'forceLogout': false,
+          });
+          print('[AuthService] ✓ STEP 3 succeeded - forceLogout flag cleared');
 
           print(
             '[AuthService] ✓ Fallback write succeeded - forced logout completed',
           );
         } catch (fallbackError) {
-          print('[AuthService] Fallback write also failed: $fallbackError');
+          print('[AuthService] ❌ Fallback write FAILED: $fallbackError');
           rethrow;
         }
       }

@@ -43,10 +43,12 @@ service cloud.firestore {
       // Only the user can create their own profile
       allow create: if isOwner(userId);
 
-      // Owner can update, OR anyone can update device-related fields only
+      // Owner can update, OR anyone (including unauthenticated) can update device-related fields only
       // (This is needed for WhatsApp-style single device login: logout mechanism)
+      // When Device B is signed out after collision, it needs to write the logout signal
       allow update: if isOwner(userId) ||
-                       // Allow updating device fields for logout mechanism
+                       // Allow updating ONLY device fields (even unauthenticated)
+                       // This enables Device B to send logout signal after being signed out
                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                          'activeDeviceToken',
                          'deviceName',

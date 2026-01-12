@@ -600,7 +600,7 @@ class _LoginScreenState extends State<LoginScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => DeviceLoginDialog(
+      builder: (dialogContext) => DeviceLoginDialog(
         deviceName: deviceName,
         onLogoutOtherDevice: () async {
           try {
@@ -608,15 +608,16 @@ class _LoginScreenState extends State<LoginScreen>
             // Logout from other devices and keep current device logged in
             await _authService.logoutFromOtherDevices(userId: _pendingUserId);
 
-            // Close dialog
-            if (mounted) {
-              Navigator.pop(context);
+            // Close dialog - use mounted check before accessing context
+            // The dialog context may not be valid after long async operations
+            if (mounted && dialogContext.mounted) {
+              Navigator.pop(dialogContext);
             }
 
             // Wait a moment for Firestore to sync
             await Future.delayed(const Duration(milliseconds: 300));
 
-            // Navigate to main app
+            // Navigate to main app - use the screen's context (self) for navigation
             if (mounted) {
               await _navigateAfterAuth(isNewUser: false);
             }
