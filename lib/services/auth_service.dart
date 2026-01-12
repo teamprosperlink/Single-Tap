@@ -10,7 +10,15 @@ import '../res/utils/photo_url_helper.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  static final GoogleSignIn _googleSignIn = GoogleSignIn();
+  static final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // Properly initialize GoogleSignIn with Firebase scopes
+    scopes: [
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
+  );
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   static const String _deviceTokenKey = 'device_login_token';
 
@@ -187,26 +195,48 @@ class AuthService {
       try {
         await _googleSignIn.signOut();
       } catch (e) {
-        // Error signing out previous session
+        print('[AuthService] Warning: Error signing out previous session: $e');
+        // Don't fail - continue with new sign in
       }
 
+      print('[AuthService] Starting Google Sign In...');
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
+        print('[AuthService] Google Sign In was cancelled by user');
         return null;
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      print('[AuthService] Google Sign In successful for: ${googleUser.email}');
 
+      final GoogleSignInAuthentication googleAuth;
+      try {
+        googleAuth = await googleUser.authentication;
+      } catch (e) {
+        print('[AuthService] Error getting Google authentication: $e');
+        throw Exception('Failed to get Google authentication: $e');
+      }
+
+      if (googleAuth.idToken == null) {
+        print('[AuthService] ERROR: idToken is null - this causes DEVELOPER_ERROR');
+        print('[AuthService] Possible causes:');
+        print('[AuthService]   1. SHA-1 certificate hash mismatch in Google Cloud Console');
+        print('[AuthService]   2. Wrong package name configuration');
+        print('[AuthService]   3. Google Sign In not properly configured in Firebase');
+        throw Exception('Google Sign In idToken is null. Check Firebase Google Sign-In configuration.');
+      }
+
+      print('[AuthService] Creating Firebase credential with Google tokens...');
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
+      print('[AuthService] Signing in to Firebase with Google credential...');
       final UserCredential result = await _auth.signInWithCredential(
         credential,
       );
+      print('[AuthService] Firebase sign in successful for: ${result.user?.email}');
 
       // Generate and save device token FIRST (needed for logoutFromOtherDevices)
       String? deviceToken;
