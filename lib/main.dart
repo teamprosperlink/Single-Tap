@@ -433,34 +433,36 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   return;
                 }
 
-                // IMPORTANT: Skip forceLogout check on FIRST snapshot from this listener
-                // The first snapshot is the initial state and always has forceLogout=false
-                // Only check it on subsequent updates (from other devices)
+                // IMPORTANT: Skip ALL logout checks on FIRST snapshot from this listener
+                // The first snapshot is the initial state right after login and should NOT trigger logout
+                // Only check logout signals on subsequent updates (from other devices)
                 if (!_hasReceivedFirstSnapshot) {
                   _hasReceivedFirstSnapshot = true;
-                  print('[DeviceSession] ℹ️ Received first snapshot - skipping forceLogout check (initialization)');
-                  // Continue to token checks below (but not forceLogout)
-                } else {
-                  // PRIORITY 1: Check forceLogout flag (most reliable signal)
-                  // Only check after first snapshot to avoid false positives on new device
-                  final forceLogoutRaw = snapshotData['forceLogout'];
-                  bool forceLogout = false;
-                  if (forceLogoutRaw is bool) {
-                    forceLogout = forceLogoutRaw;
-                  } else if (forceLogoutRaw is int) {
-                    forceLogout = forceLogoutRaw != 0;
-                  } else if (forceLogoutRaw != null) {
-                    forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
-                  }
+                  print('[DeviceSession] ℹ️ Received first snapshot - skipping ALL logout checks (initialization)');
+                  // Skip all logout detection on first snapshot - this is just initial state
+                  return;
+                }
 
-                  if (forceLogout == true) {
-                    print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
-                    if (mounted && !_isPerformingLogout) {
-                      _isPerformingLogout = true;
-                      await _performRemoteLogout('Another device logged in');
-                    }
-                    return;
+                // ONLY CHECK LOGOUT SIGNALS ON 2ND+ SNAPSHOTS
+
+                // PRIORITY 1: Check forceLogout flag (most reliable signal)
+                final forceLogoutRaw = snapshotData['forceLogout'];
+                bool forceLogout = false;
+                if (forceLogoutRaw is bool) {
+                  forceLogout = forceLogoutRaw;
+                } else if (forceLogoutRaw is int) {
+                  forceLogout = forceLogoutRaw != 0;
+                } else if (forceLogoutRaw != null) {
+                  forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
+                }
+
+                if (forceLogout == true) {
+                  print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
+                  if (mounted && !_isPerformingLogout) {
+                    _isPerformingLogout = true;
+                    await _performRemoteLogout('Another device logged in');
                   }
+                  return;
                 }
 
                 // PRIORITY 2: Check token empty (fallback detection)
