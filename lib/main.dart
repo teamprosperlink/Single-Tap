@@ -444,11 +444,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 //   3. WITHOUT this 6s window, Device B would logout itself!
                 final now = DateTime.now();
                 final secondsSinceListenerStart = _listenerStartTime != null
-                    ? now.difference(_listenerStartTime!).inSeconds
+                    ? now.difference(_listenerStartTime!).inMilliseconds / 1000.0
                     : 0;
 
-                if (secondsSinceListenerStart < 6) {
-                  print('[DeviceSession] ⏳ PROTECTION PHASE (${6 - secondsSinceListenerStart}s remaining) - skipping ALL logout checks');
+                print('[DeviceSession] 🕐 Snapshot received: ${secondsSinceListenerStart.toStringAsFixed(2)}s since listener start (listenerStartTime=${_listenerStartTime != null ? "SET" : "NULL"})');
+
+                if (secondsSinceListenerStart < 10) {
+                  print('[DeviceSession] ⏳ PROTECTION PHASE (${(10 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining) - skipping ALL logout checks');
                   return; // Skip ALL checks (forceLogout, token empty, token mismatch) during protection window
                 }
 

@@ -610,8 +610,9 @@ class _LoginScreenState extends State<LoginScreen>
             // The listener needs time to initialize (500ms auth delay + listener setup)
             // If we call logoutFromOtherDevices() too early, the listener won't be ready
             // and won't properly handle the forceLogout signal
-            print('[LoginScreen] Waiting 1.5 seconds for listener to initialize...');
-            await Future.delayed(const Duration(milliseconds: 1500));
+            // Extended to 2.5s to ensure we're well within protection window
+            print('[LoginScreen] Waiting 2.5 seconds for listener to initialize...');
+            await Future.delayed(const Duration(milliseconds: 2500));
             print('[LoginScreen] Listener should be initialized now, proceeding with logout');
 
             // Logout from other devices and keep current device logged in
