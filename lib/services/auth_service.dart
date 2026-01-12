@@ -1099,8 +1099,11 @@ class AuthService {
           }, SetOptions(merge: true));
           print('[AuthService] ✓ STEP 1 succeeded - forceLogout signal sent');
 
-          await Future.delayed(const Duration(milliseconds: 200));
-          print('[AuthService] ⏳ Waited 200ms for Firestore to sync...');
+          // CRITICAL: Wait longer to ensure Device A listener detects the signal
+          // Device A has a 10-second protection window after startup, but once past it,
+          // it should immediately detect this forceLogout flag
+          await Future.delayed(const Duration(milliseconds: 500));
+          print('[AuthService] ⏳ Waited 500ms for Firestore to sync and Device A to detect signal...');
 
           print('[AuthService] STEP 2: Writing activeDeviceToken=${localToken.substring(0, 8)}... to user doc: $uid');
           await FirebaseFirestore.instance
@@ -1116,8 +1119,9 @@ class AuthService {
           }, SetOptions(merge: true));
           print('[AuthService] ✓ STEP 2 succeeded - new device set as active');
 
-          // STEP 3: Clear the forceLogout flag AFTER new device is active
-          await Future.delayed(const Duration(milliseconds: 100));
+          // STEP 3: Clear the forceLogout flag AFTER new device is active and Device A has processed
+          // Give Device A extra time to detect and process the logout signal
+          await Future.delayed(const Duration(milliseconds: 1000));
           print('[AuthService] STEP 3: Clearing forceLogout flag');
           await FirebaseFirestore.instance
               .collection('users')

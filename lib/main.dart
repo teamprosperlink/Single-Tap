@@ -471,6 +471,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
                 final forceLogoutRaw = snapshotData['forceLogout'];
+                print('[DeviceSession] 📋 forceLogout value: $forceLogoutRaw (type: ${forceLogoutRaw.runtimeType})');
                 bool forceLogout = false;
                 if (forceLogoutRaw is bool) {
                   forceLogout = forceLogoutRaw;
@@ -480,13 +481,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
                 }
 
+                print('[DeviceSession] 📋 forceLogout parsed: $forceLogout');
+
                 if (forceLogout == true) {
-                  print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
+                  print('[DeviceSession] �� FORCE LOGOUT SIGNAL DETECTED');
                   if (mounted && !_isPerformingLogout) {
                     _isPerformingLogout = true;
                     await _performRemoteLogout('Another device logged in');
                   }
                   return;
+                } else {
+                  print('[DeviceSession] ✓ No forceLogout signal (or false)');
                 }
 
                 // PRIORITY 2: Check token empty (fallback detection)
