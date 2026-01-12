@@ -444,7 +444,12 @@ class _LoginScreenState extends State<LoginScreen>
 
             // Store the user ID for logout
             _pendingUserId = userId ?? _authService.currentUser?.uid;
-            _showDeviceLoginDialog(deviceName);
+
+            // CRITICAL: Automatically logout other device (WhatsApp-style)
+            // Device B is now logged in and saved to Firestore
+            // No dialog needed - just logout the old device automatically
+            print('[LoginScreen] Another device detected, automatically logging it out...');
+            await _automaticallyLogoutOtherDevice();
           } else {
             HapticFeedback.heavyImpact();
             _showErrorSnackBar(errorMsg);
@@ -579,7 +584,12 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Store the user ID for logout
           _pendingUserId = userId ?? _authService.currentUser?.uid;
-          _showDeviceLoginDialog(deviceName);
+
+          // CRITICAL: Automatically logout other device (WhatsApp-style)
+          // Device B is now logged in and saved to Firestore
+          // No dialog needed - just logout the old device automatically
+          print('[LoginScreen] Another device detected, automatically logging it out...');
+          await _automaticallyLogoutOtherDevice();
         } else {
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
