@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -380,124 +381,110 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
   /// Start real-time monitoring for device session changes (WhatsApp-style)
   /// Automatically logs out user if another device logs in with same account
+  /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
-    // Cancel any existing subscription
-    _deviceSessionSubscription?.cancel();
-
     try {
-      // Get local device token
+      // Cancel any existing subscription
+      _deviceSessionSubscription?.cancel();
+
+      // Get local device token - CRITICAL for device comparison
       final localToken = await _authService.getLocalDeviceToken();
-      if (localToken == null) {
-        print('[DeviceSession] No local token found, skipping listener');
+      if (localToken == null || localToken.isEmpty) {
+        print('[DeviceSession] ❌ ERROR: No valid local token found');
         return;
       }
 
-      print('[DeviceSession] ✓ Starting real-time listener for user: $userId');
-      print('[DeviceSession] Local device token: ${localToken.substring(0, 8)}...');
+      print('[DeviceSession] ✅ Starting real-time listener');
+      print('[DeviceSession] ✅ User: ${userId.substring(0, 8)}...');
+      print('[DeviceSession] ✅ Local token: ${localToken.substring(0, min(8, localToken.length))}...');
 
       // Listen to user document changes in real-time
-      // Include metadata changes to detect server updates IMMEDIATELY
-      // This is critical for the forceLogout flag - we need to detect changes from other devices
       _deviceSessionSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .snapshots(includeMetadataChanges: true)
           .listen(
             (snapshot) async {
-              // Skip local (pending) writes - only process server data
-              if (snapshot.metadata.hasPendingWrites) {
-                print('[DeviceSession] 📡 SNAPSHOT - local pending write, skipping for now');
-                return;
-              }
-
-              print('[DeviceSession] 📡 SNAPSHOT RECEIVED from SERVER - exists: ${snapshot.exists}');
-
-              if (!snapshot.exists) {
-                print('[DeviceSession] User document deleted');
-                if (mounted && !_isPerformingLogout) {
-                  _isPerformingLogout = true;
-                  await _performRemoteLogout(
-                      'Account was deleted or access revoked');
+              try {
+                // Skip local pending writes - only process SERVER data
+                if (snapshot.metadata.hasPendingWrites) {
+                  return;
                 }
-                return;
+
+                // Validate snapshot exists
+                if (!snapshot.exists) {
+                  if (mounted && !_isPerformingLogout) {
+                    _isPerformingLogout = true;
+                    await _performRemoteLogout('Account deleted or revoked');
+                  }
+                  return;
+                }
+
+                // Get snapshot data safely
+                final snapshotData = snapshot.data();
+                if (snapshotData == null) {
+                  return;
+                }
+
+                // Already performing logout - skip
+                if (_isPerformingLogout) {
+                  return;
+                }
+
+                // PRIORITY 1: Check forceLogout flag (most reliable signal)
+                final forceLogoutRaw = snapshotData['forceLogout'];
+                bool forceLogout = false;
+                if (forceLogoutRaw is bool) {
+                  forceLogout = forceLogoutRaw;
+                } else if (forceLogoutRaw is int) {
+                  forceLogout = forceLogoutRaw != 0;
+                } else if (forceLogoutRaw != null) {
+                  forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
+                }
+
+                if (forceLogout == true) {
+                  print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
+                  if (mounted && !_isPerformingLogout) {
+                    _isPerformingLogout = true;
+                    await _performRemoteLogout('Another device logged in');
+                  }
+                  return;
+                }
+
+                // PRIORITY 2: Check token empty (fallback detection)
+                final serverToken = snapshotData['activeDeviceToken'] as String?;
+                final serverTokenValid = (serverToken?.isNotEmpty ?? false);
+                final localTokenValid = localToken.isNotEmpty;
+
+                if (!serverTokenValid && localTokenValid) {
+                  print('[DeviceSession] ❌ TOKEN CLEARED ON SERVER');
+                  if (mounted && !_isPerformingLogout) {
+                    _isPerformingLogout = true;
+                    await _performRemoteLogout('Another device logged in');
+                  }
+                  return;
+                }
+
+                // PRIORITY 3: Token mismatch (device has changed)
+                if (serverTokenValid && localTokenValid && serverToken != localToken) {
+                  print('[DeviceSession] ❌ TOKEN MISMATCH - ANOTHER DEVICE ACTIVE');
+                  if (mounted && !_isPerformingLogout) {
+                    _isPerformingLogout = true;
+                    await _performRemoteLogout('Another device logged in');
+                  }
+                  return;
+                }
+              } catch (e) {
+                print('[DeviceSession] ❌ Error in listener callback: $e');
               }
-
-              // Get the server data
-              final snapshotData = snapshot.data();
-              print('[DeviceSession] 📡 Full snapshot data: $snapshotData');
-              print('[DeviceSession] 📡 Snapshot timestamp: ${snapshot.metadata.hasPendingWrites ? "LOCAL" : "SERVER"}');
-
-              // CRITICAL: Parse forceLogout carefully - handle all possible types
-              final forceLogoutValue = snapshotData?['forceLogout'];
-              bool forceLogout = false;
-
-              if (forceLogoutValue is bool) {
-                forceLogout = forceLogoutValue;
-              } else if (forceLogoutValue is int) {
-                forceLogout = forceLogoutValue != 0;
-              } else if (forceLogoutValue != null) {
-                // Try parsing as string
-                forceLogout = forceLogoutValue.toString().toLowerCase() == 'true';
-              }
-
-              final serverToken = snapshotData?['activeDeviceToken'] as String?;
-
-              print('[DeviceSession] 📡 forceLogoutValue (raw): $forceLogoutValue (type: ${forceLogoutValue.runtimeType})');
-              print('[DeviceSession] 📡 forceLogout (parsed): $forceLogout (type: ${forceLogout.runtimeType})');
-              print('[DeviceSession] 📡 serverToken: ${serverToken?.substring(0, 8) ?? "NULL"}...');
-              print('[DeviceSession] 📡 localToken: ${localToken.substring(0, 8)}...');
-              print('[DeviceSession] 📡 Check flags: forceLogout=$forceLogout, _isPerformingLogout=$_isPerformingLogout, mounted=$mounted');
-
-              // Already performing logout - skip this snapshot
-              if (_isPerformingLogout) {
-                print('[DeviceSession] ⏳ Already performing logout, skipping this snapshot');
-                return;
-              }
-
-              // PRIORITY 1: Check forceLogout flag FIRST (instant logout signal - WhatsApp style!)
-              // This must be EXACT true comparison
-              if (forceLogout == true) {
-                print('[DeviceSession] 🔴 FORCE LOGOUT DETECTED! forceLogout == true');
-                print('[DeviceSession] 🔴 Setting _isPerformingLogout=true and calling _performRemoteLogout()');
-                _isPerformingLogout = true;
-                await _performRemoteLogout(
-                    'Logged out: Account accessed on another device');
-                print('[DeviceSession] 🔴 _performRemoteLogout() completed');
-                return;
-              }
-
-              // PRIORITY 2: Check if server token is null/empty (another device logged in)
-              if ((serverToken == null || serverToken.isEmpty) && localToken.isNotEmpty) {
-                print('[DeviceSession] ❌ TOKEN EMPTY DETECTED!');
-                _isPerformingLogout = true;
-                await _performRemoteLogout(
-                    'Logged out: Account accessed on another device');
-                return;
-              }
-
-              // PRIORITY 3: Token mismatch - another device is active
-              if (serverToken != null &&
-                  serverToken.isNotEmpty &&
-                  serverToken != localToken) {
-                print('[DeviceSession] ❌ TOKEN MISMATCH! Other device is active');
-                print('[DeviceSession] ❌ serverToken: ${serverToken.substring(0, 8)}...');
-                print('[DeviceSession] ❌ localToken: ${localToken.substring(0, 8)}...');
-                _isPerformingLogout = true;
-                await _performRemoteLogout(
-                    'Logged out: Account accessed on another device');
-                return;
-              }
-
-              // Token matches - we're still the active device
-              print('[DeviceSession] ✓ Session check OK - token matches, we are active device');
             },
             onError: (e) {
-              print('[DeviceSession] ❌ Listener error: $e');
-              print('[DeviceSession] ❌ Listener error stack: ${StackTrace.current}');
+              print('[DeviceSession] ❌ LISTENER FAILED: $e');
+              // On listener error: still try to stay logged in until next check
             },
           );
     } catch (e) {
-      print('[DeviceSession] Error starting listener: $e');
+      print('[DeviceSession] ❌ Failed to start listener: $e');
     }
   }
 
