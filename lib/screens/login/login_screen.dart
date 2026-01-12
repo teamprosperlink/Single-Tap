@@ -602,6 +602,7 @@ class _LoginScreenState extends State<LoginScreen>
       barrierDismissible: false,
       builder: (dialogContext) => DeviceLoginDialog(
         deviceName: deviceName,
+        // Option 1: User clicks "Logout Other Device"
         onLogoutOtherDevice: () async {
           try {
             print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
@@ -635,6 +636,23 @@ class _LoginScreenState extends State<LoginScreen>
             if (mounted) {
               HapticFeedback.heavyImpact();
               _showErrorSnackBar('Failed to logout from other device: ${e.toString()}');
+            }
+          }
+        },
+        // Option 2: User clicks "Stay Logged In" - Device B stays logged in without logging out Device A
+        onCancel: () async {
+          try {
+            print('[LoginScreen] User chose to stay logged in on this device - navigating to main app');
+
+            // Device B is already logged in (saved in auth_service)
+            // Just navigate to main app without logging out Device A
+            if (mounted) {
+              await _navigateAfterAuth(isNewUser: false);
+            }
+          } catch (e) {
+            if (mounted) {
+              HapticFeedback.heavyImpact();
+              _showErrorSnackBar('Error: ${e.toString()}');
             }
           }
         },

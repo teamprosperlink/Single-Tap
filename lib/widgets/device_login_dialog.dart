@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class DeviceLoginDialog extends StatefulWidget {
   final String deviceName;
   final VoidCallback onLogoutOtherDevice;
+  final VoidCallback? onCancel; // Allow user to stay logged in on both devices
 
   const DeviceLoginDialog({
     super.key,
     required this.deviceName,
     required this.onLogoutOtherDevice,
+    this.onCancel,
   });
 
   @override
@@ -129,12 +131,21 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
                 ),
                 const SizedBox(height: 12),
 
-                // Cancel button
+                // Cancel button - User stays logged in on this device
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: OutlinedButton(
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pop(context);
+                            // Call onCancel callback if provided
+                            // This allows Device B to continue to main app without logging out Device A
+                            if (widget.onCancel != null) {
+                              widget.onCancel!();
+                            }
+                          },
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(
                         color: Colors.white.withValues(alpha: 0.3),
@@ -144,7 +155,7 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
                       ),
                     ),
                     child: const Text(
-                      'Cancel',
+                      'Stay Logged In',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

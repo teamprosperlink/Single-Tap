@@ -61,18 +61,25 @@ class AuthService {
         final sessionCheck = await _checkExistingSession(result.user!.uid);
         if (sessionCheck['exists'] == true) {
           print(
-            '[AuthService] Existing session detected, throwing ALREADY_LOGGED_IN',
+            '[AuthService] Existing session detected, showing device login dialog',
           );
-          // IMPORTANT: Save the UID BEFORE signing out Device B!
+          // CRITICAL FIX: DO NOT sign out Device B!
+          // Device B should stay logged in and the user can decide what to do:
+          // - Click "Logout Other Device" to logout the old device and keep new device
+          // - Click "Cancel" to stay on both devices (or return to login)
+
           final userIdToPass = result.user!.uid;
-
-          // IMPORTANT: Sign out Device B immediately so it stays on login screen
-          // Device B's device token is saved in SharedPreferences, that's enough for logoutFromOtherDevices
-          await _auth.signOut();
-          print('[AuthService] Device B signed out to keep it on login screen - token saved in SharedPreferences');
-
           final deviceInfo =
               sessionCheck['deviceInfo'] as Map<String, dynamic>?;
+
+          // Save Device B's session since it's now logged in
+          print('[AuthService] Saving Device B session...');
+          await _updateUserProfileOnLoginAsync(result.user!, email);
+          await _saveDeviceSession(result.user!.uid, deviceToken ?? '');
+
+          print('[AuthService] Device B logged in successfully - showing device conflict dialog');
+
+          // Throw error to trigger dialog, but Device B is already logged in
           throw Exception(
             'ALREADY_LOGGED_IN:${deviceInfo?['deviceName'] ?? 'Another Device'}:$userIdToPass',
           );
