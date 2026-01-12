@@ -396,14 +396,21 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       print('[DeviceSession] Local device token: ${localToken.substring(0, 8)}...');
 
       // Listen to user document changes in real-time
-      // Use server source first to get fresh data
+      // Include metadata changes to detect server updates IMMEDIATELY
+      // This is critical for the forceLogout flag - we need to detect changes from other devices
       _deviceSessionSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .snapshots(includeMetadataChanges: false)
+          .snapshots(includeMetadataChanges: true)
           .listen(
             (snapshot) async {
-              print('[DeviceSession] 📡 SNAPSHOT RECEIVED - exists: ${snapshot.exists}');
+              // Skip local (pending) writes - only process server data
+              if (snapshot.metadata.hasPendingWrites) {
+                print('[DeviceSession] 📡 SNAPSHOT - local pending write, skipping for now');
+                return;
+              }
+
+              print('[DeviceSession] 📡 SNAPSHOT RECEIVED from SERVER - exists: ${snapshot.exists}');
 
               if (!snapshot.exists) {
                 print('[DeviceSession] User document deleted');
@@ -417,22 +424,41 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
               // Get the server data
               final snapshotData = snapshot.data();
-              final forceLogout = snapshotData?['forceLogout'] as bool? ?? false;
+              print('[DeviceSession] 📡 Full snapshot data: $snapshotData');
+              print('[DeviceSession] 📡 Snapshot timestamp: ${snapshot.metadata.hasPendingWrites ? "LOCAL" : "SERVER"}');
+
+              // CRITICAL: Parse forceLogout carefully - handle all possible types
+              final forceLogoutValue = snapshotData?['forceLogout'];
+              bool forceLogout = false;
+
+              if (forceLogoutValue is bool) {
+                forceLogout = forceLogoutValue;
+              } else if (forceLogoutValue is int) {
+                forceLogout = forceLogoutValue != 0;
+              } else if (forceLogoutValue != null) {
+                // Try parsing as string
+                forceLogout = forceLogoutValue.toString().toLowerCase() == 'true';
+              }
+
               final serverToken = snapshotData?['activeDeviceToken'] as String?;
 
-              print('[DeviceSession] 📡 Data: forceLogout=$forceLogout, serverToken=${serverToken?.substring(0, 8) ?? "NULL"}..., localToken=${localToken.substring(0, 8)}...');
-              print('[DeviceSession] 📡 _isPerformingLogout=$_isPerformingLogout, mounted=$mounted');
+              print('[DeviceSession] 📡 forceLogoutValue (raw): $forceLogoutValue (type: ${forceLogoutValue.runtimeType})');
+              print('[DeviceSession] 📡 forceLogout (parsed): $forceLogout (type: ${forceLogout.runtimeType})');
+              print('[DeviceSession] 📡 serverToken: ${serverToken?.substring(0, 8) ?? "NULL"}...');
+              print('[DeviceSession] 📡 localToken: ${localToken.substring(0, 8)}...');
+              print('[DeviceSession] 📡 Check flags: forceLogout=$forceLogout, _isPerformingLogout=$_isPerformingLogout, mounted=$mounted');
 
               // Already performing logout - skip this snapshot
               if (_isPerformingLogout) {
-                print('[DeviceSession] ⏳ Already performing logout, skipping...');
+                print('[DeviceSession] ⏳ Already performing logout, skipping this snapshot');
                 return;
               }
 
               // PRIORITY 1: Check forceLogout flag FIRST (instant logout signal - WhatsApp style!)
+              // This must be EXACT true comparison
               if (forceLogout == true) {
-                print('[DeviceSession] 🔴 FORCE LOGOUT DETECTED! forceLogout=true');
-                print('[DeviceSession] 🔴 About to set _isPerformingLogout=true and call _performRemoteLogout()');
+                print('[DeviceSession] 🔴 FORCE LOGOUT DETECTED! forceLogout == true');
+                print('[DeviceSession] 🔴 Setting _isPerformingLogout=true and calling _performRemoteLogout()');
                 _isPerformingLogout = true;
                 await _performRemoteLogout(
                     'Logged out: Account accessed on another device');
@@ -454,6 +480,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   serverToken.isNotEmpty &&
                   serverToken != localToken) {
                 print('[DeviceSession] ❌ TOKEN MISMATCH! Other device is active');
+                print('[DeviceSession] ❌ serverToken: ${serverToken.substring(0, 8)}...');
+                print('[DeviceSession] ❌ localToken: ${localToken.substring(0, 8)}...');
                 _isPerformingLogout = true;
                 await _performRemoteLogout(
                     'Logged out: Account accessed on another device');
@@ -461,10 +489,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
               }
 
               // Token matches - we're still the active device
-              print('[DeviceSession] ✓ Session check OK - token matches');
+              print('[DeviceSession] ✓ Session check OK - token matches, we are active device');
             },
             onError: (e) {
               print('[DeviceSession] ❌ Listener error: $e');
+              print('[DeviceSession] ❌ Listener error stack: ${StackTrace.current}');
             },
           );
     } catch (e) {
@@ -630,7 +659,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           // Start real-time device session monitoring (WhatsApp-style auto-logout)
           if (_lastInitializedUserId != uid) {
             print('[BUILD] Starting device session monitoring for new user: $uid');
+            print('[BUILD] Subscription BEFORE: $_deviceSessionSubscription');
             _startDeviceSessionMonitoring(uid);
+            print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+          } else {
+            print('[BUILD] Reusing existing device session monitoring for: $uid');
+            print('[BUILD] Subscription status: $_deviceSessionSubscription');
           }
 
           if (!_hasInitializedServices || _lastInitializedUserId != uid) {
