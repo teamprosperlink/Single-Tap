@@ -477,6 +477,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     print('[RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========');
     print('[RemoteLogout] Reason: $message');
     print('[RemoteLogout] Current user BEFORE logout: ${_authService.currentUser?.uid ?? "null"}');
+    print('[RemoteLogout] Widget mounted? $mounted');
 
     try {
       // Cancel subscriptions FIRST (before logout)
@@ -484,6 +485,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _deviceSessionSubscription?.cancel();
       _sessionCheckTimer?.cancel();
       _autoCheckTimer?.cancel();
+      _authStateSubscription?.cancel(); // Also cancel auth subscription
       print('[RemoteLogout] ✓ All subscriptions cancelled');
 
       // Clear flags BEFORE logout
@@ -491,7 +493,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _hasInitializedServices = false;
       _lastInitializedUserId = null;
       _isInitializing = false;
-      _isPerformingLogout = false;
+      // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
       print('[RemoteLogout] 🔴 Calling signOut()...');
@@ -499,28 +501,44 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       print('[RemoteLogout] ✓ Firebase sign out completed');
 
       // CRITICAL: Wait for Firebase to process logout
-      print('[RemoteLogout] ⏳ Waiting for Firebase to process logout...');
+      print('[RemoteLogout] ⏳ Waiting for Firebase auth state to clear...');
 
       // Wait with multiple checks
       int waitCount = 0;
-      while (_authService.currentUser != null && waitCount < 15) {
+      while (_authService.currentUser != null && waitCount < 20) {
         await Future.delayed(const Duration(milliseconds: 100));
+        print('[RemoteLogout] ⏳ Wait iteration $waitCount - currentUser still: ${_authService.currentUser?.uid ?? "null"}');
         waitCount++;
       }
 
       final stillLoggedIn = _authService.currentUser != null;
-      print('[RemoteLogout] After ${waitCount * 100}ms - still logged in? $stillLoggedIn');
+      print('[RemoteLogout] ✓ After ${waitCount * 100}ms - still logged in? $stillLoggedIn');
 
+      // Final check - ensure we're actually logged out
+      if (_authService.currentUser != null) {
+        print('[RemoteLogout] ⚠️ WARNING: currentUser is still not null after wait, forcing immediate signOut...');
+        await _authService.firebaseAuth.signOut();
+        await Future.delayed(const Duration(milliseconds: 300));
+        print('[RemoteLogout] ✓ Force sign out completed');
+      }
+
+      // Now trigger rebuild - this will cause StreamBuilder to rebuild and show login
       if (mounted) {
-        print('[RemoteLogout] 🔄 Triggering setState to rebuild...');
+        print('[RemoteLogout] 🔄 Widget is mounted - triggering setState to rebuild...');
         setState(() {
+          print('[RemoteLogout] setState callback executing');
           // This causes build() to be called
           // build() will check currentUser and show OnboardingScreen if null
         });
 
-        print('[RemoteLogout] ✓ setState completed - AuthWrapper should show login screen now');
+        // Give Flutter a chance to process the rebuild
+        await Future.delayed(const Duration(milliseconds: 100));
+        print('[RemoteLogout] ✓ setState completed and Flutter processing done');
+      } else {
+        print('[RemoteLogout] ⚠️ Widget is NOT mounted - cannot rebuild UI');
       }
 
+      _isPerformingLogout = false; // Reset at the very end
       print('[RemoteLogout] ✓ Remote logout completed successfully');
     } catch (e) {
       print('[RemoteLogout] ❌ Error in logout: $e');
@@ -548,7 +566,23 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    print('[BUILD] AuthWrapper.build() called');
+    print('[BUILD] >>>>>>>>>> AuthWrapper.build() called');
+
+    // CRITICAL CHECK FIRST - before even building StreamBuilder
+    final currentUser = _authService.currentUser;
+    print('[BUILD] CRITICAL FIRST CHECK - currentUser: ${currentUser?.uid ?? "null"}');
+
+    if (currentUser == null) {
+      print('[BUILD] ✓✓✓ currentUser is NULL - IMMEDIATELY showing login screen (before StreamBuilder)');
+      _hasInitializedServices = false;
+      _lastInitializedUserId = null;
+      _isInitializing = false;
+      _isPerformingLogout = false;
+      return const OnboardingScreen();
+    }
+
+    print('[BUILD] currentUser exists: ${currentUser.uid} - proceeding with StreamBuilder');
+
     return StreamBuilder<User?>(
       stream: _authService.authStateChanges,
       builder: (context, snapshot) {
@@ -556,11 +590,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           '[BUILD] StreamBuilder fired - connectionState: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, data: ${snapshot.data?.uid ?? "null"}',
         );
 
-        // CRITICAL: Always check currentUser directly too in case snapshot is stale
-        final currentUser = _authService.currentUser;
-        print('[BUILD] Direct auth check - currentUser: ${currentUser?.uid ?? "null"}');
+        // CRITICAL: Always check currentUser directly again in case snapshot is stale or delayed
+        final currentUserAgain = _authService.currentUser;
+        print('[BUILD] Direct auth check AGAIN - currentUser: ${currentUserAgain?.uid ?? "null"}');
 
         if (snapshot.connectionState == ConnectionState.waiting) {
+          print('[BUILD] connectionState is waiting - checking if we should show login instead...');
+          // Even if waiting, if currentUser is null, show login
+          if (currentUserAgain == null) {
+            print('[BUILD] ✓ During WAITING state, currentUser is null - show login screen');
+            return const OnboardingScreen();
+          }
           print('[BUILD] Showing loading screen');
           return _buildLoadingScreen();
         }
@@ -570,13 +610,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           return _buildErrorScreen(snapshot.error.toString());
         }
 
-        // CRITICAL FIX: Use currentUser directly if it's null (logout happened)
-        // This prevents showing cached user data after logout
-        final userFromSnapshot = snapshot.data;
-
-        // If currentUser is null, ALWAYS show login regardless of snapshot
-        if (currentUser == null) {
-          print('[BUILD] ✓ currentUser is null - showing login screen');
+        // CRITICAL FIX: If currentUser is null, ALWAYS show login regardless of snapshot state
+        if (currentUserAgain == null) {
+          print('[BUILD] ✓✓ currentUser is null in StreamBuilder builder - showing login screen');
           _hasInitializedServices = false;
           _lastInitializedUserId = null;
           _isInitializing = false;
@@ -584,15 +620,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           return const OnboardingScreen();
         }
 
-        // Otherwise use snapshot data
-        final userToShow = userFromSnapshot;
+        // Use snapshot data only if currentUser is not null
+        final userFromSnapshot = snapshot.data;
 
-        if (userToShow != null) {
-          print('[BUILD] User logged in: ${userToShow.uid}');
-          String uid = userToShow.uid;
+        if (userFromSnapshot != null) {
+          print('[BUILD] User logged in: ${userFromSnapshot.uid}');
+          String uid = userFromSnapshot.uid;
 
           // Start real-time device session monitoring (WhatsApp-style auto-logout)
           if (_lastInitializedUserId != uid) {
+            print('[BUILD] Starting device session monitoring for new user: $uid');
             _startDeviceSessionMonitoring(uid);
           }
 
@@ -612,6 +649,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // CRITICAL: Wrap MainNavigationScreen with periodic validation
           // This ensures we ALWAYS check if session is still valid
+          print('[BUILD] Showing MainNavigationScreen');
           return _buildMainScreenWithValidation();
         }
 
@@ -621,7 +659,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         _isInitializing = false;
         _isPerformingLogout = false; // Reset flag on logout
 
-        print('[BUILD] No user - showing OnboardingScreen');
+        print('[BUILD] No user in snapshot - showing OnboardingScreen');
         return const OnboardingScreen();
       },
     );
