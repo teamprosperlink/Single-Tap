@@ -341,6 +341,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   Timer? _sessionCheckTimer;
   Timer? _autoCheckTimer;
   DateTime? _listenerStartTime; // Track when listener started for initialization timeout
+  bool _listenerReady = false; // Flag to ensure listener is ready before processing
 
 
   @override
@@ -389,6 +390,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _deviceSessionSubscription?.cancel();
       _listenerStartTime = DateTime.now(); // Track when listener started
 
+      print('[DeviceSession] 🚀 LISTENER STARTED AT: ${_listenerStartTime.toString()} (${_listenerStartTime!.millisecondsSinceEpoch})');
+
       // Get local device token - CRITICAL for device comparison
       final localToken = await _authService.getLocalDeviceToken();
       if (localToken == null || localToken.isEmpty) {
@@ -399,6 +402,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       print('[DeviceSession] ✅ Starting real-time listener');
       print('[DeviceSession] ✅ User: ${userId.substring(0, 8)}...');
       print('[DeviceSession] ✅ Local token: ${localToken.substring(0, min(8, localToken.length))}...');
+      print('[DeviceSession] 🛡️ PROTECTION WINDOW: 10 seconds from ${_listenerStartTime.toString()}');
 
       // Listen to user document changes in real-time
       _deviceSessionSubscription = FirebaseFirestore.instance
@@ -408,6 +412,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           .listen(
             (snapshot) async {
               try {
+                // CRITICAL: Only process if listener initialization is complete
+                // This prevents race conditions where the listener fires before _listenerStartTime is set
+                if (!_listenerReady) {
+                  print('[DeviceSession] ⏭️ Listener not ready yet, skipping snapshot');
+                  return;
+                }
+
                 // Skip local pending writes - only process SERVER data
                 if (snapshot.metadata.hasPendingWrites) {
                   return;
@@ -434,7 +445,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   return;
                 }
 
-                // CRITICAL: Skip ALL logout checks for the first 6 seconds after listener starts
+                // CRITICAL: Skip ALL logout checks for the first 10 seconds after listener starts
                 // This protects BOTH devices during the login sequence:
                 // - Device A: Initializing and syncing token (0-3s)
                 // - Device B: Initializing, syncing token, AND triggering forceLogout on Device A (0-6s)
@@ -515,6 +526,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
               // On listener error: still try to stay logged in until next check
             },
           );
+
+      // CRITICAL: Mark listener as ready AFTER it's been created
+      // This ensures the callback won't process snapshots until we're completely initialized
+      _listenerReady = true;
+      print('[DeviceSession] ✅ Listener ready - protection window now active');
     } catch (e) {
       print('[DeviceSession] ❌ Failed to start listener: $e');
     }
@@ -542,6 +558,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _lastInitializedUserId = null;
       _isInitializing = false;
       _listenerStartTime = null; // Reset listener timer for next login
+      _listenerReady = false; // Reset listener ready flag for next login
       // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
