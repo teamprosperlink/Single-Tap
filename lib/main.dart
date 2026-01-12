@@ -341,6 +341,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   Timer? _sessionCheckTimer;
   Timer? _autoCheckTimer;
   bool _hasReceivedFirstSnapshot = false; // Track if we've seen the first listener update
+  int _snapshotCount = 0; // Count snapshots to wait for full initialization
 
 
   @override
@@ -388,6 +389,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       // Cancel any existing subscription
       _deviceSessionSubscription?.cancel();
       _hasReceivedFirstSnapshot = false; // Reset for new listener
+      _snapshotCount = 0; // Reset snapshot counter for new listener
 
       // Get local device token - CRITICAL for device comparison
       final localToken = await _authService.getLocalDeviceToken();
@@ -430,20 +432,33 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
                 // Already performing logout - skip
                 if (_isPerformingLogout) {
+                  print('[DeviceSession] ⏭️ Skipping snapshot - already performing logout');
                   return;
                 }
 
-                // IMPORTANT: Skip ALL logout checks on FIRST snapshot from this listener
-                // The first snapshot is the initial state right after login and should NOT trigger logout
-                // Only check logout signals on subsequent updates (from other devices)
+                // CRITICAL: Skip ALL logout checks during the FIRST SNAPSHOT WINDOW
+                // New devices don't have their token set yet, so we must skip ALL checks
+                // until we know the device has properly initialized
                 if (!_hasReceivedFirstSnapshot) {
                   _hasReceivedFirstSnapshot = true;
-                  print('[DeviceSession] ℹ️ Received first snapshot - skipping ALL logout checks (initialization)');
-                  // Skip all logout detection on first snapshot - this is just initial state
+                  print('[DeviceSession] ℹ️ FIRST SNAPSHOT RECEIVED - SKIPPING ALL CHECKS');
+                  print('[DeviceSession] Server token: ${snapshotData['activeDeviceToken']?.toString().substring(0, 8) ?? "NONE"}...');
+                  print('[DeviceSession] Local token: ${localToken.substring(0, 8)}...');
+                  // Return immediately - don't check anything on first snapshot
                   return;
                 }
 
-                // ONLY CHECK LOGOUT SIGNALS ON 2ND+ SNAPSHOTS
+                // WAIT FOR SECOND SNAPSHOT BEFORE CHECKING - ensures token is synced
+                // Count snapshots to be extra safe
+                _snapshotCount++;
+                if (_snapshotCount <= 2) {
+                  print('[DeviceSession] 📸 Snapshot #$_snapshotCount received - still initializing, waiting for full sync...');
+                  return; // Skip checks until at least 3rd snapshot
+                }
+
+                print('[DeviceSession] 📸 Snapshot #$_snapshotCount - NOW checking logout signals');
+
+                // ONLY CHECK LOGOUT SIGNALS AFTER FULL INITIALIZATION
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
                 final forceLogoutRaw = snapshotData['forceLogout'];
@@ -524,6 +539,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _lastInitializedUserId = null;
       _isInitializing = false;
       _hasReceivedFirstSnapshot = false; // Reset snapshot flag for next login
+      _snapshotCount = 0; // Reset snapshot counter for next login
       // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
