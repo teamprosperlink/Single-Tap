@@ -252,10 +252,12 @@ class AuthService {
           // IMPORTANT: Save UID BEFORE signing out!
           final userIdToPass = result.user!.uid;
 
-          // Sign out Device B immediately so it stays on login screen
-          // Device B's device token is saved in SharedPreferences, that's enough for logoutFromOtherDevices
-          await _auth.signOut();
-          print('[AuthService] Device B signed out to keep it on login screen - token saved in SharedPreferences');
+          // IMPORTANT: Do NOT sign out Device B here!
+          // Device B must stay logged in so user can confirm in the dialog
+          // Only Device A will be signed out (after user confirms in dialog)
+          // Signing out Device B now causes both devices to show logout screen (BUG!)
+
+          print('[AuthService] Device B will stay logged in - user must confirm in dialog');
 
           final deviceInfo =
               sessionCheck['deviceInfo'] as Map<String, dynamic>?;
@@ -487,10 +489,12 @@ class AuthService {
           // IMPORTANT: Save UID BEFORE signing out!
           final userIdToPass = result.user!.uid;
 
-          // Sign out Device B immediately so it stays on login screen
-          // Device B's device token is saved in SharedPreferences, that's enough for logoutFromOtherDevices
-          await _auth.signOut();
-          print('[AuthService] Device B signed out to keep it on login screen - token saved in SharedPreferences');
+          // IMPORTANT: Do NOT sign out Device B here!
+          // Device B must stay logged in so user can confirm in the dialog
+          // Only Device A will be signed out (after user confirms in dialog)
+          // Signing out Device B now causes both devices to show logout screen (BUG!)
+
+          print('[AuthService] Device B will stay logged in - user must confirm in dialog');
 
           final deviceInfo =
               sessionCheck['deviceInfo'] as Map<String, dynamic>?;
