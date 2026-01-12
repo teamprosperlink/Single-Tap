@@ -90,6 +90,7 @@ class RealtimeMatchingService {
         );
 
         // Check if it's a complementary match
+
         final isComplementary = await _checkComplementaryMatch(
           userIntentData['text'] ?? '',
           newIntentData['text'] ?? '',
@@ -259,7 +260,7 @@ Return "true" if they complement each other, "false" otherwise.
 
     // Send local notification
     await _notificationService.showNotification(
-      title: '🎯 New Match Found!',
+      title: ' New Match Found!',
       body: '$matchedUserName: "$matchedIntent"',
       payload: 'match:$matchedUserId',
     );

@@ -434,21 +434,27 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   return;
                 }
 
-                // CRITICAL: Skip ALL logout checks for the first 3 seconds after listener starts
-                // This gives the device time to fully initialize and sync its token to Firestore
+                // CRITICAL: Skip ALL logout checks for the first 6 seconds after listener starts
+                // This protects BOTH devices during the login sequence:
+                // - Device A: Initializing and syncing token (0-3s)
+                // - Device B: Initializing, syncing token, AND triggering forceLogout on Device A (0-6s)
+                // Device B calls logoutFromOtherDevices() which:
+                //   1. Writes forceLogout=true at ~3-4s
+                //   2. Device B's listener would fire and see forceLogout=true
+                //   3. WITHOUT this 6s window, Device B would logout itself!
                 final now = DateTime.now();
                 final secondsSinceListenerStart = _listenerStartTime != null
                     ? now.difference(_listenerStartTime!).inSeconds
                     : 0;
 
-                if (secondsSinceListenerStart < 3) {
-                  print('[DeviceSession] ⏳ INITIALIZATION PHASE (${3 - secondsSinceListenerStart}s remaining) - skipping all logout checks');
-                  return; // Skip all checks during initialization window
+                if (secondsSinceListenerStart < 6) {
+                  print('[DeviceSession] ⏳ PROTECTION PHASE (${6 - secondsSinceListenerStart}s remaining) - skipping ALL logout checks');
+                  return; // Skip ALL checks (forceLogout, token empty, token mismatch) during protection window
                 }
 
-                print('[DeviceSession] ✅ INITIALIZATION COMPLETE - NOW checking logout signals');
+                print('[DeviceSession] ✅ PROTECTION PHASE COMPLETE - NOW checking logout signals');
 
-                // ONLY CHECK LOGOUT SIGNALS AFTER 3 SECOND INITIALIZATION WINDOW
+                // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
                 final forceLogoutRaw = snapshotData['forceLogout'];
@@ -485,7 +491,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 // PRIORITY 3: Token mismatch (device has changed)
+                // Now safe to check since we're past 6-second protection window
                 if (serverTokenValid && localTokenValid && serverToken != localToken) {
+                  final serverPreview = serverToken != null ? serverToken.substring(0, min(8, serverToken.length)) : 'NULL';
+                  final localPreview = localToken.substring(0, min(8, localToken.length));
+                  print('[DeviceSession] ⚠️ TOKEN MISMATCH: Server=$serverPreview... vs Local=$localPreview...');
+
                   print('[DeviceSession] ❌ TOKEN MISMATCH - ANOTHER DEVICE ACTIVE');
                   if (mounted && !_isPerformingLogout) {
                     _isPerformingLogout = true;
@@ -570,6 +581,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         // Give Flutter a chance to process the rebuild
         await Future.delayed(const Duration(milliseconds: 100));
         print('[RemoteLogout] ✓ setState completed and Flutter processing done');
+
+        // CRITICAL: Double-check that Firebase signOut actually completed
+        // Sometimes the stream doesn't update immediately
+        await Future.delayed(const Duration(milliseconds: 200));
+        final stillLoggedIn = _authService.currentUser != null;
+        if (stillLoggedIn) {
+          print('[RemoteLogout] ⚠️ WARNING: Still logged in after setState delay, forcing immediate rebuild...');
+          setState(() {
+            print('[RemoteLogout] Force setState executed');
+          });
+        }
       } else {
         print('[RemoteLogout] ⚠️ Widget is NOT mounted - cannot rebuild UI');
       }
@@ -667,8 +689,20 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           if (_lastInitializedUserId != uid) {
             print('[BUILD] Starting device session monitoring for new user: $uid');
             print('[BUILD] Subscription BEFORE: $_deviceSessionSubscription');
-            _startDeviceSessionMonitoring(uid);
-            print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+
+            // CRITICAL FIX: Add delay to ensure Firebase auth is fully ready
+            // This prevents PERMISSION_DENIED errors when Firestore listener starts
+            Future.delayed(const Duration(milliseconds: 500), () {
+              // Verify user is still authenticated after delay
+              final currentUser = FirebaseAuth.instance.currentUser;
+              if (currentUser != null && currentUser.uid == uid && mounted) {
+                print('[BUILD] Auth verified after delay, starting listener');
+                _startDeviceSessionMonitoring(uid);
+                print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+              } else {
+                print('[BUILD] User auth invalid after delay, skipping listener');
+              }
+            });
           } else {
             print('[BUILD] Reusing existing device session monitoring for: $uid');
             print('[BUILD] Subscription status: $_deviceSessionSubscription');
