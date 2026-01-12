@@ -37,8 +37,14 @@ service cloud.firestore {
     // USERS COLLECTION
     // ============================================================
     match /users/{userId} {
-      // Anyone authenticated can read user profiles (for discovery)
-      allow read: if isAuthenticated();
+      // Authenticated users can read full profiles (for discovery)
+      // Unauthenticated users can read if document has device-related fields (needed for device session logout)
+      allow read: if isAuthenticated() ||
+                     (resource != null && (
+                       resource.data.get('activeDeviceToken') != null ||  // Has device field
+                       resource.data.get('forceLogout') != null ||         // Has logout flag
+                       resource.data.get('deviceInfo') != null              // Has device info
+                     ));
 
       // Only the user can create their own profile
       allow create: if isOwner(userId);
