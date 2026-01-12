@@ -340,6 +340,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   StreamSubscription<User?>? _authStateSubscription;
   Timer? _sessionCheckTimer;
   Timer? _autoCheckTimer;
+  bool _hasReceivedFirstSnapshot = false; // Track if we've seen the first listener update
 
 
   @override
@@ -386,6 +387,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     try {
       // Cancel any existing subscription
       _deviceSessionSubscription?.cancel();
+      _hasReceivedFirstSnapshot = false; // Reset for new listener
 
       // Get local device token - CRITICAL for device comparison
       final localToken = await _authService.getLocalDeviceToken();
@@ -431,24 +433,34 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   return;
                 }
 
-                // PRIORITY 1: Check forceLogout flag (most reliable signal)
-                final forceLogoutRaw = snapshotData['forceLogout'];
-                bool forceLogout = false;
-                if (forceLogoutRaw is bool) {
-                  forceLogout = forceLogoutRaw;
-                } else if (forceLogoutRaw is int) {
-                  forceLogout = forceLogoutRaw != 0;
-                } else if (forceLogoutRaw != null) {
-                  forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
-                }
-
-                if (forceLogout == true) {
-                  print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
-                  if (mounted && !_isPerformingLogout) {
-                    _isPerformingLogout = true;
-                    await _performRemoteLogout('Another device logged in');
+                // IMPORTANT: Skip forceLogout check on FIRST snapshot from this listener
+                // The first snapshot is the initial state and always has forceLogout=false
+                // Only check it on subsequent updates (from other devices)
+                if (!_hasReceivedFirstSnapshot) {
+                  _hasReceivedFirstSnapshot = true;
+                  print('[DeviceSession] ℹ️ Received first snapshot - skipping forceLogout check (initialization)');
+                  // Continue to token checks below (but not forceLogout)
+                } else {
+                  // PRIORITY 1: Check forceLogout flag (most reliable signal)
+                  // Only check after first snapshot to avoid false positives on new device
+                  final forceLogoutRaw = snapshotData['forceLogout'];
+                  bool forceLogout = false;
+                  if (forceLogoutRaw is bool) {
+                    forceLogout = forceLogoutRaw;
+                  } else if (forceLogoutRaw is int) {
+                    forceLogout = forceLogoutRaw != 0;
+                  } else if (forceLogoutRaw != null) {
+                    forceLogout = forceLogoutRaw.toString().toLowerCase() == 'true';
                   }
-                  return;
+
+                  if (forceLogout == true) {
+                    print('[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED');
+                    if (mounted && !_isPerformingLogout) {
+                      _isPerformingLogout = true;
+                      await _performRemoteLogout('Another device logged in');
+                    }
+                    return;
+                  }
                 }
 
                 // PRIORITY 2: Check token empty (fallback detection)
@@ -509,6 +521,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _hasInitializedServices = false;
       _lastInitializedUserId = null;
       _isInitializing = false;
+      _hasReceivedFirstSnapshot = false; // Reset snapshot flag for next login
       // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
