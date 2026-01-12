@@ -709,28 +709,25 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           print('[BUILD] User logged in: ${userFromSnapshot.uid}');
           String uid = userFromSnapshot.uid;
 
-          // Start real-time device session monitoring (WhatsApp-style auto-logout)
-          if (_lastInitializedUserId != uid) {
-            print('[BUILD] Starting device session monitoring for new user: $uid');
-            print('[BUILD] Subscription BEFORE: $_deviceSessionSubscription');
+          // CRITICAL FIX: Always restart listener for device logout detection
+          // Even if same user (uid), another device might have logged in
+          // Need to detect new activeDeviceToken and forceLogout changes
+          print('[BUILD] Restarting device session monitoring - checking for new device logins...');
+          print('[BUILD] Subscription BEFORE: $_deviceSessionSubscription');
 
-            // CRITICAL FIX: Add delay to ensure Firebase auth is fully ready
-            // This prevents PERMISSION_DENIED errors when Firestore listener starts
-            Future.delayed(const Duration(milliseconds: 500), () {
-              // Verify user is still authenticated after delay
-              final currentUser = FirebaseAuth.instance.currentUser;
-              if (currentUser != null && currentUser.uid == uid && mounted) {
-                print('[BUILD] Auth verified after delay, starting listener');
-                _startDeviceSessionMonitoring(uid);
-                print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
-              } else {
-                print('[BUILD] User auth invalid after delay, skipping listener');
-              }
-            });
-          } else {
-            print('[BUILD] Reusing existing device session monitoring for: $uid');
-            print('[BUILD] Subscription status: $_deviceSessionSubscription');
-          }
+          // CRITICAL FIX: Add delay to ensure Firebase auth is fully ready
+          // This prevents PERMISSION_DENIED errors when Firestore listener starts
+          Future.delayed(const Duration(milliseconds: 500), () {
+            // Verify user is still authenticated after delay
+            final currentUser = FirebaseAuth.instance.currentUser;
+            if (currentUser != null && currentUser.uid == uid && mounted) {
+              print('[BUILD] Auth verified after delay, starting listener');
+              _startDeviceSessionMonitoring(uid);
+              print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+            } else {
+              print('[BUILD] User auth invalid after delay, skipping listener');
+            }
+          });
 
           if (!_hasInitializedServices || _lastInitializedUserId != uid) {
             if (!_isInitializing) {
