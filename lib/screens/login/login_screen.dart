@@ -462,7 +462,7 @@ class _LoginScreenState extends State<LoginScreen>
 
             // Show device login dialog to user - let them decide
             print('[LoginScreen] 🔔 Showing device login dialog...');
-            _showDeviceLoginDialog(deviceName);
+            await _showDeviceLoginDialog(deviceName);
           } else {
             print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
             HapticFeedback.heavyImpact();
