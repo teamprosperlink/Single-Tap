@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../config/business_category_config.dart';
 import '../../models/business_model.dart';
 import '../../models/conversation_model.dart';
 import '../../services/business_service.dart';
@@ -9,10 +10,17 @@ import '../../services/chat services/conversation_service.dart';
 import '../login/choose_account_type_screen.dart';
 import 'business_home_tab.dart';
 import 'business_messages_tab.dart';
-import 'business_profile_tab.dart';
+import 'business_public_profile_tab.dart';
 import 'business_setup_screen.dart';
+import 'category_content_tab.dart';
 
-/// Main business screen with bottom navigation
+/// Main business screen with category-aware bottom navigation
+///
+/// Navigation structure:
+/// - Home: Dashboard with stats and quick actions
+/// - [Category-specific]: Products/Menu/Rooms/Services based on business type
+/// - Chat: Messages and conversations
+/// - Profile: Public profile view
 class BusinessMainScreen extends ConsumerStatefulWidget {
   const BusinessMainScreen({super.key});
 
@@ -26,12 +34,6 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
   final ConversationService _conversationService = ConversationService();
   BusinessModel? _business;
   bool _isLoading = true;
-
-  final List<_NavItem> _navItems = [
-    _NavItem(icon: Icons.home_rounded, activeIcon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble, label: 'Messages'),
-    _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
-  ];
 
   @override
   void initState() {
@@ -53,6 +55,43 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
 
   void _refreshBusiness() {
     _loadBusinessData();
+  }
+
+  /// Get the business category from business type
+  BusinessCategory get _category {
+    return BusinessCategoryExtension.fromBusinessType(_business?.businessType);
+  }
+
+  /// Build navigation items based on business category
+  List<_NavItem> _buildNavItems() {
+    final category = _category;
+
+    return [
+      // Home tab - always first
+      const _NavItem(
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: 'Home',
+      ),
+      // Category-specific content tab
+      _NavItem(
+        icon: category.contentTabIcon,
+        activeIcon: category.contentTabActiveIcon,
+        label: category.contentTabLabel,
+      ),
+      // Chat tab
+      const _NavItem(
+        icon: Icons.chat_bubble_outline,
+        activeIcon: Icons.chat_bubble,
+        label: 'Chat',
+      ),
+      // Profile tab
+      const _NavItem(
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+        label: 'Profile',
+      ),
+    ];
   }
 
   @override
@@ -102,20 +141,32 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
       );
     }
 
+    final navItems = _buildNavItems();
+
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.grey[50],
       body: IndexedStack(
         index: _currentIndex,
         children: [
+          // Home Tab
           BusinessHomeTab(
             business: _business!,
+            category: _category,
             onRefresh: _refreshBusiness,
             onSwitchTab: (index) => setState(() => _currentIndex = index),
           ),
+          // Category Content Tab (Products/Menu/Rooms/Services)
+          CategoryContentTab(
+            business: _business!,
+            category: _category,
+            onRefresh: _refreshBusiness,
+          ),
+          // Messages Tab
           BusinessMessagesTab(
             business: _business!,
           ),
-          BusinessProfileTab(
+          // Profile Tab (Public Profile View)
+          BusinessPublicProfileTab(
             business: _business!,
             onRefresh: _refreshBusiness,
             onLogout: () async {
@@ -133,11 +184,11 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomNavBar(isDarkMode),
+      bottomNavigationBar: _buildBottomNavBar(isDarkMode, navItems),
     );
   }
 
-  Widget _buildBottomNavBar(bool isDarkMode) {
+  Widget _buildBottomNavBar(bool isDarkMode, List<_NavItem> navItems) {
     return Container(
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
@@ -154,12 +205,17 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_navItems.length, (index) {
-              final item = _navItems[index];
+            children: List.generate(navItems.length, (index) {
+              final item = navItems[index];
               final isSelected = _currentIndex == index;
 
-              // Messages tab (index 1) gets unread badge
-              if (index == 1 && _business != null) {
+              // Home tab (index 0) gets active status indicator
+              if (index == 0 && _business != null) {
+                return _buildHomeNavItem(item, isSelected, isDarkMode);
+              }
+
+              // Messages tab (index 2) gets unread badge
+              if (index == 2 && _business != null) {
                 return _buildMessagesNavItem(item, isSelected, isDarkMode);
               }
 
@@ -180,6 +236,74 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
     );
   }
 
+  /// Home nav item with active status indicator
+  Widget _buildHomeNavItem(_NavItem item, bool isSelected, bool isDarkMode) {
+    final isOnline = _business?.isOnline ?? false;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _currentIndex = 0);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF00D67D).withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  isSelected ? item.activeIcon : item.icon,
+                  size: 24,
+                  color: isSelected
+                      ? const Color(0xFF00D67D)
+                      : (isDarkMode ? Colors.white54 : Colors.grey[600]),
+                ),
+                // Online status indicator
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: isOnline ? const Color(0xFF00D67D) : Colors.grey,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected
+                    ? const Color(0xFF00D67D)
+                    : (isDarkMode ? Colors.white54 : Colors.grey[600]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessagesNavItem(_NavItem item, bool isSelected, bool isDarkMode) {
     return StreamBuilder<List<ConversationModel>>(
       stream: _conversationService.getBusinessConversations(_business!.id),
@@ -194,7 +318,7 @@ class _BusinessMainScreenState extends ConsumerState<BusinessMainScreen> {
         return GestureDetector(
           onTap: () {
             HapticFeedback.lightImpact();
-            setState(() => _currentIndex = 1);
+            setState(() => _currentIndex = 2);
           },
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
@@ -274,7 +398,7 @@ class _NavItem {
   final IconData activeIcon;
   final String label;
 
-  _NavItem({
+  const _NavItem({
     required this.icon,
     required this.activeIcon,
     required this.label,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:ui';
+import '../../config/business_category_config.dart';
 import '../../models/business_model.dart';
 import '../../services/business_service.dart';
 import '../../widgets/business/glassmorphic_card.dart';
@@ -8,18 +10,50 @@ import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
 import 'business_analytics_screen.dart';
 import 'business_inquiries_screen.dart';
-import 'business_services_tab.dart';
-import 'business_posts_tab.dart';
+
+/// Dashboard data model for real-time stats
+class DashboardData {
+  final int metric1Value;
+  final int metric2Value;
+  final int metric3Value;
+  final int metric4Value;
+  final double todayRevenue;
+  final double weekRevenue;
+  final double monthRevenue;
+  final int totalRooms;
+  final int availableRooms;
+
+  const DashboardData({
+    this.metric1Value = 0,
+    this.metric2Value = 0,
+    this.metric3Value = 0,
+    this.metric4Value = 0,
+    this.todayRevenue = 0,
+    this.weekRevenue = 0,
+    this.monthRevenue = 0,
+    this.totalRooms = 0,
+    this.availableRooms = 0,
+  });
+}
 
 /// Home tab showing dashboard with stats, online toggle, and quick actions
+///
+/// Dashboard adapts based on business category:
+/// - Retail: Orders, Products, Inventory
+/// - Food & Beverage: Orders, Kitchen, QR Menu
+/// - Hospitality: Bookings, Room Status, Guests
+/// - Healthcare: Appts, Patients, Records
+/// - Beauty & Wellness: Schedule, Staff, Reviews
 class BusinessHomeTab extends StatefulWidget {
   final BusinessModel business;
+  final BusinessCategory category;
   final VoidCallback onRefresh;
   final Function(int) onSwitchTab;
 
   const BusinessHomeTab({
     super.key,
     required this.business,
+    required this.category,
     required this.onRefresh,
     required this.onSwitchTab,
   });
@@ -31,11 +65,15 @@ class BusinessHomeTab extends StatefulWidget {
 class _BusinessHomeTabState extends State<BusinessHomeTab> {
   final BusinessService _businessService = BusinessService();
   bool _isOnline = false;
+  DashboardData _dashboardData = const DashboardData();
+  bool _isLoadingStats = true;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     _isOnline = widget.business.isOnline;
+    _loadDashboardData();
   }
 
   @override
@@ -44,6 +82,219 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     if (oldWidget.business.isOnline != widget.business.isOnline) {
       _isOnline = widget.business.isOnline;
     }
+    if (oldWidget.business.id != widget.business.id ||
+        oldWidget.category != widget.category) {
+      _loadDashboardData();
+    }
+  }
+
+  /// Load dashboard data based on business category
+  Future<void> _loadDashboardData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingStats = true;
+      _loadError = null;
+    });
+
+    try {
+      switch (widget.category) {
+        case BusinessCategory.hospitality:
+        case BusinessCategory.travelTourism:
+          await _loadHospitalityStats();
+          break;
+        case BusinessCategory.healthcare:
+        case BusinessCategory.beautyWellness:
+        case BusinessCategory.fitness:
+          await _loadAppointmentStats();
+          break;
+        case BusinessCategory.retail:
+        case BusinessCategory.grocery:
+        case BusinessCategory.foodBeverage:
+        default:
+          await _loadDefaultStats();
+          break;
+      }
+    } catch (e) {
+      debugPrint('Error loading dashboard data: $e');
+      if (mounted) {
+        setState(() {
+          _loadError = 'Failed to load dashboard data';
+          _isLoadingStats = false;
+        });
+      }
+    }
+  }
+
+  /// Load hospitality-specific stats (bookings, check-ins, rooms, revenue)
+  Future<void> _loadHospitalityStats() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+    final startOfWeek = startOfDay.subtract(Duration(days: now.weekday - 1));
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    int totalRooms = 0;
+    int availableRooms = 0;
+    try {
+      final roomsSnapshot = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(widget.business.id)
+          .collection('rooms')
+          .limit(100)
+          .get();
+
+      for (final doc in roomsSnapshot.docs) {
+        final data = doc.data();
+        final roomTotal = (data['totalRooms'] ?? data['quantity'] ?? 1);
+        final roomAvailable = (data['availableRooms'] ?? data['available'] ?? roomTotal);
+        totalRooms += roomTotal is int ? roomTotal : (roomTotal as num).toInt();
+        availableRooms += roomAvailable is int ? roomAvailable : (roomAvailable as num).toInt();
+      }
+    } catch (e) {
+      debugPrint('Error loading rooms: $e');
+    }
+
+    int totalBookings = 0;
+    int todayCheckIns = 0;
+    int todayCheckOuts = 0;
+    int pendingBookings = 0;
+    double todayRevenue = 0;
+    double weekRevenue = 0;
+    double monthRevenue = 0;
+
+    try {
+      final bookingsSnapshot = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(widget.business.id)
+          .collection('room_bookings')
+          .orderBy('checkIn', descending: true)
+          .limit(200)
+          .get();
+
+      totalBookings = bookingsSnapshot.docs.length;
+
+      for (final doc in bookingsSnapshot.docs) {
+        final data = doc.data();
+        final checkIn = (data['checkIn'] as Timestamp?)?.toDate();
+        final checkOut = (data['checkOut'] as Timestamp?)?.toDate();
+        final status = data['status'] as String?;
+        final total = (data['totalAmount'] ?? data['total'] ?? 0).toDouble();
+
+        if (checkIn != null && checkIn.isAfter(startOfDay) && checkIn.isBefore(endOfDay)) {
+          todayCheckIns++;
+          todayRevenue += total;
+        }
+
+        if (checkOut != null && checkOut.isAfter(startOfDay) && checkOut.isBefore(endOfDay)) {
+          todayCheckOuts++;
+        }
+
+        if (status == 'pending') pendingBookings++;
+
+        if (checkIn != null && checkIn.isAfter(startOfWeek)) weekRevenue += total;
+        if (checkIn != null && checkIn.isAfter(startOfMonth)) monthRevenue += total;
+      }
+    } catch (e) {
+      debugPrint('Error loading hospitality bookings: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _dashboardData = DashboardData(
+          metric1Value: totalBookings,
+          metric2Value: todayCheckIns,
+          metric3Value: todayCheckOuts,
+          metric4Value: pendingBookings,
+          totalRooms: totalRooms,
+          availableRooms: availableRooms,
+          todayRevenue: todayRevenue,
+          weekRevenue: weekRevenue,
+          monthRevenue: monthRevenue,
+        );
+        _isLoadingStats = false;
+      });
+    }
+  }
+
+  /// Load appointment-based stats (healthcare, beauty, fitness)
+  Future<void> _loadAppointmentStats() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    int totalAppointments = 0;
+    int todayAppointments = 0;
+    int completedAppointments = 0;
+    int pendingAppointments = 0;
+
+    try {
+      final appointmentsSnapshot = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(widget.business.id)
+          .collection('appointments')
+          .orderBy('dateTime', descending: true)
+          .limit(200)
+          .get();
+
+      totalAppointments = appointmentsSnapshot.docs.length;
+
+      for (final doc in appointmentsSnapshot.docs) {
+        final data = doc.data();
+        final dateTime = (data['dateTime'] as Timestamp?)?.toDate();
+        final status = data['status'] as String?;
+
+        if (dateTime != null && dateTime.isAfter(startOfDay) && dateTime.isBefore(endOfDay)) {
+          todayAppointments++;
+        }
+
+        if (status == 'completed') completedAppointments++;
+        if (status == 'pending' || status == 'confirmed') pendingAppointments++;
+      }
+    } catch (e) {
+      debugPrint('Error loading appointments: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _dashboardData = DashboardData(
+          metric1Value: totalAppointments,
+          metric2Value: todayAppointments,
+          metric3Value: completedAppointments,
+          metric4Value: pendingAppointments,
+          todayRevenue: widget.business.todayEarnings,
+          weekRevenue: widget.business.monthlyEarnings,
+          monthRevenue: widget.business.totalEarnings,
+        );
+        _isLoadingStats = false;
+      });
+    }
+  }
+
+  /// Load default stats from business model
+  Future<void> _loadDefaultStats() async {
+    if (mounted) {
+      setState(() {
+        _dashboardData = DashboardData(
+          metric1Value: widget.business.totalOrders,
+          metric2Value: widget.business.pendingOrders,
+          metric3Value: widget.business.completedOrders,
+          metric4Value: widget.business.todayOrders,
+          todayRevenue: widget.business.todayEarnings,
+          weekRevenue: widget.business.monthlyEarnings,
+          monthRevenue: widget.business.totalEarnings,
+        );
+        _isLoadingStats = false;
+      });
+    }
+  }
+
+  String _formatCurrency(double amount) {
+    if (amount >= 100000) {
+      return '${(amount / 100000).toStringAsFixed(1)}L';
+    } else if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(1)}K';
+    }
+    return amount.toStringAsFixed(0);
   }
 
   Future<void> _toggleOnlineStatus() async {
@@ -73,11 +324,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Stack(
       children: [
-        // Background Image (same as Feed screen)
+        // Background Image
         Positioned.fill(
           child: Image.asset(
             AppAssets.homeBackgroundImage,
@@ -96,7 +345,7 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         SafeArea(
           child: Column(
             children: [
-              // Header (same style as Feed screen)
+              // Header
               _buildAppBarHeader(),
 
               // Divider line
@@ -108,24 +357,33 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               // Scrollable content
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () async => widget.onRefresh(),
+                  onRefresh: () async {
+                    await _loadDashboardData();
+                    widget.onRefresh();
+                  },
                   color: const Color(0xFF00D67D),
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     children: [
-                      // Quick Actions - Services & Posts
-                      _buildQuickActions(isDarkMode),
+                      // Quick Actions
+                      _buildQuickActions(),
                       const SizedBox(height: 24),
 
                       // Stats Grid
-                      _buildSectionTitle('Overview', isDarkMode),
+                      _buildSectionTitle('Overview'),
                       const SizedBox(height: 12),
-                      _buildStatsGrid(isDarkMode),
+                      _buildStatsGrid(),
                       const SizedBox(height: 24),
 
+                      // Revenue section (for applicable categories)
+                      if (_shouldShowRevenue()) ...[
+                        _buildRevenueSection(),
+                        const SizedBox(height: 24),
+                      ],
+
                       // Analytics Preview
-                      _buildAnalyticsPreview(isDarkMode),
+                      _buildAnalyticsPreview(),
 
                       const SizedBox(height: 100),
                     ],
@@ -139,7 +397,19 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     );
   }
 
-  /// Simple header like Feed screen
+  bool _shouldShowRevenue() {
+    switch (widget.category) {
+      case BusinessCategory.hospitality:
+      case BusinessCategory.travelTourism:
+      case BusinessCategory.retail:
+      case BusinessCategory.grocery:
+      case BusinessCategory.foodBeverage:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   Widget _buildAppBarHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -183,19 +453,12 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                 ),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
+                    const Icon(Icons.location_on, size: 12, color: Colors.white54),
                     const SizedBox(width: 2),
                     Expanded(
                       child: Text(
                         _getLocationText(),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.white54,
-                        ),
+                        style: const TextStyle(fontSize: 11, color: Colors.white54),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -215,13 +478,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
           GestureDetector(
             onTap: () {
               HapticFeedback.lightImpact();
-              // TODO: Show notifications
             },
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white,
-              size: 22,
-            ),
+            child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
           ),
         ],
       ),
@@ -233,12 +491,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     if (address == null) return 'Location not set';
 
     final parts = <String>[];
-    if (address.city != null && address.city!.isNotEmpty) {
-      parts.add(address.city!);
-    }
-    if (address.state != null && address.state!.isNotEmpty) {
-      parts.add(address.state!);
-    }
+    if (address.city != null && address.city!.isNotEmpty) parts.add(address.city!);
+    if (address.state != null && address.state!.isNotEmpty) parts.add(address.state!);
     return parts.isNotEmpty ? parts.join(', ') : 'Location not set';
   }
 
@@ -263,14 +517,12 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     );
   }
 
-  /// Compact online/offline toggle for AppBar
   Widget _buildOnlineToggleCompact() {
     return GestureDetector(
       onTap: _toggleOnlineStatus,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Status dot
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             width: 8,
@@ -290,7 +542,6 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
             ),
           ),
           const SizedBox(width: 6),
-          // Status text
           Text(
             _isOnline ? 'Online' : 'Offline',
             style: TextStyle(
@@ -300,7 +551,6 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
             ),
           ),
           const SizedBox(width: 4),
-          // Toggle icon - bigger size
           Icon(
             _isOnline ? Icons.toggle_on : Icons.toggle_off,
             size: 44,
@@ -311,152 +561,82 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     );
   }
 
-  Widget _buildQuickActions(bool isDarkMode) {
+  Widget _buildQuickActions() {
+    final terminology = CategoryTerminology.getForCategory(widget.category);
+    final quickActions = terminology.quickActions;
+
     return Row(
-      children: [
-        // Services Button
-        Expanded(
-          child: _buildQuickActionCard(
-            icon: Icons.inventory_2_outlined,
-            label: 'Services',
-            subtitle: 'Manage your services',
-            gradient: [
-              const Color(0xFF00D67D).withValues(alpha: 0.3),
-              const Color(0xFF00A86B).withValues(alpha: 0.2),
-            ],
-            iconColor: const Color(0xFF00D67D),
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BusinessServicesTab(
-                    business: widget.business,
-                    onRefresh: widget.onRefresh,
-                  ),
-                ),
-              );
-            },
+      children: List.generate(quickActions.length, (index) {
+        final action = quickActions[index];
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: index == 0 ? 0 : 6,
+              right: index == quickActions.length - 1 ? 0 : 6,
+            ),
+            child: _buildQuickActionCard(
+              icon: action.icon,
+              label: action.label,
+              color: action.color,
+              onTap: () => _handleQuickAction(action.label),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        // Posts Button
-        Expanded(
-          child: _buildQuickActionCard(
-            icon: Icons.post_add_outlined,
-            label: 'Posts',
-            subtitle: 'Create & manage posts',
-            gradient: [
-              Colors.blue.withValues(alpha: 0.3),
-              Colors.indigo.withValues(alpha: 0.2),
-            ],
-            iconColor: Colors.blue,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BusinessPostsTab(
-                    business: widget.business,
-                    onRefresh: widget.onRefresh,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        );
+      }),
     );
   }
 
   Widget _buildQuickActionCard({
     required IconData icon,
     required String label,
-    required String subtitle,
-    required List<Color> gradient,
-    required Color iconColor,
+    required Color color,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: gradient,
+                colors: [
+                  color.withValues(alpha: 0.25),
+                  color.withValues(alpha: 0.15),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.15),
                 width: 1,
               ),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon with glow effect
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: iconColor.withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        spreadRadius: 0,
-                      ),
-                    ],
+                    color: color.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 26,
-                  ),
+                  child: Icon(icon, color: color, size: 22),
                 ),
-                const SizedBox(height: 14),
-                // Label
+                const SizedBox(height: 8),
                 Text(
                   label,
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
-                ),
-                const SizedBox(height: 4),
-                // Subtitle
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Arrow indicator
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -466,7 +646,47 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     );
   }
 
-  Widget _buildSectionTitle(String title, bool isDarkMode) {
+  void _handleQuickAction(String label) {
+    switch (label.toLowerCase()) {
+      case 'orders':
+      case 'bookings':
+      case 'appts':
+      case 'schedule':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BusinessInquiriesScreen(
+              business: widget.business,
+              initialFilter: 'All',
+            ),
+          ),
+        );
+        break;
+      case 'products':
+      case 'menu':
+      case 'rooms':
+      case 'services':
+      case 'inventory':
+      case 'kitchen':
+      case 'room status':
+        widget.onSwitchTab(1); // Switch to content tab
+        break;
+      case 'analytics':
+      case 'reviews':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BusinessAnalyticsScreen(business: widget.business),
+          ),
+        );
+        break;
+      default:
+        // Handle other actions
+        break;
+    }
+  }
+
+  Widget _buildSectionTitle(String title) {
     return Text(
       title,
       style: const TextStyle(
@@ -477,7 +697,17 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     );
   }
 
-  Widget _buildStatsGrid(bool isDarkMode) {
+  Widget _buildStatsGrid() {
+    if (_isLoadingStats) {
+      return _buildLoadingStatsGrid();
+    }
+
+    if (_loadError != null) {
+      return _buildErrorStatsGrid();
+    }
+
+    final terminology = CategoryTerminology.getForCategory(widget.category);
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -487,38 +717,198 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
       childAspectRatio: 1.15,
       children: [
         GlassmorphicStatCard(
-          title: 'Total Inquiries',
-          value: '${widget.business.totalOrders}',
-          icon: Icons.inbox_outlined,
+          title: terminology.metric1Label,
+          value: '${_dashboardData.metric1Value}',
+          icon: terminology.metric1Icon,
           accentColor: const Color(0xFF00D67D),
           onTap: () => _navigateToInquiries('All'),
         ),
         GlassmorphicStatCard(
-          title: 'New',
-          value: '${widget.business.pendingOrders}',
-          icon: Icons.mark_email_unread_outlined,
-          accentColor: Colors.orange,
-          onTap: () => _navigateToInquiries('New'),
+          title: 'Today',
+          value: '${_dashboardData.metric4Value}',
+          icon: Icons.today,
+          accentColor: Colors.purple,
+          onTap: () => _navigateToInquiries('Today'),
         ),
         GlassmorphicStatCard(
-          title: 'Responded',
-          value: '${widget.business.completedOrders}',
-          icon: Icons.check_circle_outline,
+          title: terminology.metric3Label,
+          value: '${_dashboardData.metric3Value}',
+          icon: terminology.metric3Icon,
           accentColor: Colors.blue,
           onTap: () => _navigateToInquiries('Responded'),
         ),
         GlassmorphicStatCard(
-          title: 'Today',
-          value: '${widget.business.todayOrders}',
-          icon: Icons.today,
-          accentColor: Colors.purple,
-          onTap: () => _navigateToInquiries('Today'),
+          title: 'Pending',
+          value: '${_dashboardData.metric2Value}',
+          icon: Icons.pending_outlined,
+          accentColor: Colors.orange,
+          onTap: () => _navigateToInquiries('New'),
         ),
       ],
     );
   }
 
-  Widget _buildAnalyticsPreview(bool isDarkMode) {
+  Widget _buildLoadingStatsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.15,
+      children: List.generate(4, (index) {
+        return GlassmorphicCard(
+          child: Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(
+                  Colors.white.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildErrorStatsGrid() {
+    return GlassmorphicCard(
+      onTap: _loadDashboardData,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: Colors.orange.withValues(alpha: 0.8),
+              size: 40,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _loadError ?? 'Failed to load data',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap to retry',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRevenueSection() {
+    return GlassmorphicCard(
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00D67D).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.trending_up,
+                    color: Color(0xFF00D67D),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Revenue Summary',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildRevenueItem(
+                    label: 'Today',
+                    amount: _dashboardData.todayRevenue,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
+                Expanded(
+                  child: _buildRevenueItem(
+                    label: 'This Week',
+                    amount: _dashboardData.weekRevenue,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
+                Expanded(
+                  child: _buildRevenueItem(
+                    label: 'This Month',
+                    amount: _dashboardData.monthRevenue,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRevenueItem({
+    required String label,
+    required double amount,
+  }) {
+    return Column(
+      children: [
+        Text(
+          amount > 0 ? '\u20B9${_formatCurrency(amount)}' : '\u20B90',
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF00D67D),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnalyticsPreview() {
     return GlassmorphicCard(
       onTap: () {
         HapticFeedback.lightImpact();
