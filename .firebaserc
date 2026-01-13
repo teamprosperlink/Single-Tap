@@ -1,7 +1,6 @@
 {
   "projects": {
-    "default": "suuper2",
-    "y": "dlink-f6cc9"
+    "default": "dlink-f6cc9"
   },
   "targets": {},
   "etags": {}

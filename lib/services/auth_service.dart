@@ -1096,6 +1096,7 @@ class AuthService {
         // This handles cases where Cloud Function isn't deployed yet
         try {
           print('[AuthService] STEP 1: Writing forceLogout=true to user doc: $uid');
+          print('[AuthService] 🔍 About to write: {forceLogout: true (bool), lastSessionUpdate: serverTimestamp()}');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
@@ -1104,6 +1105,7 @@ class AuthService {
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
           print('[AuthService] ✓ STEP 1 succeeded - forceLogout signal sent');
+          print('[AuthService] 🔍 forceLogout=true has been written to Firestore');
 
           // CRITICAL: Wait longer to ensure Device A listener detects the signal
           // Device A has a 10-second protection window after startup, but once past it,

@@ -474,6 +474,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
+                print('[DeviceSession] 📋 ALL SNAPSHOT DATA: ${snapshotData.keys.toList()}');
                 final forceLogoutRaw = snapshotData['forceLogout'];
                 print('[DeviceSession] 📋 forceLogout value: $forceLogoutRaw (type: ${forceLogoutRaw.runtimeType})');
                 bool forceLogout = false;

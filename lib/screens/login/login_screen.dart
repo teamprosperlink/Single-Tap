@@ -641,7 +641,7 @@ class _LoginScreenState extends State<LoginScreen>
     print('[LoginScreen] 🔴 Context mounted: $mounted');
     print('[LoginScreen] 🔴 About to call showDialog...');
 
-    return showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -705,6 +705,7 @@ class _LoginScreenState extends State<LoginScreen>
         );
       },
     );
+    print('[LoginScreen] 🔴 showDialog completed');
   }
 
   void _showSuccessSnackBar(String message) {
