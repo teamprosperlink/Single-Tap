@@ -492,16 +492,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // We MUST check forceLogout and token deletion even during protection window
                 // because legitimate logout signals need to be processed immediately
 
-                if (secondsSinceListenerStart < 3) {
+                if (secondsSinceListenerStart < 1) {
                   print(
-                    '[DeviceSession]  EARLY PROTECTION PHASE (${(3 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining) - only skipping token mismatch checks',
+                    '[DeviceSession]  ULTRA-FAST PROTECTION (${(1 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining)',
                   );
-                  // Only skip token mismatch, but DO check forceLogout and token deletion
-                  // Don't return here - continue to check logout signals below
+                  // Only skip token mismatch check (prevents false positives)
+                  // forceLogout and token deletion ALWAYS checked for instant logout
                 } else {
-                  print(
-                    '[DeviceSession]  PROTECTION PHASE COMPLETE - checking ALL logout signals',
-                  );
+                  print('[DeviceSession]  PROTECTION COMPLETE - ALL CHECKS ACTIVE');
                 }
 
                 // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
@@ -537,27 +535,18 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 bool shouldLogout = false;
 
                 if (forceLogout == true) {
-                  print('[DeviceSession]  forceLogout is TRUE - checking if signal is NEW');
-
-                  if (forceLogoutTimestamp != null) {
-                    // Timestamp available - check if signal is newer than listener start
+                  // OPTIMIZATION: Minimal checks for 1-second logout target
+                  if (_listenerStartTime == null) {
+                    // First signal - always logout immediately
+                    shouldLogout = true;
+                  } else if (forceLogoutTimestamp != null) {
+                    // Timestamp available - fast validation (5s tolerance for clock skew)
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
-
-                    // CRITICAL FIX: If listener hasn't started yet (_listenerStartTime is null),
-                    // this signal must be new (first-time logout)
-                    if (_listenerStartTime == null) {
-                      print('[DeviceSession]  ⚠️ CRITICAL: Listener not yet initialized, treating forceLogout as NEW signal');
-                      shouldLogout = true;
-                    } else {
-                      final listenerTime = _listenerStartTime!;
-                      final isNewSignal = forceLogoutTime.isAfter(listenerTime.subtract(Duration(seconds: 2))); // Small 2s margin for clock skew
-                      print('[DeviceSession]  forceLogoutTime: $forceLogoutTime, listenerTime: $listenerTime, isNewSignal: $isNewSignal (margin: 2s)');
-                      shouldLogout = isNewSignal;
-                    }
+                    final listenerTime = _listenerStartTime!;
+                    final isNewSignal = forceLogoutTime.isAfter(listenerTime.subtract(const Duration(seconds: 5)));
+                    shouldLogout = isNewSignal;
                   } else {
-                    // No timestamp available - this is OLD behavior, still logout
-                    // But add extra logging to debug
-                    print('[DeviceSession]  No forceLogoutTime field - treating as new signal (fallback)');
+                    // No timestamp - fallback logout (safer)
                     shouldLogout = true;
                   }
                 }
@@ -589,34 +578,19 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 // PRIORITY 3: Token mismatch (device has changed)
-                // Only check token mismatch AFTER early protection phase (>3 seconds)
+                // Only check token mismatch AFTER early protection phase (>1 second)
                 // This prevents false positives from local writes during initialization
-                if (secondsSinceListenerStart >= 3) {
+                if (secondsSinceListenerStart >= 1) {
                   if (serverTokenValid &&
                       localTokenValid &&
                       serverToken != localToken) {
-                    final serverPreview = serverToken != null
-                        ? serverToken.substring(0, min(8, serverToken.length))
-                        : 'NULL';
-                    final localPreview = localToken.substring(
-                      0,
-                      min(8, localToken.length),
-                    );
-                    print(
-                      '[DeviceSession]  TOKEN MISMATCH: Server=$serverPreview... vs Local=$localPreview...',
-                    );
-
-                    print(
-                      '[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE',
-                    );
+                    print('[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE - LOGGING OUT');
                     if (mounted && !_isPerformingLogout) {
                       _isPerformingLogout = true;
                       await _performRemoteLogout('Another device logged in');
                     }
                     return;
                   }
-                } else {
-                  print('[DeviceSession]  Skipping token mismatch check (within early protection phase)');
                 }
               } catch (e) {
                 print('[DeviceSession]  Error in listener callback: $e');
