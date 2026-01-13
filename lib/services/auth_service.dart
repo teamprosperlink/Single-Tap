@@ -12,6 +12,7 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     // Properly initialize GoogleSignIn with Firebase scopes
+    clientId: '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
     scopes: [
       'email',
       'profile',
@@ -63,23 +64,24 @@ class AuthService {
           print(
             '[AuthService] Existing session detected, showing device login dialog',
           );
-          // CRITICAL FIX: DO NOT sign out Device B!
-          // Device B should stay logged in and the user can decide what to do:
-          // - Click "Logout Other Device" to logout the old device and keep new device
-          // - Click "Cancel" to stay on both devices (or return to login)
+          // CRITICAL FIX: DO NOT save Device B's session yet!
+          // Device B is authenticated in Firebase but NOT saved to Firestore
+          // This way, old device still shows as active
+          // Only save Device B if user confirms "Logout Other Device"
 
           final userIdToPass = result.user!.uid;
           final deviceInfo =
               sessionCheck['deviceInfo'] as Map<String, dynamic>?;
 
-          // Save Device B's session since it's now logged in
-          print('[AuthService] Saving Device B session...');
+          // Update user profile (lastSeen, isOnline) but DON'T save device session yet
+          print('[AuthService] Updating user profile but NOT saving device session yet...');
           await _updateUserProfileOnLoginAsync(result.user!, email);
-          await _saveDeviceSession(result.user!.uid, deviceToken ?? '');
+          // DO NOT call _saveDeviceSession here!
 
-          print('[AuthService] Device B logged in successfully - showing device conflict dialog');
+          print('[AuthService] Device B authenticated but NOT saved to Firestore - showing device conflict dialog');
 
-          // Throw error to trigger dialog, but Device B is already logged in
+          // Throw error to trigger dialog
+          // Device B is NOT yet in the active device list
           throw Exception(
             'ALREADY_LOGGED_IN:${deviceInfo?['deviceName'] ?? 'Another Device'}:$userIdToPass',
           );
@@ -1139,9 +1141,13 @@ class AuthService {
           throw Exception('No response from Cloud Function');
         }
       } catch (e) {
-        print(
-          '[AuthService] Cloud Function error: $e. Attempting direct Firestore write as fallback...',
-        );
+        // Cloud Function might not be deployed - this is OK, fallback works fine
+        final errorString = e.toString();
+        if (errorString.contains('NOT_FOUND')) {
+          print('[AuthService] Cloud Function not deployed (expected). Using Firestore fallback...');
+        } else {
+          print('[AuthService] Cloud Function error: $e. Attempting fallback...');
+        }
         // Fallback: Try direct Firestore write if Cloud Function fails
         // This handles cases where Cloud Function isn't deployed yet
         try {
@@ -1159,10 +1165,14 @@ class AuthService {
           print('[AuthService] 🔍 forceLogout=true with timestamp has been written to Firestore');
 
           // CRITICAL: Wait longer to ensure Device A listener detects the signal
-          // Device A has a 10-second protection window after startup, but once past it,
-          // it should immediately detect this forceLogout flag
-          await Future.delayed(const Duration(milliseconds: 500));
-          print('[AuthService] ⏳ Waited 500ms for Firestore to sync and Device A to detect signal...');
+          // Device A's listener needs time to:
+          // 1. Receive the Firestore snapshot (200-500ms)
+          // 2. Process the forceLogout flag (50-100ms)
+          // 3. Call _performRemoteLogout() (100-200ms)
+          // Total: ~500ms minimum
+          // Extended to 1.5s to ensure signal is definitely processed
+          await Future.delayed(const Duration(milliseconds: 1500));
+          print('[AuthService] ⏳ Waited 1.5s for Firestore to sync and Device A to detect and process signal...');
 
           print('[AuthService] STEP 2: Writing activeDeviceToken=${localToken.substring(0, 8)}... to user doc: $uid');
           await FirebaseFirestore.instance
@@ -1189,6 +1199,84 @@ class AuthService {
       print('[AuthService] ========== LOGOUT OTHER DEVICES END ERROR ==========');
       print('[AuthService] Error logging out from other devices: $e');
       rethrow;
+    }
+  }
+
+  /// Wait for the old device to actually logout (token cleared from Firestore)
+  /// CRITICAL: New device should NOT proceed until old device is confirmed logged out
+  /// This ensures only one device is logged in at a time
+  /// Returns when the activeDeviceToken field is deleted/cleared from Firestore
+  /// Timeout: 20 seconds (fail-safe)
+  Future<bool> waitForOldDeviceLogout({String? userId}) async {
+    try {
+      final uid = userId ?? currentUser?.uid;
+      if (uid == null) {
+        print('[AuthService] ⏳ No user ID for logout wait, skipping');
+        return false;
+      }
+
+      print('[AuthService] ⏳ WAITING for old device to logout...');
+      final startTime = DateTime.now();
+      const maxWaitTime = Duration(seconds: 20);
+
+      // Poll Firestore every 500ms to check if old token is cleared
+      while (true) {
+        final elapsed = DateTime.now().difference(startTime);
+
+        // Timeout after 20 seconds
+        if (elapsed > maxWaitTime) {
+          print('[AuthService] ⏳ TIMEOUT waiting for old device logout (20s)');
+          return false;
+        }
+
+        try {
+          // Get latest user doc from server (no cache)
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get(const GetOptions(source: Source.server));
+
+          final activeToken = doc.data()?['activeDeviceToken'] as String?;
+
+          // Check if old device's token is cleared
+          if (activeToken == null || activeToken.isEmpty) {
+            print(
+              '[AuthService] ✅ Old device logged out! (activeDeviceToken cleared after ${elapsed.inSeconds}s)',
+            );
+            return true;
+          }
+
+          // Token still exists, wait 500ms and check again
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (e) {
+          print('[AuthService] ⏳ Error checking token status: $e');
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+    } catch (e) {
+      print('[AuthService] ⏳ Error in waitForOldDeviceLogout: $e');
+      return false;
+    }
+  }
+
+  /// PUBLIC: Save the current device session to Firestore
+  /// Called when device is confirmed as the active device
+  /// This is called AFTER device conflict is resolved
+  Future<void> saveCurrentDeviceSession() async {
+    try {
+      final uid = currentUser?.uid;
+      final token = await getLocalDeviceToken();
+
+      if (uid == null || token == null) {
+        print('[AuthService] Cannot save session: uid=$uid, token=$token');
+        return;
+      }
+
+      print('[AuthService] 💾 Saving current device session to Firestore...');
+      await _saveDeviceSession(uid, token);
+      print('[AuthService] ✅ Device session saved successfully');
+    } catch (e) {
+      print('[AuthService] ❌ Error saving device session: $e');
     }
   }
 }

@@ -936,8 +936,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.orange),
               onTap: () {
+                // IMPORTANT: Close parent dialog first (Security dialog)
+                // This allows the logout dialog to show properly
                 Navigator.pop(context);
-                _showLogoutDialog(context, authService);
+                // Schedule logout dialog to show after parent dialog closes
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _showLogoutDialog(context, authService);
+                });
               },
             ),
             const Divider(),

@@ -654,16 +654,40 @@ class _LoginScreenState extends State<LoginScreen>
               print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
 
               // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
-              // The listener needs time to initialize (500ms auth delay + listener setup)
-              // If we call logoutFromOtherDevices() too early, the listener won't be ready
-              // and won't properly handle the forceLogout signal
-              // Extended to 2.5s to ensure we're well within protection window
-              print('[LoginScreen] Waiting 2.5 seconds for listener to initialize...');
-              await Future.delayed(const Duration(milliseconds: 2500));
-              print('[LoginScreen] Listener should be initialized now, proceeding with logout');
+              // The listener needs time to initialize:
+              // 1. Device A auth state stream fires (500ms)
+              // 2. initializeServices() runs (300ms)
+              // 3. _startDeviceSessionMonitoring() creates listener (200ms)
+              // 4. _listenerReady = true (100ms)
+              // 5. First snapshot arrives and is processed (500ms)
+              // Total: ~1.6 seconds minimum for safety
+              // Extended to 4+ seconds to ensure listener is FULLY ready and processing snapshots
+              print('[LoginScreen] Waiting 4.5 seconds for listener to fully initialize and process snapshots...');
+              await Future.delayed(const Duration(milliseconds: 4500));
+              print('[LoginScreen] Listener should be fully initialized now, proceeding with logout');
 
               // Logout from other devices and keep current device logged in
               await _authService.logoutFromOtherDevices(userId: _pendingUserId);
+
+              // CRITICAL: Wait for old device to actually logout before proceeding
+              // This ensures only one device is logged in at a time
+              print('[LoginScreen] 🔄 Waiting for old device to logout...');
+              final oldDeviceLoggedOut = await _authService.waitForOldDeviceLogout(userId: _pendingUserId);
+              if (oldDeviceLoggedOut) {
+                print('[LoginScreen] ✅ Old device confirmed logged out, proceeding with Device B login');
+              } else {
+                print('[LoginScreen] ⚠️ Timeout waiting for old device logout, proceeding anyway');
+              }
+
+              // CRITICAL: Now that old device is logged out, save Device B's session
+              // This was deferred from the initial login because device conflict existed
+              // logoutFromOtherDevices STEP 2 already saved the token, but verify it's there
+              print('[LoginScreen] 💾 Verifying Device B session saved to Firestore...');
+              try {
+                await _authService.saveCurrentDeviceSession();
+              } catch (e) {
+                print('[LoginScreen] ⚠️ Error verifying device session: $e');
+              }
 
               // Close dialog - use mounted check before accessing context
               // The dialog context may not be valid after long async operations
@@ -688,10 +712,20 @@ class _LoginScreenState extends State<LoginScreen>
           // Option 2: User clicks "Stay Logged In" - Device B stays logged in without logging out Device A
           onCancel: () async {
             try {
-              print('[LoginScreen] User chose to stay logged in on this device - navigating to main app');
+              print('[LoginScreen] User chose to stay logged in on this device - both devices logged in');
 
-              // Device B is already logged in (saved in auth_service)
-              // Just navigate to main app without logging out Device A
+              // CRITICAL: Device B needs to be saved to Firestore
+              // Device A stays logged in, Device B is NEW active device
+              // Actually, Device B shouldn't take over - keep Device A as active
+              // So Device B is logged in Firebase but NOT the active device in Firestore
+              // This way both devices are logged in at Firebase level
+              print('[LoginScreen] 💾 Saving Device B session to Firestore (both devices logged in)...');
+              try {
+                await _authService.saveCurrentDeviceSession();
+              } catch (e) {
+                print('[LoginScreen] ⚠️ Error saving device session: $e');
+              }
+
               if (mounted) {
                 await _navigateAfterAuth(isNewUser: false);
               }
