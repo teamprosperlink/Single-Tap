@@ -1044,18 +1044,6 @@ class AuthService {
     }
   }
 
-  /// Clear device session from Firestore on logout
-  Future<void> _clearDeviceSession(String uid) async {
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'activeDeviceToken': FieldValue.delete(),
-      });
-    } catch (e) {
-      // Silent fail - not critical
-      print('[AuthService] Error clearing device session: $e');
-    }
-  }
-
   /// Logout from all other devices and keep only current device logged in
   /// Uses a two-step approach for instant logout (WhatsApp-style):
   /// 1. Set forceLogout flag to trigger immediate logout on other devices
@@ -1096,7 +1084,7 @@ class AuthService {
       final deviceInfo = await _getDeviceInfo();
 
       print('[AuthService] Calling Cloud Function: forceLogoutOtherDevices');
-      print('[AuthService] New device token: ${localToken?.substring(0, 8) ?? "NULL"}...');
+      print('[AuthService] New device token: ${localToken.substring(0, 8)}...');
 
       // CRITICAL IMPROVEMENT: Directly clear the old token IMMEDIATELY
       // This ensures that even if the old device is offline and never detects forceLogout,
