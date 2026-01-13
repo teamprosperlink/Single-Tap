@@ -487,16 +487,22 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   '[DeviceSession] Snapshot received: ${secondsSinceListenerStart.toStringAsFixed(2)}s since listener start (listenerStartTime=${_listenerStartTime != null ? "SET" : "NULL"})',
                 );
 
-                if (secondsSinceListenerStart < 10) {
-                  print(
-                    '[DeviceSession]  PROTECTION PHASE (${(10 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining) - skipping ALL logout checks',
-                  );
-                  return; // Skip ALL checks (forceLogout, token empty, token mismatch) during protection window
-                }
+                // CRITICAL FIX: Don't skip ALL checks during protection window
+                // Protection window should only prevent token mismatch false positives
+                // We MUST check forceLogout and token deletion even during protection window
+                // because legitimate logout signals need to be processed immediately
 
-                print(
-                  '[DeviceSession]  PROTECTION PHASE COMPLETE - NOW checking logout signals',
-                );
+                if (secondsSinceListenerStart < 3) {
+                  print(
+                    '[DeviceSession]  EARLY PROTECTION PHASE (${(3 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining) - only skipping token mismatch checks',
+                  );
+                  // Only skip token mismatch, but DO check forceLogout and token deletion
+                  // Don't return here - continue to check logout signals below
+                } else {
+                  print(
+                    '[DeviceSession]  PROTECTION PHASE COMPLETE - checking ALL logout signals',
+                  );
+                }
 
                 // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
 
@@ -583,29 +589,34 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 // PRIORITY 3: Token mismatch (device has changed)
-                // Now safe to check since we're past 6-second protection window
-                if (serverTokenValid &&
-                    localTokenValid &&
-                    serverToken != localToken) {
-                  final serverPreview = serverToken != null
-                      ? serverToken.substring(0, min(8, serverToken.length))
-                      : 'NULL';
-                  final localPreview = localToken.substring(
-                    0,
-                    min(8, localToken.length),
-                  );
-                  print(
-                    '[DeviceSession]  TOKEN MISMATCH: Server=$serverPreview... vs Local=$localPreview...',
-                  );
+                // Only check token mismatch AFTER early protection phase (>3 seconds)
+                // This prevents false positives from local writes during initialization
+                if (secondsSinceListenerStart >= 3) {
+                  if (serverTokenValid &&
+                      localTokenValid &&
+                      serverToken != localToken) {
+                    final serverPreview = serverToken != null
+                        ? serverToken.substring(0, min(8, serverToken.length))
+                        : 'NULL';
+                    final localPreview = localToken.substring(
+                      0,
+                      min(8, localToken.length),
+                    );
+                    print(
+                      '[DeviceSession]  TOKEN MISMATCH: Server=$serverPreview... vs Local=$localPreview...',
+                    );
 
-                  print(
-                    '[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE',
-                  );
-                  if (mounted && !_isPerformingLogout) {
-                    _isPerformingLogout = true;
-                    await _performRemoteLogout('Another device logged in');
+                    print(
+                      '[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE',
+                    );
+                    if (mounted && !_isPerformingLogout) {
+                      _isPerformingLogout = true;
+                      await _performRemoteLogout('Another device logged in');
+                    }
+                    return;
                   }
-                  return;
+                } else {
+                  print('[DeviceSession]  Skipping token mismatch check (within early protection phase)');
                 }
               } catch (e) {
                 print('[DeviceSession]  Error in listener callback: $e');
