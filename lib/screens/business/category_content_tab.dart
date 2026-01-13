@@ -1064,7 +1064,7 @@ class _AddItemSheetState extends State<_AddItemSheet> {
                           Switch(
                             value: _isAvailable,
                             onChanged: (value) => setState(() => _isAvailable = value),
-                            activeColor: const Color(0xFF00D67D),
+                            activeThumbColor: const Color(0xFF00D67D),
                           ),
                         ],
                       ),
