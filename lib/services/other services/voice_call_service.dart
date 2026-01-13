@@ -769,7 +769,7 @@ class VoiceCallService {
     } catch (e) {
       debugPrint('  VoiceCallService: Error calling onLeaveChannel: $e');
     }
-    debugPrint('  VoiceCallService: ✅ Left call successfully');
+    debugPrint('  VoiceCallService:  Left call successfully');
   }
 
   /// Toggle mute state

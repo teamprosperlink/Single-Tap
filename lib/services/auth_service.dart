@@ -90,16 +90,8 @@ class AuthService {
       if (result.user != null && deviceToken != null) {
         // Update user profile
         await _updateUserProfileOnLoginAsync(result.user!, email);
+        // This also clears forceLogout flag and removes old timestamps
         await _saveDeviceSession(result.user!.uid, deviceToken);
-
-        // Initialize forceLogout flag
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(result.user!.uid)
-            .update({'forceLogout': false})
-            .catchError((e) {
-              // Ignore errors - this is just initialization
-            });
       }
 
       return result.user;
@@ -168,7 +160,13 @@ class AuthService {
           'accountType': accType,
           'accountStatus': needsVerification ? 'pendingVerification' : 'active',
           'verification': {'status': needsVerification ? 'pending' : 'none'},
+          'forceLogout': false, // CRITICAL: Initialize logout flag
         }, SetOptions(merge: true));
+
+        // Generate and save device token for email signup
+        final deviceToken = _generateDeviceToken();
+        await _saveLocalDeviceToken(deviceToken);
+        await _saveDeviceSession(user.uid, deviceToken);
       }
 
       return result.user;
@@ -334,16 +332,8 @@ class AuthService {
         }
 
         // Save device session with the token we generated earlier
+        // This also clears forceLogout flag and removes old timestamps
         await _saveDeviceSession(user.uid, deviceToken);
-
-        // Initialize forceLogout flag
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .update({'forceLogout': false})
-            .catchError((e) {
-              // Ignore errors - this is just initialization
-            });
       }
 
       return result.user;
@@ -375,6 +365,7 @@ class AuthService {
       final user = _auth.currentUser;
       if (user != null) {
         try {
+          print('[AuthService] Clearing device session on logout...');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -382,8 +373,12 @@ class AuthService {
                 'isOnline': false,
                 'lastSeen': FieldValue.serverTimestamp(),
                 'activeDeviceToken': FieldValue.delete(),
+                'forceLogout': false, // CRITICAL: Clear logout flag so other devices can login
+                'forceLogoutTime': FieldValue.delete(), // CRITICAL: Clear timestamp to prevent stale signal
               });
+          print('[AuthService] Device session cleared successfully');
         } catch (e) {
+          print('[AuthService] Warning: Could not update Firestore on logout: $e');
           // Continue with logout even if Firestore update fails
         }
       }
@@ -960,6 +955,7 @@ class AuthService {
 
   /// Check if user is already logged in on another device
   /// Returns {exists: bool, deviceInfo: Map, loginDate: DateTime?}
+  /// IMPORTANT: If old session is stale (>5 minutes without update), automatically logout old device
   Future<Map<String, dynamic>> _checkExistingSession(String uid) async {
     try {
       // Get user document from server (no cache)
@@ -979,6 +975,40 @@ class AuthService {
       if (serverToken != null &&
           serverToken.isNotEmpty &&
           (localToken == null || serverToken != localToken)) {
+
+        // IMPROVEMENT: Check if old session is stale (>5 minutes without update)
+        // If stale, automatically logout the old device to prevent stuck sessions
+        bool isSessionStale = false;
+        if (lastSessionUpdate != null) {
+          final lastUpdate = lastSessionUpdate.toDate();
+          final now = DateTime.now();
+          final minutesSinceUpdate = now.difference(lastUpdate).inMinutes;
+          isSessionStale = minutesSinceUpdate > 5;
+
+          print('[AuthService] Session age: $minutesSinceUpdate minutes (stale if > 5)');
+
+          if (isSessionStale) {
+            print('[AuthService] Old session is STALE - automatically clearing old device session');
+            try {
+              // Auto-logout the old device to prevent stuck sessions
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .update({
+                    'activeDeviceToken': FieldValue.delete(),
+                    'forceLogout': false,
+                  });
+              print('[AuthService] Old device session cleared successfully');
+
+              // After clearing stale session, return that no existing session exists
+              return {'exists': false};
+            } catch (e) {
+              print('[AuthService] Error clearing stale session: $e');
+              // Fall through to normal detection if cleanup fails
+            }
+          }
+        }
+
         return {
           'exists': true,
           'deviceInfo': deviceInfo ?? {'deviceName': 'Another Device'},
@@ -989,6 +1019,7 @@ class AuthService {
       return {'exists': false};
     } catch (e) {
       // On error, assume no existing session (fail-open for UX)
+      print('[AuthService] Error checking existing session: $e');
       return {'exists': false};
     }
   }
@@ -1001,6 +1032,8 @@ class AuthService {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'activeDeviceToken': deviceToken,
         'deviceInfo': deviceInfo,
+        'forceLogout': false, // CRITICAL: Clear any stale logout flag from previous logout
+        'forceLogoutTime': FieldValue.delete(), // Remove old timestamp
         'lastSessionUpdate': FieldValue.serverTimestamp(),
       });
     } catch (e) {
@@ -1063,6 +1096,23 @@ class AuthService {
       print('[AuthService] Calling Cloud Function: forceLogoutOtherDevices');
       print('[AuthService] New device token: ${localToken?.substring(0, 8) ?? "NULL"}...');
 
+      // CRITICAL IMPROVEMENT: Directly clear the old token IMMEDIATELY
+      // This ensures that even if the old device is offline and never detects forceLogout,
+      // its session will be invalidated and it will logout when it comes back online
+      print('[AuthService] STEP 0: Immediately clearing old device token from Firestore...');
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({
+              'activeDeviceToken': FieldValue.delete(), // Delete old token
+            });
+        print('[AuthService] ✓ STEP 0 succeeded - old device token cleared');
+      } catch (e) {
+        print('[AuthService] ⚠️ STEP 0 warning - could not clear old token: $e');
+        // Continue anyway - we'll still try the full logout sequence below
+      }
+
       // Call Callable Cloud Function to handle force logout securely
       // The Cloud Function runs with admin privileges, bypassing Firestore security rules
       // This ensures permission-denied errors don't block the logout process
@@ -1096,16 +1146,17 @@ class AuthService {
         // This handles cases where Cloud Function isn't deployed yet
         try {
           print('[AuthService] STEP 1: Writing forceLogout=true to user doc: $uid');
-          print('[AuthService] 🔍 About to write: {forceLogout: true (bool), lastSessionUpdate: serverTimestamp()}');
+          print('[AuthService] 🔍 About to write: {forceLogout: true (bool), forceLogoutTime: serverTimestamp(), lastSessionUpdate: serverTimestamp()}');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
               .set({
             'forceLogout': true,
+            'forceLogoutTime': FieldValue.serverTimestamp(), // CRITICAL: Timestamp to prevent stale signal
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
           print('[AuthService] ✓ STEP 1 succeeded - forceLogout signal sent');
-          print('[AuthService] 🔍 forceLogout=true has been written to Firestore');
+          print('[AuthService] 🔍 forceLogout=true with timestamp has been written to Firestore');
 
           // CRITICAL: Wait longer to ensure Device A listener detects the signal
           // Device A has a 10-second protection window after startup, but once past it,
@@ -1120,24 +1171,10 @@ class AuthService {
               .set({
             'activeDeviceToken': localToken,
             'deviceInfo': deviceInfo,
-            // DO NOT set forceLogout: false here! Let Device A handle cleanup
-            // Setting it to false here creates a race condition where the signal
-            // is immediately cleared before Device A can react
+            'forceLogout': false, // CRITICAL: Clear forceLogout flag immediately when setting new device
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-          print('[AuthService] ✓ STEP 2 succeeded - new device set as active');
-
-          // STEP 3: Clear the forceLogout flag AFTER new device is active and Device A has processed
-          // Give Device A extra time to detect and process the logout signal
-          await Future.delayed(const Duration(milliseconds: 1000));
-          print('[AuthService] STEP 3: Clearing forceLogout flag');
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .update({
-            'forceLogout': false,
-          });
-          print('[AuthService] ✓ STEP 3 succeeded - forceLogout flag cleared');
+          print('[AuthService] ✓ STEP 2 succeeded - new device set as active and forceLogout cleared');
 
           print(
             '[AuthService] ✓ Fallback write succeeded - forced logout completed',

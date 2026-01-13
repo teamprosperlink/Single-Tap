@@ -511,14 +511,24 @@ exports.forceLogoutOtherDevices = onCall(
     );
 
     try {
-      // STEP 1: Set force logout flag + clear token (INSTANT logout for other devices)
+      // CRITICAL IMPROVEMENT: Delete old token IMMEDIATELY (within same transaction)
+      // This ensures old device will logout when it tries to sync, regardless of listener status
       logger.info(
-        `Step 1: Setting forceLogout=true for user ${userId} to trigger instant logout on old devices...`
+        `STEP 0: IMMEDIATELY deleting old device token for user ${userId} (old device will logout on reconnect)...`
+      );
+      await db.collection("users").doc(userId).update({
+        activeDeviceToken: new (require("firebase-admin/firestore").FieldValue).delete(),
+      });
+      logger.info(`Old device token deleted for user ${userId}`);
+
+      // STEP 1: Set force logout flag to trigger instant logout for listening devices
+      logger.info(
+        `STEP 1: Setting forceLogout=true for user ${userId} to trigger instant logout on old devices...`
       );
       await db.collection("users").doc(userId).set(
         {
           forceLogout: true, // Signal to other devices: LOGOUT NOW!
-          activeDeviceToken: "", // Clear token so old device sees mismatch
+          forceLogoutTime: new (require("firebase-admin/firestore").FieldValue).serverTimestamp(), // CRITICAL: Timestamp to prevent stale signal
           lastSessionUpdate: new (require("firebase-admin/firestore").FieldValue).serverTimestamp(),
         },
         { merge: true }
@@ -527,24 +537,28 @@ exports.forceLogoutOtherDevices = onCall(
       logger.info(`forceLogout signal sent for user ${userId}`);
 
       // Wait to ensure old device receives and processes logout signal
+      // This wait is CRITICAL - gives Device A time to detect forceLogout=true
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // STEP 2: Set new device as the active device and clear logout flag
+      // STEP 2: Set new device as the active device and IMMEDIATELY clear logout flag
+      // DO NOT delay clearing forceLogout - clear it in the same update
+      // Delaying creates a window where other devices might see forceLogout=true
       logger.info(
-        `Step 2: Setting new device as active for user ${userId}...`
+        `STEP 2: Setting new device as active for user ${userId} and clearing forceLogout...`
       );
       await db.collection("users").doc(userId).set(
         {
           activeDeviceToken: localToken,
           deviceInfo: deviceInfo || {},
-          forceLogout: false, // Clear the logout flag now that old device should be logged out
+          forceLogout: false, // CRITICAL: Clear immediately, don't delay
+          forceLogoutTime: new (require("firebase-admin/firestore").FieldValue).delete(), // Remove old timestamp
           lastSessionUpdate: new (require("firebase-admin/firestore").FieldValue).serverTimestamp(),
         },
         { merge: true }
       );
 
       logger.info(
-        `Successfully forced logout on other devices for user ${userId}`
+        `Successfully forced logout on other devices for user ${userId} - forceLogout cleared`
       );
 
       return {
