@@ -536,10 +536,18 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   if (forceLogoutTimestamp != null) {
                     // Timestamp available - check if signal is newer than listener start
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
-                    final listenerTime = _listenerStartTime ?? DateTime.now();
-                    final isNewSignal = forceLogoutTime.isAfter(listenerTime.subtract(Duration(seconds: 2))); // Small 2s margin for clock skew
-                    print('[DeviceSession]  forceLogoutTime: $forceLogoutTime, listenerTime: $listenerTime, isNewSignal: $isNewSignal (margin: 2s)');
-                    shouldLogout = isNewSignal;
+
+                    // CRITICAL FIX: If listener hasn't started yet (_listenerStartTime is null),
+                    // this signal must be new (first-time logout)
+                    if (_listenerStartTime == null) {
+                      print('[DeviceSession]  ⚠️ CRITICAL: Listener not yet initialized, treating forceLogout as NEW signal');
+                      shouldLogout = true;
+                    } else {
+                      final listenerTime = _listenerStartTime!;
+                      final isNewSignal = forceLogoutTime.isAfter(listenerTime.subtract(Duration(seconds: 2))); // Small 2s margin for clock skew
+                      print('[DeviceSession]  forceLogoutTime: $forceLogoutTime, listenerTime: $listenerTime, isNewSignal: $isNewSignal (margin: 2s)');
+                      shouldLogout = isNewSignal;
+                    }
                   } else {
                     // No timestamp available - this is OLD behavior, still logout
                     // But add extra logging to debug
