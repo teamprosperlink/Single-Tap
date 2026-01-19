@@ -6,10 +6,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
-import '../../res/config/app_assets.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/other widgets/user_avatar.dart';
+import '../../widgets/app_background.dart';
 import 'edit_post_screen.dart';
 
 class MyPostsScreen extends StatefulWidget {
@@ -66,118 +66,103 @@ class _MyPostsScreenState extends State<MyPostsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ),
         title: Text(
-          'Supper Posts',
+          'Posts',
           style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
         ),
         centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Divider line
-              Container(
-                width: double.infinity,
-                height: 0.5,
-                color: Colors.white.withValues(alpha: 0.4),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.glassBackgroundDark(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.glassBorder(alpha: 0.2)),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: AppColors.iosBlue.withValues(alpha: 0.6),
-                  ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white60,
-                  labelStyle: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  tabs: const [
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.post_add_rounded, size: 18),
-                          SizedBox(width: 4),
-                          Text('My Posts'),
-                        ],
-                      ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.bookmark_rounded, size: 18),
-                          SizedBox(width: 4),
-                          Text('Saved'),
-                        ],
-                      ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.delete_outline_rounded, size: 18),
-                          SizedBox(width: 4),
-                          Text('Delete'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: Stack(
-        children: [
-          // Background Image (same as feed screen)
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.fill,
-              width: double.infinity,
-              height: double.infinity,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
-
-          // Dark overlay for readability
-          Positioned.fill(child: Container(color: AppColors.darkOverlay())),
-
-          // Tab content
-          SafeArea(
-            child: TabBarView(
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: TabBar(
               controller: _tabController,
-              children: [
-                _buildCreatedPostsTab(),
-                _buildSavedPostsTab(),
-                _buildDeletePostsTab(),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorColor: Colors.white,
+              indicatorWeight: 2,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              labelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: const [
+                Tab(text: 'My Posts'),
+                Tab(text: 'Saved'),
+                Tab(text: 'Delete'),
               ],
             ),
           ),
-        ],
+        ),
+      ),
+      body: AppBackground(
+        showParticles: true,
+        overlayOpacity: 0.6,
+        child: Column(
+          children: [
+            // Spacer for AppBar
+            SizedBox(
+              height: MediaQuery.of(context).padding.top + kToolbarHeight + 48,
+            ),
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildCreatedPostsTab(),
+                  _buildSavedPostsTab(),
+                  _buildDeletePostsTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

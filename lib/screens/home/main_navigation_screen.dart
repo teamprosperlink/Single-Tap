@@ -1,25 +1,26 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
 
-// Replace these with your actual screens
+// Screens used in navigation
 import 'home_screen.dart';
-import 'conversations_screen.dart';
 import 'live_connect_tab_screen.dart';
-import 'profile_with_history_screen.dart';
 import 'feed_screen.dart';
+import 'conversations_screen.dart';
 
 // Professional & Business screens
 import '../professional/professional_dashboard_screen.dart';
 import '../business/business_main_screen.dart';
 
-// Call screens
-import '../chat/incoming_call_screen.dart';
+// Call screens - Now using CallKit instead of IncomingCallScreen widget
+// Video call disabled
+// import '../call/incoming_video_call_screen.dart';
 
 // services
 import '../../services/location services/location_service.dart';
@@ -41,9 +42,10 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   int _unreadMessageCount = 0;
+  late TabController _tabController;
 
   // Stream subscription for cleanup
   StreamSubscription<QuerySnapshot>? _unreadSubscription;
@@ -62,9 +64,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Initialize TabController with 4 tabs
+    _tabController = TabController(length: 4, vsync: this);
+
     // Set initial index based on login account type or initialIndex
     if (widget.initialIndex != null) {
       _currentIndex = widget.initialIndex!;
+      _tabController.index = _convertToTabIndex(_currentIndex);
       _saveScreenIndex(_currentIndex);
     } else if (widget.loginAccountType != null) {
       // Set initial screen based on account type from login
@@ -72,15 +78,50 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         _currentIndex = 6; // Business dashboard
       } else {
         _currentIndex = 0; // Home screen for Personal
+        _tabController.index = _convertToTabIndex(0);
       }
       _saveScreenIndex(_currentIndex);
     } else {
-      // Load saved screen index (instant, no Firebase needed)
-      _loadSavedScreenIndex();
+      // Always start at home screen on refresh
+      _currentIndex = 0;
+      _tabController.index = _convertToTabIndex(0);
     }
+
+    // Listen to tab changes
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      final newIndex = _convertFromTabIndex(_tabController.index);
+      if (newIndex != _currentIndex) {
+        HapticFeedback.mediumImpact();
+        setState(() => _currentIndex = newIndex);
+        _saveScreenIndex(newIndex);
+      }
+    });
 
     // Initialize listeners with error handling
     _safeInit();
+  }
+
+  // Convert main index to tab index (0-3)
+  int _convertToTabIndex(int mainIndex) {
+    switch (mainIndex) {
+      case 4: return 0; // Nearby (Feed)
+      case 0: return 1; // Home
+      case 1: return 2; // Chat
+      case 2: return 3; // Networking
+      default: return 1;
+    }
+  }
+
+  // Convert tab index (0-3) to main index
+  int _convertFromTabIndex(int tabIndex) {
+    switch (tabIndex) {
+      case 0: return 4; // Nearby (Feed)
+      case 1: return 0; // Home
+      case 2: return 1; // Chat
+      case 3: return 2; // Networking
+      default: return 0;
+    }
   }
 
   void _safeInit() {
@@ -118,17 +159,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   Future<void> _saveScreenIndex(int index) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_screenIndexKey, index);
-  }
-
-  // Load saved screen index instantly
-  Future<void> _loadSavedScreenIndex() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedIndex = prefs.getInt(_screenIndexKey);
-    if (savedIndex != null && mounted) {
-      setState(() {
-        _currentIndex = savedIndex;
-      });
-    }
   }
 
   // Check for old calls that were never answered and mark them as missed
@@ -188,6 +218,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabController.dispose();
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
     super.dispose();
@@ -226,6 +257,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         .collection('calls')
         .where('receiverId', isEqualTo: currentUserId);
 
+    debugPrint('🔍 Setting up call listener for receiverId: $currentUserId');
+
     if (useOrderBy) {
       query = query.orderBy('createdAt', descending: true);
     }
@@ -260,12 +293,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 final callId = doc.id;
                 final status = data['status'] as String? ?? '';
                 final callerId = data['callerId'] as String? ?? '';
+                final receiverId = data['receiverId'] as String? ?? '';
+
+                debugPrint('🔔 Call found: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId');
 
                 // Skip if already handled
-                if (_handledCallIds.contains(callId)) continue;
+                if (_handledCallIds.contains(callId)) {
+                  debugPrint('  ⏭️ Skipping - already handled');
+                  continue;
+                }
 
                 // Skip caller's own calls
                 if (callerId == currentUserId) {
+                  debugPrint('  ⏭️ Skipping - user is caller, not receiver');
+                  _handledCallIds.add(callId);
+                  continue;
+                }
+
+                // CRITICAL: Verify this call is actually for current user
+                if (receiverId != currentUserId) {
+                  debugPrint('  ❌ ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!');
                   _handledCallIds.add(callId);
                   continue;
                 }
@@ -315,11 +362,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 if (callTime != null) {
                   final callAge = now.difference(callTime).inSeconds;
 
-                  // If call is more than 5 seconds old, mark as missed
-                  // (caller probably already gave up or app was closed for too long)
-                  if (callAge > 5) {
+                  // If call is more than 39 seconds old, mark as missed (timeout)
+                  // This matches the caller's timeout duration
+                  if (callAge > 39) {
                     debugPrint(
-                      '  First snapshot: Call $callId is $callAge seconds old, marking as missed',
+                      '  First snapshot: Call $callId is $callAge seconds old (timeout), marking as missed',
                     );
                     _handledCallIds.add(callId);
 
@@ -338,7 +385,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       data['callerName'] as String? ?? 'Unknown',
                     );
                   } else {
-                    // Call is very recent (within 5 seconds) AND still in 'calling' status
+                    // Call is within timeout period (39 seconds) AND still in 'calling' status
                     // This means caller is still waiting - show the call
                     debugPrint(
                       '  First snapshot: Call $callId is only $callAge seconds old and still calling, showing incoming call',
@@ -391,24 +438,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
               final callId = doc.id;
               final status = data['status'] as String? ?? '';
-
-              // Skip if we've already handled this call
-              if (_handledCallIds.contains(callId)) continue;
-
               final callerId = data['callerId'] as String? ?? '';
               final receiverId = data['receiverId'] as String? ?? '';
 
+              debugPrint('📞 NEW call detected: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId');
+
+              // Skip if we've already handled this call
+              if (_handledCallIds.contains(callId)) {
+                debugPrint('  ⏭️ Skipping - already handled');
+                continue;
+              }
+
               // Skip if current user is the caller (not the receiver)
               if (callerId == currentUserId) {
+                debugPrint('  ⏭️ Skipping - user is caller, not receiver');
                 _handledCallIds.add(callId);
                 continue;
               }
 
               // Verify receiver ID matches current user
               if (receiverId != currentUserId) {
+                debugPrint('  ❌ ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!');
                 _handledCallIds.add(callId);
                 continue;
               }
+
+              debugPrint('  ✅ Valid incoming call for current user - showing call screen');
 
               // Check if call is still active (status = 'calling')
               if (status != 'calling') {
@@ -487,59 +542,117 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     HapticFeedback.heavyImpact();
 
     debugPrint(
-      '  _showIncomingCall: Showing IncomingCallScreen for callId=$callId',
+      '📞 _showIncomingCall: Showing IncomingCallScreen for callId=$callId',
     );
 
     // IMPORTANT: End any existing CallKit UI to prevent conflicts
     // This prevents CallKit timeout from marking call as missed
     try {
       await FlutterCallkitIncoming.endAllCalls();
-      debugPrint('  Ended all CallKit calls to prevent conflict');
+      debugPrint('✅ Ended all CallKit calls to prevent conflict');
     } catch (e) {
-      debugPrint('  Error ending CallKit calls: $e');
+      debugPrint('⚠️ Error ending CallKit calls: $e');
     }
 
-    // Update call status to 'ringing' so caller sees "Ringing..." (like WhatsApp)
+    // Get call type (audio/video) from Firestore
+    String callType = 'audio'; // default
     try {
+      final callDoc = await _firestore.collection('calls').doc(callId).get();
+      callType = callDoc.data()?['type'] ?? 'audio';
+      debugPrint('📱 Call type: $callType');
+    } catch (e) {
+      debugPrint('⚠️ Error getting call type: $e');
+    }
+
+    // CRITICAL FIX: Use CallKit for WhatsApp-style full-screen incoming call UI
+    // This replaces the old IncomingCallScreen widget approach
+    // CallKit provides native full-screen UI even when app is in foreground
+
+    debugPrint('🔔 Showing CallKit full-screen UI for incoming call');
+
+    // Video calling disabled - auto-reject video calls
+    if (callType == 'video') {
+      debugPrint('⚠️ Video call rejected (feature disabled): $callId');
+      try {
+        await _firestore.collection('calls').doc(callId).update({
+          'status': 'rejected',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('Error rejecting video call: $e');
+      }
+      _isShowingIncomingCall = false;
+      return;
+    }
+
+    // Show CallKit full-screen incoming call UI (like WhatsApp)
+    try {
+      final callKitParams = CallKitParams(
+        id: callId,
+        nameCaller: callerName.isNotEmpty ? callerName : 'Unknown',
+        appName: 'Supper',
+        avatar: callerPhoto,
+        handle: 'Voice Call',
+        type: 0, // Audio call
+        textAccept: 'Accept',
+        textDecline: 'Decline',
+        missedCallNotification: const NotificationParams(
+          showNotification: true,
+          isShowCallback: false,
+          subtitle: 'Missed Call',
+          callbackText: 'Call back',
+        ),
+        duration: 60000, // 60 seconds timeout
+        extra: <String, dynamic>{
+          'callId': callId,
+          'callerId': callerId,
+          'callerName': callerName,
+          'callerPhoto': callerPhoto,
+        },
+        headers: <String, dynamic>{},
+        android: const AndroidParams(
+          isCustomNotification: true,
+          isShowLogo: false,
+          ringtonePath: 'system_ringtone_default',
+          backgroundColor: '#0f0f23',
+          backgroundUrl: '',
+          actionColor: '#4CAF50',
+          textColor: '#FFFFFF',
+          incomingCallNotificationChannelName: 'Incoming Calls',
+          missedCallNotificationChannelName: 'Missed Calls',
+          isShowCallID: false,
+          isShowFullLockedScreen: true,
+        ),
+        ios: const IOSParams(
+          iconName: 'CallKitLogo',
+          handleType: 'generic',
+          supportsVideo: false,
+          maximumCallGroups: 1,
+          maximumCallsPerCallGroup: 1,
+          audioSessionMode: 'default',
+          audioSessionActive: true,
+          audioSessionPreferredSampleRate: 44100.0,
+          audioSessionPreferredIOBufferDuration: 0.005,
+          supportsDTMF: false,
+          supportsHolding: false,
+          supportsGrouping: false,
+          supportsUngrouping: false,
+          ringtonePath: 'system_ringtone_default',
+        ),
+      );
+
+      await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
+      debugPrint('✅ CallKit UI shown successfully');
+
+      // Update call status to 'ringing' so caller sees "Ringing..."
       await _firestore.collection('calls').doc(callId).update({
         'status': 'ringing',
         'ringingAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('  Call status updated to ringing');
+      debugPrint('✅ Call status updated to ringing');
     } catch (e) {
-      debugPrint('  Error updating call status to ringing: $e');
-    }
-
-    // Show our custom IncomingCallScreen (WhatsApp style) directly
-    // This works better than CallKit when app is in foreground
-    if (mounted && context.mounted) {
-      try {
-        Navigator.of(context)
-            .push(
-              MaterialPageRoute(
-                builder: (context) => IncomingCallScreen(
-                  callId: callId,
-                  callerName: callerName.isNotEmpty ? callerName : 'Unknown',
-                  callerPhoto: callerPhoto,
-                  callerId: callerId,
-                ),
-              ),
-            )
-            .then((_) {
-              // Reset flag when screen is closed
-              _isShowingIncomingCall = false;
-            })
-            .catchError((e) {
-              debugPrint('  Navigation error: $e');
-              _isShowingIncomingCall = false;
-            });
-      } catch (e) {
-        debugPrint('  Error showing IncomingCallScreen: $e');
-        _isShowingIncomingCall = false;
-      }
-    } else {
+      debugPrint('❌ Error showing CallKit UI: $e');
       _isShowingIncomingCall = false;
-      debugPrint('  Not mounted, cannot show IncomingCallScreen');
     }
   }
 
@@ -581,7 +694,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
       // Check if message already exists
       final existingMessage = await messageRef.get();
-      if (existingMessage.exists) return;
+      if (existingMessage.exists) {
+        debugPrint('  Missed call message already exists for callId=$callId, skipping');
+        return;
+      }
+
+      // Get call type from Firestore to determine correct message text
+      final callDoc = await _firestore.collection('calls').doc(callId).get();
+      final callType = callDoc.data()?['type'] as String? ?? 'audio';
+      final isVideo = callType == 'video';
 
       final now = DateTime.now();
 
@@ -591,7 +712,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         'senderId': callerId,
         'receiverId': currentUserId,
         'chatId': conversationId,
-        'text': 'Missed voice call',
+        'text': isVideo ? 'Missed video call' : 'Missed voice call',
         'type': MessageType.missedCall.index,
         'status': MessageStatus.delivered.index,
         'timestamp': Timestamp.fromDate(now),
@@ -688,21 +809,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       case 0:
         return const HomeScreen();
       case 1:
-        return const ConversationsScreen();
+        return const ConversationsScreen(); // Chat/Messages screen
       case 2:
-        return const LiveConnectTabScreen();
-      case 3:
-        return const ProfileWithHistoryScreen();
-      case 5:
-        return const ProfessionalDashboardScreen();
-      case 6:
-        return const BusinessMainScreen();
-      case 7:
-        return FeedScreen(
+        return const LiveConnectTabScreen(activateNetworkingFilter: true); // Networking with professional filters
+      case 4:
+        return FeedScreen( // Nearby - Feed Screen
           onBack: () {
             setState(() => _currentIndex = 0);
           },
         );
+      case 5:
+        return const ProfessionalDashboardScreen();
+      case 6:
+        return const BusinessMainScreen();
       default:
         return const HomeScreen();
     }
@@ -712,205 +831,244 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildScreen(),
+    // For Business and Professional screens, show without TabBar
+    if (_currentIndex == 6 || _currentIndex == 5) {
+      return Scaffold(
+        body: _buildScreen(),
+      );
+    }
 
-          // Bottom Navigation Bar (hide on Feed, Business, and Professional screens)
-          if (_currentIndex != 7 && _currentIndex != 6 && _currentIndex != 5)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _ModernBottomNavBar(
-                currentIndex: _currentIndex,
-                unreadCount: _unreadMessageCount,
-                onTap: (index) {
-                  HapticFeedback.mediumImpact();
-                  setState(() => _currentIndex = index);
-                  _saveScreenIndex(index);
-                },
-              ),
-            ),
+    // For Chat, Networking, and Nearby - show them fullscreen without the main TabBar
+    // But still keep the bottom navigation for easy switching between screens
 
-          // Swipe gesture detector for Feed
-          if (_currentIndex == 0)
-            Positioned(
-              left: 0,
-              top: 0,
-              height: size.height - 100,
-              width: 100,
-              child: _SwipeDetector(
-                onSwipeRight: () {
-                  HapticFeedback.mediumImpact();
-                  setState(() => _currentIndex = 7);
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// Modern Bottom Navigation Bar - 4 tabs with proper styling
-class _ModernBottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final int unreadCount;
-  final Function(int) onTap;
-
-  const _ModernBottomNavBar({
-    required this.currentIndex,
-    required this.unreadCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-
-    return Container(
-      color: Colors.transparent,
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: bottomPadding + 8,
-        top: 8,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(35),
+    // Create bottom navigation bar widget with gradient like AppBar
+    Widget buildBottomNavBar() {
+      return ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            height: 70,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(35),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.15),
-                width: 1,
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.95),
+                  Colors.black.withValues(alpha: 0.85),
+                  Colors.black.withValues(alpha: 0.7),
+                ],
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _NavItem(
-                  icon: Icons.home_outlined,
-                  selectedIcon: Icons.home_rounded,
-                  label: 'Home',
-                  isSelected: currentIndex == 0,
-                  onTap: () => onTap(0),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 60,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(
+                      icon: Icons.explore,
+                      label: 'Nearby',
+                      index: 4,
+                      isActive: _currentIndex == 4,
+                    ),
+                    _buildNavItem(
+                      icon: Icons.home,
+                      label: 'Home',
+                      index: 0,
+                      isActive: _currentIndex == 0,
+                    ),
+                    _buildNavItem(
+                      icon: Icons.chat_bubble,
+                      label: 'Chat',
+                      index: 1,
+                      isActive: _currentIndex == 1,
+                    ),
+                    _buildNavItem(
+                      icon: Icons.business_center,
+                      label: 'Networking',
+                      index: 2,
+                      isActive: _currentIndex == 2,
+                    ),
+                  ],
                 ),
-                _NavItem(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  selectedIcon: Icons.chat_bubble_rounded,
-                  label: 'Chat',
-                  isSelected: currentIndex == 1,
-                  badge: unreadCount > 0 ? unreadCount : null,
-                  onTap: () => onTap(1),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_currentIndex == 1) {
+      return Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+        body: const ConversationsScreen(),
+        bottomNavigationBar: buildBottomNavBar(),
+      );
+    }
+    if (_currentIndex == 2) {
+      return Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+        body: const LiveConnectTabScreen(activateNetworkingFilter: true),
+        bottomNavigationBar: buildBottomNavBar(),
+      );
+    }
+    if (_currentIndex == 4) {
+      return Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+        body: FeedScreen(
+          onBack: () {
+            setState(() {
+              _currentIndex = 0;
+              _tabController.index = 0;
+            });
+          },
+        ),
+        bottomNavigationBar: buildBottomNavBar(),
+      );
+    }
+
+    // For Home screen - show with icon-based bottom navigation (same as Messages screen)
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        centerTitle: false,
+        toolbarHeight: 56,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 16),
+          child: Center(
+            child: Text(
+              'Single Tap',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        leadingWidth: 100,
+        title: const SizedBox.shrink(),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Scaffold.of(context).openEndDrawer();
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.people_outline_rounded,
-                  selectedIcon: Icons.people_rounded,
-                  label: 'Networking',
-                  isSelected: currentIndex == 2,
-                  onTap: () => onTap(2),
+                child: const Icon(
+                  Icons.menu_rounded,
+                  color: Colors.white,
+                  size: 22,
                 ),
-                _NavItem(
-                  icon: Icons.person_outline_rounded,
-                  selectedIcon: Icons.person_rounded,
-                  label: 'Profile',
-                  isSelected: currentIndex == 3,
-                  onTap: () => onTap(3),
-                ),
+              ),
+            ),
+          ),
+        ],
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
               ],
+            ),
+            border: const Border(
+              bottom: BorderSide(
+                color: Colors.white,
+                width: 0.5,
+              ),
             ),
           ),
         ),
       ),
+      body: Stack(
+        children: [
+          const HomeScreen(),
+
+          // Swipe gesture detector for Feed
+          Positioned(
+            left: 0,
+            top: 0,
+            height: size.height - 100,
+            width: 100,
+            child: _SwipeDetector(
+              onSwipeRight: () {
+                HapticFeedback.mediumImpact();
+                setState(() => _currentIndex = 7);
+              },
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: buildBottomNavBar(),
     );
   }
-}
 
-// Individual navigation item - icon with label below
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-  final bool isSelected;
-  final int? badge;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
-    required this.isSelected,
-    this.badge,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+  // Build navigation item for bottom nav
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required int index,
+    required bool isActive,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() {
+            _currentIndex = index;
+            if (index <= 3) {
+              _tabController.index = _convertToTabIndex(index);
+            }
+          });
+        },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Icon
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  isSelected ? selectedIcon : icon,
-                  size: 24,
-                  color: isSelected
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.5),
-                ),
-                // Badge
-                if (badge != null)
-                  Positioned(
-                    right: -8,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      constraints: const BoxConstraints(minWidth: 16),
-                      child: Text(
-                        badge! > 99 ? '99+' : badge.toString(),
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+            Icon(
+              icon,
+              color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
+              size: 22,
             ),
-            const SizedBox(height: 4),
-            // Label always visible
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
+                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.5),
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ],

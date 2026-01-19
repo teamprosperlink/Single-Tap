@@ -8,7 +8,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
-import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/photo_url_helper.dart';
@@ -21,6 +20,7 @@ import '../../res/utils/snackbar_helper.dart';
 import 'my_posts_screen.dart';
 import 'create_post_screen.dart';
 import 'edit_post_screen.dart';
+import '../../widgets/app_background.dart';
 
 class FeedScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -31,7 +31,9 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
+class _FeedScreenState extends State<FeedScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ScrollController _scrollController = ScrollController();
@@ -84,6 +86,24 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _categories.length, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        HapticFeedback.lightImpact();
+        setState(() {
+          _isCategoryLoading = true;
+          _selectedCategory = _categories[_tabController.index]['name'];
+        });
+        // Simulate loading delay for smooth UX
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            setState(() {
+              _isCategoryLoading = false;
+            });
+          }
+        });
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     _subscribeToFeedPosts();
     _loadSavedPosts();
@@ -139,6 +159,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _tabController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _postsSubscription?.cancel();
     _scrollController.dispose();
@@ -220,7 +241,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         setState(() {
           // Filter out duplicates before adding
           final existingIds = _posts.map((d) => d.id).toSet();
-          final newDocs = snapshot.docs.where((d) => !existingIds.contains(d.id)).toList();
+          final newDocs = snapshot.docs
+              .where((d) => !existingIds.contains(d.id))
+              .toList();
           _posts.addAll(newDocs);
           _isLoadingMore = false;
           _hasMore = snapshot.docs.length == _pageSize;
@@ -283,10 +306,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   /// Get display name for a post - fetches from user profile if not stored
-  String _getDisplayName(Map<String, dynamic> post, Map<String, dynamic>? userData) {
+  String _getDisplayName(
+    Map<String, dynamic> post,
+    Map<String, dynamic>? userData,
+  ) {
     // First try post's stored userName
     final postUserName = post['userName'] as String?;
-    if (postUserName != null && postUserName.isNotEmpty && postUserName != 'User') {
+    if (postUserName != null &&
+        postUserName.isNotEmpty &&
+        postUserName != 'User') {
       return postUserName;
     }
 
@@ -294,7 +322,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     if (userData != null) {
       // Try name first
       final name = userData['name'] ?? userData['displayName'];
-      if (name != null && name.toString().isNotEmpty && name.toString() != 'User') {
+      if (name != null &&
+          name.toString().isNotEmpty &&
+          name.toString() != 'User') {
         return name.toString();
       }
       // Fallback to phone number for phone login users
@@ -308,7 +338,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   /// Get photo URL for a post - fetches from user profile if not stored
-  String? _getPhotoUrl(Map<String, dynamic> post, Map<String, dynamic>? userData) {
+  String? _getPhotoUrl(
+    Map<String, dynamic> post,
+    Map<String, dynamic>? userData,
+  ) {
     // First try post's stored userPhoto
     final postPhoto = post['userPhoto'] as String?;
     if (postPhoto != null && postPhoto.isNotEmpty) {
@@ -317,7 +350,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
     // Then try fetched user data
     if (userData != null) {
-      return userData['photoUrl'] ?? userData['photoURL'] ?? userData['profileImageUrl'];
+      return userData['photoUrl'] ??
+          userData['photoURL'] ??
+          userData['profileImageUrl'];
     }
 
     return null;
@@ -485,7 +520,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       if (postUserId == null || postUserId.startsWith('dummy_')) return false;
 
       // Remove duplicates by title only (more reliable)
-      final title = (data['title'] ?? data['originalPrompt'] ?? '').toString().toLowerCase().trim();
+      final title = (data['title'] ?? data['originalPrompt'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
       if (title.isNotEmpty && seenTitles.contains(title)) return false;
       if (title.isNotEmpty) seenTitles.add(title);
 
@@ -613,104 +651,198 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // Background Image
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
+      appBar: AppBar(
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        title: const Text(
+          'Nearby',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
-
-          // Dark overlay
-          Positioned.fill(child: Container(color: AppColors.darkOverlay())),
-
-          // Main content
-          SafeArea(
-            child: Column(
-              children: [
-                // Header
-                _buildHeader(),
-
-                // Divider line
-                Container(
-                  height: 0.5,
+        ),
+        actions: [
+          // More options icon with circular container
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyPostsScreen()),
+                );
+              },
+              icon: const Icon(
+                Icons.more_vert_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              iconSize: 18,
+              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
                   color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorColor: Colors.white,
+              indicatorWeight: 2,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.normal,
+              ),
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              tabs: _categories.map((category) {
+                return Tab(text: category['name'] as String);
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+      body: AppBackground(
+        showParticles: true,
+        overlayOpacity: 0.6,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                // Spacer for AppBar with TabBar
+                SizedBox(
+                  height:
+                      MediaQuery.of(context).padding.top + kToolbarHeight + 48,
                 ),
 
                 // Search bar
                 _buildGlassSearchBar(),
 
-                // Categories
-                _buildGlassCategoryChips(),
-
-                // Posts list
+                // Posts list with TabBarView for swipe functionality
                 Expanded(
-                  child: _isLoading && _posts.isEmpty
-                      ? const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        )
-                      : _isCategoryLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        )
-                      : _filteredPosts.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          // Performance optimizations
-                          addAutomaticKeepAlives: false,
-                          addRepaintBoundaries: true,
-                          cacheExtent: 500, // Pre-render items 500px ahead
-                          itemCount:
-                              _filteredPosts.length + (_isLoadingMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == _filteredPosts.length) {
-                              return const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final doc = _filteredPosts[index];
-                            final data = doc.data() as Map<String, dynamic>;
-
-                            return RepaintBoundary(
-                              child: _buildPostCard(
-                                postId: doc.id,
-                                post: data,
-                                isSaved: _savedPostIds.contains(doc.id),
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: _categories.map((category) {
+                      return _isLoading && _posts.isEmpty
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
                               ),
+                            )
+                          : _isCategoryLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                            )
+                          : _filteredPosts.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(16),
+                              // Performance optimizations
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              cacheExtent: 500,
+                              itemCount:
+                                  _filteredPosts.length +
+                                  (_isLoadingMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == _filteredPosts.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final doc = _filteredPosts[index];
+                                final data = doc.data() as Map<String, dynamic>;
+
+                                return RepaintBoundary(
+                                  child: _buildPostCard(
+                                    postId: doc.id,
+                                    post: data,
+                                    isSaved: _savedPostIds.contains(doc.id),
+                                  ),
+                                );
+                              },
                             );
-                          },
-                        ),
+                    }).toList(),
+                  ),
                 ),
               ],
             ),
-          ),
 
-          // Floating Action Button - Create Post
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: FloatingActionButton(
-              onPressed: _showCreatePostDialog,
-              backgroundColor: AppColors.iosBlue,
-              shape: const CircleBorder(),
-              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            // Floating Action Button - Create Post
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: _showCreatePostDialog,
+                backgroundColor: AppColors.iosBlue,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -722,54 +854,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (_) => const CreatePostScreen()),
     );
     // Feed auto-refreshes via real-time subscription
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Row(
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: widget.onBack,
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-
-          const Expanded(
-            child: Center(
-              child: Text(
-                "Supper Feed",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-
-          // Profile / My Posts button
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyPostsScreen()),
-              );
-            },
-            child: const Icon(
-              Icons.more_vert_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildGlassSearchBar() {
@@ -785,74 +869,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         onStopListening: _stopVoiceSearch,
         onChanged: (value) => setState(() {}),
         onClear: () => setState(() {}),
-      ),
-    );
-  }
-
-  Widget _buildGlassCategoryChips() {
-    return Container(
-      height: 38,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          final isSelected = _selectedCategory == category['name'];
-
-          return GestureDetector(
-            onTap: () async {
-              HapticFeedback.lightImpact();
-              setState(() {
-                _isCategoryLoading = true;
-                _selectedCategory = category['name'];
-              });
-              await Future.delayed(const Duration(milliseconds: 300));
-              if (mounted) {
-                setState(() {
-                  _isCategoryLoading = false;
-                });
-              }
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: isSelected
-                    ? AppColors.buttonBackground()
-                    : AppColors.backgroundDark.withValues(alpha: 0.5),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.buttonBorder()
-                      : AppColors.glassBorder(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    category['icon'] as IconData,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    category['name'],
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -905,7 +921,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       // Fetch user data in background if name is missing/default
       if (postUserId != null &&
           !postUserId.startsWith('dummy_') &&
-          (storedUserName == null || storedUserName.isEmpty || storedUserName == 'User')) {
+          (storedUserName == null ||
+              storedUserName.isEmpty ||
+              storedUserName == 'User')) {
         _getUserData(postUserId).then((userData) {
           if (userData != null && mounted) {
             setState(() {}); // Trigger rebuild with cached data
@@ -1095,14 +1113,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ],
-
             ],
           ),
         ),
       ),
     );
   }
-
 
   // Icon button with border and background - fixed size for all posts
   Widget _buildIconOnlyButton({
