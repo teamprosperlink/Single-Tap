@@ -1490,76 +1490,7 @@ class _HomeScreenState extends State<HomeScreen>
         toolbarHeight: 60,
         centerTitle: false,
         leadingWidth: 56,
-        // leading: Padding(
-        //   padding: const EdgeInsets.only(left: 12),
-        //   child: GestureDetector(
-        //     onTap: () {
-        //       HapticFeedback.lightImpact();
-        //       _showChatHistoryDrawer();
-        //     },
-        //     child: Container(
-        //       width: 40,
-        //       height: 40,
-        //       decoration: BoxDecoration(
-        //         color: Colors.white.withValues(alpha: 0.15),
-        //         borderRadius: BorderRadius.circular(12),
-        //         border: Border.all(
-        //           color: Colors.white.withValues(alpha: 0.3),
-        //           width: 1,
-        //         ),
-        //       ),
-        //       child: const Icon(
-        //         Icons.menu_rounded,
-        //         color: Colors.white,
-        //         size: 22,
-        //       ),
-        //     ),
-        //   ),
-        // ),
-        title: ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            colors: isDarkMode
-                ? [Colors.white, Colors.grey[400]!]
-                : [Colors.black, Colors.grey[800]!],
-          ).createShader(bounds),
-          child: const Text(
-            'Supper',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 24,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Scaffold.of(context).openEndDrawer();
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.menu_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
-          ),
-        ],
+        title: const SizedBox.shrink(),
       ),
       body: Stack(
         children: [
@@ -1617,14 +1548,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildInputSection(bool isDarkMode) {
-    // Add padding for the bottom navigation bar (70px bar + padding + safe area)
+    // Add padding for safe area (no bottom nav bar anymore - it's now a top TabBar)
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final navBarHeight = 100 + bottomPadding;
     return Container(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
-        bottom: navBarHeight,
+        bottom: bottomPadding + 16,
         top: 16,
       ),
       decoration: const BoxDecoration(color: Colors.transparent),
@@ -1818,8 +1748,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   fontWeight: FontWeight.w400,
                                 ),
                                 decoration: InputDecoration(
-                                  hintText:
-                                      'Ask me anything... What do you need?',
+                                  hintText: 'Ask me anything...',
                                   hintStyle: TextStyle(
                                     color: Colors.grey[400],
                                     fontSize: 15,
@@ -1900,7 +1829,7 @@ class _HomeScreenState extends State<HomeScreen>
                       onTap: _isProcessing ? null : _processIntent,
                       child: Container(
                         width: 50,
-                        height: 50,
+                        height: 40,
                         margin: const EdgeInsets.only(right: 6, bottom: 7.5),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
@@ -1917,7 +1846,7 @@ class _HomeScreenState extends State<HomeScreen>
                             : const Icon(
                                 Icons.send,
                                 color: Colors.white,
-                                size: 22,
+                                size: 20,
                               ),
                       ),
                     ),

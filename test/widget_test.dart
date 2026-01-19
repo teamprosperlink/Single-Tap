@@ -24,11 +24,7 @@ void main() {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: Center(
-                child: Text('Supper App'),
-              ),
-            ),
+            home: Scaffold(body: Center(child: Text('Supper App'))),
           ),
         ),
       );
@@ -39,15 +35,12 @@ void main() {
       expect(find.text('Supper App'), findsOneWidget);
     });
 
-    testWidgets('ProviderScope wraps MaterialApp correctly',
-        (WidgetTester tester) async {
+    testWidgets('ProviderScope wraps MaterialApp correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: Text('Test'),
-            ),
-          ),
+          child: MaterialApp(home: Scaffold(body: Text('Test'))),
         ),
       );
 
@@ -55,8 +48,9 @@ void main() {
       expect(find.byType(MaterialApp), findsOneWidget);
     });
 
-    testWidgets('Bottom navigation bar structure test',
-        (WidgetTester tester) async {
+    testWidgets('Bottom navigation bar structure test', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
@@ -75,7 +69,7 @@ void main() {
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.people),
-                    label: 'Live Connect',
+                    label: 'Networking',
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.person),
@@ -100,8 +94,9 @@ void main() {
       expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('Navigation bar tap changes index',
-        (WidgetTester tester) async {
+    testWidgets('Navigation bar tap changes index', (
+      WidgetTester tester,
+    ) async {
       int currentIndex = 0;
 
       await tester.pumpWidget(
@@ -110,9 +105,7 @@ void main() {
             home: StatefulBuilder(
               builder: (context, setState) {
                 return Scaffold(
-                  body: Center(
-                    child: Text('Tab $currentIndex'),
-                  ),
+                  body: Center(child: Text('Tab $currentIndex')),
                   bottomNavigationBar: BottomNavigationBar(
                     currentIndex: currentIndex,
                     onTap: (index) {
@@ -160,16 +153,13 @@ void main() {
       expect(find.text('Tab 3'), findsOneWidget);
     });
 
-    testWidgets('Loading indicator renders correctly',
-        (WidgetTester tester) async {
+    testWidgets('Loading indicator renders correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
+            home: Scaffold(body: Center(child: CircularProgressIndicator())),
           ),
         ),
       );
@@ -186,7 +176,11 @@ void main() {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red,
+                    ),
                     const SizedBox(height: 16),
                     const Text('Something went wrong'),
                     const SizedBox(height: 8),

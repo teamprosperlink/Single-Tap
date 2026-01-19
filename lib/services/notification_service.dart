@@ -13,6 +13,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/user_profile.dart';
 import '../screens/chat/enhanced_chat_screen.dart';
 import '../screens/call/voice_call_screen.dart';
+import 'active_chat_service.dart';
 
 /// Global navigator key for notification navigation
 /// Set this in main.dart MaterialApp
@@ -32,6 +33,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ActiveChatService _activeChatService = ActiveChatService();
 
   String? _fcmToken;
 
@@ -210,7 +212,7 @@ class NotificationService {
 
       try {
         if (navigatorKey.currentState != null) {
-          debugPrint('  _handleCallAccepted: Navigating to VoiceCallScreen');
+          debugPrint('  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})');
           navigatorKey.currentState!.push(
             MaterialPageRoute(
               builder: (context) => VoiceCallScreen(
@@ -489,18 +491,34 @@ class NotificationService {
     final data = message.data;
     final type = data['type'] as String?;
 
-    // For call notifications in foreground, do NOT navigate here
-    // The Firestore listener in main_navigation_screen.dart already handles
-    // incoming calls when app is in foreground. FCM is only for background/terminated.
+    // CRITICAL FIX: For call notifications, ALWAYS show full-screen CallKit UI
+    // Even when app is in foreground (both devices active)
+    // This ensures WhatsApp-style incoming call experience
     if (type == 'call') {
-      // Just ignore - Firestore listener will handle it
+      debugPrint('🔔 FOREGROUND CALL: Showing full-screen CallKit UI');
+      _navigateToCall(data); // Show full-screen incoming call
       return;
     }
 
-    // Don't show notification for messages in the current chat
-    // This would require checking if user is currently viewing that conversation
-    // For now, show all notifications
+    // WhatsApp-style: Don't show notification for messages in the CURRENT OPEN chat
+    // Check if user is currently viewing this conversation
+    if (type == 'message') {
+      final senderId = data['senderId'] as String?;
+      final conversationId = data['conversationId'] as String?;
 
+      // Check if this message is from the currently active chat
+      if (senderId != null && _activeChatService.isUserChatActive(senderId)) {
+        debugPrint('🔕 Suppressing notification: User is in chat with $senderId');
+        return; // Don't show notification - user is already viewing this chat
+      }
+
+      if (conversationId != null && _activeChatService.isConversationActive(conversationId)) {
+        debugPrint('🔕 Suppressing notification: Conversation $conversationId is active');
+        return; // Don't show notification - conversation is open
+      }
+    }
+
+    // Show notification for all other cases
     if (message.notification != null) {
       _showLocalNotification(
         title: message.notification!.title ?? 'New Notification',

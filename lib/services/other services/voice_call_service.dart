@@ -670,28 +670,52 @@ class VoiceCallService {
             if (change.type == DocumentChangeType.added) {
               final data = change.doc.data();
               if (data != null && data['candidate'] != null) {
-                final candidate = RTCIceCandidate(
-                  data['candidate'] as String?,
-                  data['sdpMid'] as String?,
-                  data['sdpMLineIndex'] as int?,
-                );
+                try {
+                  // Safely extract and convert values
+                  final candidateStr = data['candidate'];
+                  final sdpMidStr = data['sdpMid'];
+                  final sdpMLineIndexValue = data['sdpMLineIndex'];
 
-                // Only add ICE candidate if remote description is set
-                if (_remoteDescriptionSet && _peerConnection != null) {
-                  try {
-                    await _peerConnection!.addCandidate(candidate);
+                  // Safely convert sdpMLineIndex to int
+                  int? mLineIndexInt;
+                  if (sdpMLineIndexValue is int) {
+                    mLineIndexInt = sdpMLineIndexValue;
+                  } else if (sdpMLineIndexValue is String) {
+                    mLineIndexInt = int.tryParse(sdpMLineIndexValue);
+                  } else if (sdpMLineIndexValue != null) {
                     debugPrint(
-                      ' VoiceCallService:  Added ICE candidate from $otherCandidatesCollection',
+                      ' VoiceCallService: Warning - sdpMLineIndex is unexpected type: ${sdpMLineIndexValue.runtimeType}',
                     );
-                  } catch (e) {
-                    debugPrint(' VoiceCallService: Error adding candidate: $e');
+                    mLineIndexInt = int.tryParse(sdpMLineIndexValue.toString());
                   }
-                } else {
-                  // Queue the candidate for later
-                  _pendingIceCandidates.add(candidate);
-                  debugPrint(
-                    ' VoiceCallService: Queued ICE candidate (remote desc not set yet, count: ${_pendingIceCandidates.length})',
+
+                  // Create candidate safely without forceful casts
+                  final candidate = RTCIceCandidate(
+                    candidateStr,
+                    sdpMidStr,
+                    mLineIndexInt,
                   );
+
+                  // Only add ICE candidate if remote description is set
+                  if (_remoteDescriptionSet && _peerConnection != null) {
+                    try {
+                      await _peerConnection!.addCandidate(candidate);
+                      debugPrint(
+                        ' VoiceCallService:  Added ICE candidate from $otherCandidatesCollection',
+                      );
+                    } catch (e) {
+                      debugPrint(' VoiceCallService: Error adding candidate: $e');
+                    }
+                  } else {
+                    // Queue the candidate for later
+                    _pendingIceCandidates.add(candidate);
+                    debugPrint(
+                      ' VoiceCallService: Queued ICE candidate (remote desc not set yet, count: ${_pendingIceCandidates.length})',
+                    );
+                  }
+                } catch (e, st) {
+                  debugPrint(' VoiceCallService: Error processing ICE candidate: $e');
+                  debugPrint(' VoiceCallService: Stack trace: $st');
                 }
               }
             }

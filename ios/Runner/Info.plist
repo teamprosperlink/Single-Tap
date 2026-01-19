@@ -48,7 +48,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to photo library to select profile images.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to camera to take profile photos.</string>
+	<string>This app needs camera access for video calls and profile photos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This app needs permission to save photos to your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -10,6 +10,7 @@ import '../../models/message_model.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../call/voice_call_screen.dart';
+// import '../call/video_call_screen.dart'; // Video calling disabled
 import '../call/call_history_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String callerName;
   final String? callerPhoto;
   final String callerId;
+  final VoidCallback? onCallAccepted; // Callback to reset parent state before navigation
 
   const IncomingCallScreen({
     super.key,
@@ -24,6 +26,7 @@ class IncomingCallScreen extends StatefulWidget {
     required this.callerName,
     this.callerPhoto,
     required this.callerId,
+    this.onCallAccepted,
   });
 
   @override
@@ -38,6 +41,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   StreamSubscription? _callStatusSubscription;
   bool _isAnswering = false;
   bool _isNavigating = false;
+  String _callType = 'audio'; // Track call type (audio or video)
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _updateStatusToRinging();
     _playRingtone();
     HapticFeedback.heavyImpact();
+    _fetchCallType(); // Fetch call type from Firestore
   }
 
   void _setupAnimation() {
@@ -58,6 +63,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+  }
+
+  // Fetch call type from Firestore
+  Future<void> _fetchCallType() async {
+    try {
+      final callDoc = await _firestore
+          .collection('calls')
+          .doc(widget.callId)
+          .get();
+      if (callDoc.exists && mounted) {
+        final type = callDoc.data()?['type'] ?? 'audio';
+        setState(() {
+          _callType = type;
+        });
+        debugPrint('  IncomingCallScreen: Call type fetched: $_callType');
+      }
+    } catch (e) {
+      debugPrint('  IncomingCallScreen: Error fetching call type: $e');
+    }
   }
 
   // Update call status to ringing so caller knows
@@ -175,6 +199,46 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       '  IncomingCallScreen: _acceptCall started - callId=${widget.callId}',
     );
 
+    // Check if user already has another active call (single call restriction)
+    try {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId != null) {
+        final activeCallsQuery = await _firestore
+            .collection('calls')
+            .where('participants', arrayContains: currentUserId)
+            .where('status', whereIn: ['calling', 'ringing', 'connected'])
+            .limit(2) // Limit 2 to check if there's another call besides this one
+            .get();
+
+        // Filter out the current incoming call
+        final otherActiveCalls = activeCallsQuery.docs
+            .where((doc) => doc.id != widget.callId)
+            .toList();
+
+        if (otherActiveCalls.isNotEmpty) {
+          // User already has another active call
+          debugPrint('⚠️ User already has another active call, cannot accept new call');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You already have an active call'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          // Reject this call automatically
+          await _rejectCall();
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking active calls: $e');
+      // Continue with call acceptance even if check fails
+    }
+
     try {
       setState(() => _isAnswering = true);
     } catch (e) {
@@ -235,7 +299,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         if (callerDoc.exists) {
           callerProfile = UserProfile.fromFirestore(callerDoc);
           debugPrint(
-            '  IncomingCallScreen: Using Firestore profile - ${callerProfile.name}',
+            '  IncomingCallScreen: Using Firestore profile - ${callerProfile.name} (UID: ${callerProfile.uid})',
           );
         } else {
           debugPrint(
@@ -253,19 +317,65 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         return;
       }
 
-      debugPrint('  IncomingCallScreen: Navigating to VoiceCallScreen');
+      // Get call type from Firestore to determine which screen to navigate to
+      final callDoc = await _firestore
+          .collection('calls')
+          .doc(widget.callId)
+          .get();
+      final callType = callDoc.data()?['type'] ?? 'audio';
+      debugPrint(
+        '  IncomingCallScreen: Call type is $callType, navigating to appropriate screen',
+      );
 
-      // Navigate to voice call screen
+      if (!mounted) {
+        debugPrint('  IncomingCallScreen: Not mounted after getting call type');
+        return;
+      }
+
+      // Navigate to appropriate call screen based on type
       if (mounted && context.mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => VoiceCallScreen(
-              callId: widget.callId,
-              otherUser: callerProfile,
-              isOutgoing: false,
+        // CRITICAL: Call the callback BEFORE navigation to reset parent's _isShowingIncomingCall flag
+        // This prevents the main_navigation_screen from being stuck with the flag set to true
+        widget.onCallAccepted?.call();
+
+        // Navigate to appropriate screen based on call type
+        if (callType == 'video') {
+          // Video calling functionality disabled - silently reject
+          debugPrint('  IncomingCallScreen: Video call rejected (feature disabled)');
+          await _rejectCall();
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+          return;
+
+          /* Original video call code (disabled)
+          debugPrint(
+            '  IncomingCallScreen: Navigating to VideoCallScreen with callerProfile: \${callerProfile.name} (\${callerProfile.uid})',
+          );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => VideoCallScreen(
+                callId: widget.callId,
+                otherUser: callerProfile,
+                isOutgoing: false,
+              ),
             ),
-          ),
-        );
+          );
+          */
+        } else {
+          debugPrint(
+            '  IncomingCallScreen: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
+          );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => VoiceCallScreen(
+                callId: widget.callId,
+                otherUser: callerProfile,
+                isOutgoing: false,
+              ),
+            ),
+          );
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('  IncomingCallScreen: Error accepting call: $e');
@@ -298,8 +408,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         'rejectedAt': FieldValue.serverTimestamp(),
       });
 
-      // Send missed call message to chat
-      await _sendMissedCallMessage();
+      // ✅ REMOVED: Message saving is now handled by enhanced_chat_screen.dart
+      // to prevent duplicate messages
+      // await _sendMissedCallMessage();
 
       _safeNavigateBack();
     } catch (e) {
@@ -530,74 +641,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     }
   }
 
-  /// Send missed call message to chat conversation
-  Future<void> _sendMissedCallMessage() async {
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId == null) return;
-
-      // Caller is the sender, receiver (current user) is receiving
-      // We use caller's ID as senderId so it shows as "incoming missed call" for receiver
-      final participants = [currentUserId, widget.callerId]..sort();
-      final conversationId = participants.join('_');
-
-      // Check if conversation exists
-      final conversationDoc = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
-      if (!conversationDoc.exists) {
-        await _firestore.collection('conversations').doc(conversationId).set({
-          'participants': participants,
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastMessageTime': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // Use deterministic message ID based on call ID to prevent duplicates
-      // This ensures consistency with VoiceCallScreen's message sending
-      final messageId = 'call_${widget.callId}';
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc(messageId);
-
-      final now = DateTime.now();
-
-      // Create call message - senderId is CALLER so it shows as incoming for receiver
-      await messageRef.set({
-        'id': messageId,
-        'senderId':
-            widget.callerId, // Caller's ID - so receiver sees it as incoming
-        'receiverId': currentUserId,
-        'chatId': conversationId,
-        'text': 'Missed voice call',
-        'type': MessageType.missedCall.index,
-        'status': MessageStatus.delivered.index,
-        'timestamp': Timestamp.fromDate(now),
-        'isEdited': false,
-        'read': false,
-        'isRead': false,
-        'metadata': {
-          'callId': widget.callId,
-          'duration': 0,
-          'isOutgoing': false,
-          'isMissed': true,
-        },
-      });
-
-      // Update conversation last message
-      await _firestore.collection('conversations').doc(conversationId).update({
-        'lastMessage': '  Missed call',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageSenderId': widget.callerId,
-      });
-    } catch (e) {
-      // Error sending missed call message
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -694,7 +737,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
                 // Call type
                 Text(
-                  'Voice Call',
+                  _callType == 'video' ? 'Video Call' : 'Voice Call',
                   style: AppTextStyles.bodyLarge.copyWith(
                     color: AppColors.textSecondaryDark,
                   ),
@@ -718,7 +761,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
                       // Accept button
                       _buildActionButton(
-                        icon: Icons.call_rounded,
+                        icon: _callType == 'video' ? Icons.videocam_rounded : Icons.call_rounded,
                         color: AppColors.vibrantGreen,
                         label: 'Accept',
                         onTap: _acceptCall,

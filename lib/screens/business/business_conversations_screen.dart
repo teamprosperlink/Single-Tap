@@ -18,10 +18,7 @@ import '../chat/enhanced_chat_screen.dart';
 class BusinessConversationsScreen extends StatefulWidget {
   final BusinessModel business;
 
-  const BusinessConversationsScreen({
-    super.key,
-    required this.business,
-  });
+  const BusinessConversationsScreen({super.key, required this.business});
 
   @override
   State<BusinessConversationsScreen> createState() =>
@@ -56,9 +53,7 @@ class _BusinessConversationsScreenState
           ),
 
           // Dark overlay
-          Positioned.fill(
-            child: Container(color: AppColors.darkOverlay()),
-          ),
+          Positioned.fill(child: Container(color: AppColors.darkOverlay())),
 
           // Main content
           SafeArea(
@@ -77,9 +72,7 @@ class _BusinessConversationsScreenState
                 _buildSearchBar(),
 
                 // Conversations list
-                Expanded(
-                  child: _buildConversationsList(),
-                ),
+                Expanded(child: _buildConversationsList()),
               ],
             ),
           ),
@@ -164,11 +157,7 @@ class _BusinessConversationsScreenState
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.verified,
-                  color: Color(0xFF00D67D),
-                  size: 14,
-                ),
+                Icon(Icons.verified, color: Color(0xFF00D67D), size: 14),
                 SizedBox(width: 4),
                 Text(
                   'Business',
@@ -219,16 +208,11 @@ class _BusinessConversationsScreenState
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 16),
               decoration: InputDecoration(
                 hintText: 'Search conversations',
                 hintStyle: TextStyle(
@@ -264,9 +248,7 @@ class _BusinessConversationsScreenState
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFF00D67D),
-            ),
+            child: CircularProgressIndicator(color: Color(0xFF00D67D)),
           );
         }
 
@@ -290,8 +272,9 @@ class _BusinessConversationsScreenState
         var conversations = snapshot.data!;
         if (_searchQuery.isNotEmpty) {
           conversations = conversations.where((conv) {
-            final otherUserId =
-                conv.getOtherParticipantId(widget.business.userId);
+            final otherUserId = conv.getOtherParticipantId(
+              widget.business.userId,
+            );
             final name = conv.participantNames[otherUserId] ?? '';
             return name.toLowerCase().contains(_searchQuery);
           }).toList();
@@ -317,14 +300,15 @@ class _BusinessConversationsScreenState
   }
 
   Widget _buildConversationTile(ConversationModel conversation) {
-    final otherUserId =
-        conversation.getOtherParticipantId(widget.business.userId);
-    final displayName = conversation.participantNames[otherUserId] ?? 'Customer';
+    final otherUserId = conversation.getOtherParticipantId(
+      widget.business.userId,
+    );
+    final displayName =
+        conversation.participantNames[otherUserId] ?? 'Customer';
     final displayPhoto = conversation.participantPhotos[otherUserId];
     final unreadCount = conversation.getUnreadCount(widget.business.userId);
     final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(displayPhoto);
-    final initial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C';
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -336,9 +320,7 @@ class _BusinessConversationsScreenState
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Material(
               color: Colors.transparent,
@@ -380,7 +362,9 @@ class _BusinessConversationsScreenState
                                 ),
                                 if (conversation.lastMessageTime != null)
                                   Text(
-                                    timeago.format(conversation.lastMessageTime!),
+                                    timeago.format(
+                                      conversation.lastMessageTime!,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: unreadCount > 0
@@ -399,7 +383,9 @@ class _BusinessConversationsScreenState
                                         'Start a conversation',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.white.withValues(alpha: 0.6),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.6,
+                                      ),
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -470,10 +456,7 @@ class _BusinessConversationsScreenState
       return Container(
         width: 48,
         height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: avatarColor,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: avatarColor),
         child: Center(
           child: Text(
             initial,
@@ -512,11 +495,7 @@ class _BusinessConversationsScreenState
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 80,
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
+          Icon(icon, size: 80, color: Colors.white.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text(
             title,

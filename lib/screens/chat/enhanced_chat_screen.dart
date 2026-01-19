@@ -30,8 +30,10 @@ import '../../models/message_model.dart';
 import '../../services/notification_service.dart';
 import '../../services/chat services/conversation_service.dart';
 import '../../services/hybrid_chat_service.dart';
+import '../../services/active_chat_service.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../call/voice_call_screen.dart';
+// import '../call/video_call_screen.dart'; // Video calling disabled
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat_common.dart';
 
@@ -65,6 +67,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   final ImagePicker _imagePicker = ImagePicker();
   final ConversationService _conversationService = ConversationService();
   final HybridChatService _hybridChatService = HybridChatService();
+  final ActiveChatService _activeChatService = ActiveChatService();
 
   // Helper getter for current user ID from provider
   String? get _currentUserId => ref.read(currentUserIdProvider);
@@ -114,6 +117,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   // Video recording flag to prevent multiple simultaneous recordings
   bool _isRecordingVideo = false;
 
+  // Call state flags to prevent multiple simultaneous calls
+  bool _isStartingCall = false;
+
   // Chat theme
   String _selectedTheme = 'default';
 
@@ -148,6 +154,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // Initialize conversation IMMEDIATELY for faster loading
       _initializeConversation();
 
+      // Set this chat as active to suppress notifications (WhatsApp-style)
+      _activeChatService.setActiveChat(
+        conversationId: _conversationId,
+        userId: widget.otherUser.uid,
+      );
+
       _setupAnimations();
       _scrollController.addListener(_scrollListener);
 
@@ -169,7 +181,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
           // Sync messages from Firebase to local database in background (low priority)
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) _syncMessagesInBackground();
+            if (mounted) {
+              _syncMessagesInBackground();
+              _cleanupEmptyCallMessages(); // ✅ Remove empty call messages
+            }
           });
         } catch (e) {
           // Error in post frame callback
@@ -301,6 +316,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         });
         // Load chat theme after conversation is initialized
         _loadThemeFromFirestore();
+
+        // ✅ Clean up empty/duplicate call messages immediately after conversation is initialized
+        _cleanupEmptyCallMessages();
+
+        // ✅ Set up real-time guard against empty messages
+        _setupEmptyMessageGuard();
       }
     } catch (e) {
       debugPrint('Error initializing conversation: $e');
@@ -312,6 +333,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   @override
   void dispose() {
+    // Clear active chat status to re-enable notifications (WhatsApp-style)
+    _activeChatService.clearActiveChat();
+
     try {
       WidgetsBinding.instance.removeObserver(this);
     } catch (_) {}
@@ -790,8 +814,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               size: 24,
             ),
             onPressed: _startVideoCall,
+            tooltip: 'Video Call',
           ),
-          // Audio call button
+          // Audio call button (voice only)
           IconButton(
             icon: Icon(
               Icons.call_rounded,
@@ -799,6 +824,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               size: 24,
             ),
             onPressed: _startAudioCall,
+            tooltip: 'Voice Call',
           ),
         ],
         IconButton(
@@ -861,18 +887,50 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 return !deletedFor.contains(currentUserId);
               }
 
+              // ✅ Filter out empty/invalid call messages to prevent blank UI
+              final messageTypeEnum = _parseMessageType(data['type']);
+              if (messageTypeEnum == MessageType.voiceCall ||
+                  messageTypeEnum == MessageType.videoCall ||
+                  messageTypeEnum == MessageType.missedCall) {
+                final text = data['text'] as String?;
+                final timestamp = data['timestamp'];
+                final callId = data['callId'] as String?;
+
+                // Debug: Print all call message data
+                debugPrint(
+                  '🔍 Call message found: id=${doc.id}, text="$text", callId=$callId, hasTimestamp=${timestamp != null}',
+                );
+
+                // Filter out messages with empty text OR null timestamp
+                if (text == null || text.isEmpty || text.trim().isEmpty) {
+                  debugPrint(
+                    '⚠️ Filtering out empty call message: ${doc.id}, text="$text"',
+                  );
+                  return false; // Skip empty call messages
+                }
+
+                // Also filter out call messages with null/invalid timestamp (incomplete saves)
+                if (timestamp == null) {
+                  debugPrint(
+                    '⚠️ Filtering out call message with null timestamp: ${doc.id}',
+                  );
+                  return false;
+                }
+              }
+
               // Hide videos/images that are still uploading from receiver
               // Only show uploading media to the sender
               final senderId = data['senderId'] as String?;
-              final messageType = data['type'] as int?;
-              final status = data['status'] as int?;
+              final messageStatusEnum = _parseMessageStatusFromInt(
+                data['status'],
+              );
               final mediaUrl = data['mediaUrl'] as String?;
 
               // If this is a video or image message
-              if (messageType == MessageType.video.index ||
-                  messageType == MessageType.image.index) {
-                // If status is 'sending' (0) or mediaUrl is empty, only sender should see it
-                if (status == MessageStatus.sending.index ||
+              if (messageTypeEnum == MessageType.video ||
+                  messageTypeEnum == MessageType.image) {
+                // If status is 'sending' or mediaUrl is empty, only sender should see it
+                if (messageStatusEnum == MessageStatus.sending ||
                     (mediaUrl == null || mediaUrl.isEmpty)) {
                   // Only show to sender
                   if (senderId != currentUserId) {
@@ -900,7 +958,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     data['localPath']
                         as String?, // For WhatsApp-style preview during upload
                 audioUrl: isDeleted ? null : data['audioUrl'] as String?,
-                audioDuration: data['audioDuration'] as int?,
+                audioDuration: _parseIntFromDynamic(data['audioDuration']),
                 timestamp: data['timestamp'] != null
                     ? (data['timestamp'] as Timestamp).toDate()
                     : DateTime.now(),
@@ -948,13 +1006,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
           // Hide videos/images that are still uploading from receiver
           final senderId = data['senderId'] as String?;
-          final messageType = data['type'] as int?;
-          final status = data['status'] as int?;
+          final messageTypeEnum = _parseMessageType(data['type']);
+          final messageStatusEnum = _parseMessageStatusFromInt(data['status']);
           final mediaUrl = data['mediaUrl'] as String?;
 
-          if (messageType == MessageType.video.index ||
-              messageType == MessageType.image.index) {
-            if (status == MessageStatus.sending.index ||
+          if (messageTypeEnum == MessageType.video ||
+              messageTypeEnum == MessageType.image) {
+            if (messageStatusEnum == MessageStatus.sending ||
                 (mediaUrl == null || mediaUrl.isEmpty)) {
               if (senderId != currentUserId) {
                 continue; // Hide from receiver
@@ -976,7 +1034,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     : (data['mediaUrl'] as String? ??
                           data['imageUrl'] as String?),
                 audioUrl: isDeleted ? null : data['audioUrl'] as String?,
-                audioDuration: data['audioDuration'] as int?,
+                audioDuration: _parseIntFromDynamic(data['audioDuration']),
                 timestamp: data['timestamp'] != null
                     ? (data['timestamp'] as Timestamp).toDate()
                     : DateTime.now(),
@@ -1046,11 +1104,31 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     );
   }
 
+  // Helper to parse int from dynamic (handles int, string, or null) - static so it can be used by nested classes
+  static int? _parseIntFromDynamic(dynamic value) {
+    if (value is int) {
+      return value;
+    } else if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
   // Helper to parse message type
   MessageType _parseMessageType(dynamic type) {
     if (type == null) return MessageType.text;
     if (type is int) {
       return MessageType.values[type.clamp(0, MessageType.values.length - 1)];
+    }
+    // Handle string type (from Firestore)
+    if (type is String) {
+      final intType = int.tryParse(type);
+      if (intType != null) {
+        return MessageType.values[intType.clamp(
+          0,
+          MessageType.values.length - 1,
+        )];
+      }
     }
     return MessageType.text;
   }
@@ -1076,6 +1154,15 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // Handle string status
     if (status is String) {
+      // Try parsing as numeric string first
+      final intStatus = int.tryParse(status);
+      if (intStatus != null) {
+        return MessageStatus.values[intStatus.clamp(
+          0,
+          MessageStatus.values.length - 1,
+        )];
+      }
+      // Otherwise try parsing as text
       switch (status.toLowerCase()) {
         case 'sending':
           return MessageStatus.sending;
@@ -1130,6 +1217,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             ),
           Expanded(
             child: ListView.builder(
+              key: const PageStorageKey('message_list'),
               controller: _scrollController,
               reverse: true,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1164,6 +1252,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 }
 
                 return Column(
+                  key: ValueKey(message.id),
                   children: [
                     if (dateSeparator != null) dateSeparator,
                     _buildMessageBubble(
@@ -1278,7 +1367,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // Handle call messages (WhatsApp-style centered call events)
     if (message.type == MessageType.voiceCall ||
-        message.type == MessageType.missedCall) {
+        message.type == MessageType.missedCall ||
+        message.type == MessageType.videoCall) {
       return _buildCallMessageBubble(message, isMe, isDarkMode);
     }
 
@@ -1461,7 +1551,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                 // Audio message player UI
                                 if (message.type == MessageType.audio &&
                                     message.audioUrl != null)
-                                  _buildAudioMessagePlayer(message, isMe, isDarkMode: isDarkMode),
+                                  _buildAudioMessagePlayer(
+                                    message,
+                                    isMe,
+                                    isDarkMode: isDarkMode,
+                                  ),
                                 if (message.text != null &&
                                     message.text!.isNotEmpty)
                                   Padding(
@@ -3294,7 +3388,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   /// Show call back confirmation dialog when tapping on call history
-  void _showCallBackConfirmation() {
+  void _showCallBackConfirmation({bool isVideoCall = false}) {
     HapticFeedback.lightImpact();
 
     showDialog(
@@ -3320,14 +3414,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Call icon
+                  // Call icon (voice only)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.green.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.call_rounded,
                       color: Colors.green,
                       size: 28,
@@ -3344,7 +3438,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Start a voice call',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
@@ -3377,7 +3471,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Call button
+                      // Call button (voice only)
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
@@ -3390,11 +3484,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                               borderRadius: BorderRadius.circular(12),
                               color: Colors.green,
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.call, color: Colors.white, size: 18),
-                                SizedBox(width: 6),
+                                const SizedBox(width: 6),
                                 Text(
                                   'Call',
                                   style: TextStyle(
@@ -5081,58 +5175,61 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   ),
                 ),
 
-          // Upload progress overlay (WhatsApp style)
-          if (isUploading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.4),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Circular progress indicator with percentage
-                      SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              value: uploadProgress > 0 ? uploadProgress : null,
-                              strokeWidth: 3,
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.3,
-                              ),
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                            if (uploadProgress > 0)
-                              Text(
-                                '${(uploadProgress * 100).toInt()}%',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+              // Upload progress overlay (WhatsApp style)
+              if (isUploading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Circular progress indicator with percentage
+                          SizedBox(
+                            width: 50,
+                            height: 50,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CircularProgressIndicator(
+                                  value: uploadProgress > 0
+                                      ? uploadProgress
+                                      : null,
+                                  strokeWidth: 3,
+                                  backgroundColor: Colors.white.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                 ),
-                              ),
-                          ],
-                        ),
+                                if (uploadProgress > 0)
+                                  Text(
+                                    '${(uploadProgress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Sending...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Sending...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
             ],
           ),
         ),
@@ -5182,70 +5279,77 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   width: 220,
                   height: 180,
                   color: Colors.black87,
-              child: isSending
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white70,
+                  child: isSending
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white70,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.videocam,
+                          color: Colors.white38,
+                          size: 50,
                         ),
+                ),
+                // Play button overlay
+                if (!isSending)
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    )
-                  : const Icon(Icons.videocam, color: Colors.white38, size: 50),
-            ),
-            // Play button overlay
-            if (!isSending)
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF007AFF).withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      spreadRadius: 2,
+                // Video label
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 36,
-                ),
-              ),
-            // Video label
-            Positioned(
-              bottom: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.videocam, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
-                    Text(
-                      'Video',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam, color: Colors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Video',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
               ],
             ),
           ),
@@ -5449,105 +5553,142 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Build call message bubble like regular chat messages (right for outgoing, left for incoming)
+  /// Build WhatsApp-style call message UI (left for incoming, right for outgoing)
   Widget _buildCallMessageBubble(
     MessageModel message,
     bool isMe,
     bool isDarkMode,
   ) {
+    //  Filter out empty/invalid call messages to prevent blank UI
+    if (message.text == null ||
+        message.text!.isEmpty ||
+        message.text!.trim().isEmpty) {
+      debugPrint(
+        ' Skipping empty call message: id=${message.id}, text="${message.text}"',
+      );
+      return const SizedBox.shrink(); // Return empty widget (no UI)
+    }
+
+    debugPrint(
+      ' Call message alignment: isMe=$isMe (${isMe ? "OUTGOING-RIGHT" : "INCOMING-LEFT"}), senderId=${message.senderId}, currentUserId=$_currentUserId',
+    );
+
     final isMissed = message.type == MessageType.missedCall;
+    bool isVideoCall = message.type == MessageType.videoCall;
+    final isVoiceCall = message.type == MessageType.voiceCall;
+
+    // For missed calls, check text content to determine if video or audio
+    if (isMissed && message.text != null) {
+      final textLower = message.text!.toLowerCase();
+      if (textLower.contains('video')) {
+        isVideoCall = true;
+      }
+    }
+
+    // Debug: Print message type details
+    debugPrint(
+      '📱 Message Type: ${message.type}, isMissed: $isMissed, isVideoCall: $isVideoCall, isVoiceCall: $isVoiceCall, text: ${message.text}',
+    );
+
     final isSelected = _selectedMessageIds.contains(message.id);
 
     // isMe means current user was the CALLER (senderId = current user)
     // !isMe means current user was the RECEIVER
 
-    // Determine call text based on who's viewing
+    // Determine call text, icon, and color based on call type
     String callText;
-    if (isMissed) {
-      if (isMe) {
-        // Caller viewing their outgoing missed call
-        callText = 'Outgoing call - No answer';
-      } else {
-        // Receiver viewing their missed incoming call
-        callText = 'Missed voice call';
-      }
-    } else {
-      // Answered call - extract duration from stored text or metadata
-      final storedText = message.text ?? '';
-      if (storedText.contains('•')) {
-        // Use the duration part from stored text
-        callText = storedText;
-      } else {
-        callText = 'Voice call';
-      }
-    }
-
-    // Determine icon and color based on call type and who made/received the call
-    // isMe = true means current user made the call (outgoing)
-    // isMe = false means current user received the call (incoming)
     IconData callIcon;
     Color iconColor;
 
     if (isMissed) {
-      // Missed call - phone_missed icon (red)
-      callIcon = Icons.phone_missed;
+      // ❌ Missed call - RED color for all missed calls
       iconColor = Colors.red;
-    } else if (isMe) {
-      // Outgoing call that was answered - arrow going up-right (green)
-      callIcon = Icons.call_made;
-      iconColor = Colors.green;
+
+      if (isMe) {
+        // Caller viewing their outgoing missed call (cancelled/no answer)
+        if (isVideoCall) {
+          callText = 'outgoing video call';
+          callIcon = Icons.videocam; // RED videocam_off
+        } else {
+          callText = 'outgoing voice call';
+          callIcon = Icons.phone; // RED phone_missed
+        }
+      } else {
+        // Receiver viewing their missed incoming call
+        if (isVideoCall) {
+          callText = 'Missed video call';
+          callIcon = Icons.videocam; // RED videocam_off
+        } else {
+          callText = 'Missed voice call';
+          callIcon = Icons.phone_missed; // RED phone_missed
+        }
+      }
     } else {
-      // Incoming call that was answered - arrow going down-left (green)
-      callIcon = Icons.call_received;
-      iconColor = Colors.green;
+      // ✅ Answered call - GREEN color for all answered calls
+      iconColor = const Color(0xFF25D366); // WhatsApp green
+
+      debugPrint(
+        '✅ Setting GREEN color for answered call: isVideoCall=$isVideoCall',
+      );
+
+      // Extract duration from stored text or show default
+      final storedText = message.text ?? '';
+      if (storedText.isNotEmpty && !storedText.contains('call')) {
+        callText = storedText; // Duration like "0:45" or "1:23"
+      } else {
+        callText = isVideoCall ? 'Video call' : 'Voice call';
+      }
+
+      // Set GREEN icons for answered calls (don't override callText!)
+      if (isVideoCall) {
+        callIcon = Icons.videocam; // GREEN videocam for answered video call
+      } else {
+        callIcon = Icons.phone; // GREEN phone for answered voice call
+      }
     }
 
-    // Build the call bubble widget
-    final callBubble = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    // Debug: Print complete icon details with actual color values
+    final colorHex = iconColor == Colors.red
+        ? 'RED'
+        : (iconColor == const Color(0xFF25D366) ? 'GREEN(#25D366)' : 'UNKNOWN');
+    debugPrint(
+      '🎨 Call Icon: $callIcon, Color: $colorHex, isMissed: $isMissed, isVideoCall: $isVideoCall, isMe: $isMe, text: "$callText"',
+    );
+
+    // Sanity check: Verify iconColor is actually set
+    assert(
+      iconColor == Colors.red || iconColor == const Color(0xFF25D366),
+      'Icon color must be either RED or GREEN, but got: $iconColor',
+    );
+
+    // WhatsApp-style call widget (exact replica)
+    final callWidget = Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? const LinearGradient(
-                colors: [
-                  Color.fromARGB(255, 116, 114, 248),
-                  Color.fromARGB(255, 95, 170, 250),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        color: !isMe
-            ? (isDarkMode
-                  ? const Color.fromARGB(255, 46, 46, 46)
-                  : const Color.fromARGB(255, 39, 39, 39))
-            : null,
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(18),
-          topRight: const Radius.circular(18),
-          bottomLeft: Radius.circular(isMe ? 18 : 4),
-          bottomRight: Radius.circular(isMe ? 4 : 18),
-        ),
+        color: isDarkMode
+            ? const Color(0xFF1F2C33)
+            : const Color(0xFFFFFFFF).withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Phone icon with arrow
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: isMe
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : iconColor.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              callIcon,
-              size: 16,
-              color: isMe ? Colors.white : iconColor,
-            ),
+          // Call icon with explicit color - force the color to apply
+          Icon(
+            callIcon,
+            size: 20,
+            color: iconColor,
+            semanticLabel: 'Call icon',
           ),
           const SizedBox(width: 10),
-          // Call text and time
+          // Call text and time in single line
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -5555,36 +5696,20 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               Text(
                 callText,
                 style: TextStyle(
-                  color: isMe
-                      ? Colors.white
-                      : (isDarkMode ? Colors.white : Colors.black87),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  color: isDarkMode ? Colors.white : const Color(0xFF111B21),
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _formatMessageTime(message.timestamp),
-                    style: TextStyle(
-                      color: isMe
-                          ? Colors.white.withValues(alpha: 0.7)
-                          : (isDarkMode ? Colors.grey[500] : Colors.grey[600]),
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Call back icon
-                  Icon(
-                    Icons.call,
-                    size: 14,
-                    color: isMe
-                        ? Colors.white.withValues(alpha: 0.8)
-                        : Colors.green,
-                  ),
-                ],
+              const SizedBox(height: 3),
+              Text(
+                _formatMessageTime(message.timestamp),
+                style: TextStyle(
+                  color: isDarkMode
+                      ? const Color(0xFF8696A0)
+                      : const Color(0xFF667781),
+                  fontSize: 12.5,
+                ),
               ),
             ],
           ),
@@ -5595,24 +5720,22 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     // If in multi-select mode, show checkbox
     if (_isMultiSelectMode) {
       return Padding(
-        padding: EdgeInsets.only(bottom: 6, left: 8, right: isMe ? 16 : 60),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: GestureDetector(
           onTap: () => _toggleMessageSelection(message.id),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(8),
               color: isSelected
                   ? Colors.blue.withValues(alpha: 0.15)
                   : Colors.transparent,
             ),
             child: Row(
-              mainAxisAlignment: isMe
-                  ? MainAxisAlignment.end
-                  : MainAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Checkbox
                 Padding(
-                  padding: const EdgeInsets.only(left: 4, right: 8),
+                  padding: const EdgeInsets.only(right: 8),
                   child: Container(
                     width: 22,
                     height: 22,
@@ -5629,8 +5752,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         : null,
                   ),
                 ),
-                // Call bubble
-                Flexible(child: callBubble),
+                callWidget,
               ],
             ),
           ),
@@ -5638,10 +5760,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
     }
 
-    // Normal mode - tap to call back, long press for options
+    // Normal mode - WhatsApp style: outgoing (right), incoming (left)
     return Padding(
       padding: EdgeInsets.only(
-        bottom: 6,
+        top: 4,
+        bottom: 4,
         left: isMe ? 60 : 16,
         right: isMe ? 16 : 60,
       ),
@@ -5652,18 +5775,22 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         children: [
           GestureDetector(
             onTap: () {
-              // Show call back confirmation dialog instead of auto-calling
-              _showCallBackConfirmation();
+              // Tap to call back
+              _showCallBackConfirmation(isVideoCall: isVideoCall);
             },
             onLongPress: () => _showCallDeleteConfirmation(message),
-            child: callBubble,
+            child: callWidget,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAudioMessagePlayer(MessageModel message, bool isMe, {bool isDarkMode = true}) {
+  Widget _buildAudioMessagePlayer(
+    MessageModel message,
+    bool isMe, {
+    bool isDarkMode = true,
+  }) {
     final isSending =
         message.status == MessageStatus.sending ||
         (message.audioUrl == null || message.audioUrl!.isEmpty);
@@ -5726,141 +5853,181 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           color: Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(30),
         ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Play/Pause button with gradient
-          GestureDetector(
-            onTap: isSending
-                ? null
-                : () => _playAudio(message.id, message.audioUrl!),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: isSending
-                    ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                color: isSending ? Colors.white.withValues(alpha: 0.2) : null,
-                shape: BoxShape.circle,
-                boxShadow: isSending
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: const Color(0xFF5856D6).withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          spreadRadius: 1,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Play/Pause button with gradient
+            GestureDetector(
+              onTap: isSending
+                  ? null
+                  : () => _playAudio(message.id, message.audioUrl!),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: isSending
+                      ? null
+                      : const LinearGradient(
+                          colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                      ],
-              ),
-              child: isSending
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Icon(
-                      isCurrentlyPlaying
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Waveform and info
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Waveform
-              SizedBox(
-                width: 120,
-                height: 24,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(20, (index) {
-                    final barProgress = index / 20;
-                    final isActive = barProgress <= progress;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 100),
-                      width: 3,
-                      height: heights[index],
-                      decoration: BoxDecoration(
-                        color: isSending
-                            ? Colors.white.withValues(alpha: 0.3)
-                            : (isActive
-                                  ? const Color(0xFF5856D6)
-                                  : Colors.white24),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    );
-                  }),
+                  color: isSending ? Colors.white.withValues(alpha: 0.2) : null,
+                  shape: BoxShape.circle,
+                  boxShadow: isSending
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: const Color(
+                              0xFF5856D6,
+                            ).withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
                 ),
+                child: isSending
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        isCurrentlyPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
               ),
-              const SizedBox(height: 4),
-              // Duration, time and status
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Duration
-                  Text(
-                    isSending ? 'Sending...' : formatDuration(duration),
-                    style: TextStyle(
-                      color: isSending
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : Colors.white70,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
+            ),
+            const SizedBox(width: 12),
+            // Waveform and info
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Waveform
+                SizedBox(
+                  width: 120,
+                  height: 24,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(20, (index) {
+                      final barProgress = index / 20;
+                      final isActive = barProgress <= progress;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 100),
+                        width: 3,
+                        height: heights[index],
+                        decoration: BoxDecoration(
+                          color: isSending
+                              ? Colors.white.withValues(alpha: 0.3)
+                              : (isActive
+                                    ? const Color(0xFF5856D6)
+                                    : Colors.white24),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      );
+                    }),
                   ),
-                  const SizedBox(width: 8),
-                  // Time
-                  Text(
-                    timeString,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 10,
+                ),
+                const SizedBox(height: 4),
+                // Duration, time and status
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Duration
+                    Text(
+                      isSending ? 'Sending...' : formatDuration(duration),
+                      style: TextStyle(
+                        color: isSending
+                            ? Colors.white.withValues(alpha: 0.6)
+                            : Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  // Status tick (only for sent messages by me, skip if sending - button has loader)
-                  if (isMe && !isSending) ...[
-                    const SizedBox(width: 4),
-                    _buildMessageStatusIcon(message.status, isMe),
+                    const SizedBox(width: 8),
+                    // Time
+                    Text(
+                      timeString,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                      ),
+                    ),
+                    // Status tick (only for sent messages by me, skip if sending - button has loader)
+                    if (isMe && !isSending) ...[
+                      const SizedBox(width: 4),
+                      _buildMessageStatusIcon(message.status, isMe),
+                    ],
                   ],
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          // Mic icon
-          Icon(
-            Icons.mic,
-            color: isSending ? Colors.orange : Colors.white38,
-            size: 20,
-          ),
-        ],
-      ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 8),
+            // Mic icon
+            Icon(
+              Icons.mic,
+              color: isSending ? Colors.orange : Colors.white38,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _startVideoCall() {
-    // Video call not supported - voice only app
-  }
-
   void _startAudioCall() async {
+    // Prevent multiple rapid clicks
+    if (_isStartingCall) {
+      debugPrint('⚠️ Call already being initiated, ignoring duplicate request');
+      return;
+    }
+
+    setState(() => _isStartingCall = true);
+
+    try {
+      // Check if user already has an active call (single device/call restriction)
+      final activeCallsQuery = await _firestore
+          .collection('calls')
+          .where('participants', arrayContains: _currentUserId)
+          .where('status', whereIn: ['calling', 'ringing', 'connected'])
+          .limit(1)
+          .get();
+
+      if (activeCallsQuery.docs.isNotEmpty) {
+        // User already has an active call
+        debugPrint('⚠️ User already has an active call, cannot start new call');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You already have an active call'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          setState(() => _isStartingCall = false);
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error checking active calls: $e');
+      if (mounted) {
+        setState(() => _isStartingCall = false);
+      }
+      return; // Don't continue if check fails
+    }
+
     final currentUserProfile = ref.read(currentUserProfileProvider).valueOrNull;
     final callerName = currentUserProfile?.name ?? 'Someone';
 
     // Create a call document in Firestore
+    debugPrint(
+      '📞 Creating call: Caller=$_currentUserId -> Receiver=${widget.otherUser.uid}',
+    );
     final callDoc = await _firestore.collection('calls').add({
       'callerId': _currentUserId,
       'receiverId': widget.otherUser.uid,
@@ -5877,6 +6044,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       'timestamp': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    debugPrint('✅ Call document created with ID: ${callDoc.id}');
 
     if (!mounted) return;
 
@@ -5894,8 +6062,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       },
     );
 
-    // Navigate to voice call screen immediately
-    Navigator.push(
+    // Navigate to voice call screen and wait for result
+    debugPrint(
+      '  EnhancedChatScreen: Starting voice call - otherUser: ${widget.otherUser.name} (${widget.otherUser.uid}), currentUserId: $_currentUserId',
+    );
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => VoiceCallScreen(
@@ -5905,6 +6076,387 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         ),
       ),
     );
+
+    if (mounted) {
+      setState(() => _isStartingCall = false);
+      _checkCallStatusAndAddMessage(callDoc.id, isVideo: false);
+    }
+  }
+
+  void _startVideoCall() async {
+    // Video calling functionality disabled - silently ignore
+    return;
+
+    // Original code kept for reference (disabled)
+    /*
+    final currentUserProfile = ref.read(currentUserProfileProvider).valueOrNull;
+    final callerName = currentUserProfile?.name ?? 'Someone';
+
+    // Create a call document in Firestore
+    final callDoc = await _firestore.collection('calls').add({
+      'callerId': _currentUserId,
+      'receiverId': widget.otherUser.uid,
+      'callerName': callerName,
+      'callerPhoto': currentUserProfile?.photoUrl,
+      'receiverName': widget.otherUser.name,
+      'receiverPhoto': widget.otherUser.photoUrl,
+      'participants': [
+        _currentUserId,
+        widget.otherUser.uid,
+      ], // Required for Calls tab query
+      'status': 'calling',
+      'type': 'video',
+      'timestamp': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    if (!mounted) return;
+
+    // Send call notification to receiver (don't await - fire and forget for speed)
+    NotificationService().sendNotificationToUser(
+      userId: widget.otherUser.uid,
+      title: 'Incoming Video Call',
+      body: '$callerName is video calling you',
+      type: 'video_call',
+      data: {
+        'callId': callDoc.id,
+        'callerId': _currentUserId,
+        'callerName': callerName,
+        'callerPhoto': currentUserProfile?.photoUrl,
+        'isVideo': true,
+      },
+    );
+
+    // Navigate to video call screen and wait for result
+    debugPrint(
+      '  EnhancedChatScreen: Starting video call - otherUser: ${widget.otherUser.name} (${widget.otherUser.uid}), currentUserId: $_currentUserId',
+    );
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoCallScreen(
+          callId: callDoc.id,
+          otherUser: widget.otherUser,
+          isOutgoing: true,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      _checkCallStatusAndAddMessage(callDoc.id, isVideo: true);
+    }
+    */
+  }
+
+  Future<void> _checkCallStatusAndAddMessage(
+    String callId, {
+    required bool isVideo,
+  }) async {
+    if (_conversationId == null || _currentUserId == null) return;
+
+    try {
+      // Small delay to ensure Firestore update from call screen has propagated
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final callDoc = await _firestore.collection('calls').doc(callId).get();
+      if (!callDoc.exists) {
+        debugPrint('❌ Call document not found: $callId');
+        return;
+      }
+
+      final data = callDoc.data()!;
+      final status = data['status'] as String?;
+      final duration = data['duration']; // dynamic
+      final callerId = data['callerId'] as String?;
+      final receiverId = data['receiverId'] as String?;
+
+      // ✅ CRITICAL FIX: Only create message if current user is the CALLER
+      // This prevents duplicate messages from being created on both devices
+      // The receiver should NOT create a message - only the caller creates it
+      if (callerId != _currentUserId) {
+        debugPrint(
+          '🚫 BLOCKED: Not creating call message because current user ($_currentUserId) is NOT the caller ($callerId)',
+        );
+        return;
+      }
+
+      debugPrint(
+        '📞 Call Status: $status, Duration: $duration, isVideo: $isVideo, CallId: $callId',
+      );
+      debugPrint('📞 Full call data: $data');
+      debugPrint(
+        '📞 CallerId: $callerId, ReceiverId: $receiverId, CurrentUserId: $_currentUserId',
+      );
+
+      int durationSeconds = 0;
+      if (duration is int) {
+        durationSeconds = duration;
+      } else if (duration is double) {
+        durationSeconds = duration.toInt();
+      }
+
+      MessageType msgType;
+      String msgText;
+
+      // ✅ Safety check: if status is null/empty, don't create message
+      if (status == null || status.isEmpty) {
+        debugPrint(
+          '⚠️ Call status is null/empty, skipping message creation for callId: $callId',
+        );
+        return;
+      }
+
+      // Determine message type and text based on status
+      if (status == 'ended' || status == 'completed') {
+        // Call was answered/connected - always voiceCall or videoCall type (GREEN)
+        msgType = isVideo ? MessageType.videoCall : MessageType.voiceCall;
+        msgText = durationSeconds > 0
+            ? _formatCallDuration(durationSeconds)
+            : (isVideo ? 'Video call' : 'Voice call');
+      } else if (status == 'rejected' ||
+          status == 'declined' ||
+          status == 'busy') {
+        // Call was rejected - missedCall type (RED)
+        msgType = MessageType.missedCall;
+        msgText = isVideo ? 'Video call declined' : 'Voice call declined';
+      } else if (status == 'missed' ||
+          status == 'timeout' ||
+          status == 'canceled' ||
+          status == 'no_answer') {
+        // Call was not answered - missedCall type (RED)
+        msgType = MessageType.missedCall;
+        msgText = isVideo ? 'Missed video call' : 'Missed voice call';
+      } else {
+        // Fallback - if duration > 0, treat as answered call (GREEN)
+        if (durationSeconds > 0) {
+          msgType = isVideo ? MessageType.videoCall : MessageType.voiceCall;
+          msgText = _formatCallDuration(durationSeconds);
+        } else {
+          // No duration and unknown status - treat as missed (RED)
+          msgType = MessageType.missedCall;
+          msgText = isVideo ? 'Missed video call' : 'Missed voice call';
+        }
+      }
+
+      // ✅ Final safety check: ensure msgText is not empty
+      if (msgText.isEmpty) {
+        debugPrint(
+          '⚠️ msgText is empty after status check, status=$status, skipping message creation',
+        );
+        return;
+      }
+
+      // ✅ Use deterministic message ID to prevent duplicates
+      // If this function is called multiple times for same call, it will update instead of creating duplicates
+      final messageId = 'call_$callId';
+
+      // ⚠️ CRITICAL: Triple-check msgText before saving (prevent empty messages)
+      if (msgText.trim().isEmpty) {
+        debugPrint(
+          '🚫 BLOCKED: Attempted to save call message with empty text! callId=$callId, status=$status',
+        );
+        return;
+      }
+
+      // Add message to conversation
+      debugPrint(
+        '💾 Saving call message: id=$messageId, type=${msgType.index}, text="$msgText", status=$status',
+      );
+
+      // ✅ Determine correct senderId based on who initiated the call
+      // If current user is the caller, they are the sender
+      // If current user is the receiver, the other person is the sender
+      final messageSenderId = (callerId == _currentUserId)
+          ? _currentUserId
+          : widget.otherUser.uid;
+      final messageReceiverId = (callerId == _currentUserId)
+          ? widget.otherUser.uid
+          : _currentUserId;
+
+      debugPrint(
+        '💡 Message will be saved with senderId=$messageSenderId (caller=$callerId, currentUser=$_currentUserId)',
+      );
+
+      // ✅ Use merge: true to avoid overwriting existing data if message already exists
+      await _firestore
+          .collection('conversations')
+          .doc(_conversationId!)
+          .collection('messages')
+          .doc(messageId) // Use deterministic ID instead of .add()
+          .set({
+            'senderId': messageSenderId, // ✅ FIXED: Use caller as sender
+            'receiverId': messageReceiverId,
+            'chatId': _conversationId,
+            'text':
+                msgText, // This will NEVER be empty due to triple-check above
+            'type': msgType.index,
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': MessageStatus.sent.index,
+            'read': false,
+            'isRead': false,
+            'callId': callId,
+            'callDuration': durationSeconds,
+          }, SetOptions(merge: true)); // Merge to avoid data loss if doc exists
+      debugPrint('✅ Call message saved successfully with ID: $messageId');
+
+      // Update last message in conversation
+      await _firestore
+          .collection('conversations')
+          .doc(_conversationId!)
+          .update({
+            'lastMessage': isVideo ? '📹 Video call' : '📞 Voice call',
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'lastMessageSenderId': _currentUserId,
+          });
+    } catch (e) {
+      debugPrint('Error adding call message: $e');
+    }
+  }
+
+  /// ✅ Real-time guard: Delete empty call messages as soon as they appear
+  void _setupEmptyMessageGuard() {
+    if (_conversationId == null) return;
+
+    // Listen to all new call messages in real-time
+    _firestore
+        .collection('conversations')
+        .doc(_conversationId!)
+        .collection('messages')
+        .where(
+          'type',
+          whereIn: [
+            MessageType.voiceCall.index,
+            MessageType.videoCall.index,
+            MessageType.missedCall.index,
+          ],
+        )
+        .snapshots()
+        .listen((snapshot) {
+          for (final change in snapshot.docChanges) {
+            // Check only newly added or modified messages
+            if (change.type == DocumentChangeType.added ||
+                change.type == DocumentChangeType.modified) {
+              final doc = change.doc;
+              final data = doc.data();
+              if (data != null) {
+                final text = data['text'] as String?;
+
+                // If empty call message detected, delete it immediately
+                if (text == null || text.trim().isEmpty) {
+                  debugPrint(
+                    '🚨 GUARD: Empty call message detected! Deleting immediately: ${doc.id}',
+                  );
+                  doc.reference
+                      .delete()
+                      .then((_) {
+                        debugPrint('✅ GUARD: Empty message deleted: ${doc.id}');
+                      })
+                      .catchError((e) {
+                        debugPrint(
+                          '❌ GUARD: Failed to delete empty message: $e',
+                        );
+                      });
+                }
+              }
+            }
+          }
+        });
+  }
+
+  /// ✅ Cleanup empty and duplicate call messages from Firestore
+  Future<void> _cleanupEmptyCallMessages() async {
+    if (_conversationId == null) return;
+
+    try {
+      debugPrint('🧹 Starting cleanup of empty and duplicate call messages...');
+
+      final messagesSnapshot = await _firestore
+          .collection('conversations')
+          .doc(_conversationId!)
+          .collection('messages')
+          .get();
+
+      int deletedCount = 0;
+      final Map<String, List<String>> callIdToMessageIds = {};
+
+      for (final doc in messagesSnapshot.docs) {
+        final data = doc.data();
+        final messageType = _parseMessageType(data['type']);
+
+        // Check if this is a call message
+        if (messageType == MessageType.voiceCall ||
+            messageType == MessageType.videoCall ||
+            messageType == MessageType.missedCall) {
+          final text = data['text'] as String?;
+
+          // Delete if text is null, empty, or whitespace only
+          if (text == null || text.isEmpty || text.trim().isEmpty) {
+            await doc.reference.delete();
+            deletedCount++;
+            debugPrint('🗑️ Deleted empty call message: ${doc.id}');
+            continue;
+          }
+
+          // Track duplicate call messages by callId
+          final callId = data['callId'] as String?;
+          if (callId != null) {
+            if (!callIdToMessageIds.containsKey(callId)) {
+              callIdToMessageIds[callId] = [];
+            }
+            callIdToMessageIds[callId]!.add(doc.id);
+          }
+        }
+      }
+
+      // Delete duplicate call messages (keep only the one with proper ID format 'call_<callId>')
+      for (final entry in callIdToMessageIds.entries) {
+        final callId = entry.key;
+        final messageIds = entry.value;
+
+        if (messageIds.length > 1) {
+          // Keep the message with ID 'call_<callId>', delete others
+          final properMessageId = 'call_$callId';
+          for (final msgId in messageIds) {
+            if (msgId != properMessageId) {
+              await _firestore
+                  .collection('conversations')
+                  .doc(_conversationId!)
+                  .collection('messages')
+                  .doc(msgId)
+                  .delete();
+              deletedCount++;
+              debugPrint(
+                '🗑️ Deleted duplicate call message: $msgId (keeping $properMessageId)',
+              );
+            }
+          }
+        }
+      }
+
+      if (deletedCount > 0) {
+        debugPrint(
+          '✅ Cleanup complete: Deleted $deletedCount empty/duplicate call messages',
+        );
+      } else {
+        debugPrint(
+          '✅ Cleanup complete: No empty/duplicate call messages found',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error cleaning up call messages: $e');
+    }
+  }
+
+  String _formatCallDuration(int seconds) {
+    final int h = seconds ~/ 3600;
+    final int m = (seconds % 3600) ~/ 60;
+    final int s = seconds % 60;
+
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    } else {
+      return '$m:${s.toString().padLeft(2, '0')}';
+    }
   }
 
   void _showChatInfo() {
@@ -7546,7 +8098,8 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         final mediaUrl =
             data['mediaUrl'] as String? ?? data['imageUrl'] as String?;
         final text = data['text'] as String?;
-        final type = data['type'] as int? ?? 0;
+        final type =
+            _EnhancedChatScreenState._parseIntFromDynamic(data['type']) ?? 0;
         final timestamp = data['timestamp'] as Timestamp?;
 
         // Check for media (images/videos)
@@ -8056,7 +8609,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
   Widget _buildDocItem(Map<String, dynamic> item) {
     final name = item['name'] as String;
     final timestamp = item['timestamp'] as DateTime;
-    final size = item['size'] as int?;
+    final size = _EnhancedChatScreenState._parseIntFromDynamic(item['size']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -8210,7 +8763,9 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         final item = _docItems[index];
         final name = item['name'] as String;
         final timestamp = item['timestamp'] as DateTime;
-        final size = item['size'] as int?;
+        final size = _EnhancedChatScreenState._parseIntFromDynamic(
+          item['size'],
+        );
         final messageId = item['id'] as String?;
 
         return Container(
@@ -9044,109 +9599,110 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Play/Pause button
-                    GestureDetector(
-                      onTap: _togglePlayback,
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Play/Pause button
+                      GestureDetector(
+                        onTap: _togglePlayback,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF5856D6,
+                                ).withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
                           ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF5856D6,
-                              ).withValues(alpha: 0.4),
-                              blurRadius: 8,
-                              spreadRadius: 1,
+                          child: Icon(
+                            _isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Waveform / Progress bar
+                      SizedBox(
+                        width: 120,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Waveform visualization with animation
+                            SizedBox(
+                              height: 24,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: List.generate(20, (index) {
+                                  final isActive =
+                                      index / 20 <= _playbackProgress;
+                                  final heights = [
+                                    8.0,
+                                    14.0,
+                                    10.0,
+                                    18.0,
+                                    12.0,
+                                    20.0,
+                                    14.0,
+                                    16.0,
+                                    10.0,
+                                    22.0,
+                                    18.0,
+                                    12.0,
+                                    20.0,
+                                    8.0,
+                                    16.0,
+                                    14.0,
+                                    18.0,
+                                    10.0,
+                                    14.0,
+                                    12.0,
+                                  ];
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 150),
+                                    width: 3,
+                                    height: heights[index],
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? const Color(0xFF5856D6)
+                                          : Colors.white24,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Duration text
+                            Text(
+                              _formatTime(widget.duration),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
-                        child: Icon(
-                          _isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Waveform / Progress bar
-                    SizedBox(
-                      width: 120,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Waveform visualization with animation
-                          SizedBox(
-                            height: 24,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: List.generate(20, (index) {
-                                final isActive =
-                                    index / 20 <= _playbackProgress;
-                                final heights = [
-                                  8.0,
-                                  14.0,
-                                  10.0,
-                                  18.0,
-                                  12.0,
-                                  20.0,
-                                  14.0,
-                                  16.0,
-                                  10.0,
-                                  22.0,
-                                  18.0,
-                                  12.0,
-                                  20.0,
-                                  8.0,
-                                  16.0,
-                                  14.0,
-                                  18.0,
-                                  10.0,
-                                  14.0,
-                                  12.0,
-                                ];
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 150),
-                                  width: 3,
-                                  height: heights[index],
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? const Color(0xFF5856D6)
-                                        : Colors.white24,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Duration text
-                          Text(
-                            _formatTime(widget.duration),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Mic icon
-                    const Icon(Icons.mic, color: Colors.white38, size: 20),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      // Mic icon
+                      const Icon(Icons.mic, color: Colors.white38, size: 20),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -9616,7 +10172,9 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                         borderRadius: BorderRadius.circular(25),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF007AFF).withValues(alpha: 0.3),
+                            color: const Color(
+                              0xFF007AFF,
+                            ).withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -9699,10 +10257,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
           const SizedBox(height: 16),
           Text(
             file.path.split('/').last,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -9715,10 +10270,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                 final sizeMB = snapshot.data! / (1024 * 1024);
                 return Text(
                   '${sizeMB.toStringAsFixed(1)} MB',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
                 );
               }
               return const SizedBox.shrink();

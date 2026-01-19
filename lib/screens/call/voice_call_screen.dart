@@ -3,10 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_profile.dart';
-import '../../models/message_model.dart';
-import '../../widgets/safe_circle_avatar.dart';
 import '../../widgets/floating_particles.dart';
 import '../../services/other services/voice_call_service.dart';
 
@@ -42,14 +39,15 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
   bool _isSpeakerOn = true; // Speaker on by default
   StreamSubscription? _callSubscription;
   bool _webrtcConnected = false;
+  bool _isEndingCall = false; // Flag to prevent multiple end call clicks
 
-  static const int _callTimeoutSeconds = 60; // Mark as missed after 60 seconds
+  static const int _callTimeoutSeconds = 39; // Mark as missed after 39 seconds
 
   @override
   void initState() {
     super.initState();
     debugPrint(
-      '  VoiceCallScreen: initState - callId=${widget.callId}, isOutgoing=${widget.isOutgoing}',
+      '  VoiceCallScreen: initState - callId=${widget.callId}, isOutgoing=${widget.isOutgoing}, otherUser=${widget.otherUser.name} (${widget.otherUser.uid})',
     );
 
     // Initialize animation synchronously - MUST happen before first build
@@ -104,10 +102,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
         'missedAt': FieldValue.serverTimestamp(),
       });
 
-      // Send missed call message to chat (only from caller's side to avoid duplicates)
-      if (widget.isOutgoing) {
-        await _sendCallMessageToChat(isMissed: true, duration: 0);
-      }
+      // REMOVED: Message saving is now handled by enhanced_chat_screen.dart
+      // to prevent duplicate messages
+      // if (widget.isOutgoing) {
+      //   await _sendCallMessageToChat(isMissed: true, duration: 0);
+      // }
     } catch (e) {
       // Error marking call as missed
     }
@@ -117,105 +116,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
     }
   }
 
-  /// Send call event message to chat conversation
-  /// Uses deterministic message ID to prevent duplicates if both users try to send
-  Future<void> _sendCallMessageToChat({
-    required bool isMissed,
-    required int duration,
-  }) async {
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId == null) return;
-
-      // Get or create conversation ID
-      final participants = [currentUserId, widget.otherUser.uid]..sort();
-      final conversationId = participants.join('_');
-
-      // Determine who was the actual caller (the one with isOutgoing = true)
-      // This is important for correct message display
-      final actualCallerId = widget.isOutgoing
-          ? currentUserId
-          : widget.otherUser.uid;
-      final actualReceiverId = widget.isOutgoing
-          ? widget.otherUser.uid
-          : currentUserId;
-
-      // Check if conversation exists
-      final conversationDoc = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
-      if (!conversationDoc.exists) {
-        // Create conversation if it doesn't exist
-        await _firestore.collection('conversations').doc(conversationId).set({
-          'participants': participants,
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastMessageTime': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // Use deterministic message ID based on call ID to prevent duplicates
-      // This allows both caller and receiver to attempt sending without creating duplicates
-      final messageId = 'call_${widget.callId}';
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc(messageId);
-
-      final now = DateTime.now();
-      final messageType = isMissed
-          ? MessageType.missedCall
-          : MessageType.voiceCall;
-
-      // Format duration for display
-      String callText;
-      if (isMissed) {
-        callText = widget.isOutgoing
-            ? 'Outgoing call - No answer'
-            : 'Missed voice call';
-      } else {
-        final minutes = duration ~/ 60;
-        final seconds = duration % 60;
-        final durationStr =
-            '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-        callText = 'Voice call • $durationStr';
-      }
-
-      // IMPORTANT: senderId is ALWAYS the caller, not necessarily the current user
-      // This ensures the message displays correctly:
-      // - Caller sees it as "outgoing" (isMe = true)
-      // - Receiver sees it as "incoming" (isMe = false)
-      await messageRef.set({
-        'id': messageId,
-        'senderId': actualCallerId,
-        'receiverId': actualReceiverId,
-        'chatId': conversationId,
-        'text': callText,
-        'type': messageType.index,
-        'status': MessageStatus.delivered.index,
-        'timestamp': Timestamp.fromDate(now),
-        'isEdited': false,
-        'read': false,
-        'isRead': false,
-        'metadata': {
-          'callId': widget.callId,
-          'duration': duration,
-          'isOutgoing': widget.isOutgoing,
-          'isMissed': isMissed,
-        },
-      });
-
-      // Update conversation last message
-      await _firestore.collection('conversations').doc(conversationId).update({
-        'lastMessage': isMissed ? '  Missed call' : '  Voice call',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageSenderId': actualCallerId,
-      });
-    } catch (e) {
-      // Error sending call message
-    }
-  }
+  // REMOVED: This function was creating duplicate messages
+  // Message saving is now centrally handled by enhanced_chat_screen.dart
+  // via _checkCallStatusAndAddMessage() to prevent duplicates
 
   void _setupVoiceCallService() {
     _voiceCallService.onUserJoined = (uid) {
@@ -450,9 +353,22 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
     bool wasMissedOrDeclined = false,
     bool skipMessage = false,
   }) async {
+    // ✅ Prevent multiple simultaneous end call operations
+    if (_isEndingCall) {
+      debugPrint('  VoiceCallScreen: Already ending call, ignoring duplicate request');
+      return;
+    }
+    _isEndingCall = true;
+
     debugPrint(
       '  VoiceCallScreen: _endCall started (wasMissedOrDeclined=$wasMissedOrDeclined, skipMessage=$skipMessage)',
     );
+
+    // Provide immediate UI feedback by popping screen first
+    if (mounted) {
+      debugPrint('  VoiceCallScreen: Popping screen immediately for instant feedback');
+      Navigator.of(context).pop();
+    }
 
     // Cancel timers and subscriptions first
     try {
@@ -483,8 +399,12 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
       debugPrint('  VoiceCallScreen: Error leaving WebRTC call: $e');
     }
 
-    // Determine if this was a missed/declined call or completed call
-    final bool wasMissed = wasMissedOrDeclined || _callDuration == 0;
+    // ✅ FIXED: Determine if this was a missed/declined call or completed call
+    // A call is considered "answered/connected" if:
+    // 1. It was NOT explicitly marked as missed/declined AND
+    // 2. Call duration is greater than 0 (means call timer started) OR status is 'connected'
+    final bool wasConnected = !wasMissedOrDeclined && (_callDuration > 0 || _callStatus == 'connected');
+    final bool wasMissed = !wasConnected;
 
     try {
       await _firestore.collection('calls').doc(widget.callId).update({
@@ -492,26 +412,22 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
         'endedAt': FieldValue.serverTimestamp(),
         'duration': _callDuration,
       });
-      debugPrint('  VoiceCallScreen: Updated call status in Firestore');
+      debugPrint('  VoiceCallScreen: Updated call status in Firestore (wasConnected=$wasConnected, wasMissed=$wasMissed, duration=$_callDuration, _callStatus=$_callStatus)');
 
-      // Send call message to chat from BOTH sides for reliability
-      // Uses deterministic message ID (call_{callId}) to prevent duplicates
-      // This ensures the message is recorded even if one side disconnects
-      // Skip only if rejected - IncomingCallScreen handles that case
-      if (!skipMessage) {
-        await _sendCallMessageToChat(
-          isMissed: wasMissed,
-          duration: _callDuration,
-        );
-      }
+      // REMOVED: Message saving is now handled by enhanced_chat_screen.dart
+      // to prevent duplicate messages
+      // if (!skipMessage) {
+      //   await _sendCallMessageToChat(
+      //     isMissed: wasMissed,
+      //     duration: _callDuration,
+      //   );
+      // }
     } catch (e) {
       debugPrint('  VoiceCallScreen: Error updating call status: $e');
     }
 
-    if (mounted) {
-      debugPrint('  VoiceCallScreen: Popping screen');
-      Navigator.of(context).pop();
-    }
+    // Screen already popped at the start for instant feedback
+    debugPrint('  VoiceCallScreen: Call ended successfully');
   }
 
   void _toggleMute() {
@@ -558,6 +474,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false, // Prevent keyboard/input from affecting layout
+      extendBodyBehindAppBar: false, // Don't extend body behind app bar
       body: Stack(
         children: [
           // Background Image (same as home screen)
@@ -618,20 +536,30 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
             return Transform.scale(
               scale: _callStatus == 'calling' ? _pulseAnimation.value : 1.0,
               child: Container(
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.blue.shade400,
+                      Colors.blue.shade600,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withValues(alpha: 0.3),
+                      color: Colors.blue.withValues(alpha: 0.4),
                       blurRadius: 30,
                       spreadRadius: 10,
                     ),
                   ],
                 ),
-                child: SafeCircleAvatar(
-                  photoUrl: widget.otherUser.photoUrl,
-                  radius: 70,
-                  name: widget.otherUser.name,
+                child: const Icon(
+                  Icons.phone,
+                  size: 70,
+                  color: Colors.white,
                 ),
               ),
             );

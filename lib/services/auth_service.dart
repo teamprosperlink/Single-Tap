@@ -1,3 +1,4 @@
+import 'dart:math' show min;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -880,9 +881,14 @@ class AuthService {
   /// Get the local device token from SharedPreferences
   Future<String?> getLocalDeviceToken() async {
     try {
+      print('[AuthService] getLocalDeviceToken() called');
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_deviceTokenKey);
-    } catch (e) {
+      final token = prefs.getString(_deviceTokenKey);
+      print('[AuthService] Token retrieved: ${token != null ? "${token.substring(0, min(8, token.length))}..." : "NULL"}');
+      return token;
+    } catch (e, stackTrace) {
+      print('[AuthService] ERROR in getLocalDeviceToken: $e');
+      print('[AuthService] Stack trace: $stackTrace');
       return null;
     }
   }
@@ -1097,9 +1103,9 @@ class AuthService {
             .update({
               'activeDeviceToken': FieldValue.delete(), // Delete old token
             });
-        print('[AuthService] ✓ STEP 0 succeeded - old device token cleared');
+        print('[AuthService]  STEP 0 succeeded - old device token cleared');
       } catch (e) {
-        print('[AuthService] ⚠️ STEP 0 warning - could not clear old token: $e');
+        print('[AuthService]  STEP 0 warning - could not clear old token: $e');
         // Continue anyway - we'll still try the full logout sequence below
       }
 
@@ -1119,7 +1125,7 @@ class AuthService {
           final data = result.data as Map<dynamic, dynamic>?;
           if (data?['success'] == true) {
             print(
-              '[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!',
+              '[AuthService]  Successfully forced logout on other devices - instant like WhatsApp!',
             );
           } else {
             throw Exception(
@@ -1140,7 +1146,7 @@ class AuthService {
         // This handles cases where Cloud Function isn't deployed yet
         try {
           print('[AuthService] STEP 1: Writing forceLogout=true to user doc: $uid');
-          print('[AuthService] 🔍 About to write: {forceLogout: true (bool), forceLogoutTime: serverTimestamp(), lastSessionUpdate: serverTimestamp()}');
+          print('[AuthService]  About to write: {forceLogout: true (bool), forceLogoutTime: serverTimestamp(), lastSessionUpdate: serverTimestamp()}');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(uid)
@@ -1149,8 +1155,8 @@ class AuthService {
             'forceLogoutTime': FieldValue.serverTimestamp(), // CRITICAL: Timestamp to prevent stale signal
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-          print('[AuthService] ✓ STEP 1 succeeded - forceLogout signal sent');
-          print('[AuthService] 🔍 forceLogout=true with timestamp has been written to Firestore');
+          print('[AuthService]  STEP 1 succeeded - forceLogout signal sent');
+          print('[AuthService]  forceLogout=true with timestamp has been written to Firestore');
 
           // CRITICAL: Wait longer to ensure Device A listener detects the signal
           // Device A's listener needs time to:
@@ -1160,7 +1166,7 @@ class AuthService {
           // Total: ~500ms minimum
           // Extended to 1.5s to ensure signal is definitely processed
           await Future.delayed(const Duration(milliseconds: 1500));
-          print('[AuthService] ⏳ Waited 1.5s for Firestore to sync and Device A to detect and process signal...');
+          print('[AuthService]  Waited 1.5s for Firestore to sync and Device A to detect and process signal...');
 
           print('[AuthService] STEP 2: Writing activeDeviceToken=${localToken.substring(0, 8)}... to user doc: $uid');
           await FirebaseFirestore.instance
@@ -1172,13 +1178,13 @@ class AuthService {
             'forceLogout': false, // CRITICAL: Clear forceLogout flag immediately when setting new device
             'lastSessionUpdate': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-          print('[AuthService] ✓ STEP 2 succeeded - new device set as active and forceLogout cleared');
+          print('[AuthService]  STEP 2 succeeded - new device set as active and forceLogout cleared');
 
           print(
             '[AuthService] ✓ Fallback write succeeded - forced logout completed',
           );
         } catch (fallbackError) {
-          print('[AuthService] ❌ Fallback write FAILED: $fallbackError');
+          print('[AuthService]  Fallback write FAILED: $fallbackError');
           rethrow;
         }
       }
@@ -1199,11 +1205,11 @@ class AuthService {
     try {
       final uid = userId ?? currentUser?.uid;
       if (uid == null) {
-        print('[AuthService] ⏳ No user ID for logout wait, skipping');
+        print('[AuthService]  No user ID for logout wait, skipping');
         return false;
       }
 
-      print('[AuthService] ⏳ WAITING for old device to logout...');
+      print('[AuthService]  WAITING for old device to logout...');
       final startTime = DateTime.now();
       const maxWaitTime = Duration(seconds: 20);
 
@@ -1213,7 +1219,7 @@ class AuthService {
 
         // Timeout after 20 seconds
         if (elapsed > maxWaitTime) {
-          print('[AuthService] ⏳ TIMEOUT waiting for old device logout (20s)');
+          print('[AuthService]  TIMEOUT waiting for old device logout (20s)');
           return false;
         }
 
@@ -1229,7 +1235,7 @@ class AuthService {
           // Check if old device's token is cleared
           if (activeToken == null || activeToken.isEmpty) {
             print(
-              '[AuthService] ✅ Old device logged out! (activeDeviceToken cleared after ${elapsed.inSeconds}s)',
+              '[AuthService]  Old device logged out! (activeDeviceToken cleared after ${elapsed.inSeconds}s)',
             );
             return true;
           }
@@ -1237,12 +1243,12 @@ class AuthService {
           // Token still exists, wait 500ms and check again
           await Future.delayed(const Duration(milliseconds: 500));
         } catch (e) {
-          print('[AuthService] ⏳ Error checking token status: $e');
+          print('[AuthService]  Error checking token status: $e');
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
     } catch (e) {
-      print('[AuthService] ⏳ Error in waitForOldDeviceLogout: $e');
+      print('[AuthService]  Error in waitForOldDeviceLogout: $e');
       return false;
     }
   }
@@ -1260,11 +1266,11 @@ class AuthService {
         return;
       }
 
-      print('[AuthService] 💾 Saving current device session to Firestore...');
+      print('[AuthService]  Saving current device session to Firestore...');
       await _saveDeviceSession(uid, token);
-      print('[AuthService] ✅ Device session saved successfully');
+      print('[AuthService]  Device session saved successfully');
     } catch (e) {
-      print('[AuthService] ❌ Error saving device session: $e');
+      print('[AuthService]  Error saving device session: $e');
     }
   }
 }

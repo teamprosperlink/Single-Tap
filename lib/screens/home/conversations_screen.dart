@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,7 +19,12 @@ import '../chat/group_chat_screen.dart';
 import '../call/call_history_screen.dart';
 
 class ConversationsScreen extends StatefulWidget {
-  const ConversationsScreen({super.key});
+  final VoidCallback? onBack;
+
+  const ConversationsScreen({
+    super.key,
+    this.onBack,
+  });
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -39,6 +46,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   // Call selection mode
   bool _isCallSelectionMode = false;
   final Set<String> _selectedCallIds = {};
+
+  // Conversation selection mode (for Chats and Groups tabs)
+  bool _isConversationSelectionMode = false;
+  final Set<String> _selectedConversationIds = {};
 
   @override
   void initState() {
@@ -88,14 +99,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   /// Prefetch user data for a list of user IDs
   Future<void> _prefetchUsers(List<String> userIds) async {
-    final uncachedIds = userIds.where((id) => !_userCache.containsKey(id) && id.isNotEmpty).toList();
+    final uncachedIds = userIds
+        .where((id) => !_userCache.containsKey(id) && id.isNotEmpty)
+        .toList();
     if (uncachedIds.isEmpty) return;
 
     // Batch fetch users (max 10 at a time due to Firestore limitations)
     for (var i = 0; i < uncachedIds.length; i += 10) {
       final batch = uncachedIds.skip(i).take(10).toList();
       try {
-        final futures = batch.map((id) => _firestore.collection('users').doc(id).get());
+        final futures = batch.map(
+          (id) => _firestore.collection('users').doc(id).get(),
+        );
         final results = await Future.wait(futures);
         for (var doc in results) {
           if (doc.exists) {
@@ -115,288 +130,269 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        centerTitle: true,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: _buildProfileAvatar(isDarkMode),
+        ),
+        title: const Text(
+          'Messages',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(
+                color: Colors.white,
+                width: 0.5,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          // Add person/group icon with circular container
+          Container(
+            margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.person_add, color: Colors.white, size: 22),
+              onPressed: () {
+                if (_currentTabIndex == 1) {
+                  _createGroup();
+                } else {
+                  _showNewChatDialog();
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorColor: Colors.white,
+              indicatorWeight: 2,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              labelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: const [
+                Tab(text: 'Chats'),
+                Tab(text: 'Groups'),
+                Tab(text: 'Calls'),
+              ],
+            ),
+          ),
+        ),
+      ),
       body: AppBackground(
         showParticles: true,
         overlayOpacity: 0.6,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with title and profile avatar
-              _buildHeader(isDarkMode),
-              // Search bar
-              _buildSearchBar(isDarkMode),
-              // Tab bar moved to top (below search)
-              _buildTopTabBar(isDarkMode),
-              // Tab content
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildChatsList(isDarkMode, isGroup: false),
-                    _buildChatsList(isDarkMode, isGroup: true),
-                    _buildCallsList(isDarkMode),
-                  ],
-                ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Spacer for AppBar
+            SizedBox(
+              height: MediaQuery.of(context).padding.top + kToolbarHeight + 48,
+            ),
+            // Search bar (hidden in selection mode)
+            if (!_isConversationSelectionMode) _buildSearchBar(isDarkMode),
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildChatsList(isDarkMode, isGroup: false),
+                  _buildChatsList(isDarkMode, isGroup: true),
+                  _buildCallsList(isDarkMode),
+                ],
               ),
-              // Add bottom padding for main navigation bar
-              SizedBox(height: 90 + MediaQuery.of(context).padding.bottom),
-            ],
-          ),
-        ),
-      ),
-      floatingActionButton: Container(
-        margin: EdgeInsets.only(bottom: 100 + MediaQuery.of(context).padding.bottom, right: 4),
-        height: 56,
-        width: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Theme.of(context).primaryColor,
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _currentTabIndex == 1 ? _createGroup : _showNewChatDialog,
-            customBorder: const CircleBorder(),
-            child: const Center(
-              child: Icon(Icons.add, color: Colors.white, size: 26),
-            ),
-          ),
-        ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
-  Widget _buildHeader(bool isDarkMode) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'Messages',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+  /// Build profile avatar for AppBar
+  Widget _buildProfileAvatar(bool isDarkMode) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore
+          .collection('users')
+          .doc(_auth.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        // Try multiple sources for photoUrl and name
+        String? photoUrl;
+        String userName = 'User';
+
+        // 1. Try from Firestore snapshot
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final userData = snapshot.data!.data() as Map<String, dynamic>?;
+          photoUrl = userData?['photoUrl'] as String?;
+          userName =
+              userData?['name'] as String? ??
+              userData?['displayName'] as String? ??
+              'User';
+          // Fallback to phone number for phone login users
+          if (userName == 'User' || userName.isEmpty) {
+            userName = userData?['phone'] as String? ?? 'User';
+          }
+        }
+
+        // 2. Fallback to cache
+        photoUrl ??= CurrentUserCache().photoUrl;
+        if (userName == 'User') {
+          userName = CurrentUserCache().name;
+        }
+
+        // 3. Fallback to Firebase Auth
+        photoUrl ??= _auth.currentUser?.photoURL;
+        if (userName == 'User') {
+          userName = _auth.currentUser?.displayName ?? 'User';
+        }
+
+        final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
+        final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+
+        // Avatar fallback widget with user's initial
+        Widget buildAvatarFallback() {
+          return Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade400, Colors.blue.shade400],
+              ),
+            ),
+            child: Center(
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDarkMode
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : Colors.grey.withValues(alpha: 0.3),
+              width: 2,
             ),
           ),
-          // Profile avatar - uses Firestore stream with cache fallback
-          StreamBuilder<DocumentSnapshot>(
-            stream: _firestore
-                .collection('users')
-                .doc(_auth.currentUser?.uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              // Try multiple sources for photoUrl and name
-              String? photoUrl;
-              String userName = 'User';
-
-              // 1. Try from Firestore snapshot
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                photoUrl = userData?['photoUrl'] as String?;
-                userName = userData?['name'] as String? ?? userData?['displayName'] as String? ?? 'User';
-                // Fallback to phone number for phone login users
-                if (userName == 'User' || userName.isEmpty) {
-                  userName = userData?['phone'] as String? ?? 'User';
-                }
-              }
-
-              // 2. Fallback to cache
-              photoUrl ??= CurrentUserCache().photoUrl;
-              if (userName == 'User') {
-                userName = CurrentUserCache().name;
-              }
-
-              // 3. Fallback to Firebase Auth
-              photoUrl ??= _auth.currentUser?.photoURL;
-              if (userName == 'User') {
-                userName = _auth.currentUser?.displayName ?? 'User';
-              }
-
-              final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
-              final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
-
-              // Avatar fallback widget with user's initial
-              Widget buildAvatarFallback() {
-                return Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.purple.shade400,
-                        Colors.blue.shade400,
-                      ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isDarkMode
-                        ? Colors.white.withValues(alpha: 0.2)
-                        : Colors.grey.withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-                ),
-                child: ClipOval(
-                  child: fixedPhotoUrl != null && fixedPhotoUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: fixedPhotoUrl,
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.cover,
-                          fadeInDuration: Duration.zero,
-                          fadeOutDuration: Duration.zero,
-                          placeholder: (context, url) => buildAvatarFallback(),
-                          errorWidget: (context, url, error) => buildAvatarFallback(),
-                        )
-                      : buildAvatarFallback(),
-                ),
-              );
-            },
+          child: ClipOval(
+            child: fixedPhotoUrl != null && fixedPhotoUrl.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: fixedPhotoUrl,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
+                    placeholder: (context, url) => buildAvatarFallback(),
+                    errorWidget: (context, url, error) => buildAvatarFallback(),
+                  )
+                : buildAvatarFallback(),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildSearchBar(bool isDarkMode) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Container(
-        height: 44,
-        decoration: BoxDecoration(
-          color: isDarkMode
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.grey.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: TextField(
-          controller: _searchController,
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black,
-            fontSize: 16,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Search',
-            hintStyle: TextStyle(
-              color: isDarkMode ? Colors.grey[600] : Colors.grey[500],
-              fontSize: 16,
-            ),
-            prefixIcon: Icon(
-              Icons.search,
-              color: isDarkMode ? Colors.grey[600] : Colors.grey[500],
-              size: 22,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value.toLowerCase();
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopTabBar(bool isDarkMode) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDarkMode
-            ? Colors.white.withValues(alpha: 0.08)
-            : Colors.grey.withValues(alpha: 0.1),
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicatorSize: TabBarIndicatorSize.tab,
-        indicator: BoxDecoration(
-          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        indicatorPadding: const EdgeInsets.all(4),
-        labelColor: Theme.of(context).primaryColor,
-        unselectedLabelColor: isDarkMode ? Colors.grey[500] : Colors.grey[600],
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-        dividerColor: Colors.transparent,
-        tabs: const [
-          Tab(
-            height: 40,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.chat_bubble_outline, size: 18),
-                SizedBox(width: 6),
-                Text('Chats'),
-              ],
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.3),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.5),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+              decoration: const InputDecoration(
+                hintText: 'Search',
+                hintStyle: TextStyle(color: Colors.white, fontSize: 16),
+                prefixIcon: Icon(Icons.search, color: Colors.white, size: 22),
+                filled: false,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.toLowerCase();
+                });
+              },
             ),
           ),
-          Tab(
-            height: 40,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.group_outlined, size: 18),
-                SizedBox(width: 6),
-                Text('Groups'),
-              ],
-            ),
-          ),
-          Tab(
-            height: 40,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.call_outlined, size: 18),
-                SizedBox(width: 6),
-                Text('Calls'),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -407,84 +403,129 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return const Center(child: Text('Please login to see conversations'));
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('conversations')
-          .where('participants', arrayContains: currentUserId)
-          .limit(50) // Pagination for better performance
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return _buildErrorState(isDarkMode, snapshot.error.toString());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(isDarkMode, isGroup);
-        }
-
-        // Filter conversations based on isGroup
-        final List<ConversationModel> conversations = [];
-        final List<String> userIdsToPrefetch = [];
-
-        for (var doc in snapshot.data!.docs) {
-          try {
-            final conv = ConversationModel.fromFirestore(doc);
-
-            // Filter by group or direct chat
-            if (conv.isGroup != isGroup) continue;
-
-            if (_searchQuery.isEmpty) {
-              conversations.add(conv);
-            } else {
-              final displayName = conv.getDisplayName(currentUserId);
-              if (displayName.toLowerCase().contains(_searchQuery)) {
-                conversations.add(conv);
+    return Column(
+      children: [
+        // Selection mode header
+        if (_isConversationSelectionMode)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: isDarkMode ? Colors.grey.shade900 : Colors.grey.shade100,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _exitConversationSelectionMode,
+                  color: isDarkMode ? Colors.white : Colors.black,
+                ),
+                Text(
+                  '${_selectedConversationIds.length} selected',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => _selectAllConversations(isGroup),
+                  child: Text(
+                    'Select All',
+                    style: TextStyle(color: Theme.of(context).primaryColor),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: _selectedConversationIds.isEmpty
+                      ? null
+                      : _deleteSelectedConversations,
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('conversations')
+                .where('participants', arrayContains: currentUserId)
+                .limit(50) // Pagination for better performance
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
               }
-            }
 
-            // Collect user IDs for prefetching (only for direct chats)
-            if (!conv.isGroup) {
-              final otherUserId = conv.getOtherParticipantId(currentUserId);
-              if (otherUserId.isNotEmpty && !_userCache.containsKey(otherUserId)) {
-                userIdsToPrefetch.add(otherUserId);
+              if (snapshot.hasError) {
+                return _buildErrorState(isDarkMode, snapshot.error.toString());
               }
-            }
-          } catch (e) {
-            debugPrint('Error parsing conversation ${doc.id}: $e');
-          }
-        }
 
-        // OPTIMIZATION: Prefetch all user data in parallel (non-blocking)
-        if (userIdsToPrefetch.isNotEmpty) {
-          _prefetchUsers(userIdsToPrefetch);
-        }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return _buildEmptyState(isDarkMode, isGroup);
+              }
 
-        // Sort by lastMessageTime (client-side to avoid index requirement)
-        conversations.sort((a, b) {
-          if (a.lastMessageTime == null) return 1;
-          if (b.lastMessageTime == null) return -1;
-          return b.lastMessageTime!.compareTo(a.lastMessageTime!);
-        });
+              // Filter conversations based on isGroup
+              final List<ConversationModel> conversations = [];
+              final List<String> userIdsToPrefetch = [];
 
-        if (conversations.isEmpty) {
-          return _buildEmptyState(isDarkMode, isGroup);
-        }
+              for (var doc in snapshot.data!.docs) {
+                try {
+                  final conv = ConversationModel.fromFirestore(doc);
 
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8),
-          itemCount: conversations.length,
-          itemBuilder: (context, index) {
-            final conversation = conversations[index];
-            return _buildConversationTile(conversation, isDarkMode);
-          },
-        );
-      },
-    );
+                  // Filter by group or direct chat
+                  if (conv.isGroup != isGroup) continue;
+
+                  if (_searchQuery.isEmpty) {
+                    conversations.add(conv);
+                  } else {
+                    final displayName = conv.getDisplayName(currentUserId);
+                    if (displayName.toLowerCase().contains(_searchQuery)) {
+                      conversations.add(conv);
+                    }
+                  }
+
+                  // Collect user IDs for prefetching (only for direct chats)
+                  if (!conv.isGroup) {
+                    final otherUserId = conv.getOtherParticipantId(
+                      currentUserId,
+                    );
+                    if (otherUserId.isNotEmpty &&
+                        !_userCache.containsKey(otherUserId)) {
+                      userIdsToPrefetch.add(otherUserId);
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('Error parsing conversation ${doc.id}: $e');
+                }
+              }
+
+              // OPTIMIZATION: Prefetch all user data in parallel (non-blocking)
+              if (userIdsToPrefetch.isNotEmpty) {
+                _prefetchUsers(userIdsToPrefetch);
+              }
+
+              // Sort by lastMessageTime (client-side to avoid index requirement)
+              conversations.sort((a, b) {
+                if (a.lastMessageTime == null) return 1;
+                if (b.lastMessageTime == null) return -1;
+                return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+              });
+
+              if (conversations.isEmpty) {
+                return _buildEmptyState(isDarkMode, isGroup);
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.only(top: 8),
+                itemCount: conversations.length,
+                itemBuilder: (context, index) {
+                  final conversation = conversations[index];
+                  return _buildConversationTile(conversation, isDarkMode);
+                },
+              );
+            },
+          ),
+        ), // Close Expanded
+      ], // Close Column children
+    ); // Close Column
   }
 
   Widget _buildCallsList(bool isDarkMode) {
@@ -526,135 +567,106 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: _selectedCallIds.isEmpty ? null : _deleteSelectedCalls,
+                  onPressed: _selectedCallIds.isEmpty
+                      ? null
+                      : _deleteSelectedCalls,
                 ),
               ],
             ),
           )
         else
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const CallHistoryScreen(),
-                      ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('calls')
+                  .where('participants', arrayContains: currentUserId)
+                  .limit(50)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  debugPrint('Calls error: ${snapshot.error}');
+                  return _buildEmptyCallsState(isDarkMode);
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildEmptyCallsState(isDarkMode);
+                }
+
+                // Sort client-side by timestamp (descending)
+                final calls = snapshot.data!.docs.toList();
+                calls.sort((a, b) {
+                  final aData = a.data() as Map<String, dynamic>;
+                  final bData = b.data() as Map<String, dynamic>;
+                  final aTime = aData['timestamp'] as Timestamp?;
+                  final bTime = bData['timestamp'] as Timestamp?;
+                  if (aTime == null && bTime == null) return 0;
+                  if (aTime == null) return 1;
+                  if (bTime == null) return -1;
+                  return bTime.compareTo(aTime);
+                });
+
+                // Prefetch all user data for calls
+                final userIds = <String>[];
+                for (var doc in calls) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final callerId = data['callerId'] as String? ?? '';
+                  final receiverId = data['receiverId'] as String? ?? '';
+                  if (callerId != currentUserId && callerId.isNotEmpty) {
+                    userIds.add(callerId);
+                  }
+                  if (receiverId != currentUserId && receiverId.isNotEmpty) {
+                    userIds.add(receiverId);
+                  }
+                }
+
+                return FutureBuilder<void>(
+                  future: _prefetchUsers(userIds),
+                  builder: (context, prefetchSnapshot) {
+                    // Filter by search query using cached names
+                    final filteredCalls = _searchQuery.isEmpty
+                        ? calls
+                        : calls.where((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final callerId = data['callerId'] as String? ?? '';
+                            final receiverId =
+                                data['receiverId'] as String? ?? '';
+                            final otherUserId = callerId == currentUserId
+                                ? receiverId
+                                : callerId;
+                            final userData = _userCache[otherUserId];
+                            final name = (userData?['name'] ?? '')
+                                .toString()
+                                .toLowerCase();
+                            return name.contains(_searchQuery);
+                          }).toList();
+
+                    if (filteredCalls.isEmpty) {
+                      return _buildEmptyCallsState(isDarkMode);
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(top: 8),
+                      itemCount: filteredCalls.length,
+                      itemBuilder: (context, index) {
+                        final callDoc = filteredCalls[index];
+                        final callData = callDoc.data() as Map<String, dynamic>;
+                        return _buildCallTileWithDelete(
+                          callDoc.id,
+                          callData,
+                          isDarkMode,
+                          currentUserId,
+                        );
+                      },
                     );
                   },
-                  icon: Icon(
-                    Icons.history,
-                    size: 18,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                  label: Text(
-                    'View All',
-                    style: TextStyle(color: Theme.of(context).primaryColor),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: _enterCallSelectionMode,
-                  icon: Icon(
-                    Icons.checklist,
-                    size: 18,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                  label: Text(
-                    'Select',
-                    style: TextStyle(color: Theme.of(context).primaryColor),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('calls')
-                .where('participants', arrayContains: currentUserId)
-                .limit(50)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                debugPrint('Calls error: ${snapshot.error}');
-                return _buildEmptyCallsState(isDarkMode);
-              }
-
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return _buildEmptyCallsState(isDarkMode);
-              }
-
-              // Sort client-side by timestamp (descending)
-              final calls = snapshot.data!.docs.toList();
-              calls.sort((a, b) {
-                final aData = a.data() as Map<String, dynamic>;
-                final bData = b.data() as Map<String, dynamic>;
-                final aTime = aData['timestamp'] as Timestamp?;
-                final bTime = bData['timestamp'] as Timestamp?;
-                if (aTime == null && bTime == null) return 0;
-                if (aTime == null) return 1;
-                if (bTime == null) return -1;
-                return bTime.compareTo(aTime);
-              });
-
-              // Prefetch all user data for calls
-              final userIds = <String>[];
-              for (var doc in calls) {
-                final data = doc.data() as Map<String, dynamic>;
-                final callerId = data['callerId'] as String? ?? '';
-                final receiverId = data['receiverId'] as String? ?? '';
-                if (callerId != currentUserId && callerId.isNotEmpty) userIds.add(callerId);
-                if (receiverId != currentUserId && receiverId.isNotEmpty) userIds.add(receiverId);
-              }
-
-              return FutureBuilder<void>(
-                future: _prefetchUsers(userIds),
-                builder: (context, prefetchSnapshot) {
-                  // Filter by search query using cached names
-                  final filteredCalls = _searchQuery.isEmpty
-                      ? calls
-                      : calls.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final callerId = data['callerId'] as String? ?? '';
-                          final receiverId = data['receiverId'] as String? ?? '';
-                          final otherUserId = callerId == currentUserId ? receiverId : callerId;
-                          final userData = _userCache[otherUserId];
-                          final name = (userData?['name'] ?? '').toString().toLowerCase();
-                          return name.contains(_searchQuery);
-                        }).toList();
-
-                  if (filteredCalls.isEmpty) {
-                    return _buildEmptyCallsState(isDarkMode);
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(top: 8),
-                    itemCount: filteredCalls.length,
-                    itemBuilder: (context, index) {
-                      final callDoc = filteredCalls[index];
-                      final callData = callDoc.data() as Map<String, dynamic>;
-                      return _buildCallTileWithDelete(
-                        callDoc.id,
-                        callData,
-                        isDarkMode,
-                        currentUserId,
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
       ],
     );
   }
@@ -707,7 +719,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Future<void> _deleteSelectedCalls() async {
-    final confirmed = await _showDeleteCallConfirmation(_selectedCallIds.length);
+    final confirmed = await _showDeleteCallConfirmation(
+      _selectedCallIds.length,
+    );
     if (!confirmed) return;
 
     final batch = _firestore.batch();
@@ -761,6 +775,175 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
+  // Conversation selection methods (for Chats and Groups tabs)
+  void _enterConversationSelectionMode(String conversationId) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isConversationSelectionMode = true;
+      _selectedConversationIds.clear();
+      _selectedConversationIds.add(conversationId);
+    });
+  }
+
+  void _exitConversationSelectionMode() {
+    setState(() {
+      _isConversationSelectionMode = false;
+      _selectedConversationIds.clear();
+    });
+  }
+
+  void _toggleConversationSelection(String conversationId) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_selectedConversationIds.contains(conversationId)) {
+        _selectedConversationIds.remove(conversationId);
+        if (_selectedConversationIds.isEmpty) {
+          _isConversationSelectionMode = false;
+        }
+      } else {
+        _selectedConversationIds.add(conversationId);
+      }
+    });
+  }
+
+  Future<void> _selectAllConversations(bool isGroup) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final snapshot = await _firestore
+        .collection('conversations')
+        .where('participants', arrayContains: currentUserId)
+        .where('isGroup', isEqualTo: isGroup)
+        .limit(50)
+        .get();
+
+    setState(() {
+      _selectedConversationIds.clear();
+      for (final doc in snapshot.docs) {
+        _selectedConversationIds.add(doc.id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedConversations() async {
+    final confirmed = await _showDeleteConversationConfirmation(
+      _selectedConversationIds.length,
+    );
+    if (!confirmed) return;
+
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final conversationIds = _selectedConversationIds.toList();
+
+      for (var conversationId in conversationIds) {
+        // 1. Delete all messages in subcollection first
+        final messagesSnapshot = await _firestore
+            .collection('conversations')
+            .doc(conversationId)
+            .collection('messages')
+            .get();
+
+        // Batch delete messages (Firestore limit: 500 operations per batch)
+        final messageBatches = <WriteBatch>[];
+        var currentBatch = _firestore.batch();
+        var operationCount = 0;
+
+        for (var messageDoc in messagesSnapshot.docs) {
+          currentBatch.delete(messageDoc.reference);
+          operationCount++;
+
+          if (operationCount == 500) {
+            messageBatches.add(currentBatch);
+            currentBatch = _firestore.batch();
+            operationCount = 0;
+          }
+        }
+
+        if (operationCount > 0) {
+          messageBatches.add(currentBatch);
+        }
+
+        // Commit all message deletion batches
+        for (var batch in messageBatches) {
+          await batch.commit();
+        }
+
+        // 2. Delete conversation document
+        await _firestore
+            .collection('conversations')
+            .doc(conversationId)
+            .delete();
+      }
+
+      // Hide loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${conversationIds.length} conversation${conversationIds.length > 1 ? 's' : ''} deleted',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      _exitConversationSelectionMode();
+    } catch (e) {
+      // Hide loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<bool> _showDeleteConversationConfirmation(int count) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Conversation'),
+            content: Text(
+              count == 1
+                  ? 'Are you sure you want to delete this conversation? All messages will be permanently deleted.'
+                  : 'Are you sure you want to delete $count conversations? All messages will be permanently deleted.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<bool> _showDeleteCallConfirmation(int count) async {
     return await showDialog<bool>(
           context: context,
@@ -778,7 +961,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
             ],
           ),
@@ -847,7 +1033,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   ),
                 ),
               Expanded(
-                child: _buildCallTileOptimized(callData, isDarkMode, currentUserId),
+                child: _buildCallTileOptimized(
+                  callData,
+                  isDarkMode,
+                  currentUserId,
+                ),
               ),
             ],
           ),
@@ -903,22 +1093,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? Colors.white.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.7),
+        color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDarkMode
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.grey.withValues(alpha: 0.15),
+          color: Colors.white.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: _buildUserAvatar(
           photoUrl: fixedPhotoUrl,
           initial: initial,
@@ -956,7 +1139,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
           onPressed: () => _initiateCall(otherUserId, callType == 'video'),
         ),
-        onTap: () => _showCallDetails(callData, formatDisplayName(displayName), isDarkMode),
+        onTap: () => _showCallDetails(
+          callData,
+          formatDisplayName(displayName),
+          isDarkMode,
+        ),
       ),
     );
   }
@@ -1153,7 +1340,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       final cachedUser = _userCache[otherUserId]!;
       if (displayName == 'Unknown User') {
         // Get display name - fallback to phone number for phone login users
-        String cachedName = cachedUser['name'] ?? cachedUser['displayName'] ?? '';
+        String cachedName =
+            cachedUser['name'] ?? cachedUser['displayName'] ?? '';
         if (cachedName.isEmpty || cachedName == 'User') {
           cachedName = cachedUser['phone'] ?? 'Unknown User';
         }
@@ -1194,18 +1382,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }) {
     final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(displayPhoto);
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final isSelected = _selectedConversationIds.contains(conversation.id);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? Colors.white.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.7),
+        color: isSelected
+            ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
+            : Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDarkMode
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.grey.withValues(alpha: 0.15),
+          color: Colors.white.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
@@ -1213,18 +1400,45 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _openConversation(conversation, otherUserId),
+          onTap: () {
+            if (_isConversationSelectionMode) {
+              _toggleConversationSelection(conversation.id);
+            } else {
+              _openConversation(conversation, otherUserId);
+            }
+          },
+          onLongPress: () {
+            if (!_isConversationSelectionMode) {
+              _enterConversationSelectionMode(conversation.id);
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
+                // Checkbox for selection mode
+                if (_isConversationSelectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Icon(
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      color: isSelected
+                          ? Theme.of(context).primaryColor
+                          : Colors.white.withValues(alpha: 0.5),
+                      size: 24,
+                    ),
+                  ),
                 // Avatar
                 Stack(
                   children: [
                     conversation.isGroup
                         ? CircleAvatar(
                             radius: 26,
-                            backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.15),
                             child: Icon(
                               Icons.group,
                               color: Theme.of(context).primaryColor,
@@ -1255,12 +1469,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                           Expanded(
                             child: Text(
                               formatDisplayName(displayName),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: unreadCount > 0
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: isDarkMode ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1268,13 +1480,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                           if (conversation.lastMessageTime != null)
                             Text(
                               timeago.format(conversation.lastMessageTime!),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 12,
-                                color: unreadCount > 0
-                                    ? Theme.of(context).primaryColor
-                                    : (isDarkMode
-                                        ? Colors.grey[600]
-                                        : Colors.grey[500]),
+                                color: Colors.white,
                               ),
                             ),
                         ],
@@ -1283,32 +1491,27 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       Row(
                         children: [
                           // Message preview with voice message indicator
-                          if (conversation.lastMessage?.contains('Voice message') ==
+                          if (conversation.lastMessage?.contains(
+                                'Voice message',
+                              ) ==
                               true)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
                               child: Icon(
                                 Icons.mic,
                                 size: 16,
-                                color: isDarkMode
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
+                                color: Colors.white,
                               ),
                             ),
                           Expanded(
                             child: Text(
                               isTyping
                                   ? 'Typing...'
-                                  : conversation.lastMessage ?? 'Start a conversation',
-                              style: TextStyle(
+                                  : conversation.lastMessage ??
+                                        'Start a conversation',
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: isTyping
-                                    ? Theme.of(context).primaryColor
-                                    : (isDarkMode
-                                        ? Colors.grey[500]
-                                        : Colors.grey[600]),
-                                fontStyle:
-                                    isTyping ? FontStyle.italic : FontStyle.normal,
+                                color: Colors.white,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1325,7 +1528,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                unreadCount > 99
+                                    ? '99+'
+                                    : unreadCount.toString(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -1383,7 +1588,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       }
       colorIndex = hash.abs() % avatarColors.length;
     } else {
-      colorIndex = initial.isNotEmpty ? initial.codeUnitAt(0) % avatarColors.length : 0;
+      colorIndex = initial.isNotEmpty
+          ? initial.codeUnitAt(0) % avatarColors.length
+          : 0;
     }
     final avatarColor = avatarColors[colorIndex];
 
@@ -1391,10 +1598,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return Container(
         width: radius * 2,
         height: radius * 2,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: avatarColor,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: avatarColor),
         child: Center(
           child: Text(
             initial,
@@ -1489,8 +1693,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               if (isOnline) {
                 final lastSeen = userData['lastSeen'];
                 if (lastSeen != null && lastSeen is Timestamp) {
-                  final difference =
-                      DateTime.now().difference(lastSeen.toDate());
+                  final difference = DateTime.now().difference(
+                    lastSeen.toDate(),
+                  );
                   if (difference.inMinutes > 5) {
                     isOnline = false;
                   }
@@ -1520,7 +1725,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  void _openConversation(ConversationModel conversation, String otherUserId) async {
+  void _openConversation(
+    ConversationModel conversation,
+    String otherUserId,
+  ) async {
     HapticFeedback.lightImpact();
 
     if (conversation.isGroup) {
@@ -1556,8 +1764,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
     // Fallback: Fetch from Firestore if not in cache
     try {
-      final otherUserDoc =
-          await _firestore.collection('users').doc(otherUserId).get();
+      final otherUserDoc = await _firestore
+          .collection('users')
+          .doc(otherUserId)
+          .get();
 
       if (otherUserDoc.exists) {
         final userData = otherUserDoc.data()!;
@@ -1578,7 +1788,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         );
       } else {
         // User no longer exists - delete orphaned conversation
-        await _firestore.collection('conversations').doc(conversation.id).delete();
+        await _firestore
+            .collection('conversations')
+            .doc(conversation.id)
+            .delete();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1615,7 +1828,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            isGroup ? 'Create a group to get started' : 'Start a new conversation',
+            isGroup
+                ? 'Create a group to get started'
+                : 'Start a new conversation',
             style: TextStyle(
               fontSize: 14,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
@@ -1631,11 +1846,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.error_outline,
-            size: 64,
-            color: Colors.orange,
-          ),
+          const Icon(Icons.error_outline, size: 64, color: Colors.orange),
           const SizedBox(height: 16),
           Text(
             'Unable to load',
@@ -1669,8 +1880,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   void _openGroupChat(String groupId) async {
     try {
-      final groupDoc =
-          await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (groupDoc.exists) {
         final data = groupDoc.data()!;
         if (data['isGroup'] == true) {
@@ -1707,37 +1920,50 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         builder: (context, scrollController) {
           final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-          return Container(
-            decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'New Message',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black,
+          return AppBackground(
+            showParticles: true,
+            overlayOpacity: 0.6,
+            child: Container(
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Header with close button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'New Message',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                Expanded(
-                  child: _buildContactsList(currentUserId, scrollController, isDarkMode),
-                ),
-              ],
+                  Expanded(
+                    child: _buildContactsList(
+                      currentUserId,
+                      scrollController,
+                      isDarkMode,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -1782,7 +2008,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
         return FutureBuilder<List<DocumentSnapshot>>(
           future: Future.wait(
-            otherUserIds.map((id) => _firestore.collection('users').doc(id).get()),
+            otherUserIds.map(
+              (id) => _firestore.collection('users').doc(id).get(),
+            ),
           ),
           builder: (context, usersSnapshot) {
             if (usersSnapshot.connectionState == ConnectionState.waiting) {
@@ -1793,8 +2021,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               return const Center(child: Text('Error loading contacts'));
             }
 
-            final validUsers =
-                usersSnapshot.data!.where((doc) => doc.exists).toList();
+            final validUsers = usersSnapshot.data!
+                .where((doc) => doc.exists)
+                .toList();
 
             if (validUsers.isEmpty) {
               return _buildEmptyContactsState(isDarkMode);
@@ -1839,58 +2068,94 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       }
     }
 
-    return ListTile(
-      leading: Stack(
-        children: [
-          _buildUserAvatar(
-            photoUrl: fixedPhotoUrl,
-            initial: initial,
-            radius: 20,
-            context: context,
-            uniqueId: userId,
-          ),
-          if (isOnline)
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isDarkMode ? Colors.black : Colors.white,
-                    width: 2,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            Navigator.pop(context);
+            final userProfile = UserProfile.fromMap(userData, userId);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    EnhancedChatScreen(otherUser: userProfile),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                // Avatar with online indicator
+                Stack(
+                  children: [
+                    _buildUserAvatar(
+                      photoUrl: fixedPhotoUrl,
+                      initial: initial,
+                      radius: 26,
+                      context: context,
+                      uniqueId: userId,
+                    ),
+                    if (isOnline)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.black, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formatDisplayName(name),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isOnline ? 'Active now' : 'Tap to message',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isOnline
+                              ? Colors.green
+                              : Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ),
-        ],
-      ),
-      title: Text(
-        formatDisplayName(name),
-        style: TextStyle(
-          color: isDarkMode ? Colors.white : Colors.black,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      subtitle: Text(
-        isOnline ? 'Active now' : 'Tap to message',
-        style: TextStyle(
-          color: isOnline ? Colors.green : (isDarkMode ? Colors.grey[600] : Colors.grey),
-        ),
-      ),
-      onTap: () async {
-        Navigator.pop(context);
-        final userProfile = UserProfile.fromMap(userData, userId);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EnhancedChatScreen(otherUser: userProfile),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

@@ -22,14 +22,24 @@ import '../../services/location services/location_service.dart';
 import '../chat/my_connections_screen.dart';
 
 class LiveConnectTabScreen extends ConsumerStatefulWidget {
-  const LiveConnectTabScreen({super.key});
+  final bool activateNearMeFilter; // Flag to activate "Near Me" filter on init
+  final bool
+  activateNetworkingFilter; // Flag to activate professional/networking filters on init
+
+  const LiveConnectTabScreen({
+    super.key,
+    this.activateNearMeFilter = false,
+    this.activateNetworkingFilter = false,
+  });
 
   @override
   ConsumerState<LiveConnectTabScreen> createState() =>
       _LiveConnectTabScreenState();
 }
 
-class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
+class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ConnectionService _connectionService = ConnectionService();
@@ -197,9 +207,66 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
     'Fashion',
   ];
 
+  // Tab categories for TabBar
+  final List<String> _tabCategories = [
+    'All',
+    'Near Me',
+    'Dating',
+    'Friendship',
+    'Business',
+    'Sports',
+  ];
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize TabController
+    _tabController = TabController(length: _tabCategories.length, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        HapticFeedback.lightImpact();
+        final selectedCategory = _tabCategories[_tabController.index];
+        setState(() {
+          if (selectedCategory == 'All') {
+            _filterByInterests = false;
+            _selectedInterests.clear();
+            _locationFilter = 'Worldwide';
+          } else if (selectedCategory == 'Near Me') {
+            _filterByInterests = false;
+            _selectedInterests.clear();
+            _locationFilter = 'Near me';
+          } else {
+            _filterByInterests = true;
+            _locationFilter = 'Worldwide';
+            _selectedInterests.removeWhere(
+              (item) =>
+                  ['Dating', 'Friendship', 'Business', 'Sports'].contains(item),
+            );
+            _selectedInterests.add(selectedCategory);
+          }
+        });
+        _loadNearbyPeople();
+      }
+    });
+
+    // Activate "Near Me" filter if requested
+    if (widget.activateNearMeFilter) {
+      _locationFilter = 'Near me';
+    }
+
+    // Activate networking/professional filters if requested
+    if (widget.activateNetworkingFilter) {
+      _filterByConnectionTypes = true;
+      _selectedConnectionTypes.addAll([
+        'Networking',
+        'Mentorship',
+        'Business Partner',
+        'Career Advice',
+        'Collaboration',
+      ]);
+    }
+
     // Initialize expanded state for all groups (all collapsed by default)
     for (var groupName in _connectionTypeGroups.keys) {
       _expandedConnectionGroups[groupName] = false;
@@ -209,6 +276,12 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
     }
     _loadMyConnections(); // Load connections for caching
     _loadUserProfile();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   /// Load user's connections list once for caching
@@ -304,7 +377,10 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
     }
   }
 
-  Future<void> _loadNearbyPeople({bool loadMore = false, bool forceRefreshLocation = false}) async {
+  Future<void> _loadNearbyPeople({
+    bool loadMore = false,
+    bool forceRefreshLocation = false,
+  }) async {
     if (!mounted) return;
 
     // If interest filter is on but no interests selected, return early
@@ -332,7 +408,8 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
 
       // Check if we need to refresh location (cached for 90 seconds)
       final now = DateTime.now();
-      final shouldRefreshLocation = forceRefreshLocation ||
+      final shouldRefreshLocation =
+          forceRefreshLocation ||
           _currentUserLat == null ||
           _currentUserLon == null ||
           _lastLocationRefresh == null ||
@@ -344,7 +421,9 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
             _isRefreshingLocation = true;
           });
         }
-        debugPrint('LiveConnect: Refreshing location (cache expired or forced)...');
+        debugPrint(
+          'LiveConnect: Refreshing location (cache expired or forced)...',
+        );
 
         final position = await _locationService.getCurrentLocation(
           silent: true,
@@ -2182,166 +2261,149 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: AppBar(
-              elevation: 0,
-              backgroundColor: isGlass
-                  ? Colors.white.withValues(alpha: 0.7)
-                  : (isDarkMode
-                        ? Colors.black.withValues(alpha: 0.9)
-                        : Colors.white.withValues(alpha: 0.95)),
-              automaticallyImplyLeading: false,
-              title: Text(
-                'Live Connect',
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              actions: [
-                // Filter Icon Button
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: (_filterByExactLocation || _filterByInterests)
-                        ? Theme.of(context).primaryColor
-                        : (isGlass
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : (isDarkMode
-                                    ? Colors.grey[900]
-                                    : Colors.grey[100])),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isGlass
-                        ? Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            width: 1,
-                          )
-                        : null,
-                  ),
-                  child: IconButton(
-                    onPressed: _showFilterDialog,
-                    icon: Icon(
-                      Icons.filter_list,
-                      color: (_filterByExactLocation || _filterByInterests)
-                          ? Colors.white
-                          : (isDarkMode ? Colors.grey[400] : Colors.grey[700]),
-                    ),
-                    tooltip: 'Filter',
-                  ),
-                ),
-                // Connection Requests Badge Button
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: isGlass
-                        ? Colors.white.withValues(alpha: 0.7)
-                        : (isDarkMode ? Colors.grey[900] : Colors.grey[100]),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isGlass
-                        ? Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            width: 1,
-                          )
-                        : null,
-                  ),
-                  child: StreamBuilder<int>(
-                    stream: _connectionService.getPendingRequestsCountStream(),
-                    builder: (context, snapshot) {
-                      final count = snapshot.data ?? 0;
+      appBar: AppBar(
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        title: const Text(
+          'Networking',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(color: Colors.white, width: 0.5),
+            ),
+          ),
+        ),
+        actions: [
+          // Live Connect Icon with Background Container
+          StreamBuilder<int>(
+            stream: _connectionService.getPendingRequestsCountStream(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
 
-                      return Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const MyConnectionsScreen(),
-                                ),
-                              );
-                            },
-                            icon: Icon(
-                              Icons.people_outline,
-                              color: isDarkMode
-                                  ? Colors.grey[400]
-                                  : Colors.grey[700],
-                            ),
-                            tooltip: 'Connection Requests',
-                          ),
-                          if (count > 0)
-                            Positioned(
-                              right: 4,
-                              top: 4,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade600,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isGlass
-                                        ? Colors.white
-                                        : (isDarkMode
-                                              ? Colors.black
-                                              : Colors.white),
-                                    width: 2,
-                                  ),
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 20,
-                                  minHeight: 20,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    count > 9 ? '9+' : '$count',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                // Profile Avatar Button
-                GestureDetector(
-                  onTap: _showMyProfile,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
                     decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: Theme.of(context).primaryColor,
-                        width: 2,
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
                       ),
                     ),
-                    child: UserAvatar(
-                      profileImageUrl:
-                          _userProfile?['profileImageUrl'] ??
-                          _userProfile?['photoUrl'],
-                      radius: 18,
-                      fallbackText: _userProfile?['name'] ?? 'User',
+                    child: IconButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MyConnectionsScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.people_outline,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      tooltip: 'Connection Requests',
                     ),
                   ),
+                  if (count > 0)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade600,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 20,
+                          minHeight: 20,
+                        ),
+                        child: Center(
+                          child: Text(
+                            count > 9 ? '9+' : '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          // Profile Avatar Button (removed - matches Messages screen)
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
                 ),
-              ],
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorColor: Colors.white,
+              indicatorWeight: 2,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.normal,
+              ),
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              tabs: _tabCategories.map((category) {
+                return Tab(text: category);
+              }).toList(),
             ),
           ),
         ),
       ),
       body: AppBackground(
         showParticles: true,
-        overlayOpacity: 0.4,
+        overlayOpacity: 0.6,
         child: Stack(
           children: [
             // Floating glass circles for depth (kept for visual effect)
@@ -2386,431 +2448,113 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  // Search bar - compact size
+                  // Search bar with filter button - glass effect like Messages screen
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
+                      horizontal: 20,
+                      vertical: 12,
                     ),
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isGlass
-                            ? Colors.white.withValues(alpha: 0.7)
-                            : (isDarkMode
-                                  ? const Color(0xFF1C1C1E)
-                                  : const Color(0xFFF2F2F7)),
-                        borderRadius: BorderRadius.circular(10),
-                        border: isGlass
-                            ? Border.all(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                width: 1,
-                              )
-                            : null,
-                      ),
-                      child: TextField(
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value;
-                            _applySearchFilter();
-                          });
-                        },
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                          fontSize: 15,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search by name, interests, or city...',
-                          hintStyle: TextStyle(
-                            color: isDarkMode
-                                ? Colors.grey[600]
-                                : Colors.grey[500],
-                            fontSize: 15,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: isDarkMode
-                                ? Colors.grey[500]
-                                : Colors.grey[500],
-                            size: 20,
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 40,
-                          ),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.clear,
-                                    color: isDarkMode
-                                        ? Colors.grey[500]
-                                        : Colors.grey[500],
-                                    size: 18,
+                    child: Row(
+                      children: [
+                        // Search field
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    width: 1,
                                   ),
-                                  onPressed: () {
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: TextField(
+                                  onChanged: (value) {
                                     setState(() {
-                                      _searchQuery = '';
+                                      _searchQuery = value;
                                       _applySearchFilter();
                                     });
                                   },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 0,
-                            vertical: 10,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Search',
+                                    hintStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.search,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                    suffixIcon: _searchQuery.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(
+                                              Icons.clear,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _searchQuery = '';
+                                                _applySearchFilter();
+                                              });
+                                            },
+                                          )
+                                        : null,
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  // Quick Filters
-                  Container(
-                    height: 50,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        // Near Me quick filter
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.location_on, size: 14),
-                                SizedBox(width: 3),
-                                Text('Near Me', style: TextStyle(fontSize: 12)),
-                              ],
+                        const SizedBox(width: 12),
+                        // Filter button with circular container
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1,
                             ),
-                            selected: _locationFilter == 'Near me',
-                            onSelected: (selected) async {
-                              if (selected) {
-                                final hasPermission =
-                                    await _checkLocationPermission();
-                                if (!hasPermission) return;
-                              }
-                              setState(() {
-                                _locationFilter = selected
-                                    ? 'Near me'
-                                    : 'Worldwide';
-                              });
-                              _loadNearbyPeople();
-                            },
-                            selectedColor: const Color(0xFF00D67D),
-                            checkmarkColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color: _locationFilter == 'Near me'
-                                  ? Colors.white
-                                  : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              fontWeight: _locationFilter == 'Near me'
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
                           ),
-                        ),
-                        // Dating filter
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: const Text(
-                              'Dating',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            selected:
-                                _filterByInterests &&
-                                _selectedInterests.contains('Dating'),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _filterByInterests = true;
-                                  // Clear other category filters (mutually exclusive)
-                                  _selectedInterests.removeWhere(
-                                    (item) => [
-                                      'Dating',
-                                      'Friendship',
-                                      'Business',
-                                      'Sports',
-                                    ].contains(item),
-                                  );
-                                  _selectedInterests.add('Dating');
-                                } else {
-                                  _selectedInterests.remove('Dating');
-                                  if (_selectedInterests.isEmpty) {
-                                    _filterByInterests = false;
-                                  }
-                                }
-                              });
-                              _loadNearbyPeople();
-                            },
-                            selectedColor: const Color(0xFFFF6B9D),
-                            checkmarkColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Dating')
-                                  ? Colors.white
-                                  : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              fontWeight:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Dating')
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
-                          ),
-                        ),
-                        // Friendship filter
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: const Text(
-                              'Friendship',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            selected:
-                                _filterByInterests &&
-                                _selectedInterests.contains('Friendship'),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _filterByInterests = true;
-                                  // Clear other category filters (mutually exclusive)
-                                  _selectedInterests.removeWhere(
-                                    (item) => [
-                                      'Dating',
-                                      'Friendship',
-                                      'Business',
-                                      'Sports',
-                                    ].contains(item),
-                                  );
-                                  _selectedInterests.add('Friendship');
-                                } else {
-                                  _selectedInterests.remove('Friendship');
-                                  if (_selectedInterests.isEmpty) {
-                                    _filterByInterests = false;
-                                  }
-                                }
-                              });
-                              _loadNearbyPeople();
-                            },
-                            selectedColor: const Color(0xFF4A90E2),
-                            checkmarkColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Friendship')
-                                  ? Colors.white
-                                  : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              fontWeight:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Friendship')
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
-                          ),
-                        ),
-                        // Business filter
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: const Text(
-                              'Business',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            selected:
-                                _filterByInterests &&
-                                _selectedInterests.contains('Business'),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _filterByInterests = true;
-                                  // Clear other category filters (mutually exclusive)
-                                  _selectedInterests.removeWhere(
-                                    (item) => [
-                                      'Dating',
-                                      'Friendship',
-                                      'Business',
-                                      'Sports',
-                                    ].contains(item),
-                                  );
-                                  _selectedInterests.add('Business');
-                                } else {
-                                  _selectedInterests.remove('Business');
-                                  if (_selectedInterests.isEmpty) {
-                                    _filterByInterests = false;
-                                  }
-                                }
-                              });
-                              _loadNearbyPeople();
-                            },
-                            selectedColor: const Color(0xFF9B59B6),
-                            checkmarkColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Business')
-                                  ? Colors.white
-                                  : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              fontWeight:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Business')
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
-                          ),
-                        ),
-                        // Sports filter
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: FilterChip(
-                            label: const Text(
-                              'Sports',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            selected:
-                                _filterByInterests &&
-                                _selectedInterests.contains('Sports'),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _filterByInterests = true;
-                                  // Clear other category filters (mutually exclusive)
-                                  _selectedInterests.removeWhere(
-                                    (item) => [
-                                      'Dating',
-                                      'Friendship',
-                                      'Business',
-                                      'Sports',
-                                    ].contains(item),
-                                  );
-                                  _selectedInterests.add('Sports');
-                                } else {
-                                  _selectedInterests.remove('Sports');
-                                  if (_selectedInterests.isEmpty) {
-                                    _filterByInterests = false;
-                                  }
-                                }
-                              });
-                              _loadNearbyPeople();
-                            },
-                            selectedColor: const Color(0xFFFFB800),
-                            checkmarkColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Sports')
-                                  ? Colors.white
-                                  : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              fontWeight:
-                                  _filterByInterests &&
-                                      _selectedInterests.contains('Sports')
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
-                          ),
-                        ),
-                        // All Filters button
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ActionChip(
-                            label: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.tune, size: 14),
-                                SizedBox(width: 3),
-                                Text('Filters', style: TextStyle(fontSize: 12)),
-                              ],
-                            ),
+                          child: IconButton(
                             onPressed: _showFilterDialog,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                            icon: const Icon(
+                              Icons.tune,
+                              color: Colors.white,
+                              size: 22,
                             ),
-                            backgroundColor: isDarkMode
-                                ? const Color(0xFF2A2A2A)
-                                : Colors.grey[200],
-                            labelStyle: TextStyle(
-                              fontSize: 12,
-                              color: isDarkMode
-                                  ? Colors.grey[400]
-                                  : Colors.grey[700],
-                            ),
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  // Main content
-                  Expanded(child: _buildContent(isDarkMode, isGlass)),
+                  // Main content with TabBarView for swipe
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: _tabCategories.map((category) {
+                        return _buildContent(isDarkMode, isGlass);
+                      }).toList(),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2960,17 +2704,25 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
                         ),
                         const SizedBox(width: 12),
                         OutlinedButton.icon(
-                          onPressed: _isRefreshingLocation ? null : () async {
-                            await _loadNearbyPeople(forceRefreshLocation: true);
-                          },
+                          onPressed: _isRefreshingLocation
+                              ? null
+                              : () async {
+                                  await _loadNearbyPeople(
+                                    forceRefreshLocation: true,
+                                  );
+                                },
                           icon: _isRefreshingLocation
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.refresh),
-                          label: Text(_isRefreshingLocation ? 'Refreshing...' : 'Refresh'),
+                          label: Text(
+                            _isRefreshingLocation ? 'Refreshing...' : 'Refresh',
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -3072,17 +2824,25 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: _isRefreshingLocation ? null : () async {
-                            await _loadNearbyPeople(forceRefreshLocation: true);
-                          },
+                          onPressed: _isRefreshingLocation
+                              ? null
+                              : () async {
+                                  await _loadNearbyPeople(
+                                    forceRefreshLocation: true,
+                                  );
+                                },
                           icon: _isRefreshingLocation
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.refresh),
-                          label: Text(_isRefreshingLocation ? 'Refreshing...' : 'Refresh'),
+                          label: Text(
+                            _isRefreshingLocation ? 'Refreshing...' : 'Refresh',
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -3203,56 +2963,82 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
           return GestureDetector(
             onTap: () => _showProfileDetail(profileWithDistance),
             child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: isGlass
-                    ? Colors.white.withValues(alpha: 0.7)
-                    : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.white),
+                color: Colors.black.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(16),
-                border: isGlass
-                    ? Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 1,
-                      )
-                    : null,
-                boxShadow: isGlass
-                    ? []
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  width: 1,
+                ),
               ),
-              child: Row(
-                children: [
-                  // Profile Image with gradient background
-                  Stack(
-                    children: [
-                      Builder(
-                        builder: (context) {
-                          final fixedPhotoUrl =
-                              PhotoUrlHelper.fixGooglePhotoUrl(
-                                extendedProfile.photoUrl,
-                              );
-                          final userInitial = userName.isNotEmpty
-                              ? userName[0].toUpperCase()
-                              : '?';
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    // Profile Image with gradient background
+                    Stack(
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            final fixedPhotoUrl =
+                                PhotoUrlHelper.fixGooglePhotoUrl(
+                                  extendedProfile.photoUrl,
+                                );
+                            final userInitial = userName.isNotEmpty
+                                ? userName[0].toUpperCase()
+                                : '?';
 
-                          // Fallback widget showing user's initial
-                          Widget buildInitialAvatar() {
+                            // Fallback widget showing user's initial
+                            Widget buildInitialAvatar() {
+                              return Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: gradientColors,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: gradientColors[0].withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    userInitial,
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // If no valid photo URL, show initial
+                            if (fixedPhotoUrl == null ||
+                                fixedPhotoUrl.isEmpty) {
+                              return buildInitialAvatar();
+                            }
+
+                            // Show photo with fallback to initial on error
                             return Container(
                               width: 64,
                               height: 64,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: gradientColors,
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: gradientColors[0].withValues(
@@ -3263,71 +3049,13 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
                                   ),
                                 ],
                               ),
-                              child: Center(
-                                child: Text(
-                                  userInitial,
-                                  style: const TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          // If no valid photo URL, show initial
-                          if (fixedPhotoUrl == null || fixedPhotoUrl.isEmpty) {
-                            return buildInitialAvatar();
-                          }
-
-                          // Show photo with fallback to initial on error
-                          return Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: gradientColors[0].withValues(
-                                    alpha: 0.3,
-                                  ),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: CachedNetworkImage(
-                                imageUrl: fixedPhotoUrl,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: gradientColors,
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      userInitial,
-                                      style: const TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) {
-                                  // Mark as rate-limited if 429 error
-                                  if (error.toString().contains('429')) {
-                                    PhotoUrlHelper.markAsRateLimited(url);
-                                  }
-                                  return Container(
+                              child: ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: fixedPhotoUrl,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: gradientColors,
@@ -3345,120 +3073,185 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      // Real-time online status indicator
-                      StreamBuilder<DocumentSnapshot>(
-                        stream: _firestore.collection('users').doc(userId).snapshots(),
-                        builder: (context, snapshot) {
-                          bool isOnline = false;
-                          if (snapshot.hasData && snapshot.data!.exists) {
-                            final data = snapshot.data!.data() as Map<String, dynamic>?;
-                            if (data != null) {
-                              final onlineFlag = data['isOnline'] as bool? ?? false;
-                              final lastSeenTimestamp = data['lastSeen'];
-                              DateTime? lastSeen;
-                              if (lastSeenTimestamp != null) {
-                                lastSeen = (lastSeenTimestamp as Timestamp).toDate();
-                              }
-                              isOnline = _isUserTrulyOnline(onlineFlag, lastSeen);
-                            }
-                          }
-
-                          if (!isOnline) return const SizedBox.shrink();
-
-                          return Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: 14,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00D67D),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isGlass
-                                      ? Colors.white
-                                      : (isDarkMode
-                                            ? Colors.black
-                                            : Colors.white),
-                                  width: 2,
+                                  ),
+                                  errorWidget: (context, url, error) {
+                                    // Mark as rate-limited if 429 error
+                                    if (error.toString().contains('429')) {
+                                      PhotoUrlHelper.markAsRateLimited(url);
+                                    }
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: gradientColors,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          userInitial,
+                                          style: const TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  // User Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                userName,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDarkMode
-                                      ? Colors.white
-                                      : Colors.black,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (extendedProfile.verified) ...[
-                              const SizedBox(width: 6),
-                              Icon(
-                                Icons.verified,
-                                size: 18,
-                                color: gradientColors[0],
-                              ),
-                            ],
-                          ],
+                            );
+                          },
                         ),
-                        const SizedBox(height: 6),
-                        // City, Distance, and Gender - always show this row
-                        Row(
-                          children: [
-                            if (extendedProfile.city != null &&
-                                extendedProfile.city!.isNotEmpty) ...[
-                              Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: isDarkMode
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
+                        // Real-time online status indicator
+                        StreamBuilder<DocumentSnapshot>(
+                          stream: _firestore
+                              .collection('users')
+                              .doc(userId)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            bool isOnline = false;
+                            if (snapshot.hasData && snapshot.data!.exists) {
+                              final data =
+                                  snapshot.data!.data()
+                                      as Map<String, dynamic>?;
+                              if (data != null) {
+                                final onlineFlag =
+                                    data['isOnline'] as bool? ?? false;
+                                final lastSeenTimestamp = data['lastSeen'];
+                                DateTime? lastSeen;
+                                if (lastSeenTimestamp != null) {
+                                  lastSeen = (lastSeenTimestamp as Timestamp)
+                                      .toDate();
+                                }
+                                isOnline = _isUserTrulyOnline(
+                                  onlineFlag,
+                                  lastSeen,
+                                );
+                              }
+                            }
+
+                            if (!isOnline) return const SizedBox.shrink();
+
+                            return Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00D67D),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isGlass
+                                        ? Colors.white
+                                        : (isDarkMode
+                                              ? Colors.black
+                                              : Colors.white),
+                                    width: 2,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 4),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+                    // User Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
                               Flexible(
                                 child: Text(
-                                  extendedProfile.city!,
+                                  userName,
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
                                     color: isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
+                                        ? Colors.white
+                                        : Colors.black,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              if (extendedProfile.verified) ...[
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.verified,
+                                  size: 18,
+                                  color: gradientColors[0],
+                                ),
+                              ],
                             ],
-                            if (distanceText != null) ...[
+                          ),
+                          const SizedBox(height: 6),
+                          // City, Distance, and Gender - always show this row
+                          Row(
+                            children: [
                               if (extendedProfile.city != null &&
-                                  extendedProfile.city!.isNotEmpty)
+                                  extendedProfile.city!.isNotEmpty) ...[
+                                Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: isDarkMode
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    extendedProfile.city!,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDarkMode
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              if (distanceText != null) ...[
+                                if (extendedProfile.city != null &&
+                                    extendedProfile.city!.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Text(
+                                      '•',
+                                      style: TextStyle(
+                                        color: isDarkMode
+                                            ? Colors.grey[600]
+                                            : Colors.grey[400],
+                                      ),
+                                    ),
+                                  ),
+                                Icon(
+                                  Icons.navigation,
+                                  size: 13,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  distanceText,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                              ],
+                              // Gender on same line
+                              if (extendedProfile.gender != null &&
+                                  extendedProfile.gender!.isNotEmpty) ...[
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -3472,94 +3265,64 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen> {
                                     ),
                                   ),
                                 ),
-                              Icon(
-                                Icons.navigation,
-                                size: 13,
-                                color: Theme.of(context).primaryColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                distanceText,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                            ],
-                            // Gender on same line
-                            if (extendedProfile.gender != null &&
-                                extendedProfile.gender!.isNotEmpty) ...[
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Text(
-                                  '•',
-                                  style: TextStyle(
-                                    color: isDarkMode
-                                        ? Colors.grey[600]
-                                        : Colors.grey[400],
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                extendedProfile.gender == 'Male'
-                                    ? Icons.male
-                                    : extendedProfile.gender == 'Female'
-                                    ? Icons.female
-                                    : Icons.person_outline,
-                                size: 13,
-                                color: isDarkMode
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                extendedProfile.gender!,
-                                style: TextStyle(
-                                  fontSize: 13,
+                                Icon(
+                                  extendedProfile.gender == 'Male'
+                                      ? Icons.male
+                                      : extendedProfile.gender == 'Female'
+                                      ? Icons.female
+                                      : Icons.person_outline,
+                                  size: 13,
                                   color: isDarkMode
-                                      ? Colors.grey[400]
+                                      ? Colors.grey[500]
                                       : Colors.grey[600],
                                 ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        // Common Interests Count
-                        if (commonInterests.isNotEmpty &&
-                            _filterByInterests) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.favorite,
-                                size: 13,
-                                color: Theme.of(context).primaryColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${commonInterests.length} common interest${commonInterests.length > 1 ? 's' : ''}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Theme.of(context).primaryColor,
+                                const SizedBox(width: 4),
+                                Text(
+                                  extendedProfile.gender!,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDarkMode
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
+                          // Common Interests Count
+                          if (commonInterests.isNotEmpty &&
+                              _filterByInterests) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.favorite,
+                                  size: 13,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${commonInterests.length} common interest${commonInterests.length > 1 ? 's' : ''}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  // Arrow icon
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 18,
-                    color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                  ),
-                ],
+                    // Arrow icon
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 18,
+                      color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                    ),
+                  ],
+                ),
               ),
             ),
           );

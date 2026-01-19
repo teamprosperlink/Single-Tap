@@ -387,6 +387,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   /// Automatically logs out user if another device logs in with same account
   /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
+    print('[DeviceSession] >>> _startDeviceSessionMonitoring() called for user: ${userId.substring(0, 8)}...');
+
     try {
       // CRITICAL: Prevent race condition where multiple listeners try to start
       if (_isStartingListener) {
@@ -394,8 +396,10 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         return;
       }
       _isStartingListener = true;
+      print('[DeviceSession] Set _isStartingListener = true');
 
       // Cancel any existing subscription
+      print('[DeviceSession] Cancelling existing subscription...');
       _deviceSessionSubscription?.cancel();
       _listenerStartTime = DateTime.now(); // Track when listener started
       _listenerReady = false; // CRITICAL: Reset readiness flag for new listener initialization
@@ -405,9 +409,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       );
 
       // Get local device token - CRITICAL for device comparison
+      print('[DeviceSession] Getting local device token...');
       final localToken = await _authService.getLocalDeviceToken();
+      print('[DeviceSession] Local token received: ${localToken != null ? "${localToken.substring(0, min(8, localToken.length))}..." : "NULL"}');
+
       if (localToken == null || localToken.isEmpty) {
         print('[DeviceSession]  ERROR: No valid local token found');
+        _isStartingListener = false; // CRITICAL: Reset flag on error
         return;
       }
 
@@ -607,10 +615,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _listenerReady = true;
       _isStartingListener = false; // CRITICAL: Reset flag to allow next listener start
       print('[DeviceSession]  Listener ready - protection window now active');
-    } catch (e) {
-      print('[DeviceSession]  Failed to start listener: $e');
+    } catch (e, stackTrace) {
+      print('[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e');
+      print('[DeviceSession]  Stack trace: $stackTrace');
       _isStartingListener = false; // CRITICAL: Reset flag even on error
     }
+
+    print('[DeviceSession] <<< _startDeviceSessionMonitoring() completed');
   }
 
   /// Perform remote logout when another device logs in
@@ -820,15 +831,20 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // CRITICAL FIX: Use addPostFrameCallback to ensure listener starts after frame is rendered
           // This is more reliable than Future.delayed
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Verify user is still authenticated before starting listener
-            final currentUser = FirebaseAuth.instance.currentUser;
-            if (currentUser != null && currentUser.uid == uid && mounted) {
-              print('[BUILD] Auth verified after frame render, starting listener');
-              _startDeviceSessionMonitoring(uid);
-              print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
-            } else {
-              print('[BUILD] User auth invalid after frame render, skipping listener');
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              // Verify user is still authenticated before starting listener
+              final currentUser = FirebaseAuth.instance.currentUser;
+              if (currentUser != null && currentUser.uid == uid && mounted) {
+                print('[BUILD] Auth verified after frame render, starting listener');
+                await _startDeviceSessionMonitoring(uid);
+                print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+              } else {
+                print('[BUILD] User auth invalid after frame render, skipping listener');
+              }
+            } catch (e, stackTrace) {
+              print('[BUILD] ERROR in addPostFrameCallback: $e');
+              print('[BUILD] Stack trace: $stackTrace');
             }
           });
 

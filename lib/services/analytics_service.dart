@@ -1,12 +1,17 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter/foundation.dart';
 
 /// Centralized analytics service for tracking user events and app usage
 class AnalyticsService {
-  static final AnalyticsService _instance = AnalyticsService._internal();
+  static final AnalyticsService _instance = AnalyticsService._internal(
+    FirebaseAnalytics.instance,
+  );
   factory AnalyticsService() => _instance;
-  AnalyticsService._internal();
 
-  final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+  final FirebaseAnalytics _analytics;
+
+  AnalyticsService._internal(this._analytics);
+
   FirebaseAnalyticsObserver get observer =>
       FirebaseAnalyticsObserver(analytics: _analytics);
 
@@ -14,8 +19,8 @@ class AnalyticsService {
   Future<void> initialize() async {
     try {
       await _analytics.setAnalyticsCollectionEnabled(true);
-    } catch (e) {
-      // Analytics initialization error
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error initializing: $e\n$stack');
     }
   }
 
@@ -23,8 +28,8 @@ class AnalyticsService {
   Future<void> setUserId(String? userId) async {
     try {
       await _analytics.setUserId(id: userId);
-    } catch (e) {
-      // Error setting user ID
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error setting user ID: $e\n$stack');
     }
   }
 
@@ -35,8 +40,8 @@ class AnalyticsService {
   }) async {
     try {
       await _analytics.setUserProperty(name: name, value: value);
-    } catch (e) {
-      // Error setting user property
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error setting user property: $e\n$stack');
     }
   }
 
@@ -50,8 +55,8 @@ class AnalyticsService {
         screenName: screenName,
         screenClass: screenClass,
       );
-    } catch (e) {
-      // Error logging screen view
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging screen view: $e\n$stack');
     }
   }
 
@@ -59,8 +64,8 @@ class AnalyticsService {
   Future<void> logLogin({String? method}) async {
     try {
       await _analytics.logLogin(loginMethod: method);
-    } catch (e) {
-      // Error logging login
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging login: $e\n$stack');
     }
   }
 
@@ -68,8 +73,8 @@ class AnalyticsService {
   Future<void> logSignUp({String? method}) async {
     try {
       await _analytics.logSignUp(signUpMethod: method ?? 'email');
-    } catch (e) {
-      // Error logging sign up
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging sign up: $e\n$stack');
     }
   }
 
@@ -88,8 +93,8 @@ class AnalyticsService {
           if (actionType != null) 'action_type': actionType,
         },
       );
-    } catch (e) {
-      // Error logging post created
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging post created: $e\n$stack');
     }
   }
 
@@ -108,8 +113,8 @@ class AnalyticsService {
           'score': score,
         },
       );
-    } catch (e) {
-      // Error logging match found
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging match found: $e\n$stack');
     }
   }
 
@@ -126,8 +131,8 @@ class AnalyticsService {
           'is_first_message': isFirstMessage,
         },
       );
-    } catch (e) {
-      // Error logging message sent
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging message sent: $e\n$stack');
     }
   }
 
@@ -139,37 +144,28 @@ class AnalyticsService {
     try {
       await _analytics.logEvent(
         name: 'connection_request',
-        parameters: {
-          'target_user_id': targetUserId,
-          'action': action,
-        },
+        parameters: {'target_user_id': targetUserId, 'action': action},
       );
-    } catch (e) {
-      // Error logging connection request
+    } catch (e, stack) {
+      debugPrint(
+        'AnalyticsService: Error logging connection request: $e\n$stack',
+      );
     }
   }
 
   /// Log search performed
-  Future<void> logSearch({
-    required String query,
-    int? resultsCount,
-  }) async {
+  Future<void> logSearch({required String query, int? resultsCount}) async {
     try {
-      await _analytics.logSearch(
-        searchTerm: query,
-      );
+      await _analytics.logSearch(searchTerm: query);
       // Log results count separately if needed
       if (resultsCount != null) {
         await _analytics.logEvent(
           name: 'search_results',
-          parameters: {
-            'query': query,
-            'results_count': resultsCount,
-          },
+          parameters: {'query': query, 'results_count': resultsCount},
         );
       }
-    } catch (e) {
-      // Error logging search
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging search: $e\n$stack');
     }
   }
 
@@ -181,13 +177,10 @@ class AnalyticsService {
     try {
       await _analytics.logEvent(
         name: 'filter_applied',
-        parameters: {
-          'filter_type': filterType,
-          'filter_value': filterValue,
-        },
+        parameters: {'filter_type': filterType, 'filter_value': filterValue},
       );
-    } catch (e) {
-      // Error logging filter applied
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging filter applied: $e\n$stack');
     }
   }
 
@@ -198,8 +191,8 @@ class AnalyticsService {
         name: 'feature_used',
         parameters: {'feature_name': featureName},
       );
-    } catch (e) {
-      // Error logging feature used
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging feature used: $e\n$stack');
     }
   }
 
@@ -214,15 +207,16 @@ class AnalyticsService {
         name: 'app_error',
         parameters: {
           'error_type': errorType,
-          if (errorMessage != null) 'error_message': errorMessage.substring(
-            0,
-            errorMessage.length > 100 ? 100 : errorMessage.length,
-          ),
+          if (errorMessage != null)
+            'error_message': errorMessage.substring(
+              0,
+              errorMessage.length > 100 ? 100 : errorMessage.length,
+            ),
           if (screenName != null) 'screen_name': screenName,
         },
       );
-    } catch (e) {
-      // Error logging error event
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging error event: $e\n$stack');
     }
   }
 
@@ -230,8 +224,8 @@ class AnalyticsService {
   Future<void> logAppOpen() async {
     try {
       await _analytics.logAppOpen();
-    } catch (e) {
-      // Error logging app open
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging app open: $e\n$stack');
     }
   }
 
@@ -242,8 +236,26 @@ class AnalyticsService {
   }) async {
     try {
       await _analytics.logEvent(name: name, parameters: parameters);
-    } catch (e) {
-      // Error logging event
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging event: $e\n$stack');
+    }
+  }
+
+  /// Log video call event
+  Future<void> logVideoCall({
+    required String status, // 'started', 'ended', 'missed', 'rejected'
+    int? duration,
+  }) async {
+    try {
+      await _analytics.logEvent(
+        name: 'video_call',
+        parameters: {
+          'status': status,
+          if (duration != null) 'duration': duration,
+        },
+      );
+    } catch (e, stack) {
+      debugPrint('AnalyticsService: Error logging video call: $e\n$stack');
     }
   }
 }
