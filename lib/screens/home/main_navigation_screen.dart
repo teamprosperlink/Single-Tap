@@ -105,22 +105,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   // Convert main index to tab index (0-3)
   int _convertToTabIndex(int mainIndex) {
     switch (mainIndex) {
-      case 4: return 0; // Nearby (Feed)
-      case 0: return 1; // Home
-      case 1: return 2; // Chat
-      case 2: return 3; // Networking
-      default: return 1;
+      case 4:
+        return 0; // Nearby (Feed)
+      case 0:
+        return 1; // Home
+      case 1:
+        return 2; // Chat
+      case 2:
+        return 3; // Networking
+      default:
+        return 1;
     }
   }
 
   // Convert tab index (0-3) to main index
   int _convertFromTabIndex(int tabIndex) {
     switch (tabIndex) {
-      case 0: return 4; // Nearby (Feed)
-      case 1: return 0; // Home
-      case 2: return 1; // Chat
-      case 3: return 2; // Networking
-      default: return 0;
+      case 0:
+        return 4; // Nearby (Feed)
+      case 1:
+        return 0; // Home
+      case 2:
+        return 1; // Chat
+      case 3:
+        return 2; // Networking
+      default:
+        return 0;
     }
   }
 
@@ -295,24 +305,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 final callerId = data['callerId'] as String? ?? '';
                 final receiverId = data['receiverId'] as String? ?? '';
 
-                debugPrint('🔔 Call found: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId');
+                debugPrint(
+                  ' Call found: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId',
+                );
 
                 // Skip if already handled
                 if (_handledCallIds.contains(callId)) {
-                  debugPrint('  ⏭️ Skipping - already handled');
+                  debugPrint('    Skipping - already handled');
                   continue;
                 }
 
                 // Skip caller's own calls
                 if (callerId == currentUserId) {
-                  debugPrint('  ⏭️ Skipping - user is caller, not receiver');
+                  debugPrint('    Skipping - user is caller, not receiver');
                   _handledCallIds.add(callId);
                   continue;
                 }
 
                 // CRITICAL: Verify this call is actually for current user
                 if (receiverId != currentUserId) {
-                  debugPrint('  ❌ ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!');
+                  debugPrint(
+                    '   ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!',
+                  );
                   _handledCallIds.add(callId);
                   continue;
                 }
@@ -441,29 +455,35 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               final callerId = data['callerId'] as String? ?? '';
               final receiverId = data['receiverId'] as String? ?? '';
 
-              debugPrint('📞 NEW call detected: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId');
+              debugPrint(
+                ' NEW call detected: ID=$callId, Caller=$callerId, Receiver=$receiverId, Status=$status, CurrentUser=$currentUserId',
+              );
 
               // Skip if we've already handled this call
               if (_handledCallIds.contains(callId)) {
-                debugPrint('  ⏭️ Skipping - already handled');
+                debugPrint('    Skipping - already handled');
                 continue;
               }
 
               // Skip if current user is the caller (not the receiver)
               if (callerId == currentUserId) {
-                debugPrint('  ⏭️ Skipping - user is caller, not receiver');
+                debugPrint('    Skipping - user is caller, not receiver');
                 _handledCallIds.add(callId);
                 continue;
               }
 
               // Verify receiver ID matches current user
               if (receiverId != currentUserId) {
-                debugPrint('  ❌ ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!');
+                debugPrint(
+                  '   ERROR: Call receiverId ($receiverId) != currentUserId ($currentUserId) - QUERY ISSUE!',
+                );
                 _handledCallIds.add(callId);
                 continue;
               }
 
-              debugPrint('  ✅ Valid incoming call for current user - showing call screen');
+              debugPrint(
+                '   Valid incoming call for current user - showing call screen',
+              );
 
               // Check if call is still active (status = 'calling')
               if (status != 'calling') {
@@ -542,16 +562,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     HapticFeedback.heavyImpact();
 
     debugPrint(
-      '📞 _showIncomingCall: Showing IncomingCallScreen for callId=$callId',
+      '  _showIncomingCall: Showing IncomingCallScreen for callId=$callId',
     );
 
     // IMPORTANT: End any existing CallKit UI to prevent conflicts
     // This prevents CallKit timeout from marking call as missed
     try {
       await FlutterCallkitIncoming.endAllCalls();
-      debugPrint('✅ Ended all CallKit calls to prevent conflict');
+      debugPrint('  Ended all CallKit calls to prevent conflict');
     } catch (e) {
-      debugPrint('⚠️ Error ending CallKit calls: $e');
+      debugPrint('  Error ending CallKit calls: $e');
     }
 
     // Get call type (audio/video) from Firestore
@@ -559,20 +579,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     try {
       final callDoc = await _firestore.collection('calls').doc(callId).get();
       callType = callDoc.data()?['type'] ?? 'audio';
-      debugPrint('📱 Call type: $callType');
+      debugPrint('  Call type: $callType');
     } catch (e) {
-      debugPrint('⚠️ Error getting call type: $e');
+      debugPrint('  Error getting call type: $e');
     }
 
     // CRITICAL FIX: Use CallKit for WhatsApp-style full-screen incoming call UI
     // This replaces the old IncomingCallScreen widget approach
     // CallKit provides native full-screen UI even when app is in foreground
 
-    debugPrint('🔔 Showing CallKit full-screen UI for incoming call');
+    debugPrint(' Showing CallKit full-screen UI for incoming call');
 
     // Video calling disabled - auto-reject video calls
     if (callType == 'video') {
-      debugPrint('⚠️ Video call rejected (feature disabled): $callId');
+      debugPrint('  Video call rejected (feature disabled): $callId');
       try {
         await _firestore.collection('calls').doc(callId).update({
           'status': 'rejected',
@@ -642,16 +662,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       );
 
       await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
-      debugPrint('✅ CallKit UI shown successfully');
+      debugPrint('  CallKit UI shown successfully');
 
       // Update call status to 'ringing' so caller sees "Ringing..."
       await _firestore.collection('calls').doc(callId).update({
         'status': 'ringing',
         'ringingAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ Call status updated to ringing');
+      debugPrint('  Call status updated to ringing');
     } catch (e) {
-      debugPrint('❌ Error showing CallKit UI: $e');
+      debugPrint('  Error showing CallKit UI: $e');
       _isShowingIncomingCall = false;
     }
   }
@@ -695,7 +715,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       // Check if message already exists
       final existingMessage = await messageRef.get();
       if (existingMessage.exists) {
-        debugPrint('  Missed call message already exists for callId=$callId, skipping');
+        debugPrint(
+          '  Missed call message already exists for callId=$callId, skipping',
+        );
         return;
       }
 
@@ -811,9 +833,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       case 1:
         return const ConversationsScreen(); // Chat/Messages screen
       case 2:
-        return const LiveConnectTabScreen(activateNetworkingFilter: true); // Networking with professional filters
+        return const LiveConnectTabScreen(
+          activateNetworkingFilter: true,
+        ); // Networking with professional filters
       case 4:
-        return FeedScreen( // Nearby - Feed Screen
+        return FeedScreen(
+          // Nearby - Feed Screen
           onBack: () {
             setState(() => _currentIndex = 0);
           },
@@ -833,9 +858,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // For Business and Professional screens, show without TabBar
     if (_currentIndex == 6 || _currentIndex == 5) {
-      return Scaffold(
-        body: _buildScreen(),
-      );
+      return Scaffold(body: _buildScreen());
     }
 
     // For Chat, Networking, and Nearby - show them fullscreen without the main TabBar
@@ -857,11 +880,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   Colors.black.withValues(alpha: 0.7),
                 ],
               ),
-              border: Border(
-                top: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
+              border: const Border(
+                top: BorderSide(color: Colors.white, width: 0.5),
               ),
             ),
             child: SafeArea(
@@ -1004,10 +1024,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               ],
             ),
             border: const Border(
-              bottom: BorderSide(
-                color: Colors.white,
-                width: 0.5,
-              ),
+              bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
         ),
@@ -1059,14 +1076,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           children: [
             Icon(
               icon,
-              color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
+              color: isActive
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.5),
               size: 22,
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                color: isActive
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.5),
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),

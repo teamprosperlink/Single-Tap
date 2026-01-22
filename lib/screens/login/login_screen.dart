@@ -332,7 +332,9 @@ class _LoginScreenState extends State<LoginScreen>
         String errorMsg = e.toString().replaceAll('Exception: ', '');
         print('[LoginScreen] ===== OTP VERIFICATION ERROR =====');
         print('[LoginScreen] Error: $errorMsg');
-        print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+        print(
+          '[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}',
+        );
         print('[LoginScreen] =====================================');
 
         if (errorMsg.contains('ALREADY_LOGGED_IN')) {
@@ -356,10 +358,12 @@ class _LoginScreenState extends State<LoginScreen>
           _pendingUserId = userId ?? _authService.currentUser?.uid;
 
           // Show device login dialog to user - let them decide
-          print('[LoginScreen] 🔔 Showing device login dialog...');
+          print('[LoginScreen]  Showing device login dialog...');
           await _showDeviceLoginDialog(deviceName);
         } else {
-          print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
+          print(
+            '[LoginScreen]   Not ALREADY_LOGGED_IN error, showing error snackbar',
+          );
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
         }
@@ -437,7 +441,9 @@ class _LoginScreenState extends State<LoginScreen>
           String errorMsg = e.toString().replaceAll('Exception: ', '');
           print('[LoginScreen] ===== EMAIL/PASSWORD AUTH ERROR =====');
           print('[LoginScreen] Error: $errorMsg');
-          print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+          print(
+            '[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}',
+          );
           print('[LoginScreen] ========================================');
 
           if (errorMsg.contains('ALREADY_LOGGED_IN')) {
@@ -461,10 +467,12 @@ class _LoginScreenState extends State<LoginScreen>
             _pendingUserId = userId ?? _authService.currentUser?.uid;
 
             // Show device login dialog to user - let them decide
-            print('[LoginScreen] 🔔 Showing device login dialog...');
+            print('[LoginScreen]  Showing device login dialog...');
             await _showDeviceLoginDialog(deviceName);
           } else {
-            print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
+            print(
+              '[LoginScreen]   Not ALREADY_LOGGED_IN error, showing error snackbar',
+            );
             HapticFeedback.heavyImpact();
             _showErrorSnackBar(errorMsg);
           }
@@ -494,10 +502,13 @@ class _LoginScreenState extends State<LoginScreen>
             .collection('users')
             .doc(user.uid)
             .get();
-        final storedAccountType = doc.data()?['accountType']?.toString().toLowerCase() ?? '';
+        final storedAccountType =
+            doc.data()?['accountType']?.toString().toLowerCase() ?? '';
         // Use stored account type if widget account type is empty or "personal"
         if (storedAccountType.isNotEmpty &&
-            (accountType.isEmpty || accountType == 'personal' || accountType.contains('personal'))) {
+            (accountType.isEmpty ||
+                accountType == 'personal' ||
+                accountType.contains('personal'))) {
           accountType = storedAccountType;
         }
       }
@@ -509,14 +520,13 @@ class _LoginScreenState extends State<LoginScreen>
       // Check for Professional account
       if (accountType.contains('professional')) {
         final professionalService = ProfessionalService();
-        final isSetupComplete = await professionalService.isProfessionalSetupComplete();
+        final isSetupComplete = await professionalService
+            .isProfessionalSetupComplete();
 
         if (!isSetupComplete) {
           if (!mounted) return;
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => const ProfessionalSetupScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const ProfessionalSetupScreen()),
             (route) => false,
           );
           return;
@@ -531,9 +541,7 @@ class _LoginScreenState extends State<LoginScreen>
         if (!isSetupComplete) {
           if (!mounted) return;
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => const BusinessSetupScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
             (route) => false,
           );
           return;
@@ -544,7 +552,8 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => MainNavigationScreen(loginAccountType: widget.accountType),
+          builder: (_) =>
+              MainNavigationScreen(loginAccountType: widget.accountType),
         ),
         (route) => false,
       );
@@ -552,9 +561,7 @@ class _LoginScreenState extends State<LoginScreen>
       // Fallback: try to navigate to main screen anyway
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => const MainNavigationScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
           (route) => false,
         );
       }
@@ -584,7 +591,9 @@ class _LoginScreenState extends State<LoginScreen>
         String errorMsg = e.toString().replaceAll('Exception: ', '');
         print('[LoginScreen] ===== GOOGLE SIGN-IN ERROR =====');
         print('[LoginScreen] Error: $errorMsg');
-        print('[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}');
+        print(
+          '[LoginScreen] Contains ALREADY_LOGGED_IN: ${errorMsg.contains('ALREADY_LOGGED_IN')}',
+        );
         print('[LoginScreen] ======================================');
 
         if (errorMsg.contains('ALREADY_LOGGED_IN')) {
@@ -608,10 +617,12 @@ class _LoginScreenState extends State<LoginScreen>
           _pendingUserId = userId ?? _authService.currentUser?.uid;
 
           // Show device login dialog to user - let them decide
-          print('[LoginScreen] 🔔 Showing device login dialog...');
+          print('[LoginScreen]  Showing device login dialog...');
           await _showDeviceLoginDialog(deviceName);
         } else {
-          print('[LoginScreen] ❌ Not ALREADY_LOGGED_IN error, showing error snackbar');
+          print(
+            '[LoginScreen]   Not ALREADY_LOGGED_IN error, showing error snackbar',
+          );
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(errorMsg);
         }
@@ -636,22 +647,24 @@ class _LoginScreenState extends State<LoginScreen>
   /// Gives user the option to logout the other device or stay logged in on both
   /// Returns a Future that completes when the user makes a choice
   Future<void> _showDeviceLoginDialog(String deviceName) async {
-    print('[LoginScreen] 🔴 _showDeviceLoginDialog CALLED');
-    print('[LoginScreen] 🔴 Device Name: $deviceName');
-    print('[LoginScreen] 🔴 Context mounted: $mounted');
-    print('[LoginScreen] 🔴 About to call showDialog...');
+    print('[LoginScreen]  _showDeviceLoginDialog CALLED');
+    print('[LoginScreen]  Device Name: $deviceName');
+    print('[LoginScreen]  Context mounted: $mounted');
+    print('[LoginScreen]  About to call showDialog...');
 
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        print('[LoginScreen] 🔴 Dialog builder called');
+        print('[LoginScreen]  Dialog builder called');
         return DeviceLoginDialog(
           deviceName: deviceName,
           // Option 1: User clicks "Logout Other Device"
           onLogoutOtherDevice: () async {
             try {
-              print('[LoginScreen] Logout other device - pending user ID: $_pendingUserId');
+              print(
+                '[LoginScreen] Logout other device - pending user ID: $_pendingUserId',
+              );
 
               // CRITICAL: Wait for listener to start before calling logoutFromOtherDevices
               // The listener needs time to initialize:
@@ -662,31 +675,42 @@ class _LoginScreenState extends State<LoginScreen>
               // 5. First snapshot arrives and is processed (500ms)
               // Total: ~1.6 seconds minimum for safety
               // Extended to 4+ seconds to ensure listener is FULLY ready and processing snapshots
-              print('[LoginScreen] Waiting 4.5 seconds for listener to fully initialize and process snapshots...');
+              print(
+                '[LoginScreen] Waiting 4.5 seconds for listener to fully initialize and process snapshots...',
+              );
               await Future.delayed(const Duration(milliseconds: 4500));
-              print('[LoginScreen] Listener should be fully initialized now, proceeding with logout');
+              print(
+                '[LoginScreen] Listener should be fully initialized now, proceeding with logout',
+              );
 
               // Logout from other devices and keep current device logged in
               await _authService.logoutFromOtherDevices(userId: _pendingUserId);
 
               // CRITICAL: Wait for old device to actually logout before proceeding
               // This ensures only one device is logged in at a time
-              print('[LoginScreen] 🔄 Waiting for old device to logout...');
-              final oldDeviceLoggedOut = await _authService.waitForOldDeviceLogout(userId: _pendingUserId);
+              print('[LoginScreen]  Waiting for old device to logout...');
+              final oldDeviceLoggedOut = await _authService
+                  .waitForOldDeviceLogout(userId: _pendingUserId);
               if (oldDeviceLoggedOut) {
-                print('[LoginScreen] ✅ Old device confirmed logged out, proceeding with Device B login');
+                print(
+                  '[LoginScreen]   Old device confirmed logged out, proceeding with Device B login',
+                );
               } else {
-                print('[LoginScreen] ⚠️ Timeout waiting for old device logout, proceeding anyway');
+                print(
+                  '[LoginScreen]   Timeout waiting for old device logout, proceeding anyway',
+                );
               }
 
               // CRITICAL: Now that old device is logged out, save Device B's session
               // This was deferred from the initial login because device conflict existed
               // logoutFromOtherDevices STEP 2 already saved the token, but verify it's there
-              print('[LoginScreen] 💾 Verifying Device B session saved to Firestore...');
+              print(
+                '[LoginScreen]  Verifying Device B session saved to Firestore...',
+              );
               try {
                 await _authService.saveCurrentDeviceSession();
               } catch (e) {
-                print('[LoginScreen] ⚠️ Error verifying device session: $e');
+                print('[LoginScreen]   Error verifying device session: $e');
               }
 
               // Close dialog - use mounted check before accessing context
@@ -705,25 +729,31 @@ class _LoginScreenState extends State<LoginScreen>
             } catch (e) {
               if (mounted) {
                 HapticFeedback.heavyImpact();
-                _showErrorSnackBar('Failed to logout from other device: ${e.toString()}');
+                _showErrorSnackBar(
+                  'Failed to logout from other device: ${e.toString()}',
+                );
               }
             }
           },
           // Option 2: User clicks "Stay Logged In" - Device B stays logged in without logging out Device A
           onCancel: () async {
             try {
-              print('[LoginScreen] User chose to stay logged in on this device - both devices logged in');
+              print(
+                '[LoginScreen] User chose to stay logged in on this device - both devices logged in',
+              );
 
               // CRITICAL: Device B needs to be saved to Firestore
               // Device A stays logged in, Device B is NEW active device
               // Actually, Device B shouldn't take over - keep Device A as active
               // So Device B is logged in Firebase but NOT the active device in Firestore
               // This way both devices are logged in at Firebase level
-              print('[LoginScreen] 💾 Saving Device B session to Firestore (both devices logged in)...');
+              print(
+                '[LoginScreen]  Saving Device B session to Firestore (both devices logged in)...',
+              );
               try {
                 await _authService.saveCurrentDeviceSession();
               } catch (e) {
-                print('[LoginScreen] ⚠️ Error saving device session: $e');
+                print('[LoginScreen]   Error saving device session: $e');
               }
 
               if (mounted) {
@@ -739,7 +769,7 @@ class _LoginScreenState extends State<LoginScreen>
         );
       },
     );
-    print('[LoginScreen] 🔴 showDialog completed');
+    print('[LoginScreen]  showDialog completed');
   }
 
   void _showSuccessSnackBar(String message) {
@@ -918,9 +948,7 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Dark overlay
           Positioned.fill(
-            child: Container(
-              color: AppColors.darkOverlay(alpha: 0.5),
-            ),
+            child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
           ),
 
           // Content

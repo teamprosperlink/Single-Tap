@@ -687,34 +687,22 @@ class _FeedScreenState extends State<FeedScreen>
         ),
         actions: [
           // More options icon with circular container
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 1,
-              ),
+          IconButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyPostsScreen()),
+              );
+            },
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: Colors.white,
+              size: 18,
             ),
-            child: IconButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyPostsScreen()),
-                );
-              },
-              icon: const Icon(
-                Icons.more_vert_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              iconSize: 18,
-              padding: const EdgeInsets.all(6),
-              constraints: const BoxConstraints(),
-            ),
+            iconSize: 18,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 8),
         ],

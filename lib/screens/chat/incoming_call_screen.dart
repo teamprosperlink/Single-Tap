@@ -18,7 +18,8 @@ class IncomingCallScreen extends StatefulWidget {
   final String callerName;
   final String? callerPhoto;
   final String callerId;
-  final VoidCallback? onCallAccepted; // Callback to reset parent state before navigation
+  final VoidCallback?
+  onCallAccepted; // Callback to reset parent state before navigation
 
   const IncomingCallScreen({
     super.key,
@@ -207,7 +208,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             .collection('calls')
             .where('participants', arrayContains: currentUserId)
             .where('status', whereIn: ['calling', 'ringing', 'connected'])
-            .limit(2) // Limit 2 to check if there's another call besides this one
+            .limit(
+              2,
+            ) // Limit 2 to check if there's another call besides this one
             .get();
 
         // Filter out the current incoming call
@@ -217,7 +220,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
         if (otherActiveCalls.isNotEmpty) {
           // User already has another active call
-          debugPrint('⚠️ User already has another active call, cannot accept new call');
+          debugPrint(
+            '⚠️ User already has another active call, cannot accept new call',
+          );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -341,7 +346,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         // Navigate to appropriate screen based on call type
         if (callType == 'video') {
           // Video calling functionality disabled - silently reject
-          debugPrint('  IncomingCallScreen: Video call rejected (feature disabled)');
+          debugPrint(
+            '  IncomingCallScreen: Video call rejected (feature disabled)',
+          );
           await _rejectCall();
           if (mounted) {
             Navigator.of(context).pop();
@@ -408,7 +415,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         'rejectedAt': FieldValue.serverTimestamp(),
       });
 
-      // ✅ REMOVED: Message saving is now handled by enhanced_chat_screen.dart
+      //   REMOVED: Message saving is now handled by enhanced_chat_screen.dart
       // to prevent duplicate messages
       // await _sendMissedCallMessage();
 
@@ -761,7 +768,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
                       // Accept button
                       _buildActionButton(
-                        icon: _callType == 'video' ? Icons.videocam_rounded : Icons.call_rounded,
+                        icon: _callType == 'video'
+                            ? Icons.videocam_rounded
+                            : Icons.call_rounded,
                         color: AppColors.vibrantGreen,
                         label: 'Accept',
                         onTap: _acceptCall,

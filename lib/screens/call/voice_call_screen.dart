@@ -353,9 +353,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
     bool wasMissedOrDeclined = false,
     bool skipMessage = false,
   }) async {
-    // ✅ Prevent multiple simultaneous end call operations
+    //   Prevent multiple simultaneous end call operations
     if (_isEndingCall) {
-      debugPrint('  VoiceCallScreen: Already ending call, ignoring duplicate request');
+      debugPrint(
+        '  VoiceCallScreen: Already ending call, ignoring duplicate request',
+      );
       return;
     }
     _isEndingCall = true;
@@ -366,7 +368,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
 
     // Provide immediate UI feedback by popping screen first
     if (mounted) {
-      debugPrint('  VoiceCallScreen: Popping screen immediately for instant feedback');
+      debugPrint(
+        '  VoiceCallScreen: Popping screen immediately for instant feedback',
+      );
       Navigator.of(context).pop();
     }
 
@@ -399,11 +403,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
       debugPrint('  VoiceCallScreen: Error leaving WebRTC call: $e');
     }
 
-    // ✅ FIXED: Determine if this was a missed/declined call or completed call
+    //   FIXED: Determine if this was a missed/declined call or completed call
     // A call is considered "answered/connected" if:
     // 1. It was NOT explicitly marked as missed/declined AND
     // 2. Call duration is greater than 0 (means call timer started) OR status is 'connected'
-    final bool wasConnected = !wasMissedOrDeclined && (_callDuration > 0 || _callStatus == 'connected');
+    final bool wasConnected =
+        !wasMissedOrDeclined &&
+        (_callDuration > 0 || _callStatus == 'connected');
     final bool wasMissed = !wasConnected;
 
     try {
@@ -412,7 +418,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
         'endedAt': FieldValue.serverTimestamp(),
         'duration': _callDuration,
       });
-      debugPrint('  VoiceCallScreen: Updated call status in Firestore (wasConnected=$wasConnected, wasMissed=$wasMissed, duration=$_callDuration, _callStatus=$_callStatus)');
+      debugPrint(
+        '  VoiceCallScreen: Updated call status in Firestore (wasConnected=$wasConnected, wasMissed=$wasMissed, duration=$_callDuration, _callStatus=$_callStatus)',
+      );
 
       // REMOVED: Message saving is now handled by enhanced_chat_screen.dart
       // to prevent duplicate messages
@@ -474,7 +482,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      resizeToAvoidBottomInset: false, // Prevent keyboard/input from affecting layout
+      resizeToAvoidBottomInset:
+          false, // Prevent keyboard/input from affecting layout
       extendBodyBehindAppBar: false, // Don't extend body behind app bar
       body: Stack(
         children: [
@@ -541,10 +550,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [
-                      Colors.blue.shade400,
-                      Colors.blue.shade600,
-                    ],
+                    colors: [Colors.blue.shade400, Colors.blue.shade600],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -556,11 +562,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.phone,
-                  size: 70,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.phone, size: 70, color: Colors.white),
               ),
             );
           },

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +10,9 @@ import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../widgets/chat_common.dart';
 import '../../widgets/app_background.dart';
+import '../../widgets/other widgets/glass_text_field.dart';
 import '../../services/current_user_cache.dart';
+import '../../mixins/voice_search_mixin.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../chat/create_group_screen.dart';
 import '../chat/group_chat_screen.dart';
@@ -31,7 +31,7 @@ class ConversationsScreen extends StatefulWidget {
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, VoiceSearchMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final TextEditingController _searchController = TextEditingController();
@@ -54,6 +54,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   void initState() {
     super.initState();
+    initSpeech(); // From VoiceSearchMixin
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
@@ -71,7 +72,27 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     try {
       _searchController.dispose();
     } catch (_) {}
+    disposeVoiceSearch(); // From VoiceSearchMixin
     super.dispose();
+  }
+
+  void _startVoiceSearch() {
+    startVoiceSearch((recognizedText) {
+      // Update search controller text and move cursor to end
+      _searchController.text = recognizedText;
+      _searchController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _searchController.text.length),
+      );
+
+      // Force rebuild to apply filter
+      setState(() {
+        _searchQuery = recognizedText.toLowerCase();
+      });
+    });
+  }
+
+  void _stopVoiceSearch() {
+    stopVoiceSearch(); // From VoiceSearchMixin
   }
 
   /// Get user data with caching to reduce Firestore reads
@@ -355,44 +376,26 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Widget _buildSearchBar(bool isDarkMode) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.3),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.5),
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              decoration: const InputDecoration(
-                hintText: 'Search',
-                hintStyle: TextStyle(color: Colors.white, fontSize: 16),
-                prefixIcon: Icon(Icons.search, color: Colors.white, size: 22),
-                filled: false,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
-            ),
-          ),
-        ),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: GlassSearchField(
+        controller: _searchController,
+        hintText: 'Search conversations...',
+        borderRadius: 26,
+        showMic: true,
+        isListening: isListening, // From VoiceSearchMixin
+        onMicTap: _startVoiceSearch,
+        onStopListening: _stopVoiceSearch,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+          });
+        },
+        onClear: () {
+          setState(() {
+            _searchQuery = '';
+          });
+        },
       ),
     );
   }
@@ -463,15 +466,51 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               }
 
               // Filter conversations based on isGroup
-              final List<ConversationModel> conversations = [];
-              final List<String> userIdsToPrefetch = [];
+              // Use FutureBuilder to get hidden conversations list
+              return FutureBuilder<QuerySnapshot>(
+                future: _firestore
+                    .collection('users')
+                    .doc(currentUserId)
+                    .collection('hiddenConversations')
+                    .get(),
+                builder: (context, hiddenSnapshot) {
+                  // While loading hidden conversations, show loading
+                  if (!hiddenSnapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              for (var doc in snapshot.data!.docs) {
-                try {
-                  final conv = ConversationModel.fromFirestore(doc);
+                  // Get set of hidden conversation IDs
+                  final hiddenConvIds = hiddenSnapshot.data!.docs
+                      .map((doc) {
+                        final data = doc.data() as Map<String, dynamic>?;
+                        return data?['conversationId'] as String?;
+                      })
+                      .where((id) => id != null)
+                      .toSet();
 
-                  // Filter by group or direct chat
-                  if (conv.isGroup != isGroup) continue;
+                  final List<ConversationModel> conversations = [];
+                  final List<String> userIdsToPrefetch = [];
+
+                  for (var doc in snapshot.data!.docs) {
+                    try {
+                      final conv = ConversationModel.fromFirestore(doc);
+
+                      // Filter by group or direct chat
+                      if (conv.isGroup != isGroup) continue;
+
+                      // Skip if user has hidden this conversation
+                      if (hiddenConvIds.contains(conv.id)) {
+                        continue; // Skip hidden conversations
+                      }
+
+                      // OLD: Also check deletedBy field for backwards compatibility
+                      if (conv.isGroup) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final deletedBy = data['deletedBy'] as List<dynamic>?;
+                        if (deletedBy != null && deletedBy.contains(currentUserId)) {
+                          continue; // Skip this conversation
+                        }
+                      }
 
                   if (_searchQuery.isEmpty) {
                     conversations.add(conv);
@@ -521,6 +560,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   return _buildConversationTile(conversation, isDarkMode);
                 },
               );
+                },
+              ); // Close FutureBuilder
             },
           ),
         ), // Close Expanded

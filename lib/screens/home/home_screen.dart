@@ -12,7 +12,7 @@ import '../chat/enhanced_chat_screen.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../services/realtime_matching_service.dart';
 import '../../services/profile services/photo_cache_service.dart';
-import '../../widgets/floating_particles.dart';
+import '../../widgets/app_background.dart';
 import 'product_detail_screen.dart';
 
 @immutable
@@ -1487,62 +1487,43 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         toolbarHeight: 60,
         centerTitle: false,
         leadingWidth: 56,
         title: const SizedBox.shrink(),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
       ),
-      body: Stack(
-        children: [
-          // Image Background
-          Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
+      body: AppBackground(
+        showParticles: true,
+        overlayOpacity: 0.6,
+        child: Column(
+          children: [
+            Expanded(
+              child: _isProcessing
+                  ? _buildChatState(isDarkMode)
+                  : _matches.isNotEmpty
+                  ? _buildMatchesList(isDarkMode)
+                  : _buildChatState(isDarkMode),
             ),
-          ),
 
-          // Blur effect when chatting (conversation has messages)
-          if (_conversation.length > 1)
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(color: Colors.black.withValues(alpha: 0.6)),
-              ),
-            )
-          else
-            // Dark overlay only when no chat
-            Positioned.fill(
-              child: Container(color: Colors.black.withValues(alpha: 0.3)),
-            ),
-          const Positioned.fill(child: FloatingParticles(particleCount: 12)),
-
-          Column(
-            children: [
-              Expanded(
-                child: _isProcessing
-                    ? _buildChatState(isDarkMode)
-                    : _matches.isNotEmpty
-                    ? _buildMatchesList(isDarkMode)
-                    : _buildChatState(isDarkMode),
-              ),
-
-              // Bottom input section (always visible, recording happens inline)
-              _buildInputSection(isDarkMode),
-            ],
-          ),
-        ],
+            // Bottom input section (always visible, recording happens inline)
+            _buildInputSection(isDarkMode),
+          ],
+        ),
       ),
     );
   }
@@ -1735,12 +1716,13 @@ class _HomeScreenState extends State<HomeScreen>
                                 height: 1.4,
                               ),
                               child: TextField(
+                                cursorHeight: 17,
                                 controller: _intentController,
                                 focusNode: _searchFocusNode,
                                 textInputAction: TextInputAction.send,
-                                keyboardType: TextInputType.multiline,
-                                minLines: 1,
-                                maxLines: null,
+                                keyboardType: TextInputType.text,
+                                maxLines: 1,
+                                cursorWidth: 2,
                                 cursorColor: Colors.white,
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -1750,7 +1732,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 decoration: InputDecoration(
                                   hintText: 'Ask me anything...',
                                   hintStyle: TextStyle(
-                                    color: Colors.grey[400],
+                                    color: Colors.grey[300],
                                     fontSize: 15,
                                     fontWeight: FontWeight.w400,
                                   ),

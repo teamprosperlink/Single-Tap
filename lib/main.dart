@@ -335,7 +335,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   String? _lastInitializedUserId;
   bool _isInitializing = false;
   bool _isPerformingLogout = false; // Prevent multiple logout calls
-  bool _isStartingListener = false; // CRITICAL: Prevent multiple listener starts (race condition)
+  bool _isStartingListener =
+      false; // CRITICAL: Prevent multiple listener starts (race condition)
   StreamSubscription<List<Map<String, dynamic>>>? _notificationSubscription;
   StreamSubscription<dynamic>? _deviceSessionSubscription;
   StreamSubscription<User?>? _authStateSubscription;
@@ -387,12 +388,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   /// Automatically logs out user if another device logs in with same account
   /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
-    print('[DeviceSession] >>> _startDeviceSessionMonitoring() called for user: ${userId.substring(0, 8)}...');
+    print(
+      '[DeviceSession] >>> _startDeviceSessionMonitoring() called for user: ${userId.substring(0, 8)}...',
+    );
 
     try {
       // CRITICAL: Prevent race condition where multiple listeners try to start
       if (_isStartingListener) {
-        print('[DeviceSession] ⚠️ Listener already starting, skipping duplicate start');
+        print(
+          '[DeviceSession] ⚠️ Listener already starting, skipping duplicate start',
+        );
         return;
       }
       _isStartingListener = true;
@@ -402,7 +407,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       print('[DeviceSession] Cancelling existing subscription...');
       _deviceSessionSubscription?.cancel();
       _listenerStartTime = DateTime.now(); // Track when listener started
-      _listenerReady = false; // CRITICAL: Reset readiness flag for new listener initialization
+      _listenerReady =
+          false; // CRITICAL: Reset readiness flag for new listener initialization
 
       print(
         '[DeviceSession]  LISTENER STARTED AT: ${_listenerStartTime.toString()} (${_listenerStartTime!.millisecondsSinceEpoch})',
@@ -411,7 +417,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       // Get local device token - CRITICAL for device comparison
       print('[DeviceSession] Getting local device token...');
       final localToken = await _authService.getLocalDeviceToken();
-      print('[DeviceSession] Local token received: ${localToken != null ? "${localToken.substring(0, min(8, localToken.length))}..." : "NULL"}');
+      print(
+        '[DeviceSession] Local token received: ${localToken != null ? "${localToken.substring(0, min(8, localToken.length))}..." : "NULL"}',
+      );
 
       if (localToken == null || localToken.isEmpty) {
         print('[DeviceSession]  ERROR: No valid local token found');
@@ -507,7 +515,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   // Only skip token mismatch check (prevents false positives)
                   // forceLogout and token deletion ALWAYS checked for instant logout
                 } else {
-                  print('[DeviceSession]  PROTECTION COMPLETE - ALL CHECKS ACTIVE');
+                  print(
+                    '[DeviceSession]  PROTECTION COMPLETE - ALL CHECKS ACTIVE',
+                  );
                 }
 
                 // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
@@ -517,7 +527,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   '[DeviceSession]  ALL SNAPSHOT DATA: ${snapshotData.keys.toList()}',
                 );
                 final forceLogoutRaw = snapshotData['forceLogout'];
-                final forceLogoutTimestamp = snapshotData['forceLogoutTime'] as Timestamp?;
+                final forceLogoutTimestamp =
+                    snapshotData['forceLogoutTime'] as Timestamp?;
                 print(
                   '[DeviceSession]  forceLogout value: $forceLogoutRaw (type: ${forceLogoutRaw.runtimeType})',
                 );
@@ -551,7 +562,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                     // Timestamp available - fast validation (5s tolerance for clock skew)
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
                     final listenerTime = _listenerStartTime!;
-                    final isNewSignal = forceLogoutTime.isAfter(listenerTime.subtract(const Duration(seconds: 5)));
+                    final isNewSignal = forceLogoutTime.isAfter(
+                      listenerTime.subtract(const Duration(seconds: 5)),
+                    );
                     shouldLogout = isNewSignal;
                   } else {
                     // No timestamp - fallback logout (safer)
@@ -560,14 +573,18 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 if (shouldLogout) {
-                  print('[DeviceSession]  ✅ FORCE LOGOUT SIGNAL - LOGGING OUT NOW');
+                  print(
+                    '[DeviceSession]    FORCE LOGOUT SIGNAL - LOGGING OUT NOW',
+                  );
                   if (mounted && !_isPerformingLogout) {
                     _isPerformingLogout = true;
                     await _performRemoteLogout('Another device logged in');
                   }
                   return;
                 } else {
-                  print('[DeviceSession]  ✅ forceLogout is false or stale signal - NOT logging out');
+                  print(
+                    '[DeviceSession]    forceLogout is false or stale signal - NOT logging out',
+                  );
                 }
 
                 // PRIORITY 2: Check token empty (fallback detection)
@@ -592,7 +609,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   if (serverTokenValid &&
                       localTokenValid &&
                       serverToken != localToken) {
-                    print('[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE - LOGGING OUT');
+                    print(
+                      '[DeviceSession]  TOKEN MISMATCH - ANOTHER DEVICE ACTIVE - LOGGING OUT',
+                    );
                     if (mounted && !_isPerformingLogout) {
                       _isPerformingLogout = true;
                       await _performRemoteLogout('Another device logged in');
@@ -613,7 +632,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       // CRITICAL: Mark listener as ready AFTER it's been created
       // This ensures the callback won't process snapshots until we're completely initialized
       _listenerReady = true;
-      _isStartingListener = false; // CRITICAL: Reset flag to allow next listener start
+      _isStartingListener =
+          false; // CRITICAL: Reset flag to allow next listener start
       print('[DeviceSession]  Listener ready - protection window now active');
     } catch (e, stackTrace) {
       print('[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e');
@@ -647,7 +667,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _hasInitializedServices = false;
       _lastInitializedUserId = null;
       _isInitializing = false;
-      _isStartingListener = false; // CRITICAL: Reset listener start flag for next login
+      _isStartingListener =
+          false; // CRITICAL: Reset listener start flag for next login
       _listenerStartTime = null; // Reset listener timer for next login
       _listenerReady = false; // Reset listener ready flag for next login
       // NOTE: Keep _isPerformingLogout = true until the end
@@ -836,11 +857,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
               // Verify user is still authenticated before starting listener
               final currentUser = FirebaseAuth.instance.currentUser;
               if (currentUser != null && currentUser.uid == uid && mounted) {
-                print('[BUILD] Auth verified after frame render, starting listener');
+                print(
+                  '[BUILD] Auth verified after frame render, starting listener',
+                );
                 await _startDeviceSessionMonitoring(uid);
-                print('[BUILD] Subscription AFTER: $_deviceSessionSubscription');
+                print(
+                  '[BUILD] Subscription AFTER: $_deviceSessionSubscription',
+                );
               } else {
-                print('[BUILD] User auth invalid after frame render, skipping listener');
+                print(
+                  '[BUILD] User auth invalid after frame render, skipping listener',
+                );
               }
             } catch (e, stackTrace) {
               print('[BUILD] ERROR in addPostFrameCallback: $e');

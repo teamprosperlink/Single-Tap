@@ -1,5 +1,4 @@
-﻿import 'dart:ui';
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,8 +9,10 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
 import '../../widgets/other widgets/user_avatar.dart';
+import '../../widgets/other widgets/glass_text_field.dart';
 import '../../widgets/app_background.dart';
 import '../../res/utils/photo_url_helper.dart';
+import '../../mixins/voice_search_mixin.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../models/user_profile.dart';
 import '../../models/extended_user_profile.dart';
@@ -38,7 +39,7 @@ class LiveConnectTabScreen extends ConsumerStatefulWidget {
 }
 
 class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, VoiceSearchMixin {
   late TabController _tabController;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -53,6 +54,7 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   List<Map<String, dynamic>> _filteredPeople = []; // For search results
   bool _isLoadingPeople = false;
   String _searchQuery = ''; // Search query
+  final TextEditingController _searchController = TextEditingController();
 
   // Real-time location for distance calculation
   double? _currentUserLat;
@@ -221,6 +223,9 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   void initState() {
     super.initState();
 
+    // Initialize speech from VoiceSearchMixin
+    initSpeech();
+
     // Initialize TabController
     _tabController = TabController(length: _tabCategories.length, vsync: this);
     _tabController.addListener(() {
@@ -281,7 +286,29 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
+    disposeVoiceSearch(); // From VoiceSearchMixin
     super.dispose();
+  }
+
+  void _startVoiceSearch() {
+    startVoiceSearch((recognizedText) {
+      // Update search controller text and move cursor to end
+      _searchController.text = recognizedText;
+      _searchController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _searchController.text.length),
+      );
+
+      // Force rebuild to apply filter
+      setState(() {
+        _searchQuery = recognizedText;
+        _applySearchFilter();
+      });
+    });
+  }
+
+  void _stopVoiceSearch() {
+    stopVoiceSearch(); // From VoiceSearchMixin
   }
 
   /// Load user's connections list once for caching
@@ -2458,67 +2485,26 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                       children: [
                         // Search field
                         Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    width: 1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: TextField(
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _searchQuery = value;
-                                      _applySearchFilter();
-                                    });
-                                  },
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Search',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.search,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                    suffixIcon: _searchQuery.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(
-                                              Icons.clear,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                            onPressed: () {
-                                              setState(() {
-                                                _searchQuery = '';
-                                                _applySearchFilter();
-                                              });
-                                            },
-                                          )
-                                        : null,
-                                    filled: false,
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                          child: GlassSearchField(
+                            controller: _searchController,
+                            hintText: 'Search people...',
+                            borderRadius: 26,
+                            showMic: true,
+                            isListening: isListening, // From VoiceSearchMixin
+                            onMicTap: _startVoiceSearch,
+                            onStopListening: _stopVoiceSearch,
+                            onChanged: (value) {
+                              setState(() {
+                                _searchQuery = value;
+                                _applySearchFilter();
+                              });
+                            },
+                            onClear: () {
+                              setState(() {
+                                _searchQuery = '';
+                                _applySearchFilter();
+                              });
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),

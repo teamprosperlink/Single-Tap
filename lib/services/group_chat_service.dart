@@ -46,7 +46,8 @@ class GroupChatService {
         if (userDoc.exists) {
           final userData = userDoc.data()!;
           memberNames[memberId] = userData['name'] ?? 'Unknown';
-          memberPhotos[memberId] = userData['photoUrl'] ?? userData['profileImageUrl'];
+          memberPhotos[memberId] =
+              userData['photoUrl'] ?? userData['profileImageUrl'];
         } else {
           memberNames[memberId] = 'Unknown';
           memberPhotos[memberId] = null;
@@ -66,7 +67,8 @@ class GroupChatService {
         'createdBy': currentUserId,
         'createdAt': FieldValue.serverTimestamp(),
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessage': '${memberNames[currentUserId] ?? 'Someone'} created this group',
+        'lastMessage':
+            'Group created by ${memberNames[currentUserId] ?? 'Someone'}',
         'lastMessageSenderId': 'system',
         'unreadCount': {for (var id in allMembers) id: 0},
         'isTyping': {for (var id in allMembers) id: false},
@@ -79,14 +81,17 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '${memberNames[currentUserId] ?? 'Someone'} created this group',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[], // Track who has read this message
-      });
+            'senderId': 'system',
+            'text':
+                'Group created by ${memberNames[currentUserId] ?? 'Someone'}',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[], // Track who has read this message
+          });
 
-      debugPrint('GroupChatService: Created group $groupId with ${allMembers.length} members');
+      debugPrint(
+        'GroupChatService: Created group $groupId with ${allMembers.length} members',
+      );
       return groupId;
     } catch (e) {
       debugPrint('GroupChatService: Error creating group: $e');
@@ -103,7 +108,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
@@ -116,19 +124,27 @@ class GroupChatService {
       }
 
       final existingMembers = List<String>.from(data['participants'] ?? []);
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
-      final memberPhotos = Map<String, String?>.from(data['participantPhotos'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
+      final memberPhotos = Map<String, String?>.from(
+        data['participantPhotos'] ?? {},
+      );
       final unreadCount = Map<String, int>.from(data['unreadCount'] ?? {});
       final isTyping = Map<String, bool>.from(data['isTyping'] ?? {});
 
       // Filter out already existing members
-      final actualNewMembers = newMemberIds.where((id) => !existingMembers.contains(id)).toList();
+      final actualNewMembers = newMemberIds
+          .where((id) => !existingMembers.contains(id))
+          .toList();
 
       if (actualNewMembers.isEmpty) return true; // No new members to add
 
       // BATCH READ: Get all new member docs at once
       final userDocs = await Future.wait(
-        actualNewMembers.map((id) => _firestore.collection('users').doc(id).get()),
+        actualNewMembers.map(
+          (id) => _firestore.collection('users').doc(id).get(),
+        ),
       );
 
       for (int i = 0; i < actualNewMembers.length; i++) {
@@ -142,7 +158,8 @@ class GroupChatService {
         if (userDoc.exists) {
           final userData = userDoc.data()!;
           memberNames[memberId] = userData['name'] ?? 'Unknown';
-          memberPhotos[memberId] = userData['photoUrl'] ?? userData['profileImageUrl'];
+          memberPhotos[memberId] =
+              userData['photoUrl'] ?? userData['profileImageUrl'];
         } else {
           memberNames[memberId] = 'Unknown';
           memberPhotos[memberId] = null;
@@ -169,12 +186,12 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '$adderName added $addedNames to the group',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text': '$adderName added $addedNames to the group',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -192,7 +209,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
@@ -201,7 +221,9 @@ class GroupChatService {
 
       // Only admins can remove members
       if (!admins.contains(currentUserId)) {
-        debugPrint('GroupChatService: User is not admin, cannot remove members');
+        debugPrint(
+          'GroupChatService: User is not admin, cannot remove members',
+        );
         return false;
       }
 
@@ -213,12 +235,16 @@ class GroupChatService {
 
       // Only the creator can remove other admins
       if (admins.contains(memberId) && currentUserId != createdBy) {
-        debugPrint('GroupChatService: Only group creator can remove other admins');
+        debugPrint(
+          'GroupChatService: Only group creator can remove other admins',
+        );
         return false;
       }
 
       final participants = List<String>.from(data['participants'] ?? []);
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
 
       if (!participants.contains(memberId)) return false;
 
@@ -241,12 +267,12 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '$removerName removed $removedName from the group',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text': '$removerName removed $removedName from the group',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -264,14 +290,19 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
       final createdBy = data['createdBy'] as String?;
       final admins = List<String>.from(data['admins'] ?? []);
       final participants = List<String>.from(data['participants'] ?? []);
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
 
       // Only creator can make someone admin
       if (currentUserId != createdBy) {
@@ -303,12 +334,12 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '$memberName is now an admin',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text': '$memberName is now an admin',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -326,13 +357,18 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
       final createdBy = data['createdBy'] as String?;
       final admins = List<String>.from(data['admins'] ?? []);
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
 
       // Only creator can remove admin privileges
       if (currentUserId != createdBy) {
@@ -364,12 +400,12 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '$memberName is no longer an admin',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text': '$memberName is no longer an admin',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -384,12 +420,17 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
       final participants = List<String>.from(data['participants'] ?? []);
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
       final admins = List<String>.from(data['admins'] ?? []);
       final createdBy = data['createdBy'] as String?;
 
@@ -450,12 +491,12 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '$leaverName left the group',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text': '$leaverName left the group',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       // Clear typing status on leave
       await clearTypingStatus(groupId);
@@ -476,7 +517,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
@@ -488,7 +532,9 @@ class GroupChatService {
         return false;
       }
 
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
       final oldName = data['groupName'] ?? 'Group';
 
       await _firestore.collection('conversations').doc(groupId).update({
@@ -501,12 +547,13 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '${memberNames[currentUserId] ?? 'Someone'} changed the group name from "$oldName" to "$newName"',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text':
+                '${memberNames[currentUserId] ?? 'Someone'} changed the group name from "$oldName" to "$newName"',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -524,7 +571,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final data = groupDoc.data()!;
@@ -536,7 +586,9 @@ class GroupChatService {
         return false;
       }
 
-      final memberNames = Map<String, String>.from(data['participantNames'] ?? {});
+      final memberNames = Map<String, String>.from(
+        data['participantNames'] ?? {},
+      );
 
       await _firestore.collection('conversations').doc(groupId).update({
         'groupPhoto': photoUrl,
@@ -548,12 +600,13 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': 'system',
-        'text': '${memberNames[currentUserId] ?? 'Someone'} updated the group photo',
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': true,
-        'readBy': <String>[],
-      });
+            'senderId': 'system',
+            'text':
+                '${memberNames[currentUserId] ?? 'Someone'} updated the group photo',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': true,
+            'readBy': <String>[],
+          });
 
       return true;
     } catch (e) {
@@ -570,16 +623,23 @@ class GroupChatService {
     String? fileUrl,
     String? fileName,
     String? replyToMessageId,
+    String? voiceUrl,
+    int? voiceDuration,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return null;
 
     try {
       // Verify user is a participant
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return null;
 
-      final participants = List<String>.from(groupDoc.data()?['participants'] ?? []);
+      final participants = List<String>.from(
+        groupDoc.data()?['participants'] ?? [],
+      );
       if (!participants.contains(currentUserId)) {
         debugPrint('GroupChatService: User is not a participant');
         return null;
@@ -591,19 +651,25 @@ class GroupChatService {
           .doc(groupId)
           .collection('messages')
           .add({
-        'senderId': currentUserId,
-        'text': text,
-        'imageUrl': imageUrl,
-        'fileUrl': fileUrl,
-        'fileName': fileName,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isSystemMessage': false,
-        'readBy': [currentUserId], // Sender has read their own message
-        if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
-      });
+            'senderId': currentUserId,
+            'text': text,
+            'imageUrl': imageUrl,
+            'fileUrl': fileUrl,
+            'fileName': fileName,
+            'voiceUrl': voiceUrl,
+            'voiceDuration': voiceDuration,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isSystemMessage': false,
+            'readBy': [currentUserId], // Sender has read their own message
+            if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+          });
 
       final updates = <String, dynamic>{
-        'lastMessage': text.isNotEmpty ? text : (imageUrl != null ? ' Photo' : '📎 File'),
+        'lastMessage': text.isNotEmpty
+            ? text
+            : (imageUrl != null
+                  ? '  Photo'
+                  : (voiceUrl != null ? '🎤 Voice message' : '📎 File')),
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderId': currentUserId,
       };
@@ -668,7 +734,8 @@ class GroupChatService {
     try {
       await _firestore.collection('conversations').doc(groupId).update({
         'isTyping.$currentUserId': isTyping,
-        if (isTyping) 'typingTimestamp.$currentUserId': FieldValue.serverTimestamp(),
+        if (isTyping)
+          'typingTimestamp.$currentUserId': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('GroupChatService: Error setting typing: $e');
@@ -692,7 +759,10 @@ class GroupChatService {
   /// Get group members with batch read
   Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return [];
 
       final data = groupDoc.data()!;
@@ -744,7 +814,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       final admins = List<String>.from(groupDoc.data()?['admins'] ?? []);
@@ -760,7 +833,10 @@ class GroupChatService {
     if (currentUserId == null) return false;
 
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return false;
 
       return groupDoc.data()?['createdBy'] == currentUserId;
@@ -770,7 +846,10 @@ class GroupChatService {
   }
 
   /// Get who has read a specific message
-  Future<List<String>> getMessageReadBy(String groupId, String messageId) async {
+  Future<List<String>> getMessageReadBy(
+    String groupId,
+    String messageId,
+  ) async {
     try {
       final messageDoc = await _firestore
           .collection('conversations')
@@ -791,12 +870,17 @@ class GroupChatService {
   /// Clean up stale typing indicators (older than 10 seconds)
   Future<void> cleanupStaleTypingIndicators(String groupId) async {
     try {
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) return;
 
       final data = groupDoc.data()!;
       final isTyping = Map<String, bool>.from(data['isTyping'] ?? {});
-      final typingTimestamps = Map<String, dynamic>.from(data['typingTimestamp'] ?? {});
+      final typingTimestamps = Map<String, dynamic>.from(
+        data['typingTimestamp'] ?? {},
+      );
 
       final now = DateTime.now();
       final updates = <String, dynamic>{};
@@ -817,7 +901,10 @@ class GroupChatService {
       }
 
       if (updates.isNotEmpty) {
-        await _firestore.collection('conversations').doc(groupId).update(updates);
+        await _firestore
+            .collection('conversations')
+            .doc(groupId)
+            .update(updates);
       }
     } catch (e) {
       debugPrint('GroupChatService: Error cleaning up typing indicators: $e');

@@ -36,6 +36,8 @@ import '../call/voice_call_screen.dart';
 // import '../call/video_call_screen.dart'; // Video calling disabled
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat_common.dart';
+import '../home/main_navigation_screen.dart';
+import 'media_gallery_screen.dart';
 
 class EnhancedChatScreen extends ConsumerStatefulWidget {
   final UserProfile otherUser;
@@ -183,7 +185,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
               _syncMessagesInBackground();
-              _cleanupEmptyCallMessages(); // ✅ Remove empty call messages
+              _cleanupEmptyCallMessages(); //   Remove empty call messages
             }
           });
         } catch (e) {
@@ -317,10 +319,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         // Load chat theme after conversation is initialized
         _loadThemeFromFirestore();
 
-        // ✅ Clean up empty/duplicate call messages immediately after conversation is initialized
+        //   Clean up empty/duplicate call messages immediately after conversation is initialized
         _cleanupEmptyCallMessages();
 
-        // ✅ Set up real-time guard against empty messages
+        //   Set up real-time guard against empty messages
         _setupEmptyMessageGuard();
       }
     } catch (e) {
@@ -549,7 +551,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           if (_isSearching) {
             _toggleSearch();
           } else {
-            Navigator.pop(context);
+            // Navigate to messages screen (conversations screen)
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) =>
+                    const MainNavigationScreen(initialIndex: 1),
+              ),
+              (route) => false,
+            );
           }
         },
       ),
@@ -887,7 +896,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 return !deletedFor.contains(currentUserId);
               }
 
-              // ✅ Filter out empty/invalid call messages to prevent blank UI
+              //   Filter out empty/invalid call messages to prevent blank UI
               final messageTypeEnum = _parseMessageType(data['type']);
               if (messageTypeEnum == MessageType.voiceCall ||
                   messageTypeEnum == MessageType.videoCall ||
@@ -1548,13 +1557,77 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                     isMe,
                                     isDarkMode,
                                   ),
-                                // Audio message player UI
+                                // Audio message player UI with time/status below
                                 if (message.type == MessageType.audio &&
                                     message.audioUrl != null)
-                                  _buildAudioMessagePlayer(
-                                    message,
-                                    isMe,
-                                    isDarkMode: isDarkMode,
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildAudioMessagePlayer(
+                                        message,
+                                        isMe,
+                                        isDarkMode: isDarkMode,
+                                      ),
+                                      // Time and status below audio player (always show time, hide ticks when sending)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 4,
+                                          top: 4,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (message.isEdited == true) ...[
+                                              Text(
+                                                'edited ',
+                                                style: TextStyle(
+                                                  color: isMe
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.55,
+                                                        )
+                                                      : (isDarkMode
+                                                            ? Colors.grey[500]
+                                                            : Colors.grey[600]),
+                                                  fontSize: 11,
+                                                  fontStyle: FontStyle.italic,
+                                                ),
+                                              ),
+                                            ],
+                                            // Time (always show)
+                                            Text(
+                                              _formatMessageTime(
+                                                message.timestamp,
+                                              ),
+                                              style: TextStyle(
+                                                color: isMe
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.55,
+                                                      )
+                                                    : (isDarkMode
+                                                          ? Colors.grey[500]
+                                                          : Colors.grey[600]),
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                            // Status tick (only for my messages, hide when sending)
+                                            if (isMe &&
+                                                message.status !=
+                                                    MessageStatus.sending &&
+                                                message.audioUrl != null &&
+                                                message
+                                                    .audioUrl!
+                                                    .isNotEmpty) ...[
+                                              const SizedBox(width: 4),
+                                              _buildMessageStatusIcon(
+                                                message.status,
+                                                isMe,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 if (message.text != null &&
                                     message.text!.isNotEmpty)
@@ -2485,6 +2558,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // White border line at the top
+        Container(height: 0.5, color: Colors.white),
         // Input Area - Premium iMessage style
         Container(
           padding: EdgeInsets.only(
@@ -4739,7 +4814,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       await Future.wait([
         // Update conversation metadata
         _firestore.collection('conversations').doc(_conversationId!).update({
-          'lastMessage': '📷 Photo',
+          'lastMessage': '  Photo',
           'lastMessageTime': FieldValue.serverTimestamp(),
           'lastMessageSenderId': _currentUserId,
           'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
@@ -4748,7 +4823,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         NotificationService().sendNotificationToUser(
           userId: widget.otherUser.uid,
           title: 'New Photo from $currentUserName',
-          body: '📷 Photo',
+          body: '  Photo',
           type: 'message',
           data: {'conversationId': _conversationId},
         ),
@@ -5094,13 +5169,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   /// Build image message with WhatsApp-style upload preview
   /// Shows local image immediately with blur/progress overlay while uploading
   Widget _buildImageMessage(MessageModel message, bool isMe, bool isDarkMode) {
-    final isUploading = message.status == MessageStatus.sending;
     final hasLocalPath =
         message.localPath != null && message.localPath!.isNotEmpty;
     final hasMediaUrl =
         message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
-    final uploadProgress =
-        message.metadata?['uploadProgress'] as double? ?? 0.0;
 
     // Border color - blue for both sender and receiver
     const borderColor = Color(0xFF007AFF);
@@ -5116,27 +5188,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
           child: Stack(
             children: [
-              // Image - show local file during upload, cloud URL after
-              if (hasLocalPath && isUploading)
-                // Show local file with slight blur during upload (WhatsApp style)
-                Image.file(
-                  File(message.localPath!),
-                  fit: BoxFit.cover,
-                  width: 220,
-                  height: 180,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 180,
-                      height: 150,
-                      color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.image, color: Colors.grey, size: 40),
-                      ),
-                    );
-                  },
-                )
-              else if (hasMediaUrl)
-                // Show cloud image after upload complete
+              // Image - Priority: cloud URL > local file > placeholder
+              if (hasMediaUrl)
+                // Show cloud image (uploaded) - PRIORITY
                 CachedNetworkImage(
                   imageUrl: message.mediaUrl!,
                   fit: BoxFit.cover,
@@ -5145,89 +5199,45 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   memCacheWidth: 400,
                   memCacheHeight: 400,
                   placeholder: (context, url) => Container(
-                    width: 180,
-                    height: 150,
+                    width: 220,
+                    height: 180,
                     color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFF007AFF).withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
                   ),
                   errorWidget: (context, url, error) => Container(
-                    width: 180,
-                    height: 150,
+                    width: 220,
+                    height: 180,
                     color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
                     child: const Icon(Icons.error_outline, color: Colors.red),
                   ),
                 )
+              else if (hasLocalPath && File(message.localPath!).existsSync())
+                // Show local file while uploading (only if file exists)
+                Image.file(
+                  File(message.localPath!),
+                  fit: BoxFit.cover,
+                  width: 220,
+                  height: 180,
+                  errorBuilder: (context, error, stackTrace) {
+                    // If error loading file, show placeholder
+                    debugPrint('⚠️ Local image load error: $error');
+                    return Container(
+                      width: 220,
+                      height: 180,
+                      color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                      child: const Center(
+                        child: Icon(Icons.image, color: Colors.grey, size: 40),
+                      ),
+                    );
+                  },
+                )
               else
                 // Fallback placeholder
                 Container(
-                  width: 180,
-                  height: 150,
+                  width: 220,
+                  height: 180,
                   color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
                   child: const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-
-              // Upload progress overlay (WhatsApp style)
-              if (isUploading)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Circular progress indicator with percentage
-                          SizedBox(
-                            width: 50,
-                            height: 50,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                  value: uploadProgress > 0
-                                      ? uploadProgress
-                                      : null,
-                                  strokeWidth: 3,
-                                  backgroundColor: Colors.white.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                  valueColor:
-                                      const AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                ),
-                                if (uploadProgress > 0)
-                                  Text(
-                                    '${(uploadProgress * 100).toInt()}%',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Sending...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: Icon(Icons.image, color: Colors.grey, size: 40),
                   ),
                 ),
             ],
@@ -5264,13 +5274,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             },
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: borderColor, width: 2),
+          border: Border.all(color: borderColor, width: 3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(9),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 200, maxWidth: 220),
+            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -5587,7 +5597,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // Debug: Print message type details
     debugPrint(
-      '📱 Message Type: ${message.type}, isMissed: $isMissed, isVideoCall: $isVideoCall, isVoiceCall: $isVoiceCall, text: ${message.text}',
+      ' Message Type: ${message.type}, isMissed: $isMissed, isVideoCall: $isVideoCall, isVoiceCall: $isVoiceCall, text: ${message.text}',
     );
 
     final isSelected = _selectedMessageIds.contains(message.id);
@@ -5601,7 +5611,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     Color iconColor;
 
     if (isMissed) {
-      // ❌ Missed call - RED color for all missed calls
+      //   Missed call - RED color for all missed calls
       iconColor = Colors.red;
 
       if (isMe) {
@@ -5624,11 +5634,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
       }
     } else {
-      // ✅ Answered call - GREEN color for all answered calls
+      //   Answered call - GREEN color for all answered calls
       iconColor = const Color(0xFF25D366); // WhatsApp green
 
       debugPrint(
-        '✅ Setting GREEN color for answered call: isVideoCall=$isVideoCall',
+        '  Setting GREEN color for answered call: isVideoCall=$isVideoCall',
       );
 
       // Extract duration from stored text or show default
@@ -5807,176 +5817,131 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
 
-    // Format time
-    final hour = message.timestamp.hour;
-    final minute = message.timestamp.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final hour12 = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    final timeString = '$hour12:$minute $period';
-
-    // Waveform bar heights pattern (same as popup)
+    // Waveform bar heights pattern (30 bars for WhatsApp style)
     final heights = [
+      6.0,
+      10.0,
       8.0,
       14.0,
       10.0,
-      18.0,
-      12.0,
-      20.0,
-      14.0,
       16.0,
-      10.0,
-      22.0,
-      18.0,
       12.0,
-      20.0,
+      14.0,
       8.0,
-      16.0,
-      14.0,
       18.0,
+      14.0,
+      10.0,
+      16.0,
+      6.0,
+      12.0,
       10.0,
       14.0,
+      8.0,
+      10.0,
+      8.0,
       12.0,
+      14.0,
+      10.0,
+      16.0,
+      12.0,
+      8.0,
+      14.0,
+      10.0,
+      12.0,
+      8.0,
     ];
 
-    // Border color - blue for both sender and receiver
-    const borderColor = Color(0xFF007AFF);
-
-    // Audio player matching popup style - same for sent and received
+    // Audio player WhatsApp style - gradient background
     return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: borderColor, width: 2),
-        borderRadius: BorderRadius.circular(32),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(30),
+        gradient: LinearGradient(
+          colors: isMe
+              ? [const Color(0xFF5856D6), const Color(0xFF007AFF)]
+              : [const Color(0xFF3A3A3A), const Color(0xFF2A2A2A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Play/Pause button with gradient
-            GestureDetector(
-              onTap: isSending
-                  ? null
-                  : () => _playAudio(message.id, message.audioUrl!),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: isSending
-                      ? null
-                      : const LinearGradient(
-                          colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: isSending ? Colors.white.withValues(alpha: 0.2) : null,
-                  shape: BoxShape.circle,
-                  boxShadow: isSending
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF5856D6,
-                            ).withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                ),
-                child: isSending
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(
-                        isCurrentlyPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 28,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Play/Pause button
+          GestureDetector(
+            onTap: isSending
+                ? null
+                : () => _playAudio(message.id, message.audioUrl!),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isSending
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: isSending
+                  ? Padding(
+                      padding: const EdgeInsets.all(7),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isMe ? Colors.white : Colors.grey,
                       ),
+                    )
+                  : Icon(
+                      isCurrentlyPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: isMe
+                          ? const Color(0xFF007AFF)
+                          : const Color(0xFF3A3A3A),
+                      size: 20,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Waveform bars
+          Expanded(
+            child: SizedBox(
+              height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(25, (index) {
+                  final barProgress = index / 25;
+                  final isActive = barProgress <= progress;
+                  // Use modulo to cycle through heights array
+                  final heightIndex = index % heights.length;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 100),
+                    width: 2,
+                    height: heights[heightIndex] * 0.8,
+                    decoration: BoxDecoration(
+                      color: isSending
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : (isActive
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.4)),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  );
+                }),
               ),
             ),
-            const SizedBox(width: 12),
-            // Waveform and info
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Waveform
-                SizedBox(
-                  width: 120,
-                  height: 24,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(20, (index) {
-                      final barProgress = index / 20;
-                      final isActive = barProgress <= progress;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 100),
-                        width: 3,
-                        height: heights[index],
-                        decoration: BoxDecoration(
-                          color: isSending
-                              ? Colors.white.withValues(alpha: 0.3)
-                              : (isActive
-                                    ? const Color(0xFF5856D6)
-                                    : Colors.white24),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // Duration, time and status
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Duration
-                    Text(
-                      isSending ? 'Sending...' : formatDuration(duration),
-                      style: TextStyle(
-                        color: isSending
-                            ? Colors.white.withValues(alpha: 0.6)
-                            : Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Time
-                    Text(
-                      timeString,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 10,
-                      ),
-                    ),
-                    // Status tick (only for sent messages by me, skip if sending - button has loader)
-                    if (isMe && !isSending) ...[
-                      const SizedBox(width: 4),
-                      _buildMessageStatusIcon(message.status, isMe),
-                    ],
-                  ],
-                ),
-              ],
+          ),
+          const SizedBox(width: 6),
+          // Duration only
+          Text(
+            isSending ? 'Sending...' : formatDuration(duration),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(width: 8),
-            // Mic icon
-            Icon(
-              Icons.mic,
-              color: isSending ? Colors.orange : Colors.white38,
-              size: 20,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
     );
   }
@@ -6026,7 +5991,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // Create a call document in Firestore
     debugPrint(
-      '📞 Creating call: Caller=$_currentUserId -> Receiver=${widget.otherUser.uid}',
+      '  Creating call: Caller=$_currentUserId -> Receiver=${widget.otherUser.uid}',
     );
     final callDoc = await _firestore.collection('calls').add({
       'callerId': _currentUserId,
@@ -6044,7 +6009,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       'timestamp': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('✅ Call document created with ID: ${callDoc.id}');
+    debugPrint('  Call document created with ID: ${callDoc.id}');
 
     if (!mounted) return;
 
@@ -6160,7 +6125,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       final callDoc = await _firestore.collection('calls').doc(callId).get();
       if (!callDoc.exists) {
-        debugPrint('❌ Call document not found: $callId');
+        debugPrint('  Call document not found: $callId');
         return;
       }
 
@@ -6170,22 +6135,22 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       final callerId = data['callerId'] as String?;
       final receiverId = data['receiverId'] as String?;
 
-      // ✅ CRITICAL FIX: Only create message if current user is the CALLER
+      //   CRITICAL FIX: Only create message if current user is the CALLER
       // This prevents duplicate messages from being created on both devices
       // The receiver should NOT create a message - only the caller creates it
       if (callerId != _currentUserId) {
         debugPrint(
-          '🚫 BLOCKED: Not creating call message because current user ($_currentUserId) is NOT the caller ($callerId)',
+          '  BLOCKED: Not creating call message because current user ($_currentUserId) is NOT the caller ($callerId)',
         );
         return;
       }
 
       debugPrint(
-        '📞 Call Status: $status, Duration: $duration, isVideo: $isVideo, CallId: $callId',
+        '  Call Status: $status, Duration: $duration, isVideo: $isVideo, CallId: $callId',
       );
-      debugPrint('📞 Full call data: $data');
+      debugPrint('  Full call data: $data');
       debugPrint(
-        '📞 CallerId: $callerId, ReceiverId: $receiverId, CurrentUserId: $_currentUserId',
+        '  CallerId: $callerId, ReceiverId: $receiverId, CurrentUserId: $_currentUserId',
       );
 
       int durationSeconds = 0;
@@ -6198,7 +6163,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       MessageType msgType;
       String msgText;
 
-      // ✅ Safety check: if status is null/empty, don't create message
+      //   Safety check: if status is null/empty, don't create message
       if (status == null || status.isEmpty) {
         debugPrint(
           '⚠️ Call status is null/empty, skipping message creation for callId: $callId',
@@ -6238,7 +6203,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
       }
 
-      // ✅ Final safety check: ensure msgText is not empty
+      //   Final safety check: ensure msgText is not empty
       if (msgText.isEmpty) {
         debugPrint(
           '⚠️ msgText is empty after status check, status=$status, skipping message creation',
@@ -6246,14 +6211,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ✅ Use deterministic message ID to prevent duplicates
+      //   Use deterministic message ID to prevent duplicates
       // If this function is called multiple times for same call, it will update instead of creating duplicates
       final messageId = 'call_$callId';
 
       // ⚠️ CRITICAL: Triple-check msgText before saving (prevent empty messages)
       if (msgText.trim().isEmpty) {
         debugPrint(
-          '🚫 BLOCKED: Attempted to save call message with empty text! callId=$callId, status=$status',
+          '  BLOCKED: Attempted to save call message with empty text! callId=$callId, status=$status',
         );
         return;
       }
@@ -6263,7 +6228,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         '💾 Saving call message: id=$messageId, type=${msgType.index}, text="$msgText", status=$status',
       );
 
-      // ✅ Determine correct senderId based on who initiated the call
+      //   Determine correct senderId based on who initiated the call
       // If current user is the caller, they are the sender
       // If current user is the receiver, the other person is the sender
       final messageSenderId = (callerId == _currentUserId)
@@ -6277,14 +6242,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         '💡 Message will be saved with senderId=$messageSenderId (caller=$callerId, currentUser=$_currentUserId)',
       );
 
-      // ✅ Use merge: true to avoid overwriting existing data if message already exists
+      //   Use merge: true to avoid overwriting existing data if message already exists
       await _firestore
           .collection('conversations')
           .doc(_conversationId!)
           .collection('messages')
           .doc(messageId) // Use deterministic ID instead of .add()
           .set({
-            'senderId': messageSenderId, // ✅ FIXED: Use caller as sender
+            'senderId': messageSenderId, //   FIXED: Use caller as sender
             'receiverId': messageReceiverId,
             'chatId': _conversationId,
             'text':
@@ -6297,14 +6262,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             'callId': callId,
             'callDuration': durationSeconds,
           }, SetOptions(merge: true)); // Merge to avoid data loss if doc exists
-      debugPrint('✅ Call message saved successfully with ID: $messageId');
+      debugPrint('  Call message saved successfully with ID: $messageId');
 
       // Update last message in conversation
       await _firestore
           .collection('conversations')
           .doc(_conversationId!)
           .update({
-            'lastMessage': isVideo ? '📹 Video call' : '📞 Voice call',
+            'lastMessage': isVideo ? '📹 Video call' : '  Voice call',
             'lastMessageTime': FieldValue.serverTimestamp(),
             'lastMessageSenderId': _currentUserId,
           });
@@ -6313,7 +6278,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// ✅ Real-time guard: Delete empty call messages as soon as they appear
+  ///   Real-time guard: Delete empty call messages as soon as they appear
   void _setupEmptyMessageGuard() {
     if (_conversationId == null) return;
 
@@ -6349,11 +6314,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   doc.reference
                       .delete()
                       .then((_) {
-                        debugPrint('✅ GUARD: Empty message deleted: ${doc.id}');
+                        debugPrint('  GUARD: Empty message deleted: ${doc.id}');
                       })
                       .catchError((e) {
                         debugPrint(
-                          '❌ GUARD: Failed to delete empty message: $e',
+                          '  GUARD: Failed to delete empty message: $e',
                         );
                       });
                 }
@@ -6363,7 +6328,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         });
   }
 
-  /// ✅ Cleanup empty and duplicate call messages from Firestore
+  ///   Cleanup empty and duplicate call messages from Firestore
   Future<void> _cleanupEmptyCallMessages() async {
     if (_conversationId == null) return;
 
@@ -6435,15 +6400,15 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       if (deletedCount > 0) {
         debugPrint(
-          '✅ Cleanup complete: Deleted $deletedCount empty/duplicate call messages',
+          '  Cleanup complete: Deleted $deletedCount empty/duplicate call messages',
         );
       } else {
         debugPrint(
-          '✅ Cleanup complete: No empty/duplicate call messages found',
+          '  Cleanup complete: No empty/duplicate call messages found',
         );
       }
     } catch (e) {
-      debugPrint('❌ Error cleaning up call messages: $e');
+      debugPrint('  Error cleaning up call messages: $e');
     }
   }
 
@@ -6718,6 +6683,59 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 ),
               ),
               const SizedBox(height: 20),
+              // None button
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedTheme = 'default';
+                  });
+                  _saveThemeToFirestore('default');
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _selectedTheme == 'default'
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _selectedTheme == 'default'
+                          ? Colors.white
+                          : Colors.white24,
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.clear_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'None (Default)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (_selectedTheme == 'default') ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.check_circle, color: Colors.white, size: 20),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Theme Colors',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -6919,35 +6937,121 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   Future<void> _deleteConversation() async {
-    if (_conversationId == null) return;
+    debugPrint('🗑️ DELETE CONVERSATION STARTED');
+    debugPrint('📝 Conversation ID: $_conversationId');
+
+    if (_conversationId == null) {
+      debugPrint('❌ No conversation ID, returning');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'No conversation to delete');
+      }
+      return;
+    }
 
     try {
-      // Delete all messages in the conversation
-      final messagesSnapshot = await _firestore
+      debugPrint('📡 Fetching messages from Firestore...');
+
+      // Delete all messages in batches (fast deletion without waiting for media)
+      final messagesRef = _firestore
           .collection('conversations')
           .doc(_conversationId!)
-          .collection('messages')
-          .get();
+          .collection('messages');
 
+      // Get all messages
+      final messagesSnapshot = await messagesRef.get();
+      debugPrint('✅ Found ${messagesSnapshot.docs.length} messages to delete');
+
+      // Collect media URLs for background deletion
+      final mediaUrls = <String>[];
+
+      // Delete all message documents in batches
       final batch = _firestore.batch();
-      for (final doc in messagesSnapshot.docs) {
-        batch.delete(doc.reference);
+
+      if (messagesSnapshot.docs.isNotEmpty) {
+        for (final doc in messagesSnapshot.docs) {
+          final data = doc.data();
+
+          // Collect media URLs for later deletion
+          final mediaUrl =
+              data['mediaUrl'] as String? ?? data['imageUrl'] as String?;
+          if (mediaUrl != null && mediaUrl.isNotEmpty) {
+            mediaUrls.add(mediaUrl);
+          }
+
+          final voiceNoteUrl = data['voiceNoteUrl'] as String?;
+          if (voiceNoteUrl != null && voiceNoteUrl.isNotEmpty) {
+            mediaUrls.add(voiceNoteUrl);
+          }
+
+          // Delete message document
+          batch.delete(doc.reference);
+        }
+        debugPrint(
+          '🗂️ Prepared ${messagesSnapshot.docs.length} messages for deletion',
+        );
       }
 
       // Delete the conversation document
       batch.delete(
         _firestore.collection('conversations').doc(_conversationId!),
       );
+      debugPrint('📄 Added conversation document to deletion batch');
 
+      // Commit batch deletion (this is fast)
+      debugPrint('💾 Committing batch delete...');
       await batch.commit();
+      debugPrint('✅ BATCH DELETE SUCCESSFUL!');
+
+      // Delete media files in background (don't wait for it)
+      if (mediaUrls.isNotEmpty) {
+        debugPrint(
+          '🖼️ Deleting ${mediaUrls.length} media files in background',
+        );
+        _deleteMediaInBackground(mediaUrls);
+      }
+
+      debugPrint('🎉 DELETE CONVERSATION COMPLETED SUCCESSFULLY');
+
+      // Navigate back to conversations screen and show success message
+      if (mounted) {
+        debugPrint('⬅️ Navigating back to conversations screen');
+
+        // Show success message first
+        SnackBarHelper.showSuccess(
+          context,
+          'Chat deleted! All messages cleared.',
+        );
+
+        // Navigate back - pop until we reach the main navigation screen
+        Navigator.of(context).popUntil((route) => route.isFirst);
+
+        debugPrint('✅ Successfully popped back to main screen');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ DELETE CONVERSATION ERROR: $e');
+      debugPrint('📚 Stack trace: $stackTrace');
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'Conversation deleted');
-        // Stay on chat screen - messages will be empty now
+        SnackBarHelper.showError(
+          context,
+          'Delete failed: ${e.toString().substring(0, 100)}',
+        );
       }
-    } catch (e) {
-      if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to delete conversation');
+    }
+  }
+
+  // Delete media files in background without blocking UI
+  void _deleteMediaInBackground(List<String> mediaUrls) {
+    debugPrint(
+      '🧹 Starting background media cleanup for ${mediaUrls.length} files...',
+    );
+    for (final url in mediaUrls) {
+      try {
+        _storage.refFromURL(url).delete().catchError((error) {
+          debugPrint('⚠️ Media deletion error (ignored): $error');
+        });
+      } catch (e) {
+        debugPrint('⚠️ Media deletion exception (ignored): $e');
       }
     }
   }
@@ -7247,22 +7351,17 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
 
                         _buildOptionTile(
                           icon: Icons.photo_library_rounded,
-                          title: 'Shared Media',
-                          onTap: () async {
-                            final nav = Navigator.of(context);
-                            final messageId = await nav.push<String>(
+                          title: 'Media Gallery',
+                          onTap: () {
+                            Navigator.push(
+                              context,
                               MaterialPageRoute(
-                                builder: (context) => _SharedMediaScreen(
+                                builder: (context) => MediaGalleryScreen(
                                   conversationId: widget.conversationId,
                                   otherUserName: widget.otherUser.name,
                                 ),
                               ),
                             );
-                            // If a messageId was returned, navigate to that message
-                            if (messageId != null && mounted) {
-                              nav.pop(); // Close info screen
-                              widget.onNavigateToMessage(messageId);
-                            }
                           },
                         ),
 

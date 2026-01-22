@@ -82,6 +82,11 @@ service cloud.firestore {
         allow create: if isOwner(userId);
         allow update, delete: if false; // Security events are immutable
       }
+
+      // Cleared chats subcollection (for clear chat feature)
+      match /clearedChats/{conversationId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // ============================================================
