@@ -866,7 +866,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     debugPrint('📂 ========== LOADING COUNTERS FROM SHAREDPREFERENCES ==========');
     final currentUserId = _currentUserId;
     if (currentUserId == null) {
-      debugPrint('⚠️ Cannot load: currentUserId is null');
+      debugPrint('⚠️ Cannot load: currentUserId is null, marking as loaded anyway');
+      _isCounterLoaded = true; // Mark as loaded to prevent blocking
       return;
     }
 
@@ -996,12 +997,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         : mediaType == 'video'
             ? _todayVideoCount
             : _todayAudioCount;
-    final exceeds = currentCount > 4;
+    final exceeds = currentCount >= 4; // FIXED: >= instead of > (4 should be blocked!)
 
     debugPrint('📊 LIMIT CHECK RESULT:');
     debugPrint('📊   - Current $mediaType count: $currentCount');
     debugPrint('📊   - Limit: 4');
-    debugPrint('📊   - Exceeds? $exceeds ($currentCount > 4)');
+    debugPrint('📊   - Exceeds? $exceeds ($currentCount >= 4)');
     debugPrint('🔍 ========== LIMIT CHECK END ==========');
 
     return exceeds;
