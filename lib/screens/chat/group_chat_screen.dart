@@ -938,13 +938,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Decrement local media counter (when upload completes or fails)
   void _decrementMediaCounter(String mediaType) {
-    if (mediaType == 'image' && _todayImageCount > 0) {
-      _todayImageCount--;
-      debugPrint('📉 Image counter decremented: $_todayImageCount');
-    } else if (mediaType == 'video' && _todayVideoCount > 0) {
-      _todayVideoCount--;
-      debugPrint('📉 Video counter decremented: $_todayVideoCount');
-    }
+    // IMPORTANT: Don't actually decrement!
+    // Counter should accumulate throughout the day to track total attempts
+    // DB count already has the uploaded count, local counter prevents one-by-one uploads
+    debugPrint('🔒 Counter stays locked (not decremented): Images=$_todayImageCount, Videos=$_todayVideoCount');
+
+    // Counter will only reset after 24 hours via _resetDailyCountersIfNeeded()
   }
 
   // Pick image from gallery (max 4 images per selection, max 4 images per day)
