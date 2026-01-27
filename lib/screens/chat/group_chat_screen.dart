@@ -1034,7 +1034,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) {
           SnackBarHelper.showError(
             context,
-            'Daily limit reached! You can only send 4 images per day in this group.',
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
           );
         }
         return;
@@ -1103,7 +1103,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) {
           SnackBarHelper.showError(
             context,
-            'Daily limit reached! You can only send 4 images per day in this group.',
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
           );
         }
         return;
@@ -1337,7 +1337,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             if (mounted) {
               SnackBarHelper.showError(
                 context,
-                'Daily limit reached! You can only send 4 videos per day in this group.',
+                'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
               );
             }
             return;
@@ -1438,7 +1438,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           if (mounted) {
             SnackBarHelper.showError(
               context,
-              'Daily limit reached! You can only send 4 videos per day in this group.',
+              'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
             );
           }
           return;
@@ -3336,7 +3336,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) {
           SnackBarHelper.showError(
             context,
-            'Daily limit reached! You can only send 4 voice messages per day in this group.',
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
           );
         }
         return;
