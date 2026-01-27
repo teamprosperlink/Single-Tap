@@ -12,7 +12,11 @@ class AudioPlayerDialog extends StatefulWidget {
     this.title = 'Voice Message',
   });
 
-  static Future<void> show(BuildContext context, String audioUrl, {String? title}) {
+  static Future<void> show(
+    BuildContext context,
+    String audioUrl, {
+    String? title,
+  }) {
     return showDialog(
       context: context,
       builder: (context) => AudioPlayerDialog(
@@ -116,9 +120,7 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
 
     return Dialog(
       backgroundColor: isDarkMode ? const Color(0xFF1A2B3D) : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -151,11 +153,7 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
             if (_hasError)
               Column(
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    color: Colors.red,
-                    size: 48,
-                  ),
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
                   const SizedBox(height: 16),
                   Text(
                     'Error loading audio',
@@ -192,10 +190,16 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                   SliderTheme(
                     data: SliderThemeData(
                       trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 12,
+                      ),
                       activeTrackColor: Colors.green,
-                      inactiveTrackColor: isDarkMode ? Colors.white24 : Colors.black12,
+                      inactiveTrackColor: isDarkMode
+                          ? Colors.white24
+                          : Colors.black12,
                       thumbColor: Colors.green,
                       overlayColor: Colors.green.withValues(alpha: 0.2),
                     ),
@@ -204,7 +208,9 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                       min: 0,
                       max: _duration.inMilliseconds.toDouble(),
                       onChanged: (value) async {
-                        await _audioPlayer.seek(Duration(milliseconds: value.toInt()));
+                        await _audioPlayer.seek(
+                          Duration(milliseconds: value.toInt()),
+                        );
                       },
                     ),
                   ),
@@ -246,9 +252,12 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                           color: isDarkMode ? Colors.white70 : Colors.black54,
                         ),
                         onPressed: () async {
-                          final newPosition = _position - const Duration(seconds: 10);
+                          final newPosition =
+                              _position - const Duration(seconds: 10);
                           await _audioPlayer.seek(
-                            newPosition.isNegative ? Duration.zero : newPosition,
+                            newPosition.isNegative
+                                ? Duration.zero
+                                : newPosition,
                           );
                         },
                       ),
@@ -257,7 +266,7 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
 
                       // Play/Pause
                       Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.green,
                           shape: BoxShape.circle,
                         ),
@@ -280,7 +289,8 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                           color: isDarkMode ? Colors.white70 : Colors.black54,
                         ),
                         onPressed: () async {
-                          final newPosition = _position + const Duration(seconds: 10);
+                          final newPosition =
+                              _position + const Duration(seconds: 10);
                           await _audioPlayer.seek(
                             newPosition > _duration ? _duration : newPosition,
                           );

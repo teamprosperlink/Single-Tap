@@ -4168,45 +4168,18 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                         color: Colors.black.withValues(
                                           alpha: 0.3,
                                         ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const SizedBox(
-                                              width: 32,
-                                              height: 32,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 3,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                      Color
-                                                    >(Colors.orange),
+                                        child: const Center(
+                                          child: SizedBox(
+                                            width: 32,
+                                            height: 32,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 3,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.orange,
                                               ),
                                             ),
-                                            const SizedBox(height: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.7,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: const Text(
-                                                'Uploading...',
-                                                style: TextStyle(
-                                                  color: Colors.orange,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -4312,32 +4285,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                             Icons.play_arrow,
                                             color: Colors.white,
                                             size: 32,
-                                          ),
-                                        ),
-                                      // "Uploading" text for optimistic messages
-                                      if (isOptimistic)
-                                        Positioned(
-                                          bottom: 8,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: const Text(
-                                              'Uploading...',
-                                              style: TextStyle(
-                                                color: Colors.orange,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
                                           ),
                                         ),
                                     ],
