@@ -863,17 +863,28 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Load daily media counts from SharedPreferences
   Future<void> _loadDailyMediaCounts() async {
+    debugPrint('📂 ========== LOADING COUNTERS FROM SHAREDPREFERENCES ==========');
     final currentUserId = _currentUserId;
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      debugPrint('⚠️ Cannot load: currentUserId is null');
+      return;
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '${widget.groupId}_$currentUserId';
+      debugPrint('📂 Loading with key: $key');
 
       final imageCount = prefs.getInt('${key}_imageCount') ?? 0;
       final videoCount = prefs.getInt('${key}_videoCount') ?? 0;
       final audioCount = prefs.getInt('${key}_audioCount') ?? 0;
       final lastResetStr = prefs.getString('${key}_lastReset');
+
+      debugPrint('📂 Raw values from SharedPreferences:');
+      debugPrint('📂   Images: $imageCount');
+      debugPrint('📂   Videos: $videoCount');
+      debugPrint('📂   Audios: $audioCount');
+      debugPrint('📂   LastReset: $lastResetStr');
 
       _todayImageCount = imageCount;
       _todayVideoCount = videoCount;
@@ -887,9 +898,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       await _resetDailyCountersIfNeeded();
 
       _isCounterLoaded = true; // Mark counter as loaded
-      debugPrint('📊 Loaded counts: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
+      debugPrint('✅ COUNTERS LOADED SUCCESSFULLY:');
+      debugPrint('✅   Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
+      debugPrint('✅   _isCounterLoaded = true');
+      debugPrint('📂 ========== LOAD COMPLETE ==========');
     } catch (e) {
-      debugPrint('Error loading media counts: $e');
+      debugPrint('❌ Error loading media counts: $e');
       _isCounterLoaded = true; // Set to true even on error to prevent blocking
     }
   }
@@ -897,11 +911,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Save daily media counts to SharedPreferences
   Future<void> _saveDailyMediaCounts() async {
     final currentUserId = _currentUserId;
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      debugPrint('⚠️ Cannot save counts: currentUserId is null');
+      return;
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '${widget.groupId}_$currentUserId';
+
+      debugPrint('💾 SAVING to SharedPreferences:');
+      debugPrint('💾   Key: $key');
+      debugPrint('💾   Images: $_todayImageCount');
+      debugPrint('💾   Videos: $_todayVideoCount');
+      debugPrint('💾   Audios: $_todayAudioCount');
 
       await prefs.setInt('${key}_imageCount', _todayImageCount);
       await prefs.setInt('${key}_videoCount', _todayVideoCount);
@@ -909,11 +932,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       if (_lastMediaCountReset != null) {
         await prefs.setString('${key}_lastReset', _lastMediaCountReset!.toIso8601String());
+        debugPrint('💾   LastReset: $_lastMediaCountReset');
       }
 
-      debugPrint('💾 Saved counts: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
+      debugPrint('✅ Save completed successfully');
     } catch (e) {
-      debugPrint('Error saving media counts: $e');
+      debugPrint('❌ Error saving media counts: $e');
     }
   }
 
@@ -942,15 +966,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Check if current counter exceeds daily limit (4 per day)
   Future<bool> _checkDailyMediaLimit(String mediaType) async {
+    debugPrint('🔍 ========== LIMIT CHECK START ==========');
+    debugPrint('🔍 MediaType: $mediaType');
+    debugPrint('🔍 IsCounterLoaded: $_isCounterLoaded');
+    debugPrint('🔍 Current counters BEFORE check: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
+
     // CRITICAL: Wait for counter to load from SharedPreferences
     int waitCount = 0;
+    final startTime = DateTime.now();
     while (!_isCounterLoaded && waitCount < 50) {
       await Future.delayed(const Duration(milliseconds: 100));
       waitCount++;
+      if (waitCount % 10 == 0) {
+        debugPrint('⏳ Waiting for counter load... ${waitCount * 100}ms elapsed');
+      }
     }
 
+    final loadTime = DateTime.now().difference(startTime).inMilliseconds;
     if (!_isCounterLoaded) {
-      debugPrint('⚠️ Counter not loaded after 5 seconds, proceeding anyway');
+      debugPrint('⚠️ Counter NOT LOADED after ${loadTime}ms! Proceeding with possibly incorrect counter');
+    } else {
+      debugPrint('✅ Counter loaded successfully (waited ${loadTime}ms)');
     }
 
     await _resetDailyCountersIfNeeded();
@@ -962,25 +998,36 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             : _todayAudioCount;
     final exceeds = currentCount > 4;
 
-    debugPrint('📊 $mediaType check: Current=$currentCount, Exceeds limit? $exceeds');
+    debugPrint('📊 LIMIT CHECK RESULT:');
+    debugPrint('📊   - Current $mediaType count: $currentCount');
+    debugPrint('📊   - Limit: 4');
+    debugPrint('📊   - Exceeds? $exceeds ($currentCount > 4)');
+    debugPrint('🔍 ========== LIMIT CHECK END ==========');
 
     return exceeds;
   }
 
   // Increment media counter and save to SharedPreferences
   Future<void> _incrementMediaCounter(String mediaType, int count) async {
+    final oldCount = mediaType == 'image'
+        ? _todayImageCount
+        : mediaType == 'video'
+            ? _todayVideoCount
+            : _todayAudioCount;
+
     if (mediaType == 'image') {
       _todayImageCount += count;
-      debugPrint('📈 Image counter: $_todayImageCount');
+      debugPrint('📈 INCREMENT: Image counter: $oldCount → $_todayImageCount (+$count)');
     } else if (mediaType == 'video') {
       _todayVideoCount += count;
-      debugPrint('📈 Video counter: $_todayVideoCount');
+      debugPrint('📈 INCREMENT: Video counter: $oldCount → $_todayVideoCount (+$count)');
     } else if (mediaType == 'audio') {
       _todayAudioCount += count;
-      debugPrint('📈 Audio counter: $_todayAudioCount');
+      debugPrint('📈 INCREMENT: Audio counter: $oldCount → $_todayAudioCount (+$count)');
     }
 
     await _saveDailyMediaCounts();
+    debugPrint('✅ Counter saved to SharedPreferences');
   }
 
   // Decrement media counter (only for rollback when limit exceeded)
