@@ -972,22 +972,29 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     debugPrint('🔍 IsCounterLoaded: $_isCounterLoaded');
     debugPrint('🔍 Current counters BEFORE check: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
 
-    // CRITICAL: Wait for counter to load from SharedPreferences
+    // CRITICAL: If counter not loaded yet, try loading it now (in case initState failed due to null userId)
+    if (!_isCounterLoaded) {
+      debugPrint('⚠️ Counter not loaded, attempting to load now...');
+      await _loadDailyMediaCounts();
+      debugPrint('📂 Load attempt completed, _isCounterLoaded = $_isCounterLoaded');
+    }
+
+    // Wait a bit more if still not loaded (backup safety)
     int waitCount = 0;
     final startTime = DateTime.now();
-    while (!_isCounterLoaded && waitCount < 50) {
+    while (!_isCounterLoaded && waitCount < 20) { // Reduced to 2 seconds since we just tried loading
       await Future.delayed(const Duration(milliseconds: 100));
       waitCount++;
       if (waitCount % 10 == 0) {
-        debugPrint('⏳ Waiting for counter load... ${waitCount * 100}ms elapsed');
+        debugPrint('⏳ Still waiting... ${waitCount * 100}ms elapsed');
       }
     }
 
     final loadTime = DateTime.now().difference(startTime).inMilliseconds;
     if (!_isCounterLoaded) {
-      debugPrint('⚠️ Counter NOT LOADED after ${loadTime}ms! Proceeding with possibly incorrect counter');
+      debugPrint('⚠️ Counter STILL NOT LOADED after ${loadTime}ms! Proceeding anyway');
     } else {
-      debugPrint('✅ Counter loaded successfully (waited ${loadTime}ms)');
+      debugPrint('✅ Counter is loaded (additional wait: ${loadTime}ms)');
     }
 
     await _resetDailyCountersIfNeeded();
@@ -997,12 +1004,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         : mediaType == 'video'
             ? _todayVideoCount
             : _todayAudioCount;
-    final exceeds = currentCount >= 4; // FIXED: >= instead of > (4 should be blocked!)
+    final exceeds = currentCount > 4; // Correct: Allow 4, block from 5th onwards
 
     debugPrint('📊 LIMIT CHECK RESULT:');
     debugPrint('📊   - Current $mediaType count: $currentCount');
-    debugPrint('📊   - Limit: 4');
-    debugPrint('📊   - Exceeds? $exceeds ($currentCount >= 4)');
+    debugPrint('📊   - Limit: 4 (allow 1-4, block 5+)');
+    debugPrint('📊   - Exceeds? $exceeds ($currentCount > 4)');
     debugPrint('🔍 ========== LIMIT CHECK END ==========');
 
     return exceeds;
