@@ -4344,26 +4344,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                     : Colors.grey[600],
                               ),
                             ),
-                          if (isMe) ...[
+                          if (isMe && !isOptimistic) ...[
                             const SizedBox(width: 4),
-                            if (isOptimistic)
-                              SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.5,
-                                  color: isDarkMode
-                                      ? Colors.grey[600]
-                                      : Colors.grey[500],
-                                ),
-                              )
-                            else
-                              _buildMessageStatusIcon(
-                                messageData['status'],
-                                readCount,
-                                totalMembers,
-                                isDarkMode,
-                              ),
+                            _buildMessageStatusIcon(
+                              messageData['status'],
+                              readCount,
+                              totalMembers,
+                              isDarkMode,
+                            ),
                           ],
                         ],
                       ),
