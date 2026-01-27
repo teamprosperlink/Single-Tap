@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'notification_service.dart';
 
 class GroupChatService {
   static final GroupChatService _instance = GroupChatService._internal();
@@ -84,7 +85,7 @@ class GroupChatService {
             'senderId': 'system',
             'text':
                 'Group created by ${memberNames[currentUserId] ?? 'Someone'}',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[], // Track who has read this message
           });
@@ -188,7 +189,7 @@ class GroupChatService {
           .add({
             'senderId': 'system',
             'text': '$adderName added $addedNames to the group',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -269,7 +270,7 @@ class GroupChatService {
           .add({
             'senderId': 'system',
             'text': '$removerName removed $removedName from the group',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -336,7 +337,7 @@ class GroupChatService {
           .add({
             'senderId': 'system',
             'text': '$memberName is now an admin',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -402,7 +403,7 @@ class GroupChatService {
           .add({
             'senderId': 'system',
             'text': '$memberName is no longer an admin',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -493,7 +494,7 @@ class GroupChatService {
           .add({
             'senderId': 'system',
             'text': '$leaverName left the group',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -550,7 +551,7 @@ class GroupChatService {
             'senderId': 'system',
             'text':
                 '${memberNames[currentUserId] ?? 'Someone'} changed the group name from "$oldName" to "$newName"',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -603,7 +604,7 @@ class GroupChatService {
             'senderId': 'system',
             'text':
                 '${memberNames[currentUserId] ?? 'Someone'} updated the group photo',
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': Timestamp.now(), // Use client timestamp for immediate display
             'isSystemMessage': true,
             'readBy': <String>[],
           });
@@ -612,6 +613,69 @@ class GroupChatService {
     } catch (e) {
       debugPrint('GroupChatService: Error updating group photo: $e');
       return false;
+    }
+  }
+
+  /// Send a system message to the group (like "User joined", "User left", etc.)
+  Future<String?> sendSystemMessage({
+    required String groupId,
+    required String text,
+    String? actionType, // 'join', 'leave', 'call', 'name_change', etc.
+    String? callId, // For call messages
+    String? callerId, // ID of the user who initiated the call
+    String? callerName, // Name of the user who initiated the call
+    int? callDuration, // Duration in seconds
+    int? participantCount, // Number of participants who joined
+  }) async {
+    try {
+      debugPrint('📨 sendSystemMessage: groupId=$groupId, text="$text", actionType=$actionType');
+      final messageData = {
+        'text': text,
+        'timestamp': Timestamp.now(), // Use client timestamp for immediate display
+        'isSystemMessage': true,
+        'actionType': actionType,
+      };
+      debugPrint('📨 Timestamp created: ${messageData['timestamp']}');
+
+      // Add call metadata if this is a call message
+      if (callId != null) {
+        messageData['callId'] = callId;
+        debugPrint('📨 Added callId: $callId');
+      }
+      if (callerId != null) {
+        messageData['callerId'] = callerId;
+        debugPrint('📨 Added callerId: $callerId');
+      }
+      if (callerName != null) {
+        messageData['callerName'] = callerName;
+        debugPrint('📨 Added callerName: $callerName');
+      }
+      if (callDuration != null) {
+        messageData['callDuration'] = callDuration;
+      }
+      if (participantCount != null) {
+        messageData['participantCount'] = participantCount;
+      }
+
+      debugPrint('📨 Adding message to Firestore: $messageData');
+      final messageRef = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .collection('messages')
+          .add(messageData);
+      debugPrint('📨 Message added successfully with ID: ${messageRef.id}');
+
+      // Update last message
+      await _firestore.collection('conversations').doc(groupId).update({
+        'lastMessage': text,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+      });
+      debugPrint('📨 Conversation updated with last message');
+
+      return messageRef.id;
+    } catch (e) {
+      debugPrint('GroupChatService: Error sending system message: $e');
+      return null;
     }
   }
 
@@ -625,32 +689,33 @@ class GroupChatService {
     String? replyToMessageId,
     String? voiceUrl,
     int? voiceDuration,
+    List<Map<String, String>>? mentions,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return null;
 
     try {
-      // Verify user is a participant
+      // Get group doc for participants list (needed for unread counts)
       final groupDoc = await _firestore
           .collection('conversations')
           .doc(groupId)
           .get();
-      if (!groupDoc.exists) return null;
 
       final participants = List<String>.from(
         groupDoc.data()?['participants'] ?? [],
       );
-      if (!participants.contains(currentUserId)) {
-        debugPrint('GroupChatService: User is not a participant');
-        return null;
-      }
+
+      // Use batch writes for better performance
+      final batch = _firestore.batch();
 
       // Add message with per-user read tracking
-      final messageRef = await _firestore
+      final messageRef = _firestore
           .collection('conversations')
           .doc(groupId)
           .collection('messages')
-          .add({
+          .doc();
+
+      batch.set(messageRef, {
             'senderId': currentUserId,
             'text': text,
             'imageUrl': imageUrl,
@@ -661,7 +726,9 @@ class GroupChatService {
             'timestamp': FieldValue.serverTimestamp(),
             'isSystemMessage': false,
             'readBy': [currentUserId], // Sender has read their own message
+            'status': 1, // 1 = sent (single tick)
             if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+            if (mentions != null && mentions.isNotEmpty) 'mentions': mentions,
           });
 
       final updates = <String, dynamic>{
@@ -681,7 +748,44 @@ class GroupChatService {
         }
       }
 
-      await _firestore.collection('conversations').doc(groupId).update(updates);
+      // Update conversation metadata in batch
+      final conversationRef = _firestore.collection('conversations').doc(groupId);
+      batch.update(conversationRef, updates);
+
+      // Commit batch write (message + conversation update together)
+      await batch.commit();
+
+      // Send notifications to mentioned users (in parallel for better performance)
+      if (mentions != null && mentions.isNotEmpty) {
+        final senderDoc = await _firestore.collection('users').doc(currentUserId).get();
+        final senderName = senderDoc.data()?['name'] ?? 'Someone';
+        final groupName = groupDoc.data()?['name'] ?? 'Group';
+
+        // Send all notifications in parallel
+        final notificationFutures = mentions
+            .where((mention) =>
+                mention['userId'] != null && mention['userId'] != currentUserId)
+            .map((mention) async {
+          try {
+            await NotificationService().sendNotificationToUser(
+              userId: mention['userId']!,
+              title: '$senderName mentioned you in $groupName',
+              body: text.length > 50 ? '${text.substring(0, 50)}...' : text,
+              type: 'group_mention',
+              data: {
+                'groupId': groupId,
+                'messageId': messageRef.id,
+                'senderId': currentUserId,
+              },
+            );
+          } catch (e) {
+            debugPrint('Error sending mention notification: $e');
+          }
+        }).toList();
+
+        // Wait for all notifications to complete
+        await Future.wait(notificationFutures);
+      }
 
       return messageRef.id;
     } catch (e) {

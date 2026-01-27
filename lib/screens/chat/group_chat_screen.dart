@@ -20,12 +20,10 @@ import '../../widgets/other widgets/glass_text_field.dart';
 import '../../services/group_chat_service.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../res/utils/photo_url_helper.dart';
-import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../call/group_audio_call_screen.dart';
-import '../call/group_video_call_screen.dart';
-import 'media_gallery_screen.dart';
 import 'group_info_screen.dart';
+import 'video_player_screen.dart';
 
 class GroupChatScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -53,8 +51,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Helper getter for current user ID from provider
   String? get _currentUserId => ref.read(currentUserIdProvider);
 
-  // Message pagination
-  static const int _messagesPerPage = 50;
+  // Message pagination (optimized for faster loading)
+  static const int _messagesPerPage = 20;
   bool _hasMoreMessages = true;
   bool _isLoadingMore = false;
   DocumentSnapshot? _lastDocument;
@@ -110,6 +108,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Voice playback variables - lazy initialized to prevent crashes
   FlutterSoundPlayer? _audioPlayer;
   bool _isPlayerInitialized = false;
+  String? _currentlyPlayingMessageId;
+  bool _isPlaying = false;
+  double _playbackProgress = 0.0;
+  StreamSubscription? _playerSubscription;
+
+  // Mention functionality
+  bool _showMentionSuggestions = false;
+  List<Map<String, dynamic>> _filteredMembers = [];
+  int _mentionStartIndex = -1;
 
   @override
   void initState() {
@@ -124,9 +131,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   void _scrollListener() {
     if (!_scrollController.hasClients) return;
-    final shouldShow =
-        _scrollController.position.pixels <
-        _scrollController.position.maxScrollExtent - 500;
+    // With reverse: true, pixels = 0 is at bottom (newest messages)
+    // Show button when scrolled away from bottom (pixels > threshold)
+    final shouldShow = _scrollController.position.pixels > 500;
     if (shouldShow != _showScrollButton) {
       setState(() => _showScrollButton = shouldShow);
     }
@@ -172,6 +179,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     _groupChatService.clearTypingStatus(widget.groupId);
     // Clean up audio resources
     _recordingTimer?.cancel();
+    _playerSubscription?.cancel();
     _audioRecorder?.closeRecorder();
     _audioPlayer?.closePlayer();
     super.dispose();
@@ -187,8 +195,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   void _onScroll() {
-    // Load more messages when scrolling to top
-    if (_scrollController.position.pixels <= 100 &&
+    // Load more messages when scrolling to top (with reverse: true)
+    // Near maxScrollExtent means scrolling towards older messages at the top
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 100 &&
         !_isLoadingMore &&
         _hasMoreMessages) {
       _loadMoreMessages();
@@ -265,11 +276,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     // Clear typing status
     _groupChatService.setTyping(widget.groupId, false);
 
+    // Extract mentions from text
+    final mentions = _extractMentions(text);
+
     try {
       final messageId = await _groupChatService.sendMessage(
         groupId: widget.groupId,
         text: text,
         replyToMessageId: replyTo?['id'],
+        mentions: mentions.isNotEmpty ? mentions : null,
       );
 
       if (messageId != null && mounted) {
@@ -307,8 +322,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_scrollController.hasClients) {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
+          // With reverse: true, position 0 is at bottom (newest messages)
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
+            0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -328,17 +344,198 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     });
   }
 
-  // Open media gallery
-  void _openMediaGallery() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MediaGalleryScreen(
-          conversationId: widget.groupId,
-          otherUserName: _currentGroupName.isNotEmpty
-              ? _currentGroupName
-              : widget.groupName,
+  // Handle mention (@) detection
+  void _handleMentionDetection(String text) {
+    final cursorPosition = _messageController.selection.baseOffset;
+
+    // Find the last @ before cursor
+    int atIndex = -1;
+    for (int i = cursorPosition - 1; i >= 0; i--) {
+      if (text[i] == '@') {
+        // Check if @ is at start or preceded by space
+        if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
+          atIndex = i;
+          break;
+        }
+      } else if (text[i] == ' ' || text[i] == '\n') {
+        // Stop at space before finding @
+        break;
+      }
+    }
+
+    if (atIndex != -1 && atIndex < cursorPosition) {
+      // Extract query after @
+      final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+
+      // Filter members based on query
+      final filtered = _memberNames.entries
+          .where((entry) => entry.key != _currentUserId) // Exclude current user
+          .where((entry) => entry.value.toLowerCase().contains(query))
+          .map(
+            (entry) => {
+              'id': entry.key,
+              'name': entry.value,
+              'photo': _memberPhotos[entry.key],
+            },
+          )
+          .toList();
+
+      setState(() {
+        _mentionStartIndex = atIndex;
+        _filteredMembers = filtered;
+        _showMentionSuggestions = filtered.isNotEmpty;
+      });
+    } else {
+      setState(() {
+        _showMentionSuggestions = false;
+        _filteredMembers = [];
+        _mentionStartIndex = -1;
+      });
+    }
+  }
+
+  // Insert mention when user selects from suggestions
+  void _insertMention(String userId, String userName) {
+    final text = _messageController.text;
+    final cursorPosition = _messageController.selection.baseOffset;
+
+    // Replace from @ to cursor with @UserName
+    final beforeMention = text.substring(0, _mentionStartIndex);
+    final afterMention = text.substring(cursorPosition);
+    final mentionText = '@$userName ';
+
+    final newText = beforeMention + mentionText + afterMention;
+    final newCursorPosition = beforeMention.length + mentionText.length;
+
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newCursorPosition),
+    );
+
+    setState(() {
+      _showMentionSuggestions = false;
+      _filteredMembers = [];
+      _mentionStartIndex = -1;
+    });
+
+    // Keep focus on text field
+    _messageFocusNode.requestFocus();
+  }
+
+  // Extract mentions from message text
+  List<Map<String, String>> _extractMentions(String text) {
+    final mentions = <Map<String, String>>[];
+    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    final matches = regex.allMatches(text);
+
+    for (final match in matches) {
+      final mentionedName = match.group(1);
+      if (mentionedName != null) {
+        // Find user ID by name
+        final entry = _memberNames.entries.firstWhere(
+          (e) => e.value == mentionedName,
+          orElse: () => const MapEntry('', ''),
+        );
+        if (entry.key.isNotEmpty) {
+          mentions.add({'userId': entry.key, 'name': mentionedName});
+        }
+      }
+    }
+
+    return mentions;
+  }
+
+  // Build text with highlighted mentions
+  Widget _buildTextWithMentions(
+    String text,
+    bool isMe,
+    bool isDarkMode,
+    bool isDeleted,
+  ) {
+    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    final matches = regex.allMatches(text);
+
+    if (matches.isEmpty) {
+      // No mentions, return simple text
+      return Text(
+        text,
+        style: TextStyle(
+          color: isDeleted
+              ? Colors.grey
+              : (isMe
+                    ? Colors.white
+                    : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+          fontSize: 16,
+          height: 1.35,
+          fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
         ),
+      );
+    }
+
+    // Build rich text with highlighted mentions
+    final spans = <TextSpan>[];
+    int lastIndex = 0;
+
+    for (final match in matches) {
+      // Add text before mention
+      if (match.start > lastIndex) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex, match.start),
+            style: TextStyle(
+              color: isDeleted
+                  ? Colors.grey
+                  : (isMe
+                        ? Colors.white
+                        : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+            ),
+          ),
+        );
+      }
+
+      // Add highlighted mention
+      spans.add(
+        TextSpan(
+          text: match.group(0), // @Username
+          style: TextStyle(
+            color: isMe
+                ? Colors.white
+                : AppColors.iosBlue, // Blue highlight for mentions
+            fontWeight: FontWeight.w600,
+            backgroundColor: isMe
+                ? Colors.white.withValues(alpha: 0.2)
+                : AppColors.iosBlue.withValues(alpha: 0.1),
+          ),
+        ),
+      );
+
+      lastIndex = match.end;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: TextStyle(
+            color: isDeleted
+                ? Colors.grey
+                : (isMe
+                      ? Colors.white
+                      : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+          ),
+        ),
+      );
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 16,
+          height: 1.35,
+          fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
+        ),
+        children: spans,
       ),
     );
   }
@@ -352,8 +549,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Get group members
       final members = await _groupChatService.getGroupMembers(widget.groupId);
 
+      // Deduplicate members by userId using Set
+      final seenUserIds = <String>{};
+      final uniqueMembers = <Map<String, dynamic>>[];
+
+      for (final member in members) {
+        final userId = member['id'] as String;
+        if (!seenUserIds.contains(userId)) {
+          seenUserIds.add(userId);
+          uniqueMembers.add(member);
+        }
+      }
+
       // Create participants list (excluding current user for the call initiation)
-      final participants = members
+      final participants = uniqueMembers
           .where((member) => member['id'] != currentUserId)
           .map(
             (member) => {
@@ -373,33 +582,134 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      // Create call document
+      // Create call document with unique participant IDs
+      final uniqueParticipantIds = uniqueMembers
+          .map((m) => m['id'])
+          .toSet()
+          .toList();
       final callDoc = await _firestore.collection('group_calls').add({
         'groupId': widget.groupId,
+        'groupName': widget.groupName,
         'callerId': currentUserId,
         'callerName': _memberNames[currentUserId] ?? 'Unknown',
-        'participants': members.map((m) => m['id']).toList(),
+        'participants': uniqueParticipantIds,
         'isVideo': false,
         'status': 'calling',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Send notifications to all participants
+      debugPrint('  Created group call: ${callDoc.id}');
+
+      // CRITICAL: Initialize participant subcollection for all participants
+      // This is needed for accepting/rejecting calls
+      final batch = _firestore.batch();
+
+      for (final member in uniqueMembers) {
+        final userId = member['id'] as String;
+        final participantRef = _firestore
+            .collection('group_calls')
+            .doc(callDoc.id)
+            .collection('participants')
+            .doc(userId);
+
+        batch.set(participantRef, {
+          'userId': userId,
+          'name': member['name'] ?? 'Unknown',
+          'photoUrl': member['photoUrl'],
+          'isActive': userId == currentUserId, // Caller is active immediately
+          'joinedAt': userId == currentUserId
+              ? FieldValue.serverTimestamp()
+              : null,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      debugPrint('  Initialized ${uniqueMembers.length} participant documents');
+
+      // Add optimistic call system message to UI immediately (WhatsApp style)
+      final optimisticCallMessageId =
+          'optimistic_call_${DateTime.now().millisecondsSinceEpoch}';
+      final optimisticCallMessage = {
+        'id': optimisticCallMessageId,
+        'senderId': 'system',
+        'text': 'Voice call',
+        'timestamp': Timestamp.now(),
+        'isSystemMessage': true,
+        'actionType': 'call',
+        'callId': callDoc.id,
+        'callerId': currentUserId,
+        'callerName': _memberNames[currentUserId] ?? 'You',
+        'callDuration': 0, // Will be updated when call ends
+        'participantCount': 0, // Will be updated when call ends
+        'isOptimistic': true,
+      };
+
+      // Show immediately in UI
+      setState(() {
+        _optimisticMessages.insert(0, optimisticCallMessage);
+      });
+      debugPrint('📞 Added optimistic call message to UI');
+
+      // Scroll to show the call message
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToBottom();
+      });
+
+      // Send system message to chat - WhatsApp style with caller info
+      debugPrint('  Creating call system message...');
+      final systemMessageId = await _groupChatService.sendSystemMessage(
+        groupId: widget.groupId,
+        text: 'Voice call',
+        actionType: 'call',
+        callId: callDoc.id,
+        callerId: currentUserId, // Store caller ID
+        callerName:
+            _memberNames[currentUserId] ?? 'Someone', // Store caller name
+        callDuration: 0, // Will be updated when call ends
+        participantCount: 0, // Will be updated when call ends
+      );
+      debugPrint('  System message created with ID: $systemMessageId');
+
+      // Remove optimistic message once real one is created
+      if (mounted) {
+        setState(() {
+          _optimisticMessages
+              .removeWhere((msg) => msg['id'] == optimisticCallMessageId);
+        });
+      }
+
+      // Store system message ID in call document for later update
+      await _firestore.collection('group_calls').doc(callDoc.id).update({
+        'systemMessageId': systemMessageId,
+      });
+      debugPrint('  System message ID stored in call document');
+
+      // Firestore listener (startListeningForGroupCalls) will automatically
+      // detect this new call and show CallKit UI to all participants
+      debugPrint(
+        '    Group call created. Firestore listener will handle notifications.',
+      );
+
+      // Build final participants list with deduplication
+      final finalParticipants = <Map<String, dynamic>>[];
+      final finalSeenIds = <String>{};
+
+      // Add current user first
+      finalParticipants.add({
+        'userId': currentUserId,
+        'name': _memberNames[currentUserId] ?? 'You',
+        'photoUrl': _memberPhotos[currentUserId],
+      });
+      finalSeenIds.add(currentUserId);
+
+      // Add other participants (ensuring no duplicates)
       for (final participant in participants) {
-        NotificationService().sendNotificationToUser(
-          userId: participant['userId'] as String,
-          title: 'Incoming Group Call',
-          body:
-              '${_memberNames[currentUserId] ?? 'Someone'} is calling ${widget.groupName}',
-          type: 'group_audio_call',
-          data: {
-            'callId': callDoc.id,
-            'groupId': widget.groupId,
-            'groupName': widget.groupName,
-            'callerId': currentUserId,
-            'isVideo': false,
-          },
-        );
+        final userId = participant['userId'] as String;
+        if (!finalSeenIds.contains(userId)) {
+          finalSeenIds.add(userId);
+          finalParticipants.add(participant);
+        }
       }
 
       // Navigate to group audio call screen
@@ -409,112 +719,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           MaterialPageRoute(
             builder: (context) => GroupAudioCallScreen(
               callId: callDoc.id,
+              groupId: widget.groupId,
               userId: currentUserId,
               userName: _memberNames[currentUserId] ?? 'You',
-              participants: [
-                {
-                  'userId': currentUserId,
-                  'name': _memberNames[currentUserId] ?? 'You',
-                  'photoUrl': _memberPhotos[currentUserId],
-                },
-                ...participants,
-              ],
+              groupName: _currentGroupName,
+              participants: finalParticipants,
             ),
           ),
         );
       }
     } catch (e) {
       debugPrint('Error starting group audio call: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to start call: $e')));
-      }
-    }
-  }
-
-  // Start group video call
-  Future<void> _startGroupVideoCall() async {
-    final currentUserId = _currentUserId;
-    if (currentUserId == null) return;
-
-    try {
-      // Get group members
-      final members = await _groupChatService.getGroupMembers(widget.groupId);
-
-      // Create participants list (excluding current user for the call initiation)
-      final participants = members
-          .where((member) => member['id'] != currentUserId)
-          .map(
-            (member) => {
-              'userId': member['id'] as String,
-              'name': member['name'] ?? 'Unknown',
-              'photoUrl': member['photoUrl'],
-            },
-          )
-          .toList();
-
-      if (participants.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No members to call')));
-        }
-        return;
-      }
-
-      // Create call document
-      final callDoc = await _firestore.collection('group_calls').add({
-        'groupId': widget.groupId,
-        'callerId': currentUserId,
-        'callerName': _memberNames[currentUserId] ?? 'Unknown',
-        'participants': members.map((m) => m['id']).toList(),
-        'isVideo': true,
-        'status': 'calling',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Send notifications to all participants
-      for (final participant in participants) {
-        NotificationService().sendNotificationToUser(
-          userId: participant['userId'] as String,
-          title: 'Incoming Group Video Call',
-          body:
-              '${_memberNames[currentUserId] ?? 'Someone'} is video calling ${widget.groupName}',
-          type: 'group_video_call',
-          data: {
-            'callId': callDoc.id,
-            'groupId': widget.groupId,
-            'groupName': widget.groupName,
-            'callerId': currentUserId,
-            'isVideo': true,
-          },
-        );
-      }
-
-      // Navigate to group video call screen
-      if (mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => GroupVideoCallScreen(
-              callId: callDoc.id,
-              userId: currentUserId,
-              userName: _memberNames[currentUserId] ?? 'You',
-              participants: [
-                {
-                  'userId': currentUserId,
-                  'name': _memberNames[currentUserId] ?? 'You',
-                  'photoUrl': _memberPhotos[currentUserId],
-                },
-                ...participants,
-              ],
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error starting group video call: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -695,16 +910,51 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       return;
     }
 
-    debugPrint('Starting image upload...');
-    setState(() => _isSending = true);
+    // Create optimistic message ID
+    final optimisticId =
+        'optimistic_image_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Create optimistic message - show immediately with local file
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'text': '',
+      'imageUrl': imageFile.path, // Local file path for immediate display
+      'isLocalFile': true, // Flag to indicate this is a local file
+      'timestamp': Timestamp.now(),
+      'isSystemMessage': false,
+      'isOptimistic': true,
+      'readBy': [currentUserId],
+      if (_replyToMessage != null) 'replyToMessageId': _replyToMessage!['id'],
+    };
+
+    // Add optimistic message and show immediately
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+    });
+
+    // Scroll to show the new message immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+
+    // Start upload in background (don't block UI)
+    _uploadAndSendImage(imageFile, optimisticId, currentUserId);
+  }
+
+  // Separate method to handle image upload in background
+  Future<void> _uploadAndSendImage(
+    File imageFile,
+    String optimisticId,
+    String currentUserId,
+  ) async {
     try {
-      // Upload image to Firebase Storage
+      debugPrint('Starting image upload...');
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.jpg';
       final ref = _storage.ref().child('chat_media/$currentUserId/$fileName');
-      debugPrint('Uploading to: chat_media/$currentUserId/$fileName');
 
+      // Upload image to Firebase Storage
       final uploadTask = ref.putFile(imageFile);
       final snapshot = await uploadTask;
 
@@ -714,7 +964,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       if (!mounted) return;
 
-      // Send message directly to Firestore (same as 1-to-1 chat)
+      // Send message to Firestore with uploaded image URL
       await _firestore
           .collection('conversations')
           .doc(widget.groupId)
@@ -732,29 +982,33 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       // Update conversation
       await _firestore.collection('conversations').doc(widget.groupId).update({
-        'lastMessage': ' Photo',
+        'lastMessage': '📷 Photo',
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderId': currentUserId,
       });
 
-      debugPrint('Image message sent successfully');
       if (mounted) {
-        setState(() => _replyToMessage = null);
-        _scrollToBottom();
+        // Remove optimistic message (real one will come from stream)
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+          _replyToMessage = null;
+        });
       }
     } catch (e) {
-      debugPrint('Error sending image: $e');
+      debugPrint('Error uploading image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send image: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
+        // Remove failed optimistic message
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to send image: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -859,13 +1113,50 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
 
-    setState(() => _isSending = true);
+    // Create optimistic message ID
+    final optimisticId =
+        'optimistic_video_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Create optimistic message - show immediately with local file
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'text': '',
+      'videoUrl': videoFile.path, // Local file path for immediate display
+      'isLocalFile': true, // Flag to indicate this is a local file
+      'timestamp': Timestamp.now(),
+      'isSystemMessage': false,
+      'isOptimistic': true,
+      'readBy': [currentUserId],
+      if (_replyToMessage != null) 'replyToMessageId': _replyToMessage!['id'],
+    };
+
+    // Add optimistic message and show immediately
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+    });
+
+    // Scroll to show the new message immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+
+    // Start upload in background (don't block UI)
+    _uploadAndSendVideo(videoFile, optimisticId, currentUserId);
+  }
+
+  // Separate method to handle upload in background
+  Future<void> _uploadAndSendVideo(
+    File videoFile,
+    String optimisticId,
+    String currentUserId,
+  ) async {
     try {
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.mp4';
       final ref = _storage.ref().child('chat_media/$currentUserId/$fileName');
 
+      // Upload video to Firebase Storage
       final uploadTask = ref.putFile(videoFile);
       final snapshot = await uploadTask;
 
@@ -874,6 +1165,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       if (!mounted) return;
 
+      // Send message to Firestore with uploaded video URL
       await _firestore
           .collection('conversations')
           .doc(widget.groupId)
@@ -889,6 +1181,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               'replyToMessageId': _replyToMessage!['id'],
           });
 
+      // Update conversation
       await _firestore.collection('conversations').doc(widget.groupId).update({
         'lastMessage': '🎥 Video',
         'lastMessageTime': FieldValue.serverTimestamp(),
@@ -896,17 +1189,22 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       });
 
       if (mounted) {
-        setState(() => _replyToMessage = null);
-        _scrollToBottom();
+        // Remove optimistic message (real one will come from stream)
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+          _replyToMessage = null;
+        });
       }
     } catch (e) {
-      debugPrint('Error sending video: $e');
+      debugPrint('Error uploading video: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to send video');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
+        // Remove failed optimistic message
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          SnackBarHelper.showError(context, 'Failed to send video');
+        }
       }
     }
   }
@@ -1375,7 +1673,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         label: 'Reply',
                         onTap: () {
                           Navigator.pop(context);
-                          setState(() => _replyToMessage = message);
+                          setState(() {
+                            // Clear edit first - only one action at a time
+                            _editingMessage = null;
+                            _messageController.clear();
+                            _replyToMessage = message;
+                          });
                         },
                       ),
                       _buildMessageOption(
@@ -1663,6 +1966,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Delete media from Firebase Storage if exists
       final imageUrl = messageData['imageUrl'] as String?;
       final audioUrl = messageData['audioUrl'] as String?;
+      final voiceUrl = messageData['voiceUrl'] as String?;
 
       if (imageUrl != null && imageUrl.isNotEmpty) {
         try {
@@ -1682,6 +1986,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
       }
 
+      if (voiceUrl != null && voiceUrl.isNotEmpty) {
+        try {
+          final ref = _storage.refFromURL(voiceUrl);
+          await ref.delete();
+        } catch (e) {
+          debugPrint('Error deleting voice file: $e');
+        }
+      }
+
       // Mark message as deleted (WhatsApp style - shows "This message was deleted")
       await _firestore
           .collection('conversations')
@@ -1693,6 +2006,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             'text': 'This message was deleted',
             'imageUrl': null,
             'audioUrl': null,
+            'voiceUrl': null,
+            'voiceDuration': null,
             'deletedAt': FieldValue.serverTimestamp(),
           });
     } catch (e) {
@@ -1814,7 +2129,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final currentUserId = _currentUserId;
+    final currentUserId = ref.watch(currentUserIdProvider);
 
     return Scaffold(
       backgroundColor: isDarkMode ? AppColors.backgroundDark : Colors.white,
@@ -1848,8 +2163,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         .collection('conversations')
                         .doc(widget.groupId)
                         .collection('messages')
-                        .orderBy('timestamp', descending: false)
-                        .limitToLast(_messagesPerPage)
+                        .orderBy('timestamp', descending: true)
+                        .limit(_messagesPerPage)
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting &&
@@ -1858,21 +2173,37 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                       }
 
                       final messages = snapshot.data?.docs ?? [];
+                      debugPrint(
+                        '💬 StreamBuilder received ${messages.length} messages from Firestore',
+                      );
+
+                      // Log system messages
+                      for (var doc in messages) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        if (data['isSystemMessage'] == true) {
+                          debugPrint(
+                            '💬 Found system message: id=${doc.id}, text="${data['text']}", actionType=${data['actionType']}, timestamp=${data['timestamp']}',
+                          );
+                        }
+                      }
 
                       if (messages.isNotEmpty) {
-                        _lastDocument = messages.first;
+                        _lastDocument = messages.last;
                         _hasMoreMessages = messages.length >= _messagesPerPage;
                       }
 
-                      // Combine real messages with optimistic messages
+                      // With reverse: true on ListView, we want newest messages first (index 0 = bottom)
+                      // Firestore query is already descending (newest first), so don't reverse
+
+                      // Combine optimistic messages (newest) with real messages
                       var allMessages = [
+                        ..._optimisticMessages, // Newest (optimistic)
                         ...messages.map(
                           (doc) => {
                             'id': doc.id,
                             ...doc.data() as Map<String, dynamic>,
                           },
-                        ),
-                        ..._optimisticMessages,
+                        ), // Then real messages (newest to oldest)
                       ];
 
                       // Filter out messages deleted for current user
@@ -1882,6 +2213,42 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             deletedFor.contains(currentUserId)) {
                           return false; // Hide message for this user
                         }
+                        return true;
+                      }).toList();
+
+                      //   FILTER OUT 1-ON-1 MESSAGES FROM GROUP CHATS
+                      // Hide messages that are not group-related
+                      allMessages = allMessages.where((msg) {
+                        final callId = msg['callId'] as String?;
+                        final groupId = msg['groupId'] as String?;
+                        final actionType = msg['actionType'] as String?;
+
+                        // SKIP FILTER for group call system messages (actionType == 'call')
+                        // Group call IDs are from 'group_calls' collection (Firestore auto-IDs)
+                        if (actionType == 'call') {
+                          return true; // Always show group call messages
+                        }
+
+                        // Filter 1: If message has a callId but it's NOT a group call (doesn't start with "group_")
+                        if (callId != null &&
+                            callId.isNotEmpty &&
+                            !callId.startsWith('group_')) {
+                          debugPrint(
+                            '  Filtering out 1-on-1 call message from group chat: callId=$callId',
+                          );
+                          return false;
+                        }
+
+                        // Filter 2: If message has groupId but it doesn't match this group
+                        if (groupId != null &&
+                            groupId.isNotEmpty &&
+                            groupId != widget.groupId) {
+                          debugPrint(
+                            '  Filtering out message from different group: groupId=$groupId, expected=${widget.groupId}',
+                          );
+                          return false;
+                        }
+
                         return true;
                       }).toList();
 
@@ -1901,86 +2268,146 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
                       _groupChatService.markAsRead(widget.groupId);
 
+                      // Only auto-scroll to bottom if user is already near bottom
+                      // This prevents forced scrolling when user is reading old messages
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!_isLoadingMore && !_isSearching) {
-                          _scrollToBottom();
+                        if (!_isLoadingMore &&
+                            !_isSearching &&
+                            _scrollController.hasClients) {
+                          // With reverse: true, position 0 is bottom
+                          // Only auto-scroll if already within 200 pixels of bottom
+                          final isNearBottom =
+                              _scrollController.position.pixels < 200;
+                          if (isNearBottom) {
+                            _scrollToBottom();
+                          }
                         }
                       });
 
-                      return Column(
-                        children: [
-                          if (_isLoadingMore)
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          if (_hasMoreMessages &&
+                      // Calculate item count including header items
+                      // With reverse: true, header items go at END of array (display at TOP)
+                      int headerItemCount = 0;
+                      if (_isLoadingMore) {
+                        headerItemCount++;
+                      }
+                      if (_hasMoreMessages &&
+                          messages.length >= _messagesPerPage &&
+                          !_isSearching) {
+                        headerItemCount++;
+                      }
+
+                      final totalItemCount =
+                          allMessages.length + headerItemCount;
+
+                      return ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        itemCount: totalItemCount,
+                        itemBuilder: (context, index) {
+                          // Messages come first (indices 0 to allMessages.length - 1)
+                          if (index < allMessages.length) {
+                            final messageData = allMessages[index];
+                            final senderId =
+                                messageData['senderId'] as String? ?? '';
+                            final text = messageData['text'] as String? ?? '';
+                            final imageUrl = messageData['imageUrl'] as String?;
+                            final videoUrl = messageData['videoUrl'] as String?;
+                            final timestamp =
+                                messageData['timestamp'] as Timestamp?;
+                            final isSystemMessage =
+                                messageData['isSystemMessage'] ?? false;
+                            final isOptimistic =
+                                messageData['isOptimistic'] ?? false;
+                            final isMe = senderId == currentUserId;
+                            final readBy = List<String>.from(
+                              messageData['readBy'] ?? [],
+                            );
+                            final replyToId =
+                                messageData['replyToMessageId'] as String?;
+                            final voiceUrl = messageData['voiceUrl'] as String?;
+                            final voiceDuration =
+                                messageData['voiceDuration'] as int?;
+
+                            if (isSystemMessage) {
+                              final actionType =
+                                  messageData['actionType'] as String?;
+                              debugPrint(
+                                '🔍 Rendering system message: text="$text", actionType=$actionType, timestamp=$timestamp',
+                              );
+                              return _buildSystemMessage(
+                                text,
+                                isDarkMode,
+                                messageData,
+                              );
+                            }
+
+                            return _buildMessageBubble(
+                              messageData: messageData,
+                              text: text,
+                              imageUrl: imageUrl,
+                              videoUrl: videoUrl,
+                              senderId: senderId,
+                              isMe: isMe,
+                              timestamp: timestamp,
+                              isDarkMode: isDarkMode,
+                              isOptimistic: isOptimistic,
+                              readBy: readBy,
+                              replyToId: replyToId,
+                              voiceUrl: voiceUrl,
+                              voiceDuration: voiceDuration,
+                            );
+                          }
+
+                          // Header items come after messages (display at top due to reverse: true)
+                          final headerIndex = index - allMessages.length;
+
+                          // Show "Load earlier messages" button
+                          if (headerIndex == 0 &&
+                              _hasMoreMessages &&
                               messages.length >= _messagesPerPage &&
-                              !_isSearching)
-                            TextButton(
-                              onPressed: _loadMoreMessages,
-                              child: Text(
-                                'Load earlier messages',
-                                style: TextStyle(
-                                  color: Theme.of(context).primaryColor,
+                              !_isSearching) {
+                            return Center(
+                              child: TextButton(
+                                onPressed: _loadMoreMessages,
+                                child: Text(
+                                  'Load earlier messages',
+                                  style: TextStyle(
+                                    color: Theme.of(context).primaryColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                          Expanded(
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                            );
+                          }
+
+                          // Show loading indicator
+                          final loadingIndex =
+                              (_hasMoreMessages &&
+                                  messages.length >= _messagesPerPage &&
+                                  !_isSearching)
+                              ? 1
+                              : 0;
+                          if (headerIndex == loadingIndex && _isLoadingMore) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
                               ),
-                              itemCount: allMessages.length,
-                              itemBuilder: (context, index) {
-                                final messageData = allMessages[index];
-                                final senderId =
-                                    messageData['senderId'] as String;
-                                final text =
-                                    messageData['text'] as String? ?? '';
-                                final imageUrl =
-                                    messageData['imageUrl'] as String?;
-                                final timestamp =
-                                    messageData['timestamp'] as Timestamp?;
-                                final isSystemMessage =
-                                    messageData['isSystemMessage'] ?? false;
-                                final isOptimistic =
-                                    messageData['isOptimistic'] ?? false;
-                                final isMe = senderId == currentUserId;
-                                final readBy = List<String>.from(
-                                  messageData['readBy'] ?? [],
-                                );
-                                final replyToId =
-                                    messageData['replyToMessageId'] as String?;
+                            );
+                          }
 
-                                if (isSystemMessage) {
-                                  return _buildSystemMessage(text, isDarkMode);
-                                }
-
-                                return _buildMessageBubble(
-                                  messageData: messageData,
-                                  text: text,
-                                  imageUrl: imageUrl,
-                                  senderId: senderId,
-                                  isMe: isMe,
-                                  timestamp: timestamp,
-                                  isDarkMode: isDarkMode,
-                                  isOptimistic: isOptimistic,
-                                  readBy: readBy,
-                                  replyToId: replyToId,
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                          return const SizedBox.shrink();
+                        },
                       );
                     },
                   ),
@@ -2157,14 +2584,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             tooltip: 'Delete',
           ),
         ] else if (!_isSearching) ...[
-          // Video call button
+          // Video call button (disabled)
           IconButton(
             icon: Icon(
               Icons.videocam_rounded,
-              color: isDarkMode ? Colors.white70 : AppColors.iosBlue,
+              color: (isDarkMode ? Colors.white70 : AppColors.iosBlue)
+                  .withValues(alpha: 0.5),
               size: 24,
             ),
-            onPressed: _startGroupVideoCall,
+            onPressed: null,
             tooltip: 'Video Call',
           ),
           // Audio call button
@@ -2244,25 +2672,30 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   Widget _buildReplyPreview(bool isDarkMode) {
-    final senderName = _memberNames[_replyToMessage!['senderId']] ?? 'Unknown';
+    final senderId = _replyToMessage!['senderId'] as String;
+    final senderName = _memberNames[senderId] ?? 'Unknown';
+    final isMe = senderId == _currentUserId;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
-        border: Border(
-          top: BorderSide(
-            color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-          ),
+        color: isDarkMode
+            ? Colors.black.withValues(alpha: 0.5)
+            : Colors.grey[200],
+        border: Border.all(
+          color: const Color(0xFFE91E63), // Pink border
+          width: 1.5,
         ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           Container(
-            width: 4,
-            height: 40,
+            width: 3,
+            height: 45,
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
+              color: const Color(0xFFE91E63), // Pink color like in screenshot
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -2272,18 +2705,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Replying to $senderName',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).primaryColor,
+                  isMe ? 'You' : senderName,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFE91E63), // Pink color
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   _replyToMessage!['text'] ?? 'Photo',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2291,12 +2725,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.close,
-              color: isDarkMode ? Colors.grey[600] : Colors.grey,
+          GestureDetector(
+            onTap: () => setState(() => _replyToMessage = null),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.close,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                size: 20,
+              ),
             ),
-            onPressed: () => setState(() => _replyToMessage = null),
           ),
         ],
       ),
@@ -2305,20 +2743,23 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   Widget _buildEditPreview(bool isDarkMode) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
-        border: Border(
-          top: BorderSide(
-            color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-          ),
+        color: isDarkMode
+            ? Colors.black.withValues(alpha: 0.5)
+            : Colors.grey[200],
+        border: Border.all(
+          color: Colors.orange, // Orange border matching edit theme
+          width: 1.5,
         ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           Container(
-            width: 4,
-            height: 40,
+            width: 3,
+            height: 45,
             decoration: BoxDecoration(
               color: Colors.orange,
               borderRadius: BorderRadius.circular(2),
@@ -2332,16 +2773,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 const Text(
                   'Editing message',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: Colors.orange,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   _editingMessage!['text'] ?? '',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2349,12 +2791,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.close,
-              color: isDarkMode ? Colors.grey[600] : Colors.grey,
+          GestureDetector(
+            onTap: _cancelEdit,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.close,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                size: 20,
+              ),
             ),
-            onPressed: _cancelEdit,
           ),
         ],
       ),
@@ -2501,15 +2947,56 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
 
-    try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Recording file not found');
-        }
-        return;
+    final file = File(filePath);
+    if (!await file.exists()) {
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Recording file not found');
       }
+      return;
+    }
 
+    // Create optimistic message ID
+    final optimisticId =
+        'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
+
+    // Create optimistic message - show immediately with local file
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'text': '',
+      'voiceUrl': filePath, // Local file path for immediate display
+      'voiceDuration': audioDuration,
+      'isLocalFile': true, // Flag to indicate this is a local file
+      'timestamp': Timestamp.now(),
+      'isSystemMessage': false,
+      'isOptimistic': true,
+      'readBy': [currentUserId],
+      if (_replyToMessage != null) 'replyToMessageId': _replyToMessage!['id'],
+    };
+
+    // Add optimistic message and show immediately
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+      _recordingDuration = 0; // Reset recording duration
+    });
+
+    // Scroll to show the new message immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+
+    // Start upload in background (don't block UI)
+    _uploadAndSendVoice(file, optimisticId, currentUserId, audioDuration);
+  }
+
+  // Separate method to handle voice upload in background
+  Future<void> _uploadAndSendVoice(
+    File file,
+    String optimisticId,
+    String currentUserId,
+    int audioDuration,
+  ) async {
+    try {
       // Upload to Firebase Storage
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'voice_${currentUserId}_$timestamp.aac';
@@ -2527,6 +3014,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       final snapshot = await uploadTask;
       final audioUrl = await snapshot.ref.getDownloadURL();
 
+      if (!mounted) return;
+
       // Send voice message to group
       await _groupChatService.sendMessage(
         groupId: widget.groupId,
@@ -2538,15 +3027,23 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Delete local file
       await file.delete();
 
-      // Scroll to bottom
-      _scrollToBottom();
-
-      // Reset recording duration
-      _recordingDuration = 0;
-    } catch (e) {
-      debugPrint('Error sending voice message: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to send voice message');
+        // Remove optimistic message (real one will come from stream)
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+          _replyToMessage = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error uploading voice message: $e');
+      if (mounted) {
+        // Remove failed optimistic message
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          SnackBarHelper.showError(context, 'Failed to send voice message');
+        }
       }
     }
   }
@@ -2558,6 +3055,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Mention suggestions dropdown
+        if (_showMentionSuggestions)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: _buildMentionSuggestions(),
+          ),
         // White border line at the top
         Container(height: 0.5, color: Colors.white),
         // Input Area - Premium iMessage style
@@ -2626,6 +3129,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                 widget.groupId,
                                 text.isNotEmpty,
                               );
+                              // Handle @ mention detection
+                              _handleMentionDetection(text);
                             },
                             onTap: () {
                               if (_showEmojiPicker) {
@@ -2860,6 +3365,68 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
+  Widget _buildMentionSuggestions() {
+    if (!_showMentionSuggestions || _filteredMembers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _filteredMembers.length,
+        separatorBuilder: (context, index) =>
+            Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+        itemBuilder: (context, index) {
+          final member = _filteredMembers[index];
+          final name = member['name'] as String;
+          final photo = member['photo'] as String?;
+          final userId = member['id'] as String;
+
+          return ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 4,
+            ),
+            leading: CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.grey[800],
+              backgroundImage: PhotoUrlHelper.isValidUrl(photo)
+                  ? CachedNetworkImageProvider(photo!)
+                  : null,
+              child: !PhotoUrlHelper.isValidUrl(photo)
+                  ? Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                    )
+                  : null,
+            ),
+            title: Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: () => _insertMention(userId, name),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildScrollToBottomButton(bool isDarkMode) {
     return Positioned(
       bottom: _showEmojiPicker ? 370 : 100,
@@ -2890,7 +3457,136 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  Widget _buildSystemMessage(String text, bool isDarkMode) {
+  Widget _buildSystemMessage(
+    String text,
+    bool isDarkMode, [
+    Map<String, dynamic>? messageData,
+  ]) {
+    final actionType = messageData?['actionType'] as String?;
+
+    // WhatsApp-style call message
+    if (actionType == 'call') {
+      final callerId = messageData?['callerId'] as String?;
+      final callerName = messageData?['callerName'] as String?;
+      final callDuration = messageData?['callDuration'] as int?;
+      final participantCount = messageData?['participantCount'] as int?;
+      final timestamp = messageData?['timestamp'] as Timestamp?;
+
+      // Check if current user is the caller
+      final isCallerCurrentUser = callerId == _currentUserId;
+      final isMissed = callDuration == null || callDuration == 0;
+
+      IconData callIcon;
+      Color iconColor;
+      String callText;
+
+      if (isMissed) {
+        callIcon = Icons.phone_missed;
+        iconColor = Colors.red;
+        callText = isCallerCurrentUser ? 'Outgoing call' : 'Missed call';
+      } else {
+        callIcon = isCallerCurrentUser ? Icons.call_made : Icons.call_received;
+        iconColor = Colors.green;
+
+        // Format duration
+        final duration = Duration(seconds: callDuration);
+        final minutes = duration.inMinutes;
+        final seconds = duration.inSeconds % 60;
+        final durationText = minutes > 0
+            ? '${minutes}m ${seconds}s'
+            : '${seconds}s';
+
+        final participantText = participantCount != null && participantCount > 0
+            ? ' • $participantCount joined'
+            : '';
+
+        callText = isCallerCurrentUser
+            ? 'Outgoing call • $durationText$participantText'
+            : 'Incoming call • $durationText$participantText';
+      }
+
+      // WhatsApp-style positioning: right for caller, left for others
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Align(
+          alignment: isCallerCurrentUser
+              ? Alignment.centerRight
+              : Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: isCallerCurrentUser
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Show caller name (only for non-callers)
+              if (!isCallerCurrentUser && callerName != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4, left: 12),
+                  child: Text(
+                    callerName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(callIcon, size: 18, color: iconColor),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          callText,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isDarkMode
+                                ? Colors.grey[300]
+                                : Colors.grey[800],
+                          ),
+                        ),
+                        if (timestamp != null)
+                          Text(
+                            DateFormat(
+                              'MMM d, h:mm a',
+                            ).format(timestamp.toDate()),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDarkMode
+                                  ? Colors.grey[500]
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Regular system message
     return Center(
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
@@ -2915,6 +3611,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     required Map<String, dynamic> messageData,
     required String text,
     String? imageUrl,
+    String? videoUrl,
     required String senderId,
     required bool isMe,
     Timestamp? timestamp,
@@ -2922,13 +3619,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     bool isOptimistic = false,
     List<String> readBy = const [],
     String? replyToId,
+    String? voiceUrl,
+    int? voiceDuration,
   }) {
     final senderName = _memberNames[senderId] ?? 'Unknown';
     final senderPhoto = _memberPhotos[senderId];
     final totalMembers = _memberNames.length;
     final readCount = readBy.length;
     final themeColors = chatThemes[_currentTheme] ?? chatThemes['default']!;
-    final hasContent = text.isNotEmpty || imageUrl != null;
+    final hasContent =
+        text.isNotEmpty ||
+        imageUrl != null ||
+        videoUrl != null ||
+        voiceUrl != null;
 
     if (!hasContent) return const SizedBox.shrink();
 
@@ -3024,6 +3727,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   ? AppColors.iosGrayDark
                                   : AppColors.iosGrayTertiary)
                             : null,
+                        border: (isMe && text.isNotEmpty)
+                            ? Border.all(color: Colors.blue, width: 2)
+                            : null,
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(18),
                           topRight: const Radius.circular(18),
@@ -3051,7 +3757,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             Container(
                               decoration: BoxDecoration(
                                 border: Border.all(
-                                  color: AppColors.iosBlue,
+                                  color: isOptimistic
+                                      ? Colors.orange.withValues(alpha: 0.5)
+                                      : AppColors.iosBlue,
                                   width: 2,
                                 ),
                                 borderRadius: BorderRadius.only(
@@ -3076,126 +3784,299 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       ? Radius.circular(isMe ? 2 : 16)
                                       : Radius.zero,
                                 ),
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  width: 200,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    width: 200,
-                                    height: 150,
-                                    color: isDarkMode
-                                        ? Colors.grey[800]
-                                        : Colors.grey[300],
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Show local file or network image
+                                    messageData['isLocalFile'] == true
+                                        ? Image.file(
+                                            File(imageUrl),
+                                            width: 200,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : CachedNetworkImage(
+                                            imageUrl: imageUrl,
+                                            width: 200,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                Container(
+                                                  width: 200,
+                                                  height: 150,
+                                                  color: isDarkMode
+                                                      ? Colors.grey[800]
+                                                      : Colors.grey[300],
+                                                  child: const Center(
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  ),
+                                                ),
+                                            errorWidget:
+                                                (context, url, error) =>
+                                                    const Icon(
+                                                      Icons.error_outline,
+                                                      color: Colors.red,
+                                                    ),
+                                          ),
+                                    // Show uploading overlay for optimistic messages
+                                    if (isOptimistic)
+                                      Container(
+                                        width: 200,
+                                        height: 150,
+                                        color: Colors.black.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const SizedBox(
+                                              width: 32,
+                                              height: 32,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 3,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.orange),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.7,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: const Text(
+                                                'Uploading...',
+                                                style: TextStyle(
+                                                  color: Colors.orange,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      const Icon(
-                                        Icons.error_outline,
-                                        color: Colors.red,
-                                      ),
+                                  ],
                                 ),
                               ),
                             ),
-                          // Text
+                          // Video
+                          if (videoUrl != null)
+                            GestureDetector(
+                              onTap: isOptimistic
+                                  ? null
+                                  : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              VideoPlayerScreen(
+                                                videoUrl: videoUrl,
+                                                isLocalFile:
+                                                    messageData['isLocalFile'] ==
+                                                    true,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: isOptimistic
+                                        ? Colors.orange.withValues(alpha: 0.5)
+                                        : AppColors.iosBlue,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(18),
+                                    topRight: const Radius.circular(18),
+                                    bottomLeft: text.isEmpty
+                                        ? Radius.circular(isMe ? 18 : 4)
+                                        : Radius.zero,
+                                    bottomRight: text.isEmpty
+                                        ? Radius.circular(isMe ? 4 : 18)
+                                        : Radius.zero,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft: text.isEmpty
+                                        ? Radius.circular(isMe ? 16 : 2)
+                                        : Radius.zero,
+                                    bottomRight: text.isEmpty
+                                        ? Radius.circular(isMe ? 2 : 16)
+                                        : Radius.zero,
+                                  ),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Container(
+                                        width: 200,
+                                        height: 150,
+                                        color: Colors.black,
+                                        child: Icon(
+                                          Icons.video_library,
+                                          color: isOptimistic
+                                              ? Colors.white38
+                                              : Colors.white54,
+                                          size: 48,
+                                        ),
+                                      ),
+                                      // Show uploading indicator for optimistic messages
+                                      if (isOptimistic)
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const SizedBox(
+                                            width: 32,
+                                            height: 32,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 3,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.orange,
+                                                  ),
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.play_arrow,
+                                            color: Colors.white,
+                                            size: 32,
+                                          ),
+                                        ),
+                                      // "Uploading" text for optimistic messages
+                                      if (isOptimistic)
+                                        Positioned(
+                                          bottom: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.7,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: const Text(
+                                              'Uploading...',
+                                              style: TextStyle(
+                                                color: Colors.orange,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Voice message
+                          if (voiceUrl != null && voiceUrl.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: _buildAudioMessagePlayer(
+                                messageId: messageId,
+                                voiceUrl: voiceUrl,
+                                voiceDuration: voiceDuration ?? 0,
+                                isMe: isMe,
+                                isDarkMode: isDarkMode,
+                                isOptimistic: isOptimistic,
+                                isLocalFile: messageData['isLocalFile'] == true,
+                              ),
+                            ),
+                          // Text with mention highlighting
                           if (text.isNotEmpty)
                             Padding(
                               padding: EdgeInsets.only(
                                 left: 14,
                                 right: 14,
-                                top: imageUrl != null ? 8 : 10,
+                                top: imageUrl != null || videoUrl != null
+                                    ? 8
+                                    : 10,
                                 bottom: 4,
                               ),
-                              child: Text(
+                              child: _buildTextWithMentions(
                                 text,
-                                style: TextStyle(
-                                  color: (messageData['isDeleted'] == true)
-                                      ? Colors.grey
-                                      : (isMe
-                                            ? Colors.white
-                                            : (isDarkMode
-                                                  ? Colors.white
-                                                  : AppColors.iosGrayDark)),
-                                  fontSize: 16,
-                                  height: 1.35,
-                                  fontStyle: (messageData['isDeleted'] == true)
-                                      ? FontStyle.italic
-                                      : FontStyle.normal,
-                                ),
+                                isMe,
+                                isDarkMode,
+                                messageData['isDeleted'] == true,
                               ),
                             ),
-                          // Timestamp and read status
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              left: 14,
-                              right: 14,
-                              bottom: 8,
-                              top: 2,
+                        ],
+                      ),
+                    ),
+                    // Timestamp and read status - outside the bubble
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, right: 4, top: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (timestamp != null)
+                            Text(
+                              DateFormat('h:mm a').format(timestamp.toDate()),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isDarkMode
+                                    ? Colors.grey[500]
+                                    : Colors.grey[600],
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (timestamp != null)
-                                  Text(
-                                    DateFormat(
-                                      'h:mm a',
-                                    ).format(timestamp.toDate()),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: isMe
-                                          ? Colors.white.withValues(alpha: 0.8)
-                                          : (isDarkMode
-                                                ? Colors.grey[400]
-                                                : Colors.grey[600]),
-                                    ),
-                                  ),
-                                if (isMe && !isOptimistic) ...[
-                                  const SizedBox(width: 4),
-                                  if (readCount >= totalMembers)
-                                    const Icon(
-                                      Icons.done_all,
-                                      size: 16,
-                                      color: AppColors.iosGreen,
-                                    )
-                                  else if (readCount > 1)
-                                    Icon(
-                                      Icons.done_all,
-                                      size: 16,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                    )
-                                  else
-                                    Icon(
-                                      Icons.done,
-                                      size: 16,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                    ),
-                                ],
-                                if (isOptimistic) ...[
-                                  const SizedBox(width: 4),
-                                  SizedBox(
-                                    width: 10,
-                                    height: 10,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.5,
-                                      color: isMe
-                                          ? Colors.white70
-                                          : (isDarkMode
-                                                ? Colors.grey[600]
-                                                : Colors.grey),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
+                          if (isMe) ...[
+                            const SizedBox(width: 4),
+                            if (isOptimistic)
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: isDarkMode
+                                      ? Colors.grey[600]
+                                      : Colors.grey[500],
+                                ),
+                              )
+                            else
+                              _buildMessageStatusIcon(
+                                messageData['status'],
+                                readCount,
+                                totalMembers,
+                                isDarkMode,
+                              ),
+                          ],
                         ],
                       ),
                     ),
@@ -3207,6 +4088,231 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildAudioMessagePlayer({
+    required String messageId,
+    required String voiceUrl,
+    required int voiceDuration,
+    required bool isMe,
+    required bool isDarkMode,
+    bool isOptimistic = false,
+    bool isLocalFile = false,
+  }) {
+    final isCurrentlyPlaying =
+        _currentlyPlayingMessageId == messageId && _isPlaying;
+    final isThisMessage = _currentlyPlayingMessageId == messageId;
+    final progress = isThisMessage ? _playbackProgress : 0.0;
+
+    // Format duration
+    String formatDuration(int seconds) {
+      final minutes = seconds ~/ 60;
+      final secs = seconds % 60;
+      return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+
+    // Waveform bar heights pattern (30 bars for WhatsApp style)
+    final heights = [
+      6.0,
+      10.0,
+      8.0,
+      14.0,
+      10.0,
+      16.0,
+      12.0,
+      14.0,
+      8.0,
+      18.0,
+      14.0,
+      10.0,
+      16.0,
+      6.0,
+      12.0,
+      10.0,
+      14.0,
+      8.0,
+      10.0,
+      8.0,
+      12.0,
+      14.0,
+      10.0,
+      16.0,
+      12.0,
+      8.0,
+      14.0,
+      10.0,
+      12.0,
+      8.0,
+    ];
+
+    // Audio player WhatsApp style - gradient background
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isMe
+              ? chatThemes[_currentTheme] ?? chatThemes['default']!
+              : [const Color(0xFF3A3A3A), const Color(0xFF2A2A2A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Play/Pause button (or loading indicator)
+          GestureDetector(
+            onTap: isOptimistic ? null : () => _playAudio(messageId, voiceUrl),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isOptimistic
+                    ? Colors.orange.withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: isOptimistic
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Icon(
+                      isCurrentlyPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: isMe
+                          ? (chatThemes[_currentTheme] ??
+                                    chatThemes['default']!)
+                                .first
+                          : const Color(0xFF3A3A3A),
+                      size: 20,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Waveform bars
+          Expanded(
+            child: SizedBox(
+              height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(25, (index) {
+                  final barProgress = index / 25;
+                  final isActive = barProgress <= progress;
+                  final heightIndex = index % heights.length;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 100),
+                    width: 2,
+                    height: heights[heightIndex] * 0.8,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Duration
+          Text(
+            formatDuration(voiceDuration),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _playAudio(String messageId, String audioUrl) async {
+    try {
+      // Initialize player if null
+      _audioPlayer ??= FlutterSoundPlayer();
+
+      // If same message is playing, toggle pause/resume
+      if (_currentlyPlayingMessageId == messageId && _isPlaying) {
+        await _audioPlayer!.pausePlayer();
+        setState(() {
+          _isPlaying = false;
+        });
+        return;
+      }
+
+      // If different message or not playing, stop current and play new
+      if (_isPlaying) {
+        await _audioPlayer!.stopPlayer();
+      }
+
+      // Initialize player if needed
+      if (!_isPlayerInitialized) {
+        await _audioPlayer!.openPlayer();
+        _isPlayerInitialized = true;
+      }
+
+      // Set fast subscription for smooth waveform animation
+      await _audioPlayer!.setSubscriptionDuration(
+        const Duration(milliseconds: 50),
+      );
+
+      // Subscribe to playback progress BEFORE starting
+      _playerSubscription?.cancel();
+      _playerSubscription = _audioPlayer!.onProgress!.listen((e) {
+        if (mounted && e.duration.inMilliseconds > 0) {
+          setState(() {
+            _playbackProgress =
+                e.position.inMilliseconds / e.duration.inMilliseconds;
+          });
+        }
+      });
+
+      setState(() {
+        _currentlyPlayingMessageId = messageId;
+        _isPlaying = true;
+        _playbackProgress = 0.0;
+      });
+
+      await _audioPlayer!.startPlayer(
+        fromURI: audioUrl,
+        codec: Codec.aacADTS,
+        whenFinished: () {
+          if (mounted) {
+            setState(() {
+              _isPlaying = false;
+              _currentlyPlayingMessageId = null;
+              _playbackProgress = 0.0;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('Error playing audio: $e');
+      setState(() {
+        _isPlaying = false;
+        _currentlyPlayingMessageId = null;
+      });
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to play audio');
+      }
+    }
   }
 
   Widget _buildReplyBubble(String messageId, bool isMe, bool isDarkMode) {
@@ -3268,6 +4374,47 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           ),
         );
       },
+    );
+  }
+
+  // Build message status icon (WhatsApp-like ticks)
+  Widget _buildMessageStatusIcon(
+    dynamic status,
+    int readCount,
+    int totalMembers,
+    bool isDarkMode,
+  ) {
+    // WhatsApp group chat tick logic:
+    // Single grey tick ✓ = Sent to server (only sender has read, readCount = 1)
+    // Double grey tick ✓✓ = Delivered/read by some members (readCount > 1 but < totalMembers)
+    // Double blue tick ✓✓ = Read by ALL members (readCount >= totalMembers)
+
+    debugPrint(
+      '📊 Tick Status: readCount=$readCount, totalMembers=$totalMembers',
+    );
+
+    // Check if all members have read (blue double tick)
+    if (readCount >= totalMembers && totalMembers > 0) {
+      debugPrint('✓✓ BLUE - All members read');
+      return const Icon(Icons.done_all_rounded, size: 14, color: Colors.blue);
+    }
+
+    // Check if at least one other person has read (grey double tick)
+    if (readCount > 1) {
+      debugPrint('✓✓ GREY - Some members read');
+      return Icon(
+        Icons.done_all_rounded,
+        size: 14,
+        color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+      );
+    }
+
+    // Single grey tick (only sender has read)
+    debugPrint('✓ SINGLE - Only sender read');
+    return Icon(
+      Icons.check_rounded,
+      size: 14,
+      color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
     );
   }
 }
