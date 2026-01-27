@@ -965,36 +965,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Check if current counter exceeds daily limit (4 per day)
-  Future<bool> _checkDailyMediaLimit(String mediaType) async {
-    debugPrint('🔍 ========== LIMIT CHECK START ==========');
-    debugPrint('🔍 MediaType: $mediaType');
-    debugPrint('🔍 IsCounterLoaded: $_isCounterLoaded');
-    debugPrint('🔍 Current counters BEFORE check: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
+  // Check if adding 'count' items would exceed daily limit (4 per day)
+  Future<bool> _wouldExceedLimit(String mediaType, int count) async {
+    debugPrint('🔍 ========== WOULD EXCEED CHECK START ==========');
+    debugPrint('🔍 MediaType: $mediaType, Trying to add: $count');
 
-    // CRITICAL: If counter not loaded yet, try loading it now (in case initState failed due to null userId)
+    // Load counter if not loaded
     if (!_isCounterLoaded) {
-      debugPrint('⚠️ Counter not loaded, attempting to load now...');
+      debugPrint('⚠️ Counter not loaded, loading now...');
       await _loadDailyMediaCounts();
-      debugPrint('📂 Load attempt completed, _isCounterLoaded = $_isCounterLoaded');
-    }
-
-    // Wait a bit more if still not loaded (backup safety)
-    int waitCount = 0;
-    final startTime = DateTime.now();
-    while (!_isCounterLoaded && waitCount < 20) { // Reduced to 2 seconds since we just tried loading
-      await Future.delayed(const Duration(milliseconds: 100));
-      waitCount++;
-      if (waitCount % 10 == 0) {
-        debugPrint('⏳ Still waiting... ${waitCount * 100}ms elapsed');
-      }
-    }
-
-    final loadTime = DateTime.now().difference(startTime).inMilliseconds;
-    if (!_isCounterLoaded) {
-      debugPrint('⚠️ Counter STILL NOT LOADED after ${loadTime}ms! Proceeding anyway');
-    } else {
-      debugPrint('✅ Counter is loaded (additional wait: ${loadTime}ms)');
     }
 
     await _resetDailyCountersIfNeeded();
@@ -1004,15 +983,18 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         : mediaType == 'video'
             ? _todayVideoCount
             : _todayAudioCount;
-    final exceeds = currentCount > 4; // Correct: Allow 4, block from 5th onwards
 
-    debugPrint('📊 LIMIT CHECK RESULT:');
+    final newTotal = currentCount + count;
+    final wouldExceed = newTotal > 4;
+
+    debugPrint('📊 WOULD EXCEED RESULT:');
     debugPrint('📊   - Current $mediaType count: $currentCount');
-    debugPrint('📊   - Limit: 4 (allow 1-4, block 5+)');
-    debugPrint('📊   - Exceeds? $exceeds ($currentCount > 4)');
-    debugPrint('🔍 ========== LIMIT CHECK END ==========');
+    debugPrint('📊   - Trying to add: $count');
+    debugPrint('📊   - New total would be: $newTotal');
+    debugPrint('📊   - Would exceed limit of 4? $wouldExceed ($newTotal > 4)');
+    debugPrint('🔍 ========== WOULD EXCEED CHECK END ==========');
 
-    return exceeds;
+    return wouldExceed;
   }
 
   // Increment media counter and save to SharedPreferences
@@ -1036,22 +1018,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     await _saveDailyMediaCounts();
     debugPrint('✅ Counter saved to SharedPreferences');
-  }
-
-  // Decrement media counter (only for rollback when limit exceeded)
-  Future<void> _decrementMediaCounter(String mediaType, int count) async {
-    if (mediaType == 'image') {
-      _todayImageCount = (_todayImageCount - count).clamp(0, 999);
-      debugPrint('📉 Image counter rolled back: $_todayImageCount');
-    } else if (mediaType == 'video') {
-      _todayVideoCount = (_todayVideoCount - count).clamp(0, 999);
-      debugPrint('📉 Video counter rolled back: $_todayVideoCount');
-    } else if (mediaType == 'audio') {
-      _todayAudioCount = (_todayAudioCount - count).clamp(0, 999);
-      debugPrint('📉 Audio counter rolled back: $_todayAudioCount');
-    }
-
-    await _saveDailyMediaCounts();
   }
 
   // Pick image from gallery (max 4 images per selection, max 4 images per day)
@@ -1091,15 +1057,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         );
       }
 
-      // CRITICAL: Increment FIRST to prevent race condition
-      await _incrementMediaCounter('image', imagesToSend.length);
-      debugPrint('🔒 Counter incremented: $_todayImageCount images');
-
-      // Check if counter exceeds daily limit (check AFTER increment)
-      final limitReached = await _checkDailyMediaLimit('image');
-      if (limitReached) {
-        // Rollback the increment
-        await _decrementMediaCounter('image', imagesToSend.length);
+      // Check limit BEFORE incrementing (simpler & more reliable)
+      final wouldExceed = await _wouldExceedLimit('image', imagesToSend.length);
+      if (wouldExceed) {
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -1108,6 +1068,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
         return;
       }
+
+      // Passed check - now increment counter
+      await _incrementMediaCounter('image', imagesToSend.length);
+      debugPrint('✅ Counter incremented: $_todayImageCount images');
 
       debugPrint('Sending ${imagesToSend.length} images');
 
@@ -1160,15 +1124,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      // Increment FIRST to prevent race condition
-      await _incrementMediaCounter('image', 1);
-      debugPrint('🔒 Counter incremented: $_todayImageCount images');
-
-      // Check if counter exceeds daily limit
-      final limitReached = await _checkDailyMediaLimit('image');
-      if (limitReached) {
-        // Rollback
-        await _decrementMediaCounter('image', 1);
+      // Check limit BEFORE incrementing
+      final wouldExceed = await _wouldExceedLimit('image', 1);
+      if (wouldExceed) {
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -1177,6 +1135,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
         return;
       }
+
+      // Passed check - now increment
+      await _incrementMediaCounter('image', 1);
+      debugPrint('✅ Counter incremented: $_todayImageCount images');
 
       debugPrint('Photo taken: ${image.path}');
       await _sendImageMessage(File(image.path));
@@ -1394,15 +1356,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             'Camera video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
           );
 
-          // Increment FIRST to prevent race condition
-          await _incrementMediaCounter('video', 1);
-          debugPrint('🔒 Counter incremented: $_todayVideoCount videos');
-
-          // Check if counter exceeds daily limit
-          final limitReached = await _checkDailyMediaLimit('video');
-          if (limitReached) {
-            // Rollback
-            await _decrementMediaCounter('video', 1);
+          // Check limit BEFORE incrementing
+          final wouldExceed = await _wouldExceedLimit('video', 1);
+          if (wouldExceed) {
             if (mounted) {
               SnackBarHelper.showError(
                 context,
@@ -1411,6 +1367,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             }
             return;
           }
+
+          // Passed check - now increment
+          await _incrementMediaCounter('video', 1);
+          debugPrint('✅ Counter incremented: $_todayVideoCount videos');
 
           await _sendVideoMessage(videoFile);
         } catch (e) {
@@ -1495,15 +1455,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         await controller.dispose();
         debugPrint('Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB');
 
-        // Increment FIRST to prevent race condition
-        await _incrementMediaCounter('video', 1);
-        debugPrint('🔒 Counter incremented: $_todayVideoCount videos');
-
-        // Check if counter exceeds daily limit
-        final limitReached = await _checkDailyMediaLimit('video');
-        if (limitReached) {
-          // Rollback
-          await _decrementMediaCounter('video', 1);
+        // NEW APPROACH: Check BEFORE incrementing
+        final wouldExceed = await _wouldExceedLimit('video', 1);
+        if (wouldExceed) {
           if (mounted) {
             SnackBarHelper.showError(
               context,
@@ -1512,6 +1466,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           }
           return;
         }
+
+        // Only increment if passed check
+        await _incrementMediaCounter('video', 1);
+        debugPrint('✅ Counter incremented: $_todayVideoCount videos');
 
         // Send video
         await _sendVideoMessage(videoFile);
@@ -3393,15 +3351,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      // Increment FIRST to prevent race condition
-      await _incrementMediaCounter('audio', 1);
-      debugPrint('🔒 Counter incremented: $_todayAudioCount audios');
-
-      // Check if counter exceeds daily limit
-      final limitReached = await _checkDailyMediaLimit('audio');
-      if (limitReached) {
-        // Rollback
-        await _decrementMediaCounter('audio', 1);
+      // NEW APPROACH: Check BEFORE incrementing
+      final wouldExceed = await _wouldExceedLimit('audio', 1);
+      if (wouldExceed) {
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -3410,6 +3362,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
         return;
       }
+
+      // Only increment if passed check
+      await _incrementMediaCounter('audio', 1);
+      debugPrint('✅ Counter incremented: $_todayAudioCount audios');
 
       // Create optimistic message ID
       final optimisticId =
