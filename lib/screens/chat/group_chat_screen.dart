@@ -974,6 +974,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (!_isCounterLoaded) {
       debugPrint('⚠️ Counter not loaded, loading now...');
       await _loadDailyMediaCounts();
+
+      // CRITICAL: If still not loaded after retry, userId is still null
+      // Block upload to prevent bypassing limit with counter = 0
+      if (!_isCounterLoaded) {
+        debugPrint('❌ BLOCKING: Counter still not loaded (userId likely null)');
+        return true; // Block upload if we can't verify counter
+      }
+    }
+
+    // Verify userId is available before proceeding
+    if (_currentUserId == null) {
+      debugPrint('❌ BLOCKING: userId is null, cannot verify limit');
+      return true; // Block upload if userId is null
     }
 
     await _resetDailyCountersIfNeeded();
