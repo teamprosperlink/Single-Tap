@@ -14,6 +14,7 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
@@ -133,6 +134,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     _scrollController.addListener(_onScroll);
     _scrollController.addListener(_scrollListener);
     _loadChatTheme();
+    _loadDailyMediaCounts(); // Load daily media limits from SharedPreferences
   }
 
   void _scrollListener() {
@@ -856,13 +858,65 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
+  // Load daily media counts from SharedPreferences
+  Future<void> _loadDailyMediaCounts() async {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '${widget.groupId}_$currentUserId';
+
+      final imageCount = prefs.getInt('${key}_imageCount') ?? 0;
+      final videoCount = prefs.getInt('${key}_videoCount') ?? 0;
+      final lastResetStr = prefs.getString('${key}_lastReset');
+
+      _todayImageCount = imageCount;
+      _todayVideoCount = videoCount;
+
+      if (lastResetStr != null) {
+        _lastMediaCountReset = DateTime.parse(lastResetStr);
+      }
+
+      // Check if 24 hours passed and reset if needed
+      await _resetDailyCountersIfNeeded();
+
+      debugPrint('📊 Loaded counts: Images=$_todayImageCount, Videos=$_todayVideoCount');
+    } catch (e) {
+      debugPrint('Error loading media counts: $e');
+    }
+  }
+
+  // Save daily media counts to SharedPreferences
+  Future<void> _saveDailyMediaCounts() async {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '${widget.groupId}_$currentUserId';
+
+      await prefs.setInt('${key}_imageCount', _todayImageCount);
+      await prefs.setInt('${key}_videoCount', _todayVideoCount);
+
+      if (_lastMediaCountReset != null) {
+        await prefs.setString('${key}_lastReset', _lastMediaCountReset!.toIso8601String());
+      }
+
+      debugPrint('💾 Saved counts: Images=$_todayImageCount, Videos=$_todayVideoCount');
+    } catch (e) {
+      debugPrint('Error saving media counts: $e');
+    }
+  }
+
   // Reset daily counters if 24 hours passed
-  void _resetDailyCountersIfNeeded() {
+  Future<void> _resetDailyCountersIfNeeded() async {
     final now = DateTime.now();
 
     // First time: just set the timestamp, don't reset counters
     if (_lastMediaCountReset == null) {
       _lastMediaCountReset = now;
+      await _saveDailyMediaCounts();
       debugPrint('🕐 Media counter timer started');
       return;
     }
@@ -872,61 +926,25 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       _todayImageCount = 0;
       _todayVideoCount = 0;
       _lastMediaCountReset = now;
+      await _saveDailyMediaCounts();
       debugPrint('🔄 Daily media counters reset after 24 hours');
     }
   }
 
-  // Check daily media limit (4 images or 4 videos per day)
+  // Check if adding media would exceed daily limit (4 per day)
   Future<bool> _checkDailyMediaLimit(String mediaType, int addCount) async {
-    final currentUserId = _currentUserId;
-    if (currentUserId == null) return false;
+    await _resetDailyCountersIfNeeded();
 
-    // Reset counters if 24 hours passed
-    _resetDailyCountersIfNeeded();
+    final currentCount = mediaType == 'image' ? _todayImageCount : _todayVideoCount;
+    final wouldExceed = (currentCount + addCount) > 4;
 
-    try {
-      final oneDayAgo = DateTime.now().subtract(const Duration(hours: 24));
+    debugPrint('📊 $mediaType check: Current=$currentCount, Adding=$addCount, Would exceed? $wouldExceed');
 
-      // Count media sent by this user in last 24 hours from Firestore
-      final snapshot = await _firestore
-          .collection('conversations')
-          .doc(widget.groupId)
-          .collection('messages')
-          .where('senderId', isEqualTo: currentUserId)
-          .where('timestamp', isGreaterThan: Timestamp.fromDate(oneDayAgo))
-          .get();
-
-      int dbCount = 0;
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        if (mediaType == 'image' && data['imageUrl'] != null) {
-          dbCount++;
-        } else if (mediaType == 'video' && data['videoUrl'] != null) {
-          dbCount++;
-        }
-      }
-
-      // Get current local counter
-      final localCount =
-          mediaType == 'image' ? _todayImageCount : _todayVideoCount;
-
-      // Total = DB count + pending uploads
-      final totalCount = dbCount + localCount;
-
-      debugPrint(
-        '📊 $mediaType - DB: $dbCount, Local pending: $localCount, Total: $totalCount, Trying to add: $addCount',
-      );
-
-      // Check if adding new media would exceed limit
-      return (totalCount + addCount) > 4;
-    } catch (e) {
-      debugPrint('Error checking daily limit: $e');
-      return false; // Allow on error
-    }
+    return wouldExceed;
   }
 
-  // Increment local media counter
-  void _incrementMediaCounter(String mediaType, int count) {
+  // Increment media counter and save to SharedPreferences
+  Future<void> _incrementMediaCounter(String mediaType, int count) async {
     if (mediaType == 'image') {
       _todayImageCount += count;
       debugPrint('📈 Image counter: $_todayImageCount');
@@ -934,16 +952,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       _todayVideoCount += count;
       debugPrint('📈 Video counter: $_todayVideoCount');
     }
-  }
 
-  // Decrement local media counter (when upload completes or fails)
-  void _decrementMediaCounter(String mediaType) {
-    // IMPORTANT: Don't actually decrement!
-    // Counter should accumulate throughout the day to track total attempts
-    // DB count already has the uploaded count, local counter prevents one-by-one uploads
-    debugPrint('🔒 Counter stays locked (not decremented): Images=$_todayImageCount, Videos=$_todayVideoCount');
-
-    // Counter will only reset after 24 hours via _resetDailyCountersIfNeeded()
+    await _saveDailyMediaCounts();
   }
 
   // Pick image from gallery (max 4 images per selection, max 4 images per day)
@@ -971,19 +981,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         );
       }
 
-      // IMPORTANT: Increment counter FIRST to prevent race condition
-      // If two users click rapidly, both checks will see the incremented count
-      _incrementMediaCounter('image', imagesToSend.length);
-      debugPrint('🔒 Counter locked: $_todayImageCount images');
-
       // Check if adding these images would exceed daily limit
-      final limitReached =
-          await _checkDailyMediaLimit('image', 0); // addCount=0 since already incremented
+      final limitReached = await _checkDailyMediaLimit('image', imagesToSend.length);
       if (limitReached) {
-        // Rollback counter if limit exceeded
-        for (int i = 0; i < imagesToSend.length; i++) {
-          _decrementMediaCounter('image');
-        }
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -993,18 +993,18 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
+      // Increment counter BEFORE sending to reserve the slot
+      await _incrementMediaCounter('image', imagesToSend.length);
+      debugPrint('🔒 Counter incremented: $_todayImageCount images');
+
       debugPrint('Sending ${imagesToSend.length} images');
 
       // Send each image
       for (final image in imagesToSend) {
         try {
           await _sendImageMessage(File(image.path));
-          // Decrement counter after successful upload
-          _decrementMediaCounter('image');
         } catch (e) {
           debugPrint('Error sending image: $e');
-          // Decrement counter on failure too
-          _decrementMediaCounter('image');
         }
       }
     } catch (e) {
@@ -1033,15 +1033,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      // Increment counter FIRST to prevent race condition
-      _incrementMediaCounter('image', 1);
-      debugPrint('🔒 Counter locked: $_todayImageCount images');
-
       // Check daily limit (1 photo)
-      final limitReached = await _checkDailyMediaLimit('image', 0);
+      final limitReached = await _checkDailyMediaLimit('image', 1);
       if (limitReached) {
-        // Rollback counter
-        _decrementMediaCounter('image');
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -1051,16 +1045,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
+      // Increment counter BEFORE sending to reserve the slot
+      await _incrementMediaCounter('image', 1);
+      debugPrint('🔒 Counter incremented: $_todayImageCount images');
+
       debugPrint('Photo taken: ${image.path}');
-      try {
-        await _sendImageMessage(File(image.path));
-        // Decrement after successful upload
-        _decrementMediaCounter('image');
-      } catch (e) {
-        // Decrement on failure
-        _decrementMediaCounter('image');
-        rethrow;
-      }
+      await _sendImageMessage(File(image.path));
     } catch (e) {
       debugPrint('Error taking photo: $e');
       if (mounted) {
@@ -1260,15 +1250,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             'Camera video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
           );
 
-          // Increment counter FIRST to prevent race condition
-          _incrementMediaCounter('video', 1);
-          debugPrint('🔒 Counter locked: $_todayVideoCount videos');
-
           // Check daily limit
-          final limitReached = await _checkDailyMediaLimit('video', 0);
+          final limitReached = await _checkDailyMediaLimit('video', 1);
           if (limitReached) {
-            // Rollback counter
-            _decrementMediaCounter('video');
             if (mounted) {
               SnackBarHelper.showError(
                 context,
@@ -1278,15 +1262,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             return;
           }
 
-          try {
-            await _sendVideoMessage(videoFile);
-            // Decrement after successful upload
-            _decrementMediaCounter('video');
-          } catch (e) {
-            // Decrement on failure
-            _decrementMediaCounter('video');
-            rethrow;
-          }
+          // Increment counter BEFORE sending to reserve the slot
+          await _incrementMediaCounter('video', 1);
+          debugPrint('🔒 Counter incremented: $_todayVideoCount videos');
+
+          await _sendVideoMessage(videoFile);
         } catch (e) {
           debugPrint('Error validating camera video: $e');
           await controller.dispose();
@@ -1354,15 +1334,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         await controller.dispose();
         debugPrint('Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB');
 
-        // Increment counter FIRST to prevent race condition
-        _incrementMediaCounter('video', 1);
-        debugPrint('🔒 Counter locked: $_todayVideoCount videos');
-
         // Check daily limit (1 video)
-        final limitReached = await _checkDailyMediaLimit('video', 0);
+        final limitReached = await _checkDailyMediaLimit('video', 1);
         if (limitReached) {
-          // Rollback counter
-          _decrementMediaCounter('video');
           if (mounted) {
             SnackBarHelper.showError(
               context,
@@ -1372,16 +1346,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           return;
         }
 
-        try {
-          // Send video
-          await _sendVideoMessage(videoFile);
-          // Decrement after successful upload
-          _decrementMediaCounter('video');
-        } catch (e) {
-          // Decrement on failure
-          _decrementMediaCounter('video');
-          rethrow;
-        }
+        // Increment counter BEFORE sending to reserve the slot
+        await _incrementMediaCounter('video', 1);
+        debugPrint('🔒 Counter incremented: $_todayVideoCount videos');
+
+        // Send video
+        await _sendVideoMessage(videoFile);
       } catch (e) {
         debugPrint('Error checking video duration: $e');
         await controller.dispose();

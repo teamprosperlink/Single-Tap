@@ -1,22 +1,31 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../res/config/app_colors.dart';
+import '../../services/notification_service.dart';
+import '../../services/other services/group_voice_call_service.dart';
+import '../../widgets/floating_particles.dart';
 
 /// WhatsApp-style Group Audio Call Screen
 /// Supports multiple participants with audio-only conference call
 class GroupAudioCallScreen extends StatefulWidget {
   final String callId;
+  final String groupId;
   final String userId;
   final String userName;
-  final List<Map<String, dynamic>> participants; // List of {userId, name, photoUrl}
+  final String groupName;
+  final List<Map<String, dynamic>>
+  participants; // List of {userId, name, photoUrl}
 
   const GroupAudioCallScreen({
     super.key,
     required this.callId,
+    required this.groupId,
     required this.userId,
     required this.userName,
+    required this.groupName,
     required this.participants,
   });
 
@@ -27,6 +36,7 @@ class GroupAudioCallScreen extends StatefulWidget {
 class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GroupVoiceCallService _groupVoiceCallService = GroupVoiceCallService();
 
   Timer? _callTimer;
   int _callDuration = 0;
@@ -44,7 +54,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
   @override
   void initState() {
     super.initState();
-    debugPrint('🎙️ GroupAudioCallScreen: initState - callId=${widget.callId}');
+    debugPrint('  GroupAudioCallScreen: initState - callId=${widget.callId}');
 
     // Initialize pulse animation
     _pulseController = AnimationController(
@@ -75,19 +85,118 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
       } else {
         // Duplicate userId found - skip it
         duplicateCount++;
-        debugPrint('⚠️ Skipping duplicate participant: $userId (${participant['name']})');
+        debugPrint(
+          '⚠️ Skipping duplicate participant: $userId (${participant['name']})',
+        );
       }
     }
 
     if (duplicateCount > 0) {
-      debugPrint('🔧 Removed $duplicateCount duplicate participants from ${widget.participants.length} total');
+      debugPrint(
+        '🔧 Removed $duplicateCount duplicate participants from ${widget.participants.length} total',
+      );
     }
 
-    debugPrint('✅ Final unique participants: ${_participantInfo.keys.length}');
+    debugPrint('  Final unique participants: ${_participantInfo.keys.length}');
 
     _listenToParticipants();
     _startCallTimer();
     _updateCallStatus('active');
+
+    // Delay WebRTC initialization to avoid conflicts with screen setup
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _initializeWebRTC();
+      }
+    });
+  }
+
+  Future<void> _initializeWebRTC() async {
+    try {
+      debugPrint('  GroupAudioCallScreen: Initializing WebRTC...');
+
+      // Set up callbacks
+      _groupVoiceCallService.onParticipantJoined =
+          (participantId, participantName) {
+            debugPrint(
+              '  Participant joined WebRTC: $participantName ($participantId)',
+            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$participantName joined the call'),
+                  backgroundColor: const Color(0xFF25D366),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          };
+
+      _groupVoiceCallService.onParticipantLeft = (participantId) {
+        debugPrint('  Participant left WebRTC: $participantId');
+      };
+
+      _groupVoiceCallService.onError = (message) {
+        debugPrint('  WebRTC error: $message');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Call error: $message'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      };
+
+      // Join the WebRTC call
+      try {
+        final success = await _groupVoiceCallService.joinCall(
+          widget.callId,
+          widget.userId,
+        );
+
+        if (success) {
+          debugPrint('  WebRTC call joined successfully');
+          setState(() {
+            _isMuted = _groupVoiceCallService.isMuted;
+            _isSpeakerOn = _groupVoiceCallService.isSpeakerOn;
+          });
+        } else {
+          debugPrint('  Failed to join WebRTC call');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Failed to initialize audio. Check microphone permissions.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('  Error joining WebRTC call: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to join call: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('  Error initializing WebRTC: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize WebRTC: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -95,6 +204,10 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     _callTimer?.cancel();
     _participantsSubscription?.cancel();
     _pulseController.dispose();
+
+    // Clean up WebRTC
+    _groupVoiceCallService.leaveCall();
+
     super.dispose();
   }
 
@@ -104,30 +217,62 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         .doc(widget.callId)
         .collection('participants')
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
+        .listen((snapshot) async {
+          if (!mounted) return;
 
-      setState(() {
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
-          final userId = data['userId'] as String;
+          // Fetch participant details for new participants
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final userId = data['userId'] as String;
 
-          if (_participantInfo.containsKey(userId)) {
-            _participantInfo[userId]!['isActive'] = data['isActive'] == true;
+            if (!_participantInfo.containsKey(userId)) {
+              // New participant - fetch their details from users collection
+              try {
+                final userDoc = await _firestore
+                    .collection('users')
+                    .doc(userId)
+                    .get();
+                if (userDoc.exists && mounted) {
+                  final userData = userDoc.data();
+                  setState(() {
+                    _participantInfo[userId] = {
+                      'name': userData?['name'] ?? 'Unknown',
+                      'photoUrl': userData?['photoUrl'],
+                      'isActive': data['isActive'] == true,
+                    };
+                  });
+                  debugPrint(
+                    '  Fetched participant details: ${userData?['name']} ($userId)',
+                  );
+                }
+              } catch (e) {
+                debugPrint('  Error fetching participant $userId: $e');
+              }
+            } else {
+              // Existing participant - just update active status
+              if (mounted) {
+                setState(() {
+                  _participantInfo[userId]!['isActive'] =
+                      data['isActive'] == true;
+                });
+              }
+            }
           }
-        }
 
-        // Start timer only when at least one other person (not current user) becomes active
-        final othersActive = _participantInfo.entries
-            .where((entry) => entry.key != widget.userId && entry.value['isActive'] == true)
-            .isNotEmpty;
+          // Start timer only when at least one other person (not current user) becomes active
+          final othersActive = _participantInfo.entries
+              .where(
+                (entry) =>
+                    entry.key != widget.userId &&
+                    entry.value['isActive'] == true,
+              )
+              .isNotEmpty;
 
-        if (othersActive && _callDuration == 0) {
-          // First person joined, start the timer
-          debugPrint('✅ First participant joined, starting call timer');
-        }
-      });
-    });
+          if (othersActive && _callDuration == 0) {
+            // First person joined, start the timer
+            debugPrint('  First participant joined, starting call timer');
+          }
+        });
   }
 
   void _startCallTimer() {
@@ -136,7 +281,10 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
       if (mounted) {
         // Check if anyone else (excluding current user) is active
         final othersActive = _participantInfo.entries
-            .where((entry) => entry.key != widget.userId && entry.value['isActive'] == true)
+            .where(
+              (entry) =>
+                  entry.key != widget.userId && entry.value['isActive'] == true,
+            )
             .isNotEmpty;
 
         if (othersActive) {
@@ -153,7 +301,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         if (status == 'ended') 'endedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      debugPrint('❌ Error updating call status: $e');
+      debugPrint('  Error updating call status: $e');
     }
   }
 
@@ -166,18 +314,20 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
           .doc(widget.userId)
           .update({'isActive': isActive});
     } catch (e) {
-      debugPrint('❌ Error updating participant status: $e');
+      debugPrint('  Error updating participant status: $e');
     }
   }
 
-  void _toggleMute() {
-    setState(() => _isMuted = !_isMuted);
-    // TODO: Implement actual audio muting via WebRTC
+  Future<void> _toggleMute() async {
+    await _groupVoiceCallService.toggleMute();
+    setState(() => _isMuted = _groupVoiceCallService.isMuted);
+    debugPrint('  Mute toggled: $_isMuted');
   }
 
-  void _toggleSpeaker() {
-    setState(() => _isSpeakerOn = !_isSpeakerOn);
-    // TODO: Implement actual speaker toggle via WebRTC
+  Future<void> _toggleSpeaker() async {
+    await _groupVoiceCallService.toggleSpeaker();
+    setState(() => _isSpeakerOn = _groupVoiceCallService.isSpeakerOn);
+    debugPrint('🔊 Speaker toggled: $_isSpeakerOn');
   }
 
   Future<void> _endCall() async {
@@ -185,10 +335,47 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     _isEndingCall = true;
 
     try {
+      // Leave WebRTC call first
+      await _groupVoiceCallService.leaveCall();
+
       await _updateParticipantStatus(false);
       await _updateCallStatus('ended');
+
+      // Update system message with call duration and participant count
+      final callDoc = await _firestore
+          .collection('group_calls')
+          .doc(widget.callId)
+          .get();
+      if (callDoc.exists) {
+        final callData = callDoc.data();
+        final systemMessageId = callData?['systemMessageId'] as String?;
+        final groupId = callData?['groupId'] as String?;
+
+        // Count participants who joined (were active at some point)
+        final activeParticipantCount = _participantInfo.values
+            .where(
+              (info) => info['isActive'] == true || info['wasActive'] == true,
+            )
+            .length;
+
+        if (systemMessageId != null && groupId != null) {
+          // Update the system message with call details
+          await _firestore
+              .collection('conversations')
+              .doc(groupId)
+              .collection('messages')
+              .doc(systemMessageId)
+              .update({
+                'callDuration': _callDuration,
+                'participantCount': activeParticipantCount,
+                'text': _callDuration > 0
+                    ? 'Voice call • ${_formatDuration(_callDuration)} • $activeParticipantCount joined'
+                    : 'Missed call',
+              });
+        }
+      }
     } catch (e) {
-      debugPrint('❌ Error ending call: $e');
+      debugPrint('  Error ending call: $e');
     }
 
     if (mounted) {
@@ -206,56 +393,93 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
   Widget build(BuildContext context) {
     // Count active participants excluding current user
     final activeParticipants = _participantInfo.entries
-        .where((entry) => entry.key != widget.userId && entry.value['isActive'] == true)
+        .where(
+          (entry) =>
+              entry.key != widget.userId && entry.value['isActive'] == true,
+        )
         .map((entry) => entry.value)
         .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-
-            const SizedBox(height: 40),
-
-            // Call duration
-            Text(
-              _formatDuration(_callDuration),
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,
+      extendBodyBehindAppBar: false,
+      body: Stack(
+        children: [
+          // Background Image (same as home screen)
+          Positioned.fill(
+            child: Image.asset(
+              'assets/logo/home_background.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.grey.shade900, Colors.black],
+                    ),
+                  ),
+                );
+              },
             ),
+          ),
 
-            const SizedBox(height: 8),
-
-            // Call status
-            Text(
-              activeParticipants.isEmpty
-                  ? 'Calling...'
-                  : '${activeParticipants.length} ${activeParticipants.length == 1 ? 'person' : 'people'} joined',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 14,
-              ),
+          // Blur effect with dark overlay
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(color: Colors.black.withValues(alpha: 0.6)),
             ),
+          ),
 
-            const Spacer(),
+          // Floating particles
+          const Positioned.fill(child: FloatingParticles(particleCount: 12)),
 
-            // Participants grid
-            _buildParticipantsGrid(activeParticipants),
+          // Main content
+          SafeArea(
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
 
-            const Spacer(),
+                const SizedBox(height: 40),
 
-            // Controls
-            _buildControls(),
+                // Call duration - only show when someone has joined
+                if (activeParticipants.isNotEmpty)
+                  Text(
+                    _formatDuration(_callDuration),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
 
-            const SizedBox(height: 40),
-          ],
-        ),
+                if (activeParticipants.isNotEmpty) const SizedBox(height: 8),
+
+                // Call status - only show when someone has joined
+                if (activeParticipants.isNotEmpty)
+                  Text(
+                    '${activeParticipants.length} ${activeParticipants.length == 1 ? 'person' : 'people'} joined',
+                    style: const TextStyle(color: Colors.white54, fontSize: 14),
+                  ),
+
+                const Spacer(),
+
+                // Participants grid
+                _buildParticipantsGrid(activeParticipants),
+
+                const Spacer(),
+
+                // Controls
+                _buildControls(),
+
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -265,16 +489,49 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const Icon(Icons.group, color: Colors.white70, size: 24),
+          const Icon(Icons.group_rounded, color: Colors.white70, size: 24),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'Group Call',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.groupName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${_participantInfo.length} ${_participantInfo.length == 1 ? 'participant' : 'participants'}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Add participant button
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.person_add_rounded,
+                color: Colors.white70,
+                size: 20,
               ),
+              onPressed: _showAddParticipantDialog,
+              padding: EdgeInsets.zero,
             ),
           ),
         ],
@@ -282,54 +539,290 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     );
   }
 
-  Widget _buildParticipantsGrid(List<Map<String, dynamic>> activeParticipants) {
-    // Show all participants EXCEPT the current user (caller should not see themselves)
-    final allParticipants = _participantInfo.entries
-        .where((entry) => entry.key != widget.userId) // Exclude current user
-        .map((entry) {
-      return {
-        'userId': entry.key,
-        'name': entry.value['name'],
-        'photoUrl': entry.value['photoUrl'],
-        'isActive': entry.value['isActive'] ?? false,
-      };
-    }).toList();
+  Future<void> _showAddParticipantDialog() async {
+    try {
+      // Fetch all group members
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(widget.groupId)
+          .get();
 
-    if (allParticipants.isEmpty) {
-      return const Center(
-        child: Text(
-          'Waiting for others to join...',
-          style: TextStyle(color: Colors.white54, fontSize: 16),
+      if (!groupDoc.exists) return;
+
+      final groupData = groupDoc.data()!;
+      final allMemberIds = List<String>.from(groupData['participants'] ?? []);
+
+      // Get current call participants
+      final currentParticipantIds = _participantInfo.keys.toSet();
+
+      // Filter out members already in the call
+      final availableMemberIds = allMemberIds
+          .where((id) => !currentParticipantIds.contains(id))
+          .toList();
+
+      if (availableMemberIds.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('All group members are already in the call'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Fetch member details
+      final memberDetails = <Map<String, dynamic>>[];
+      for (final memberId in availableMemberIds) {
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(memberId)
+            .get();
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          memberDetails.add({
+            'userId': memberId,
+            'name': userData['name'] ?? 'Unknown',
+            'photoUrl': userData['photoUrl'] ?? userData['profileImageUrl'],
+          });
+        }
+      }
+
+      if (!mounted) return;
+
+      // Show bottom sheet with available members
+      await showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Add Participants',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // Member list
+              Expanded(
+                child: ListView.builder(
+                  itemCount: memberDetails.length,
+                  itemBuilder: (context, index) {
+                    final member = memberDetails[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 24,
+                        backgroundImage: member['photoUrl'] != null
+                            ? CachedNetworkImageProvider(member['photoUrl'])
+                            : null,
+                        backgroundColor: AppColors.iosBlue.withValues(
+                          alpha: 0.2,
+                        ),
+                        child: member['photoUrl'] == null
+                            ? Text(
+                                (member['name'] as String)[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
+                      ),
+                      title: Text(
+                        member['name'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF25D366),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Add',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _addParticipantToCall(member);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error showing add participant dialog: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load members: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _addParticipantToCall(Map<String, dynamic> member) async {
+    try {
+      // Add participant to call document
+      await _firestore.collection('group_calls').doc(widget.callId).update({
+        'participants': FieldValue.arrayUnion([member['userId']]),
+      });
+
+      // Send notification to the member
+      await NotificationService().sendNotificationToUser(
+        userId: member['userId'],
+        title: 'Incoming Group Audio Call',
+        body: '${widget.userName} added you to ${widget.groupName}',
+        type: 'group_audio_call',
+        data: {
+          'callId': widget.callId,
+          'groupId': widget.groupId,
+          'groupName': widget.groupName,
+          'callerId': widget.userId,
+          'isVideo': false,
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added ${member['name']} to the call'),
+            backgroundColor: const Color(0xFF25D366),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error adding participant: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add ${member['name']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildParticipantsGrid(List<Map<String, dynamic>> activeParticipants) {
+    // Show ONLY active/connected participants (excluding current user)
+    final connectedParticipants = _participantInfo.entries
+        .where(
+          (entry) =>
+              entry.key != widget.userId && // Exclude current user
+              entry.value['isActive'] == true,
+        ) // Only show connected users
+        .map((entry) {
+          return {
+            'userId': entry.key,
+            'name': entry.value['name'],
+            'photoUrl': entry.value['photoUrl'],
+            'isActive': true,
+          };
+        })
+        .toList();
+
+    // Show waiting message when no one has joined yet
+    if (connectedParticipants.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.people_outline_rounded,
+              size: 64,
+              color: Colors.white.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Waiting for others to join...',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: allParticipants.length <= 4 ? 2 : 3,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: allParticipants.length,
-      itemBuilder: (context, index) {
-        final participant = allParticipants[index];
-        final isCurrentUser = participant['userId'] == widget.userId;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: GridView.builder(
+        key: ValueKey(connectedParticipants.length),
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: connectedParticipants.length <= 4 ? 2 : 3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.8,
+        ),
+        itemCount: connectedParticipants.length,
+        itemBuilder: (context, index) {
+          final participant = connectedParticipants[index];
 
-        return _buildParticipantCard(
-          participant['name'] ?? 'Unknown',
-          participant['photoUrl'],
-          isCurrentUser,
-          participant['isActive'] ?? false,
-        );
-      },
+          return _buildParticipantCard(
+            participant['name'] ?? 'Unknown',
+            participant['photoUrl'],
+            false, // Never current user (already filtered out)
+            true, // Always active (already filtered)
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildParticipantCard(String name, String? photoUrl, bool isCurrentUser, bool isActive) {
+  Widget _buildParticipantCard(
+    String name,
+    String? photoUrl,
+    bool isCurrentUser,
+    bool isActive,
+  ) {
     // CRITICAL FIX: Determine correct status text
     // - Caller (isCurrentUser=true, viewing OTHER participants who are not active) should see: "Ringing..."
     // - Other participants (isCurrentUser=false, not active) should display: "Ringing..."
@@ -342,32 +835,40 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     if (!isActive) {
       // Participant hasn't joined yet - always show "Ringing..."
       statusText = 'Ringing...';
-      statusColor = Colors.orange.withValues(alpha: 0.8);
+      statusColor = const Color(0xFFFF9500); // WhatsApp orange
     } else if (_isMuted && isCurrentUser) {
       // This shouldn't happen since isCurrentUser check in grid excludes caller
       // But keeping as fallback
       statusText = 'Muted';
-      statusColor = Colors.red.withValues(alpha: 0.8);
+      statusColor = const Color(0xFFFF3B30); // WhatsApp red
     } else {
       // Participant is active/connected
       statusText = 'Connected';
-      statusColor = Colors.green.withValues(alpha: 0.8);
+      statusColor = const Color(0xFF25D366); // WhatsApp green
     }
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: isCurrentUser
-              ? [const Color(0xFF5856D6), const Color(0xFF007AFF)]
-              : [const Color(0xFF2A2A2A), const Color(0xFF1A1A1A)],
+              ? [const Color(0xFF3A3A3A), const Color(0xFF2A2A2A)]
+              : [const Color(0xFF2F2F2F), const Color(0xFF1F1F1F)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: Colors.white.withValues(alpha: 0.08),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -382,10 +883,19 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isActive
-                      ? Colors.green.withValues(alpha: 0.6)
-                      : Colors.white.withValues(alpha: 0.3),
-                  width: 2,
+                      ? const Color(0xFF25D366) // WhatsApp green
+                      : Colors.white.withValues(alpha: 0.25),
+                  width: 3,
                 ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
               ),
               child: Stack(
                 alignment: Alignment.center,
@@ -469,13 +979,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
           const SizedBox(height: 4),
 
           // Status indicator
-          Text(
-            statusText,
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 11,
-            ),
-          ),
+          Text(statusText, style: TextStyle(color: statusColor, fontSize: 11)),
         ],
       ),
     );
@@ -492,7 +996,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
           height: heights[index],
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: Colors.green,
+            color: const Color(0xFF25D366), // WhatsApp green
             borderRadius: BorderRadius.circular(1),
           ),
         );
@@ -508,27 +1012,31 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         children: [
           // Mute button
           _buildControlButton(
-            icon: _isMuted ? Icons.mic_off : Icons.mic,
+            icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
             onTap: _toggleMute,
-            backgroundColor: _isMuted ? Colors.red : Colors.white.withValues(alpha: 0.2),
-            iconColor: _isMuted ? Colors.white : Colors.white70,
+            backgroundColor: _isMuted
+                ? const Color(0xFFFF3B30) // WhatsApp red when muted
+                : const Color(0xFF3A3A3A), // Dark gray when unmuted
+            iconColor: Colors.white,
           ),
 
           // End call button
           _buildControlButton(
-            icon: Icons.call_end,
+            icon: Icons.call_end_rounded,
             onTap: _endCall,
-            backgroundColor: Colors.red,
+            backgroundColor: const Color(0xFFFF3B30), // WhatsApp red
             iconColor: Colors.white,
-            size: 64,
+            size: 68,
           ),
 
           // Speaker button
           _buildControlButton(
-            icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
+            icon: _isSpeakerOn
+                ? Icons.volume_up_rounded
+                : Icons.volume_off_rounded,
             onTap: _toggleSpeaker,
-            backgroundColor: Colors.white.withValues(alpha: 0.2),
-            iconColor: Colors.white70,
+            backgroundColor: const Color(0xFF3A3A3A), // Dark gray
+            iconColor: Colors.white,
           ),
         ],
       ),

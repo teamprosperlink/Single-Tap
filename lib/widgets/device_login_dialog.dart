@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class DeviceLoginDialog extends StatefulWidget {
   final String deviceName;
   final Future<void> Function() onLogoutOtherDevice;
-  final Future<void> Function()? onCancel; // Allow user to stay logged in on both devices
+  final Future<void> Function()?
+  onCancel; // Allow user to stay logged in on both devices
 
   const DeviceLoginDialog({
     super.key,
@@ -21,12 +22,12 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
 
   @override
   Widget build(BuildContext context) {
-    print('[DeviceLoginDialog] 🎨 Dialog build called - deviceName: ${widget.deviceName}');
+    print(
+      '[DeviceLoginDialog]   Dialog build called - deviceName: ${widget.deviceName}',
+    );
     return Dialog(
       backgroundColor: const Color(0xFF1a1a2e),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -118,7 +119,9 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(

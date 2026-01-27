@@ -102,7 +102,7 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
     _vibrationTimer = null;
     try {
       await FlutterRingtonePlayer().stop();
-      debugPrint('🔕 Ringtone stopped');
+      debugPrint('  Ringtone stopped');
     } catch (e) {
       debugPrint('Error stopping ringtone: $e');
     }
@@ -216,7 +216,7 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
 
         if (callerDoc.exists) {
           callerProfile = UserProfile.fromFirestore(callerDoc);
-          debugPrint('📋 Using Firestore profile - ${callerProfile.name}');
+          debugPrint('  Using Firestore profile - ${callerProfile.name}');
         }
       } catch (e) {
         debugPrint('Error fetching profile: $e');

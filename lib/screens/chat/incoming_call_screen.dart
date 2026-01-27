@@ -131,7 +131,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _vibrationTimer = null;
     try {
       await FlutterRingtonePlayer().stop();
-      debugPrint('🔔 Ringtone stopped');
+      debugPrint('  Ringtone stopped');
     } catch (e) {
       debugPrint('Error stopping ringtone: $e');
     }

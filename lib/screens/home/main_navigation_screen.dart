@@ -147,6 +147,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       debugPrint('Error in _listenForIncomingCalls: $e');
     }
 
+    // Start listening for group audio calls (Firestore real-time listener)
+    try {
+      NotificationService().startListeningForGroupCalls();
+      debugPrint('  Group call listener initialized in MainNavigationScreen');
+    } catch (e) {
+      debugPrint('Error starting group call listener: $e');
+    }
+
     // Run these async operations without blocking
     _checkAndMarkMissedCalls().catchError((e) {
       debugPrint('Error in _checkAndMarkMissedCalls: $e');
@@ -267,7 +275,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         .collection('calls')
         .where('receiverId', isEqualTo: currentUserId);
 
-    debugPrint('🔍 Setting up call listener for receiverId: $currentUserId');
+    debugPrint('   Setting up call listener for receiverId: $currentUserId');
 
     if (useOrderBy) {
       query = query.orderBy('createdAt', descending: true);

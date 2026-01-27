@@ -1,9 +1,12 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
 import '../../models/message_model.dart';
@@ -30,6 +33,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void initState() {
@@ -170,87 +174,51 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           );
         }
 
-        // Filter for images using imageUrl field
+        // Filter for images and exclude deleted messages
         final allDocs = snapshot.data!.docs;
 
-        final imageDocs = allDocs.where((doc) {
+        print('📊 TOTAL MESSAGES: ${allDocs.length}');
+
+        // Check first few messages to see their structure
+        for (var i = 0; i < (allDocs.length > 3 ? 3 : allDocs.length); i++) {
+          final data = allDocs[i].data() as Map<String, dynamic>;
+          print('📊 MESSAGE $i FIELDS: ${data.keys.toList()}');
+          print('   - imageUrl: ${data['imageUrl']}');
+          print('   - videoUrl: ${data['videoUrl']}');
+          final text = data['text']?.toString() ?? '';
+          print('   - text: ${text.length > 30 ? text.substring(0, 30) : text}');
+        }
+
+        final photos = allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          return data['imageUrl'] != null &&
-              (data['imageUrl'] as String).isNotEmpty;
+
+          // Check if deleted by current user
+          final deletedFor = data['deletedFor'] as List<dynamic>?;
+          if (deletedFor != null && _currentUserId != null) {
+            if (deletedFor.contains(_currentUserId)) return false;
+          }
+
+          // Check for imageUrl (group chat) OR mediaUrl with type 'image' (normal chat)
+          final imageUrl = data['imageUrl'];
+          if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+            return true;
+          }
+
+          // Check for mediaUrl (normal 1-to-1 chat uses this)
+          final mediaUrl = data['mediaUrl'];
+          final type = data['type']?.toString() ?? '';
+
+          if (mediaUrl != null && mediaUrl.toString().isNotEmpty) {
+            // Check if it's an image type
+            return type == 'image' || _isImageUrl(mediaUrl.toString());
+          }
+
+          return false;
         }).toList();
 
-        // Remove duplicates using smart matching (sender + timestamp proximity)
-        final List<QueryDocumentSnapshot> deduplicatedImageDocs = [];
-        final Set<int> skipIndices = {};
+        print('📊 PHOTOS FOUND: ${photos.length}');
 
-        for (int i = 0; i < imageDocs.length; i++) {
-          if (skipIndices.contains(i)) continue;
-
-          final doc = imageDocs[i];
-          final data = doc.data() as Map<String, dynamic>;
-          final senderId = data['senderId'] as String?;
-          final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-          final imageUrl = data['imageUrl'] as String?;
-
-          // Check if this is a duplicate of any later message
-          bool isDuplicate = false;
-          for (int j = i + 1; j < imageDocs.length; j++) {
-            if (skipIndices.contains(j)) continue;
-
-            final otherDoc = imageDocs[j];
-            final otherData = otherDoc.data() as Map<String, dynamic>;
-            final otherSenderId = otherData['senderId'] as String?;
-            final otherTimestamp = (otherData['timestamp'] as Timestamp?)
-                ?.toDate();
-            final otherImageUrl = otherData['imageUrl'] as String?;
-
-            // Same sender and (same URL OR close timestamps)
-            if (senderId == otherSenderId) {
-              bool isSameUrl = imageUrl == otherImageUrl;
-              bool isCloseTimestamp = false;
-
-              // Check if timestamps are very close (within 2 minutes)
-              if (timestamp != null && otherTimestamp != null) {
-                final difference = timestamp.difference(otherTimestamp).abs();
-                if (difference.inMinutes < 2) {
-                  isCloseTimestamp = true;
-                }
-              }
-
-              // If same sender and (same URL OR close timestamps), consider as duplicate
-              if (isSameUrl || isCloseTimestamp) {
-                // Keep the newer message, skip the older one
-                if (timestamp != null && otherTimestamp != null) {
-                  if (timestamp.isAfter(otherTimestamp)) {
-                    skipIndices.add(j); // Skip the older message
-                  } else {
-                    isDuplicate = true; // This message is older, skip it
-                    skipIndices.add(i);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-
-          if (!isDuplicate) {
-            deduplicatedImageDocs.add(doc);
-          }
-        }
-
-        // Debug logging
-        print('📊 Photos Tab: Total messages: ${allDocs.length}');
-        print('📸 Photos Tab: Messages with imageUrl: ${imageDocs.length}');
-        print('✨ After deduplication: ${deduplicatedImageDocs.length}');
-        if (deduplicatedImageDocs.isNotEmpty) {
-          final firstDoc =
-              deduplicatedImageDocs.first.data() as Map<String, dynamic>;
-          print(
-            '🔍 Sample imageUrl: ${(firstDoc['imageUrl'] as String).substring(0, 50)}...',
-          );
-        }
-
-        if (deduplicatedImageDocs.isEmpty) {
+        if (photos.isEmpty) {
           return _buildEmptyState(
             isDarkMode,
             'No Photos',
@@ -259,155 +227,146 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         }
 
         return ListView.builder(
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            right: 16,
-            bottom: 16,
-          ),
-          itemCount: deduplicatedImageDocs.length,
+          padding: const EdgeInsets.all(16),
+          itemCount: photos.length,
           itemBuilder: (context, index) {
-            final doc = deduplicatedImageDocs[index];
+            final doc = photos[index];
             final data = doc.data() as Map<String, dynamic>;
-            final imageUrl = data['imageUrl'] as String;
+
+            // Try imageUrl first (group chat), then mediaUrl (normal chat)
+            final imageUrl = (data['imageUrl'] ?? data['mediaUrl']) as String?;
             final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  decoration: BoxDecoration(
-                    color: isDarkMode
-                        ? const Color(0xFF1A2B3D)
-                        : const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => PhotoViewerDialog.show(context, imageUrl),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            // Image thumbnail
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 56,
-                                height: 56,
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: isDarkMode
-                                        ? Colors.grey[800]
-                                        : Colors.grey[300],
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        color: isDarkMode
-                                            ? Colors.grey[800]
-                                            : Colors.grey[300],
-                                        child: Icon(
-                                          Icons.error_outline,
-                                          color: isDarkMode
-                                              ? Colors.white30
-                                              : Colors.black26,
-                                        ),
-                                      ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Photo label
-                            Expanded(
-                              child: Text(
-                                'Photo',
-                                style: TextStyle(
-                                  color: isDarkMode
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: Colors.red.withValues(alpha: 0.7),
-                                size: 20,
-                              ),
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Delete Photo'),
-                                    content: const Text('Delete this photo?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.red,
-                                        ),
-                                        child: const Text('Delete'),
-                                      ),
-                                    ],
-                                  ),
-                                );
+            if (imageUrl == null) return const SizedBox.shrink();
 
-                                if (confirm == true) {
-                                  await _firestore
-                                      .collection('conversations')
-                                      .doc(widget.conversationId)
-                                      .collection('messages')
-                                      .doc(doc.id)
-                                      .delete();
-
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Photo deleted'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[800],
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             ),
-                          ],
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[800],
+                            child: const Icon(
+                              Icons.broken_image,
+                              color: Colors.white54,
+                              size: 24,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                // Timestamp outside card
-                if (timestamp != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 2, bottom: 12),
-                    child: Text(
-                      _formatDateTime(timestamp),
+                    title: const Text(
+                      'Photo',
                       style: TextStyle(
-                        color: isDarkMode ? Colors.white60 : Colors.black45,
-                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    subtitle: timestamp != null
+                        ? Text(
+                            _formatDateTime(timestamp),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12,
+                            ),
+                          )
+                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            size: 20,
+                          ),
+                          onPressed: () async {
+                            // Show confirmation dialog
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Photo'),
+                                content: const Text('Delete this photo?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true && _currentUserId != null) {
+                              // Mark message as deleted for current user
+                              await _firestore
+                                  .collection('conversations')
+                                  .doc(widget.conversationId)
+                                  .collection('messages')
+                                  .doc(doc.id)
+                                  .set({
+                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                  }, SetOptions(merge: true));
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Photo deleted'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    onTap: () => PhotoViewerDialog.show(context, imageUrl),
                   ),
-              ],
+                ),
+              ),
             );
           },
         );
@@ -437,87 +396,39 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           );
         }
 
-        // Filter for videos using videoUrl field
+        // Filter for videos and exclude deleted messages
         final allDocs = snapshot.data!.docs;
 
-        final videoDocs = allDocs.where((doc) {
+        final videos = allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          return data['videoUrl'] != null &&
-              (data['videoUrl'] as String).isNotEmpty;
+
+          // Check if deleted by current user
+          final deletedFor = data['deletedFor'] as List<dynamic>?;
+          if (deletedFor != null && _currentUserId != null) {
+            if (deletedFor.contains(_currentUserId)) return false;
+          }
+
+          // Check for videoUrl (group chat) OR mediaUrl with type 'video' (normal chat)
+          final videoUrl = data['videoUrl'];
+          if (videoUrl != null && videoUrl.toString().isNotEmpty) {
+            return true;
+          }
+
+          // Check for mediaUrl (normal 1-to-1 chat uses this)
+          final mediaUrl = data['mediaUrl'];
+          final type = data['type']?.toString() ?? '';
+
+          if (mediaUrl != null && mediaUrl.toString().isNotEmpty) {
+            // Check if it's a video type
+            return type == 'video' || _isVideoUrl(mediaUrl.toString());
+          }
+
+          return false;
         }).toList();
 
-        // Remove duplicates using smart matching (sender + timestamp proximity)
-        final List<QueryDocumentSnapshot> deduplicatedVideoDocs = [];
-        final Set<int> skipIndices = {};
+        print('🎥 VIDEOS FOUND: ${videos.length}');
 
-        for (int i = 0; i < videoDocs.length; i++) {
-          if (skipIndices.contains(i)) continue;
-
-          final doc = videoDocs[i];
-          final data = doc.data() as Map<String, dynamic>;
-          final senderId = data['senderId'] as String?;
-          final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-          final videoUrl = data['videoUrl'] as String?;
-
-          // Check if this is a duplicate of any later message
-          bool isDuplicate = false;
-          for (int j = i + 1; j < videoDocs.length; j++) {
-            if (skipIndices.contains(j)) continue;
-
-            final otherDoc = videoDocs[j];
-            final otherData = otherDoc.data() as Map<String, dynamic>;
-            final otherSenderId = otherData['senderId'] as String?;
-            final otherTimestamp = (otherData['timestamp'] as Timestamp?)
-                ?.toDate();
-            final otherVideoUrl = otherData['videoUrl'] as String?;
-
-            // Same sender and (same URL OR close timestamps)
-            if (senderId == otherSenderId) {
-              bool isSameUrl = videoUrl == otherVideoUrl;
-              bool isCloseTimestamp = false;
-
-              // Check if timestamps are very close (within 2 minutes)
-              if (timestamp != null && otherTimestamp != null) {
-                final difference = timestamp.difference(otherTimestamp).abs();
-                if (difference.inMinutes < 2) {
-                  isCloseTimestamp = true;
-                }
-              }
-
-              // If same sender and (same URL OR close timestamps), consider as duplicate
-              if (isSameUrl || isCloseTimestamp) {
-                // Keep the newer message, skip the older one
-                if (timestamp != null && otherTimestamp != null) {
-                  if (timestamp.isAfter(otherTimestamp)) {
-                    skipIndices.add(j); // Skip the older message
-                  } else {
-                    isDuplicate = true; // This message is older, skip it
-                    skipIndices.add(i);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-
-          if (!isDuplicate) {
-            deduplicatedVideoDocs.add(doc);
-          }
-        }
-
-        // Debug logging
-        print('📊 Videos Tab: Total messages: ${allDocs.length}');
-        print('🎥 Videos Tab: Messages with videoUrl: ${videoDocs.length}');
-        print('✨ After deduplication: ${deduplicatedVideoDocs.length}');
-        if (deduplicatedVideoDocs.isNotEmpty) {
-          final firstDoc =
-              deduplicatedVideoDocs.first.data() as Map<String, dynamic>;
-          print(
-            '🔍 Sample videoUrl: ${(firstDoc['videoUrl'] as String).substring(0, 50)}...',
-          );
-        }
-
-        if (deduplicatedVideoDocs.isEmpty) {
+        if (videos.isEmpty) {
           return _buildEmptyState(
             isDarkMode,
             'No Videos',
@@ -526,145 +437,168 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         }
 
         return ListView.builder(
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            right: 16,
-            bottom: 16,
-          ),
-          itemCount: deduplicatedVideoDocs.length,
+          padding: const EdgeInsets.all(16),
+          itemCount: videos.length,
           itemBuilder: (context, index) {
-            final doc = deduplicatedVideoDocs[index];
+            final doc = videos[index];
             final data = doc.data() as Map<String, dynamic>;
-            final videoUrl = data['videoUrl'] as String;
+
+            // Try videoUrl first (group chat), then mediaUrl (normal chat)
+            final videoUrl = (data['videoUrl'] ?? data['mediaUrl']) as String?;
+            final thumbnail = data['videoThumbnail'] as String?;
             final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  decoration: BoxDecoration(
-                    color: isDarkMode
-                        ? const Color(0xFF1A2B3D)
-                        : const Color(0xFFF0F2F5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                VideoPlayerScreen(videoUrl: videoUrl),
-                          ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
+            if (videoUrl == null) return const SizedBox.shrink();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 80,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          fit: StackFit.expand,
                           children: [
-                            // Video icon
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.deepPurple.withValues(
-                                  alpha: 0.15,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.play_circle_outline,
-                                color: Colors.deepPurple,
-                                size: 32,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Video label
-                            Expanded(
-                              child: Text(
-                                'Video',
-                                style: TextStyle(
-                                  color: isDarkMode
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                            if (thumbnail != null)
+                              CachedNetworkImage(
+                                imageUrl: thumbnail,
+                                fit: BoxFit.cover,
+                              )
+                            else
+                              Container(
+                                color: Colors.grey[800],
+                                child: const Icon(
+                                  Icons.video_library,
+                                  color: Colors.white54,
+                                  size: 32,
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: Colors.red.withValues(alpha: 0.7),
-                                size: 20,
+                            // Play button overlay
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Delete Video'),
-                                    content: const Text('Delete this video?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.red,
-                                        ),
-                                        child: const Text('Delete'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-
-                                if (confirm == true) {
-                                  await _firestore
-                                      .collection('conversations')
-                                      .doc(widget.conversationId)
-                                      .collection('messages')
-                                      .doc(doc.id)
-                                      .delete();
-
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Video deleted'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                // Timestamp outside card
-                if (timestamp != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 2, bottom: 12),
-                    child: Text(
-                      _formatDateTime(timestamp),
+                    title: const Text(
+                      'Video',
                       style: TextStyle(
-                        color: isDarkMode ? Colors.white60 : Colors.black45,
-                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    subtitle: timestamp != null
+                        ? Text(
+                            _formatDateTime(timestamp),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12,
+                            ),
+                          )
+                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            size: 20,
+                          ),
+                          onPressed: () async {
+                            // Show confirmation dialog
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Video'),
+                                content: const Text('Delete this video?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true && _currentUserId != null) {
+                              // Mark message as deleted for current user
+                              await _firestore
+                                  .collection('conversations')
+                                  .doc(widget.conversationId)
+                                  .collection('messages')
+                                  .doc(doc.id)
+                                  .set({
+                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                  }, SetOptions(merge: true));
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Video deleted'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              VideoPlayerScreen(videoUrl: videoUrl),
+                        ),
+                      );
+                    },
                   ),
-              ],
+                ),
+              ),
             );
           },
         );
@@ -694,85 +628,22 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           );
         }
 
-        // Filter for links on client side
+        // Filter for links on client side and not deleted by current user
         final allDocs = snapshot.data!.docs;
-        final linkDocs = allDocs.where((doc) {
+        final links = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          // Check if deleted by current user
+          final deletedFor = data['deletedFor'] as List<dynamic>?;
+          if (deletedFor != null && _currentUserId != null) {
+            if (deletedFor.contains(_currentUserId)) return false;
+          }
+
           final message = MessageModel.fromFirestore(doc);
           return message.text != null && _containsUrl(message.text!);
         }).toList();
 
-        // Remove duplicates using smart matching (sender + timestamp proximity or same URL)
-        final List<QueryDocumentSnapshot> deduplicatedLinkDocs = [];
-        final Set<int> skipIndices = {};
-
-        for (int i = 0; i < linkDocs.length; i++) {
-          if (skipIndices.contains(i)) continue;
-
-          final doc = linkDocs[i];
-          final data = doc.data() as Map<String, dynamic>;
-          final senderId = data['senderId'] as String?;
-          final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-          final text = data['text'] as String?;
-          final urls = text != null ? _extractUrls(text) : <String>[];
-
-          // Check if this is a duplicate of any later message
-          bool isDuplicate = false;
-          for (int j = i + 1; j < linkDocs.length; j++) {
-            if (skipIndices.contains(j)) continue;
-
-            final otherDoc = linkDocs[j];
-            final otherData = otherDoc.data() as Map<String, dynamic>;
-            final otherSenderId = otherData['senderId'] as String?;
-            final otherTimestamp = (otherData['timestamp'] as Timestamp?)
-                ?.toDate();
-            final otherText = otherData['text'] as String?;
-            final otherUrls = otherText != null
-                ? _extractUrls(otherText)
-                : <String>[];
-
-            // Same sender and (same URLs OR close timestamps)
-            if (senderId == otherSenderId) {
-              bool hasSameUrl = false;
-              bool isCloseTimestamp = false;
-
-              // Check if they share any URL
-              for (final url in urls) {
-                if (otherUrls.contains(url)) {
-                  hasSameUrl = true;
-                  break;
-                }
-              }
-
-              // Check if timestamps are very close (within 2 minutes)
-              if (timestamp != null && otherTimestamp != null) {
-                final difference = timestamp.difference(otherTimestamp).abs();
-                if (difference.inMinutes < 2) {
-                  isCloseTimestamp = true;
-                }
-              }
-
-              // If same sender and (same URL OR close timestamps), consider as duplicate
-              if (hasSameUrl || isCloseTimestamp) {
-                // Keep the newer message, skip the older one
-                if (timestamp != null && otherTimestamp != null) {
-                  if (timestamp.isAfter(otherTimestamp)) {
-                    skipIndices.add(j); // Skip the older message
-                  } else {
-                    isDuplicate = true; // This message is older, skip it
-                    skipIndices.add(i);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-
-          if (!isDuplicate) {
-            deduplicatedLinkDocs.add(doc);
-          }
-        }
-
-        final messages = deduplicatedLinkDocs
+        final messages = links
             .map((doc) => MessageModel.fromFirestore(doc))
             .toList();
 
@@ -823,11 +694,18 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           );
         }
 
-        // Filter for files and voice messages using fileUrl, voiceUrl, and audioUrl fields
+        // Filter for files and voice messages using fileUrl, voiceUrl, and audioUrl fields and not deleted by current user
         final allDocs = snapshot.data!.docs;
 
-        final fileDocs = allDocs.where((doc) {
+        final files = allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
+
+          // Check if deleted by current user
+          final deletedFor = data['deletedFor'] as List<dynamic>?;
+          if (deletedFor != null && _currentUserId != null) {
+            if (deletedFor.contains(_currentUserId)) return false;
+          }
+
           final hasFileUrl =
               data['fileUrl'] != null && (data['fileUrl'] as String).isNotEmpty;
           final hasVoiceUrl =
@@ -839,101 +717,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return hasFileUrl || hasVoiceUrl || hasAudioUrl;
         }).toList();
 
-        // Remove duplicates using smart matching (sender + duration or timestamp proximity)
-        final List<QueryDocumentSnapshot> deduplicatedFileDocs = [];
-        final Set<int> skipIndices = {};
-
-        for (int i = 0; i < fileDocs.length; i++) {
-          if (skipIndices.contains(i)) continue;
-
-          final doc = fileDocs[i];
-          final data = doc.data() as Map<String, dynamic>;
-          final senderId = data['senderId'] as String?;
-          final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-          final audioDuration = data['audioDuration'] as int?;
-          final isAudio = data['voiceUrl'] != null || data['audioUrl'] != null;
-
-          // Check if this is a duplicate of any later message
-          bool isDuplicate = false;
-          for (int j = i + 1; j < fileDocs.length; j++) {
-            if (skipIndices.contains(j)) continue;
-
-            final otherDoc = fileDocs[j];
-            final otherData = otherDoc.data() as Map<String, dynamic>;
-            final otherSenderId = otherData['senderId'] as String?;
-            final otherTimestamp = (otherData['timestamp'] as Timestamp?)
-                ?.toDate();
-            final otherAudioDuration = otherData['audioDuration'] as int?;
-            final otherIsAudio =
-                otherData['voiceUrl'] != null || otherData['audioUrl'] != null;
-
-            // Only compare audio messages with audio messages
-            if (isAudio && otherIsAudio && senderId == otherSenderId) {
-              bool isSameDuration = false;
-              bool isCloseTimestamp = false;
-
-              // Check if same duration
-              if (audioDuration != null &&
-                  otherAudioDuration != null &&
-                  audioDuration == otherAudioDuration) {
-                isSameDuration = true;
-              }
-
-              // Check if timestamps are very close (within 2 minutes)
-              if (timestamp != null && otherTimestamp != null) {
-                final difference = timestamp.difference(otherTimestamp).abs();
-                if (difference.inMinutes < 2) {
-                  isCloseTimestamp = true;
-                }
-              }
-
-              // If same sender and (same duration OR close timestamps), consider as duplicate
-              if (isSameDuration || isCloseTimestamp) {
-                // Keep the newer message, skip the older one
-                if (timestamp != null && otherTimestamp != null) {
-                  if (timestamp.isAfter(otherTimestamp)) {
-                    skipIndices.add(j); // Skip the older message
-                  } else {
-                    isDuplicate = true; // This message is older, skip it
-                    skipIndices.add(i);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-
-          if (!isDuplicate) {
-            deduplicatedFileDocs.add(doc);
-          }
-        }
-
-        // Debug logging
-        print('📊 Files Tab: Total messages: ${allDocs.length}');
-        print(
-          '📁 Files Tab: Messages with fileUrl/voiceUrl/audioUrl: ${fileDocs.length}',
-        );
-        print('✨ After deduplication: ${deduplicatedFileDocs.length}');
-
-        // Show details of each file/audio
-        for (int i = 0; i < deduplicatedFileDocs.length; i++) {
-          final data = deduplicatedFileDocs[i].data() as Map<String, dynamic>;
-          final hasFileUrl = data['fileUrl'] != null;
-          final hasVoiceUrl = data['voiceUrl'] != null;
-          final hasAudioUrl = data['audioUrl'] != null;
-          final fileName = data['fileName'] ?? 'Unknown';
-          final timestamp = data['timestamp'];
-
-          print('📄 File ${i + 1}:');
-          print('   - Name: $fileName');
-          print('   - Has fileUrl: $hasFileUrl');
-          print('   - Has voiceUrl: $hasVoiceUrl');
-          print('   - Has audioUrl: $hasAudioUrl');
-          print('   - Timestamp: $timestamp');
-          print('   - Document ID: ${deduplicatedFileDocs[i].id}');
-        }
-
-        if (deduplicatedFileDocs.isEmpty) {
+        if (files.isEmpty) {
           return _buildEmptyState(
             isDarkMode,
             'No Files',
@@ -948,9 +732,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             right: 16,
             bottom: 16,
           ),
-          itemCount: deduplicatedFileDocs.length,
+          itemCount: files.length,
           itemBuilder: (context, index) {
-            final doc = deduplicatedFileDocs[index];
+            final doc = files[index];
             final data = doc.data() as Map<String, dynamic>;
             final fileUrl =
                 (data['fileUrl'] ?? data['voiceUrl'] ?? data['audioUrl'])
@@ -1034,7 +818,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                         IconButton(
                           icon: Icon(
                             Icons.delete_outline,
-                            color: Colors.red.withValues(alpha: 0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             size: 20,
                           ),
                           onPressed: () async {
@@ -1064,14 +848,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                               ),
                             );
 
-                            if (confirm == true) {
-                              // Delete the message from Firestore
+                            if (confirm == true && _currentUserId != null) {
+                              // Mark message as deleted for current user
                               await _firestore
                                   .collection('conversations')
                                   .doc(widget.conversationId)
                                   .collection('messages')
                                   .doc(doc.id)
-                                  .delete();
+                                  .set({
+                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                  }, SetOptions(merge: true));
 
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1310,14 +1096,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                       ),
                     );
 
-                    if (confirm == true) {
-                      // Delete the message from Firestore
+                    if (confirm == true && _currentUserId != null) {
+                      // Mark message as deleted for current user
                       await _firestore
                           .collection('conversations')
                           .doc(widget.conversationId)
                           .collection('messages')
                           .doc(message.id)
-                          .delete();
+                          .set({
+                            'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                          }, SetOptions(merge: true));
 
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1550,6 +1338,35 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             lowerUrl.contains('/images/') ||
             lowerUrl.contains('%2fphotos%2f') ||
             lowerUrl.contains('/photos/'))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool _isVideoUrl(String url) {
+    final lowerUrl = url.toLowerCase();
+
+    // Check file extensions (with or without query parameters)
+    if (lowerUrl.contains('.mp4') ||
+        lowerUrl.contains('.mov') ||
+        lowerUrl.contains('.avi') ||
+        lowerUrl.contains('.mkv') ||
+        lowerUrl.contains('.webm') ||
+        lowerUrl.contains('.flv') ||
+        lowerUrl.contains('.wmv') ||
+        lowerUrl.contains('.m4v')) {
+      return true;
+    }
+
+    // Check for video-related keywords in URL
+    if (lowerUrl.contains('video') || lowerUrl.contains('movie')) {
+      return true;
+    }
+
+    // Check Firebase Storage video paths
+    if (lowerUrl.contains('firebasestorage') &&
+        (lowerUrl.contains('%2fvideos%2f') || lowerUrl.contains('/videos/'))) {
       return true;
     }
 

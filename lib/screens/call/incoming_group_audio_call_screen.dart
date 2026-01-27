@@ -7,6 +7,8 @@ import '../../res/config/app_colors.dart';
 /// Incoming Group Audio Call Screen
 class IncomingGroupAudioCallScreen extends StatefulWidget {
   final String callId;
+  final String groupId;
+  final String groupName;
   final String callerName;
   final String? callerPhotoUrl;
   final List<Map<String, dynamic>> participants;
@@ -15,6 +17,8 @@ class IncomingGroupAudioCallScreen extends StatefulWidget {
   const IncomingGroupAudioCallScreen({
     super.key,
     required this.callId,
+    required this.groupId,
+    required this.groupName,
     required this.callerName,
     this.callerPhotoUrl,
     required this.participants,
@@ -47,7 +51,9 @@ class _IncomingGroupAudioCallScreenState
     );
 
     // Note: Deduplication is now handled in GroupAudioCallScreen.initState
-    debugPrint('🎙️ IncomingGroupAudioCallScreen: ${widget.participants.length} participants');
+    debugPrint(
+      '  IncomingGroupAudioCallScreen: ${widget.participants.length} participants',
+    );
   }
 
   @override
@@ -69,8 +75,10 @@ class _IncomingGroupAudioCallScreenState
       if (!mounted) return;
 
       // Get current user info
-      final userDoc =
-          await _firestore.collection('users').doc(widget.currentUserId).get();
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(widget.currentUserId)
+          .get();
       final userName = userDoc.data()?['name'] ?? 'Unknown';
 
       // Navigate to group audio call screen
@@ -79,6 +87,8 @@ class _IncomingGroupAudioCallScreenState
         MaterialPageRoute(
           builder: (context) => GroupAudioCallScreen(
             callId: widget.callId,
+            groupId: widget.groupId,
+            groupName: widget.groupName,
             userId: widget.currentUserId,
             userName: userName,
             participants: widget.participants,
@@ -86,11 +96,11 @@ class _IncomingGroupAudioCallScreenState
         ),
       );
     } catch (e) {
-      debugPrint('❌ Error accepting call: $e');
+      debugPrint('  Error accepting call: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join call: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to join call: $e')));
       }
     }
   }
@@ -109,7 +119,7 @@ class _IncomingGroupAudioCallScreenState
         Navigator.pop(context);
       }
     } catch (e) {
-      debugPrint('❌ Error rejecting call: $e');
+      debugPrint('  Error rejecting call: $e');
       if (mounted) {
         Navigator.pop(context);
       }
@@ -128,10 +138,7 @@ class _IncomingGroupAudioCallScreenState
             // Caller info
             const Text(
               'Group Audio Call',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 16),
             ),
 
             const SizedBox(height: 40),
@@ -158,7 +165,8 @@ class _IncomingGroupAudioCallScreenState
                   ],
                 ),
                 child: ClipOval(
-                  child: widget.callerPhotoUrl != null &&
+                  child:
+                      widget.callerPhotoUrl != null &&
                           widget.callerPhotoUrl!.isNotEmpty
                       ? CachedNetworkImage(
                           imageUrl: widget.callerPhotoUrl!,
@@ -166,8 +174,11 @@ class _IncomingGroupAudioCallScreenState
                           placeholder: (context, url) => Container(
                             color: AppColors.iosBlue.withValues(alpha: 0.2),
                             child: const Center(
-                              child: Icon(Icons.person,
-                                  size: 60, color: Colors.white),
+                              child: Icon(
+                                Icons.person,
+                                size: 60,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           errorWidget: (context, url, error) => Container(
@@ -218,10 +229,7 @@ class _IncomingGroupAudioCallScreenState
             // Participant count
             Text(
               '${widget.participants.length} participant${widget.participants.length != 1 ? 's' : ''}',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: Colors.white54, fontSize: 16),
             ),
 
             const SizedBox(height: 8),
@@ -229,10 +237,7 @@ class _IncomingGroupAudioCallScreenState
             // Call status
             const Text(
               'Incoming audio call...',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: 14),
             ),
 
             const Spacer(),

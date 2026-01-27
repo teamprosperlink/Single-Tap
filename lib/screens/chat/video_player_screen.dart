@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
+  final bool isLocalFile;
 
   const VideoPlayerScreen({
     super.key,
     required this.videoUrl,
+    this.isLocalFile = false,
   });
 
   @override
@@ -27,7 +30,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Future<void> _initializeVideo() async {
     try {
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      // Use file controller for local files, network controller for URLs
+      if (widget.isLocalFile) {
+        _controller = VideoPlayerController.file(File(widget.videoUrl));
+      } else {
+        _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      }
+
       await _controller.initialize();
       setState(() {
         _isInitialized = true;

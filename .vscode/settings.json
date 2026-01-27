@@ -1,5 +1,6 @@
 {
     "dart.flutterRunAdditionalArgs": [
         ""
-    ]
+    ],
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

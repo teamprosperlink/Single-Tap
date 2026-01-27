@@ -337,6 +337,147 @@ exports.onCallCreated = onDocumentCreated("calls/{callId}", async (event) => {
 });
 
 /**
+ * GROUP CALL NOTIFICATION
+ *
+ * Triggers when a new group call document is created.
+ * Sends notification to all participants EXCEPT the caller.
+ *
+ * Path: group_calls/{callId}
+ */
+exports.onGroupCallCreated = onDocumentCreated("group_calls/{callId}", async (event) => {
+  const callData = event.data.data();
+  const callId = event.params.callId;
+
+  logger.info(`New group call created: ${callId}`);
+  logger.info(`Group call data:`, JSON.stringify(callData));
+
+  // Get caller ID and participants
+  const callerId = callData.callerId;
+  const participants = callData.participants || [];
+  const groupId = callData.groupId;
+  const isVideo = callData.isVideo || false;
+
+  if (!callerId || participants.length === 0) {
+    logger.warn("No caller or no participants, skipping");
+    return null;
+  }
+
+  // Only send notification for incoming calls (status: 'calling')
+  const status = callData.status;
+  if (status !== "calling" && status !== "ringing") {
+    logger.info(`Group call status is ${status}, not a new call, skipping`);
+    return null;
+  }
+
+  // Get caller's name - use from call data or fetch from user doc
+  const callerName = callData.callerName || await getUserName(callerId);
+  const callerPhotoUrl = await getUserPhotoUrl(callerId);
+
+  // Get group name from Firestore
+  let groupName = "a group";
+  try {
+    const groupDoc = await db.collection("conversations").doc(groupId).get();
+    if (groupDoc.exists) {
+      const groupData = groupDoc.data();
+      groupName = groupData.name || groupData.groupName || "a group";
+    }
+  } catch (error) {
+    logger.error(`Error fetching group name for ${groupId}:`, error);
+  }
+
+  // Send notifications to all participants EXCEPT the caller
+  const notificationPromises = participants
+    .filter(participantId => participantId !== callerId)
+    .map(async (participantId) => {
+      try {
+        // Get participant's FCM token
+        const participantToken = await getUserFcmToken(participantId);
+        if (!participantToken) {
+          logger.warn(`No FCM token for participant ${participantId}`);
+          return;
+        }
+
+        // Send HIGH PRIORITY notification
+        const message = {
+          token: participantToken,
+          notification: {
+            title: "Incoming Group Call",
+            body: `${callerName} is calling ${groupName}`,
+          },
+          data: {
+            type: "group_audio_call",
+            callId: callId,
+            callerId: callerId,
+            callerName: callerName,
+            callerPhoto: callerPhotoUrl || "",
+            groupId: groupId,
+            groupName: groupName,
+            isVideo: isVideo.toString(),
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+            timestamp: Date.now().toString(),
+          },
+          android: {
+            priority: "high",
+            ttl: 60000, // 60 seconds
+            notification: {
+              channelId: "calls",
+              priority: "max",
+              visibility: "public",
+              defaultSound: true,
+              defaultVibrateTimings: true,
+              clickAction: "FLUTTER_NOTIFICATION_CLICK",
+            },
+          },
+          apns: {
+            headers: {
+              "apns-priority": "10",
+              "apns-push-type": "alert",
+            },
+            payload: {
+              aps: {
+                alert: {
+                  title: "Incoming Group Call",
+                  body: `${callerName} is calling ${groupName}`,
+                },
+                sound: "default",
+                badge: 1,
+                "content-available": 1,
+                "mutable-content": 1,
+                category: "INCOMING_CALL",
+              },
+              callId: callId,
+              callerId: callerId,
+              callerName: callerName,
+              callerPhoto: callerPhotoUrl || "",
+              groupId: groupId,
+              groupName: groupName,
+              isVideo: isVideo.toString(),
+              type: "group_audio_call",
+            },
+          },
+        };
+
+        const response = await messaging.send(message);
+        logger.info(`Group call notification sent to ${participantId}: ${response}`);
+      } catch (error) {
+        logger.error(`Error sending group call notification to ${participantId}:`, error);
+        if (
+          error.code === "messaging/invalid-registration-token" ||
+          error.code === "messaging/registration-token-not-registered"
+        ) {
+          logger.warn(`Invalid FCM token for participant ${participantId}`);
+        }
+      }
+    });
+
+  // Wait for all notifications to be sent
+  await Promise.all(notificationPromises);
+
+  logger.info(`Group call notifications sent to ${participants.length - 1} participants`);
+  return null;
+});
+
+/**
  * INQUIRY NOTIFICATION (for Professional accounts)
  *
  * Triggers when a new inquiry is created for a professional.

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -13,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/user_profile.dart';
 import '../screens/chat/enhanced_chat_screen.dart';
 import '../screens/call/voice_call_screen.dart';
+import '../screens/call/group_audio_call_screen.dart';
 import 'active_chat_service.dart';
 
 /// Global navigator key for notification navigation
@@ -47,6 +49,8 @@ class NotificationService {
       await _configureFCM();
       await _updateFCMToken();
       await _initializeCallKit();
+
+      // Note: Group call listener is started from MainNavigationScreen after user login
     } catch (e) {
       // Continue app execution even if notifications fail
     }
@@ -88,7 +92,10 @@ class NotificationService {
                   // User declined the call - update Firestore
                   debugPrint('  CallKit: Call declined - callId=$callId');
                   if (callId != null) {
-                    await _handleCallDeclined(callId: callId, callerId: callerId ?? '');
+                    await _handleCallDeclined(
+                      callId: callId,
+                      callerId: callerId ?? '',
+                    );
                   }
                   break;
 
@@ -128,7 +135,9 @@ class NotificationService {
       try {
         final calls = await FlutterCallkitIncoming.activeCalls();
         if (calls is List && calls.isNotEmpty) {
-          debugPrint('  CallKit: Found ${calls.length} active calls on startup');
+          debugPrint(
+            '  CallKit: Found ${calls.length} active calls on startup',
+          );
         }
       } catch (e) {
         debugPrint('  Error checking active calls: $e');
@@ -150,39 +159,138 @@ class NotificationService {
         '  _handleCallAccepted: Starting - callId=$callId, callerId=$callerId',
       );
 
-      // End the CallKit call UI first
-      try {
-        await FlutterCallkitIncoming.endCall(callId);
-        debugPrint('  _handleCallAccepted: CallKit UI ended');
-      } catch (e) {
-        debugPrint('  _handleCallAccepted: Error ending CallKit UI: $e');
-      }
+      // Check if this is a group call
+      final groupCallDoc = await _firestore
+          .collection('group_calls')
+          .doc(callId)
+          .get();
+      final isGroupCall = groupCallDoc.exists;
 
-      // Update call status in Firestore
-      try {
-        await _firestore.collection('calls').doc(callId).update({
-          'status': 'connected',
-          'acceptedAt': FieldValue.serverTimestamp(),
-          'connectedAt': FieldValue.serverTimestamp(),
-        });
-        debugPrint('  _handleCallAccepted: Call status updated to connected');
-      } catch (e) {
-        debugPrint('  _handleCallAccepted: Error updating call status: $e');
-      }
+      if (isGroupCall) {
+        // Handle group call acceptance
+        debugPrint('  _handleCallAccepted: This is a GROUP call');
 
-      // Fetch caller profile for VoiceCallScreen
-      UserProfile callerProfile;
-      try {
-        final callerDoc = await _firestore
-            .collection('users')
-            .doc(callerId)
-            .get();
-        if (callerDoc.exists) {
-          callerProfile = UserProfile.fromFirestore(callerDoc);
+        final groupCallData = groupCallDoc.data();
+        debugPrint('  _handleCallAccepted: Group call data fetched');
+
+        final groupId = groupCallData?['groupId'] as String?;
+        final groupName = groupCallData?['groupName'] as String?;
+        final participantIds =
+            groupCallData?['participants'] as List<dynamic>? ?? [];
+
+        debugPrint(
+          '  _handleCallAccepted: groupId=$groupId, groupName=$groupName, participants=${participantIds.length}',
+        );
+
+        if (groupId == null) {
           debugPrint(
-            '  _handleCallAccepted: Fetched caller profile: ${callerProfile.name}',
+            '  _handleCallAccepted: ERROR - No groupId in group call data',
           );
+          return;
+        }
+
+        // Get current user ID
+        final currentUserId = _auth.currentUser?.uid;
+        if (currentUserId == null) {
+          debugPrint('  _handleCallAccepted: ERROR - No current user');
+          return;
+        }
+
+        debugPrint('  _handleCallAccepted: currentUserId=$currentUserId');
+
+        // IMMEDIATE NAVIGATION - WhatsApp-like instant call screen
+        // Dismiss CallKit and navigate FIRST, then update status in background
+        debugPrint(
+          '  _handleCallAccepted: Navigating IMMEDIATELY to call screen...',
+        );
+
+        if (navigatorKey.currentState != null) {
+          // Dismiss CallKit UI IMMEDIATELY (async, no wait)
+          FlutterCallkitIncoming.endCall(callId)
+              .then((_) {
+                debugPrint('  _handleCallAccepted: CallKit UI dismissed');
+              })
+              .catchError((e) {
+                debugPrint(
+                  '  _handleCallAccepted: Error dismissing CallKit UI: $e',
+                );
+              });
+
+          // Navigate INSTANTLY with minimal data - GroupAudioCallScreen will fetch details
+          navigatorKey.currentState!.push(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) {
+                return GroupAudioCallScreen(
+                  callId: callId,
+                  groupId: groupId,
+                  groupName: groupName ?? 'Unknown Group',
+                  userId: currentUserId,
+                  userName: _auth.currentUser?.displayName ?? 'Unknown',
+                  participants: [], // Empty - screen will fetch from Firestore
+                );
+              },
+              transitionDuration: Duration.zero, // Instant transition
+              reverseTransitionDuration: Duration.zero,
+            ),
+          );
+
+          debugPrint(
+            '  _handleCallAccepted: Navigation initiated! Updating status in background...',
+          );
+
+          // Update status in background (don't block navigation)
+          _updateGroupCallStatusInBackground(callId, currentUserId);
         } else {
+          debugPrint(
+            '  _handleCallAccepted: ERROR - navigatorKey.currentState is NULL!',
+          );
+        }
+      } else {
+        // Handle regular 1-on-1 call
+        debugPrint('  _handleCallAccepted: This is a REGULAR 1-on-1 call');
+
+        // Update call status in Firestore
+        try {
+          await _firestore.collection('calls').doc(callId).update({
+            'status': 'connected',
+            'acceptedAt': FieldValue.serverTimestamp(),
+            'connectedAt': FieldValue.serverTimestamp(),
+          });
+          debugPrint('  _handleCallAccepted: Call status updated to connected');
+        } catch (e) {
+          debugPrint('  _handleCallAccepted: Error updating call status: $e');
+        }
+
+        // Fetch caller profile for VoiceCallScreen
+        UserProfile callerProfile;
+        try {
+          final callerDoc = await _firestore
+              .collection('users')
+              .doc(callerId)
+              .get();
+          if (callerDoc.exists) {
+            callerProfile = UserProfile.fromFirestore(callerDoc);
+            debugPrint(
+              '  _handleCallAccepted: Fetched caller profile: ${callerProfile.name}',
+            );
+          } else {
+            callerProfile = UserProfile(
+              uid: callerId,
+              id: callerId,
+              name: callerName,
+              email: '',
+              profileImageUrl: callerPhoto,
+              createdAt: DateTime.now(),
+              lastSeen: DateTime.now(),
+            );
+            debugPrint(
+              '  _handleCallAccepted: Created fallback caller profile',
+            );
+          }
+        } catch (e) {
+          debugPrint(
+            '  _handleCallAccepted: Error fetching caller profile: $e',
+          );
           callerProfile = UserProfile(
             uid: callerId,
             id: callerId,
@@ -192,48 +300,89 @@ class NotificationService {
             createdAt: DateTime.now(),
             lastSeen: DateTime.now(),
           );
-          debugPrint('  _handleCallAccepted: Created fallback caller profile');
         }
-      } catch (e) {
-        debugPrint('  _handleCallAccepted: Error fetching caller profile: $e');
-        callerProfile = UserProfile(
-          uid: callerId,
-          id: callerId,
-          name: callerName,
-          email: '',
-          profileImageUrl: callerPhoto,
-          createdAt: DateTime.now(),
-          lastSeen: DateTime.now(),
-        );
-      }
 
-      // Navigate to VoiceCallScreen - small delay to ensure app is ready
-      await Future.delayed(const Duration(milliseconds: 300));
+        // Dismiss CallKit UI IMMEDIATELY (no await) for WhatsApp-like smooth transition
+        FlutterCallkitIncoming.endCall(callId)
+            .then((_) {
+              debugPrint('  _handleCallAccepted: CallKit UI dismissed');
+            })
+            .catchError((e) {
+              debugPrint(
+                '  _handleCallAccepted: Error dismissing CallKit UI: $e',
+              );
+            });
 
-      try {
-        if (navigatorKey.currentState != null) {
-          debugPrint('  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})');
-          navigatorKey.currentState!.push(
-            MaterialPageRoute(
-              builder: (context) => VoiceCallScreen(
-                callId: callId,
-                otherUser: callerProfile,
-                isOutgoing: false,
+        // Navigate INSTANTLY to VoiceCallScreen with zero transition delay
+        try {
+          if (navigatorKey.currentState != null) {
+            debugPrint(
+              '  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
+            );
+            navigatorKey.currentState!.push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) {
+                  return VoiceCallScreen(
+                    callId: callId,
+                    otherUser: callerProfile,
+                    isOutgoing: false,
+                  );
+                },
+                transitionDuration: Duration.zero, // Instant transition
+                reverseTransitionDuration: Duration.zero,
               ),
-            ),
-          );
-        } else {
-          debugPrint(
-            '  _handleCallAccepted: WARNING - navigatorKey.currentState is null!',
-          );
+            );
+            debugPrint(
+              '  _handleCallAccepted: Navigation to VoiceCallScreen initiated!',
+            );
+          } else {
+            debugPrint(
+              '  _handleCallAccepted: WARNING - navigatorKey.currentState is null!',
+            );
+          }
+        } catch (e) {
+          debugPrint('  _handleCallAccepted: Error navigating: $e');
         }
-      } catch (e) {
-        debugPrint('  _handleCallAccepted: Error navigating: $e');
       }
     } catch (e, stackTrace) {
       debugPrint('  Error handling call accept: $e');
       debugPrint('  Stack trace: $stackTrace');
     }
+  }
+
+  /// Update group call status in background (don't block navigation)
+  void _updateGroupCallStatusInBackground(String callId, String currentUserId) {
+    debugPrint(
+      '  _updateGroupCallStatusInBackground: Starting for callId=$callId, userId=$currentUserId',
+    );
+
+    // Run asynchronously without blocking
+    Future(() async {
+      try {
+        // Update call status to connected
+        await _firestore.collection('group_calls').doc(callId).update({
+          'status': 'connected',
+          'acceptedAt': FieldValue.serverTimestamp(),
+          'connectedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint(
+          '  _updateGroupCallStatusInBackground: Call status updated to connected',
+        );
+
+        // Update participant status to joined
+        await _firestore.collection('group_calls').doc(callId).update({
+          'participants.$currentUserId.status': 'joined',
+          'participants.$currentUserId.joinedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint(
+          '  _updateGroupCallStatusInBackground: Participant status updated to joined',
+        );
+      } catch (e) {
+        debugPrint(
+          '  _updateGroupCallStatusInBackground: Error updating call status: $e',
+        );
+      }
+    });
   }
 
   /// Handle call declined from CallKit
@@ -242,11 +391,28 @@ class NotificationService {
     required String callerId,
   }) async {
     try {
-      // Update call status in Firestore
-      await _firestore.collection('calls').doc(callId).update({
-        'status': 'rejected',
-        'rejectedAt': FieldValue.serverTimestamp(),
-      });
+      // Check if this is a group call
+      final groupCallDoc = await _firestore
+          .collection('group_calls')
+          .doc(callId)
+          .get();
+      final isGroupCall = groupCallDoc.exists;
+
+      if (isGroupCall) {
+        // Update group call status
+        await _firestore.collection('group_calls').doc(callId).update({
+          'status': 'rejected',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('  Group call declined: $callId');
+      } else {
+        // Update regular call status
+        await _firestore.collection('calls').doc(callId).update({
+          'status': 'rejected',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('  Regular call declined: $callId');
+      }
 
       // End the CallKit call UI
       await FlutterCallkitIncoming.endCall(callId);
@@ -262,31 +428,57 @@ class NotificationService {
     required String callerName,
   }) async {
     try {
-      // IMPORTANT: Check current call status before marking as missed
-      // If IncomingCallScreen already updated status to 'ringing' or 'connected',
-      // we should NOT mark it as missed (the call is being handled)
-      final callDoc = await _firestore.collection('calls').doc(callId).get();
-      if (callDoc.exists) {
-        final currentStatus = callDoc.data()?['status'] as String?;
-        debugPrint('  _handleCallMissed: Current status = $currentStatus');
+      // Check if this is a group call
+      final groupCallDoc = await _firestore
+          .collection('group_calls')
+          .doc(callId)
+          .get();
+      final isGroupCall = groupCallDoc.exists;
 
-        // Only mark as missed if call is still in 'calling' state
-        // 'ringing' or 'connected' means IncomingCallScreen is handling it
+      if (isGroupCall) {
+        // Handle group call missed
+        final currentStatus = groupCallDoc.data()?['status'] as String?;
+        debugPrint(
+          '  _handleCallMissed (GROUP): Current status = $currentStatus',
+        );
+
         if (currentStatus == 'ringing' || currentStatus == 'connected') {
           debugPrint(
-            '  _handleCallMissed: Call is $currentStatus, NOT marking as missed',
+            '  _handleCallMissed: Group call is $currentStatus, NOT marking as missed',
           );
-          // Just end CallKit UI, don't change status
           await FlutterCallkitIncoming.endCall(callId);
           return;
         }
-      }
 
-      // Call is still in 'calling' state - mark as missed
-      await _firestore.collection('calls').doc(callId).update({
-        'status': 'missed',
-        'missedAt': FieldValue.serverTimestamp(),
-      });
+        // Mark group call as missed
+        await _firestore.collection('group_calls').doc(callId).update({
+          'status': 'missed',
+          'missedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Handle regular call missed
+        final callDoc = await _firestore.collection('calls').doc(callId).get();
+        if (callDoc.exists) {
+          final currentStatus = callDoc.data()?['status'] as String?;
+          debugPrint(
+            '  _handleCallMissed (REGULAR): Current status = $currentStatus',
+          );
+
+          if (currentStatus == 'ringing' || currentStatus == 'connected') {
+            debugPrint(
+              '  _handleCallMissed: Call is $currentStatus, NOT marking as missed',
+            );
+            await FlutterCallkitIncoming.endCall(callId);
+            return;
+          }
+        }
+
+        // Mark regular call as missed
+        await _firestore.collection('calls').doc(callId).update({
+          'status': 'missed',
+          'missedAt': FieldValue.serverTimestamp(),
+        });
+      }
 
       // End the CallKit call UI
       await FlutterCallkitIncoming.endCall(callId);
@@ -495,8 +687,16 @@ class NotificationService {
     // Even when app is in foreground (both devices active)
     // This ensures WhatsApp-style incoming call experience
     if (type == 'call') {
-      debugPrint('🔔 FOREGROUND CALL: Showing full-screen CallKit UI');
+      debugPrint('  FOREGROUND 1-ON-1 CALL: Showing full-screen CallKit UI');
       _navigateToCall(data); // Show full-screen incoming call
+      return;
+    }
+
+    // CRITICAL FIX: For GROUP call notifications, ALWAYS show full-screen CallKit UI
+    // Even when app is in foreground - WhatsApp-style
+    if (type == 'group_audio_call') {
+      debugPrint('  FOREGROUND GROUP CALL: Showing full-screen CallKit UI');
+      _navigateToGroupCall(data); // Show full-screen incoming group call
       return;
     }
 
@@ -508,12 +708,17 @@ class NotificationService {
 
       // Check if this message is from the currently active chat
       if (senderId != null && _activeChatService.isUserChatActive(senderId)) {
-        debugPrint('🔕 Suppressing notification: User is in chat with $senderId');
+        debugPrint(
+          '  Suppressing notification: User is in chat with $senderId',
+        );
         return; // Don't show notification - user is already viewing this chat
       }
 
-      if (conversationId != null && _activeChatService.isConversationActive(conversationId)) {
-        debugPrint('🔕 Suppressing notification: Conversation $conversationId is active');
+      if (conversationId != null &&
+          _activeChatService.isConversationActive(conversationId)) {
+        debugPrint(
+          '  Suppressing notification: Conversation $conversationId is active',
+        );
         return; // Don't show notification - conversation is open
       }
     }
@@ -569,6 +774,9 @@ class NotificationService {
         break;
       case 'call':
         await _navigateToCall(data);
+        break;
+      case 'group_audio_call':
+        await _navigateToGroupCall(data);
         break;
       case 'inquiry':
         await _navigateToInquiries(data);
@@ -757,6 +965,141 @@ class NotificationService {
     );
   }
 
+  /// Navigate to incoming group call screen
+  Future<void> _navigateToGroupCall(Map<String, dynamic> data) async {
+    final callId = data['callId'] as String?;
+    final callerId = data['callerId'] as String?;
+    final groupId = data['groupId'] as String?;
+    final groupName = data['groupName'] as String? ?? 'Unknown Group';
+    final callerName = data['callerName'] as String? ?? 'Unknown';
+    final callerPhoto = data['callerPhoto'] as String?;
+
+    debugPrint(
+      '  _navigateToGroupCall: callId=$callId, callerId=$callerId, groupId=$groupId',
+    );
+
+    if (callId == null || callerId == null || groupId == null) {
+      debugPrint('  _navigateToGroupCall: Missing required data');
+      return;
+    }
+
+    // Check if call is still active before navigating
+    try {
+      final callDoc = await _firestore
+          .collection('group_calls')
+          .doc(callId)
+          .get();
+      if (!callDoc.exists) {
+        debugPrint('  _navigateToGroupCall: Call document does not exist');
+        return;
+      }
+
+      final callData = callDoc.data();
+      final callStatus = callData?['status'] as String?;
+      debugPrint('  _navigateToGroupCall: Call status = $callStatus');
+
+      // Only show incoming call screen if call is still in 'calling' or 'ringing' state
+      if (callStatus != 'calling' && callStatus != 'ringing') {
+        debugPrint(
+          '  _navigateToGroupCall: Call already ended, status=$callStatus',
+        );
+        return;
+      }
+
+      // Check if call is too old (more than 60 seconds)
+      final timestamp = callData?['timestamp'] ?? callData?['createdAt'];
+      if (timestamp is Timestamp) {
+        final callTime = timestamp.toDate();
+        final now = DateTime.now();
+        final diff = now.difference(callTime).inSeconds;
+
+        if (diff > 60) {
+          debugPrint(
+            '  _navigateToGroupCall: Call too old ($diff seconds), skipping',
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('  _navigateToGroupCall: Error checking call status: $e');
+      return;
+    }
+
+    debugPrint(
+      '  _navigateToGroupCall: Showing CallKit incoming group call UI',
+    );
+
+    // Show CallKit incoming call UI (like WhatsApp) for group calls
+    final callKitParams = CallKitParams(
+      id: callId,
+      nameCaller: callerName,
+      appName: 'Supper',
+      avatar: callerPhoto,
+      handle: 'Group Voice Call - $groupName',
+      type: 0, // Audio call
+      textAccept: 'Accept',
+      textDecline: 'Decline',
+      missedCallNotification: const NotificationParams(
+        showNotification: true,
+        isShowCallback: false,
+        subtitle: 'Missed Group Call',
+        callbackText: 'Call back',
+      ),
+      duration: 60000,
+      extra: <String, dynamic>{
+        'callId': callId,
+        'callerId': callerId,
+        'callerName': callerName,
+        'callerPhoto': callerPhoto,
+        'groupId': groupId,
+        'groupName': groupName,
+        'isGroupCall': true,
+      },
+      headers: <String, dynamic>{},
+      android: const AndroidParams(
+        isCustomNotification: true,
+        isShowLogo: false,
+        ringtonePath: 'system_ringtone_default',
+        backgroundColor: '#0f0f23',
+        backgroundUrl: '',
+        actionColor: '#4CAF50',
+        textColor: '#FFFFFF',
+        incomingCallNotificationChannelName: 'Incoming Calls',
+        missedCallNotificationChannelName: 'Missed Calls',
+        isShowCallID: false,
+        isShowFullLockedScreen: true,
+      ),
+      ios: const IOSParams(
+        iconName: 'CallKitLogo',
+        handleType: 'generic',
+        supportsVideo: false,
+        maximumCallGroups: 1,
+        maximumCallsPerCallGroup: 1,
+        audioSessionMode: 'default',
+        audioSessionActive: true,
+        audioSessionPreferredSampleRate: 44100.0,
+        audioSessionPreferredIOBufferDuration: 0.005,
+        supportsDTMF: false,
+        supportsHolding: false,
+        supportsGrouping: false,
+        supportsUngrouping: false,
+        ringtonePath: 'system_ringtone_default',
+      ),
+    );
+
+    await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
+
+    // Update call status to ringing
+    try {
+      await _firestore.collection('group_calls').doc(callId).update({
+        'status': 'ringing',
+        'ringingAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('  Error updating group call status: $e');
+    }
+  }
+
   /// Navigate to inquiries screen (for professionals)
   Future<void> _navigateToInquiries(Map<String, dynamic> data) async {
     // TODO: Navigate to inquiries screen
@@ -834,6 +1177,69 @@ class NotificationService {
 
   /// Send notification to another user via Firestore
   /// Note: For calls, the Cloud Function (onCallCreated) automatically sends FCM push
+  /// Listen for incoming group calls in real-time
+  /// This is a fallback for when Cloud Functions are not available
+  StreamSubscription? _groupCallListener;
+
+  void startListeningForGroupCalls() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    debugPrint('  Starting group call listener for user: $currentUserId');
+
+    _groupCallListener = _firestore
+        .collection('group_calls')
+        .where('participants', arrayContains: currentUserId)
+        .where('status', isEqualTo: 'calling')
+        .snapshots()
+        .listen((snapshot) async {
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final callData = change.doc.data();
+              if (callData == null) continue;
+
+              final callId = change.doc.id;
+              final callerId = callData['callerId'] as String?;
+              final callerName = callData['callerName'] as String?;
+              final groupId = callData['groupId'] as String?;
+              final groupName = callData['groupName'] as String?;
+
+              // Don't show notification to the caller
+              if (callerId == currentUserId) continue;
+
+              debugPrint(' NEW GROUP CALL DETECTED: $callId from $callerName');
+
+              // Get caller photo
+              String? callerPhoto;
+              try {
+                final callerDoc = await _firestore
+                    .collection('users')
+                    .doc(callerId)
+                    .get();
+                callerPhoto = callerDoc.data()?['photoUrl'] as String?;
+              } catch (e) {
+                debugPrint('Error fetching caller photo: $e');
+              }
+
+              // Show CallKit incoming call UI
+              await _navigateToGroupCall({
+                'callId': callId,
+                'callerId': callerId,
+                'callerName': callerName ?? 'Someone',
+                'callerPhoto': callerPhoto,
+                'groupId': groupId,
+                'groupName': groupName ?? 'Unknown Group',
+              });
+            }
+          }
+        });
+  }
+
+  void stopListeningForGroupCalls() {
+    _groupCallListener?.cancel();
+    _groupCallListener = null;
+  }
+
   /// when a call document is created in Firestore
   Future<void> sendNotificationToUser({
     required String userId,
@@ -985,7 +1391,8 @@ class NotificationService {
       for (var doc in conversations.docs) {
         try {
           final data = doc.data();
-          final unreadCountValue = data['unreadCount']?[_auth.currentUser!.uid] ?? 0;
+          final unreadCountValue =
+              data['unreadCount']?[_auth.currentUser!.uid] ?? 0;
 
           // Safely convert to int, handling both int and string types
           int count = 0;
@@ -1064,7 +1471,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final data = message.data;
   final type = data['type'] as String?;
 
-  // Handle incoming call in background
+  // Handle incoming regular 1-on-1 call in background
   if (type == 'call') {
     final callId = data['callId'] as String?;
     final callerId = data['callerId'] as String?;
@@ -1072,7 +1479,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final callerPhoto = data['callerPhoto'] as String?;
 
     if (callId != null && callerId != null) {
-      debugPrint('  Background: Showing incoming call from $callerName');
+      debugPrint('  Background: Showing incoming 1-on-1 call from $callerName');
 
       // Show WhatsApp-style incoming call UI
       final callKitParams = CallKitParams(
@@ -1110,6 +1517,81 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           missedCallNotificationChannelName: 'Missed Calls',
           isShowCallID: false,
           isShowFullLockedScreen: true,
+        ),
+        ios: const IOSParams(
+          iconName: 'CallKitLogo',
+          handleType: 'generic',
+          supportsVideo: false,
+          maximumCallGroups: 1,
+          maximumCallsPerCallGroup: 1,
+          audioSessionMode: 'default',
+          audioSessionActive: true,
+          audioSessionPreferredSampleRate: 44100.0,
+          audioSessionPreferredIOBufferDuration: 0.005,
+          supportsDTMF: false,
+          supportsHolding: false,
+          supportsGrouping: false,
+          supportsUngrouping: false,
+          ringtonePath: 'system_ringtone_default',
+        ),
+      );
+
+      await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
+    }
+  }
+  // Handle incoming GROUP call in background - WhatsApp style
+  else if (type == 'group_audio_call') {
+    final callId = data['callId'] as String?;
+    final callerId = data['callerId'] as String?;
+    final callerName = data['callerName'] as String? ?? 'Unknown';
+    final callerPhoto = data['callerPhoto'] as String?;
+    final groupId = data['groupId'] as String?;
+    final groupName = data['groupName'] as String? ?? 'Unknown Group';
+
+    if (callId != null && callerId != null && groupId != null) {
+      debugPrint(
+        '  Background: Showing incoming GROUP call from $callerName in $groupName',
+      );
+
+      // Show WhatsApp-style incoming GROUP call UI with full-screen notification
+      final callKitParams = CallKitParams(
+        id: callId,
+        nameCaller: callerName,
+        appName: 'Supper',
+        avatar: callerPhoto,
+        handle: 'Group Voice Call - $groupName',
+        type: 0, // Audio call
+        textAccept: 'Accept',
+        textDecline: 'Decline',
+        missedCallNotification: const NotificationParams(
+          showNotification: true,
+          isShowCallback: false,
+          subtitle: 'Missed Group Call',
+          callbackText: 'Call back',
+        ),
+        duration: 60000, // 60 seconds timeout
+        extra: <String, dynamic>{
+          'callId': callId,
+          'callerId': callerId,
+          'callerName': callerName,
+          'callerPhoto': callerPhoto,
+          'groupId': groupId,
+          'groupName': groupName,
+          'isGroupCall': true,
+        },
+        headers: <String, dynamic>{},
+        android: const AndroidParams(
+          isCustomNotification: true,
+          isShowLogo: false,
+          ringtonePath: 'system_ringtone_default',
+          backgroundColor: '#0f0f23',
+          backgroundUrl: '',
+          actionColor: '#4CAF50',
+          textColor: '#FFFFFF',
+          incomingCallNotificationChannelName: 'Incoming Calls',
+          missedCallNotificationChannelName: 'Missed Calls',
+          isShowCallID: false,
+          isShowFullLockedScreen: true, // Full-screen like WhatsApp
         ),
         ios: const IOSParams(
           iconName: 'CallKitLogo',
