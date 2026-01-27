@@ -859,12 +859,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Reset daily counters if 24 hours passed
   void _resetDailyCountersIfNeeded() {
     final now = DateTime.now();
-    if (_lastMediaCountReset == null ||
-        now.difference(_lastMediaCountReset!).inHours >= 24) {
+
+    // First time: just set the timestamp, don't reset counters
+    if (_lastMediaCountReset == null) {
+      _lastMediaCountReset = now;
+      debugPrint('🕐 Media counter timer started');
+      return;
+    }
+
+    // After 24 hours: reset counters
+    if (now.difference(_lastMediaCountReset!).inHours >= 24) {
       _todayImageCount = 0;
       _todayVideoCount = 0;
       _lastMediaCountReset = now;
-      debugPrint('🔄 Daily media counters reset');
+      debugPrint('🔄 Daily media counters reset after 24 hours');
     }
   }
 
@@ -932,10 +940,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   void _decrementMediaCounter(String mediaType) {
     if (mediaType == 'image' && _todayImageCount > 0) {
       _todayImageCount--;
-      debugPrint('📉 Image counter: $_todayImageCount');
+      debugPrint('📉 Image counter decremented: $_todayImageCount');
     } else if (mediaType == 'video' && _todayVideoCount > 0) {
       _todayVideoCount--;
-      debugPrint('📉 Video counter: $_todayVideoCount');
+      debugPrint('📉 Video counter decremented: $_todayVideoCount');
     }
   }
 
