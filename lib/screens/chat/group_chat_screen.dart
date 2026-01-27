@@ -972,10 +972,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         );
       }
 
+      // IMPORTANT: Increment counter FIRST to prevent race condition
+      // If two users click rapidly, both checks will see the incremented count
+      _incrementMediaCounter('image', imagesToSend.length);
+      debugPrint('🔒 Counter locked: $_todayImageCount images');
+
       // Check if adding these images would exceed daily limit
       final limitReached =
-          await _checkDailyMediaLimit('image', imagesToSend.length);
+          await _checkDailyMediaLimit('image', 0); // addCount=0 since already incremented
       if (limitReached) {
+        // Rollback counter if limit exceeded
+        for (int i = 0; i < imagesToSend.length; i++) {
+          _decrementMediaCounter('image');
+        }
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -984,9 +993,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
         return;
       }
-
-      // Increment counter for pending uploads
-      _incrementMediaCounter('image', imagesToSend.length);
 
       debugPrint('Sending ${imagesToSend.length} images');
 
@@ -1015,9 +1021,28 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Take photo with camera (subject to daily limit)
   Future<void> _takePhoto() async {
     try {
-      // Check daily limit first (1 photo)
-      final limitReached = await _checkDailyMediaLimit('image', 1);
+      debugPrint('Opening camera...');
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+
+      if (image == null) {
+        debugPrint('No photo taken');
+        return;
+      }
+
+      // Increment counter FIRST to prevent race condition
+      _incrementMediaCounter('image', 1);
+      debugPrint('🔒 Counter locked: $_todayImageCount images');
+
+      // Check daily limit (1 photo)
+      final limitReached = await _checkDailyMediaLimit('image', 0);
       if (limitReached) {
+        // Rollback counter
+        _decrementMediaCounter('image');
         if (mounted) {
           SnackBarHelper.showError(
             context,
@@ -1027,28 +1052,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      debugPrint('Opening camera...');
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-        maxWidth: 1920,
-        maxHeight: 1920,
-      );
-      if (image != null) {
-        debugPrint('Photo taken: ${image.path}');
-        // Increment counter before sending
-        _incrementMediaCounter('image', 1);
-        try {
-          await _sendImageMessage(File(image.path));
-          // Decrement after successful upload
-          _decrementMediaCounter('image');
-        } catch (e) {
-          // Decrement on failure
-          _decrementMediaCounter('image');
-          rethrow;
-        }
-      } else {
-        debugPrint('No photo taken');
+      debugPrint('Photo taken: ${image.path}');
+      try {
+        await _sendImageMessage(File(image.path));
+        // Decrement after successful upload
+        _decrementMediaCounter('image');
+      } catch (e) {
+        // Decrement on failure
+        _decrementMediaCounter('image');
+        rethrow;
       }
     } catch (e) {
       debugPrint('Error taking photo: $e');
@@ -1174,19 +1186,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Record video from camera (subject to daily limit)
   void _recordVideo() async {
     if (_isRecordingVideo) return;
-
-    // Check daily limit first (1 video)
-    final limitReached = await _checkDailyMediaLimit('video', 1);
-    if (limitReached) {
-      if (mounted) {
-        SnackBarHelper.showError(
-          context,
-          'Daily limit reached! You can only send 4 videos per day in this group.',
-        );
-      }
-      return;
-    }
-
     _isRecordingVideo = true;
 
     try {
@@ -1262,8 +1261,24 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             'Camera video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
           );
 
-          // Increment counter before sending
+          // Increment counter FIRST to prevent race condition
           _incrementMediaCounter('video', 1);
+          debugPrint('🔒 Counter locked: $_todayVideoCount videos');
+
+          // Check daily limit
+          final limitReached = await _checkDailyMediaLimit('video', 0);
+          if (limitReached) {
+            // Rollback counter
+            _decrementMediaCounter('video');
+            if (mounted) {
+              SnackBarHelper.showError(
+                context,
+                'Daily limit reached! You can only send 4 videos per day in this group.',
+              );
+            }
+            return;
+          }
+
           try {
             await _sendVideoMessage(videoFile);
             // Decrement after successful upload
@@ -1340,9 +1355,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         await controller.dispose();
         debugPrint('Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB');
 
-        // Check daily limit before sending (1 video)
-        final limitReached = await _checkDailyMediaLimit('video', 1);
+        // Increment counter FIRST to prevent race condition
+        _incrementMediaCounter('video', 1);
+        debugPrint('🔒 Counter locked: $_todayVideoCount videos');
+
+        // Check daily limit (1 video)
+        final limitReached = await _checkDailyMediaLimit('video', 0);
         if (limitReached) {
+          // Rollback counter
+          _decrementMediaCounter('video');
           if (mounted) {
             SnackBarHelper.showError(
               context,
@@ -1352,8 +1373,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           return;
         }
 
-        // Increment counter before sending
-        _incrementMediaCounter('video', 1);
         try {
           // Send video
           await _sendVideoMessage(videoFile);
