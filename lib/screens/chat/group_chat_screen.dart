@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
@@ -850,21 +851,37 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  // Pick image from gallery
+  // Pick image from gallery (max 4 images)
   Future<void> _pickImage() async {
     try {
-      debugPrint('Opening gallery picker...');
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
+      debugPrint('Opening gallery picker for multiple images...');
+      final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
         maxWidth: 1920,
         maxHeight: 1920,
       );
-      if (image != null) {
-        debugPrint('Image selected: ${image.path}');
+
+      if (images.isEmpty) {
+        debugPrint('No images selected');
+        return;
+      }
+
+      // Limit to 4 images
+      if (images.length > 4) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Maximum 4 images allowed. Only first 4 will be sent.',
+          );
+        }
+      }
+
+      final imagesToSend = images.take(4).toList();
+      debugPrint('Sending ${imagesToSend.length} images');
+
+      // Send each image
+      for (final image in imagesToSend) {
         await _sendImageMessage(File(image.path));
-      } else {
-        debugPrint('No image selected');
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -1047,13 +1064,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       final video = await _imagePicker.pickVideo(
         source: ImageSource.camera,
-        maxDuration: const Duration(seconds: 30),
+        maxDuration: const Duration(seconds: 28), // Max 28 seconds
       );
 
       _isRecordingVideo = false;
 
       if (video != null && mounted) {
         final videoFile = File(video.path);
+
+        // Check file size (max 25MB)
         final fileSize = await videoFile.length();
         final fileSizeMB = fileSize / (1024 * 1024);
 
@@ -1067,7 +1086,36 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           return;
         }
 
-        await _sendVideoMessage(videoFile);
+        // Validate video duration (max 28 seconds)
+        final controller = VideoPlayerController.file(videoFile);
+        try {
+          await controller.initialize();
+          final duration = controller.value.duration;
+
+          if (duration.inSeconds > 28) {
+            if (mounted) {
+              SnackBarHelper.showError(
+                context,
+                'Video too long (${duration.inSeconds}s). Maximum 28 seconds allowed.',
+              );
+            }
+            await controller.dispose();
+            return;
+          }
+
+          await controller.dispose();
+          debugPrint(
+            'Camera video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
+          );
+
+          await _sendVideoMessage(videoFile);
+        } catch (e) {
+          debugPrint('Error validating camera video: $e');
+          await controller.dispose();
+          if (mounted) {
+            SnackBarHelper.showError(context, 'Failed to process video');
+          }
+        }
       }
     } catch (e) {
       _isRecordingVideo = false;
@@ -1078,27 +1126,64 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Pick video from gallery
+  // Pick video from gallery (max 4 videos, max 28 seconds each)
   void _pickVideo() async {
     try {
+      // Note: pickMultipleMedia is available in image_picker 0.8.9+
+      // For now, let users pick one video at a time (they can repeat 4 times)
       final video = await _imagePicker.pickVideo(source: ImageSource.gallery);
 
-      if (video != null && mounted) {
-        final videoFile = File(video.path);
-        final fileSize = await videoFile.length();
-        final fileSizeMB = fileSize / (1024 * 1024);
+      if (video == null) {
+        debugPrint('No video selected');
+        return;
+      }
 
-        if (fileSizeMB > 25) {
+      if (!mounted) return;
+
+      final videoFile = File(video.path);
+
+      // Check file size (max 25MB)
+      final fileSize = await videoFile.length();
+      final fileSizeMB = fileSize / (1024 * 1024);
+
+      if (fileSizeMB > 25) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Video too large (${fileSizeMB.toStringAsFixed(1)}MB). Max 25MB.',
+          );
+        }
+        return;
+      }
+
+      // Check video duration (max 28 seconds)
+      final controller = VideoPlayerController.file(videoFile);
+      try {
+        await controller.initialize();
+        final duration = controller.value.duration;
+
+        if (duration.inSeconds > 28) {
           if (mounted) {
             SnackBarHelper.showError(
               context,
-              'Video too large (${fileSizeMB.toStringAsFixed(1)}MB). Max 25MB.',
+              'Video too long (${duration.inSeconds}s). Maximum 28 seconds allowed.',
             );
           }
+          await controller.dispose();
           return;
         }
 
+        await controller.dispose();
+        debugPrint('Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB');
+
+        // Send video
         await _sendVideoMessage(videoFile);
+      } catch (e) {
+        debugPrint('Error checking video duration: $e');
+        await controller.dispose();
+        if (mounted) {
+          SnackBarHelper.showError(context, 'Failed to process video');
+        }
       }
     } catch (e) {
       debugPrint('Error picking video: $e');
