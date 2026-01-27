@@ -75,6 +75,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   int _todayAudioCount = 0;
   DateTime? _lastMediaCountReset;
   bool _isMediaOperationInProgress = false; // Lock to prevent concurrent operations
+  bool _isCounterLoaded = false; // Track if counter has been loaded from SharedPreferences
 
   // Typing indicator
   List<String> _typingUsers = [];
@@ -885,9 +886,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Check if 24 hours passed and reset if needed
       await _resetDailyCountersIfNeeded();
 
+      _isCounterLoaded = true; // Mark counter as loaded
       debugPrint('📊 Loaded counts: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
     } catch (e) {
       debugPrint('Error loading media counts: $e');
+      _isCounterLoaded = true; // Set to true even on error to prevent blocking
     }
   }
 
@@ -939,6 +942,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Check if current counter exceeds daily limit (4 per day)
   Future<bool> _checkDailyMediaLimit(String mediaType) async {
+    // CRITICAL: Wait for counter to load from SharedPreferences
+    int waitCount = 0;
+    while (!_isCounterLoaded && waitCount < 50) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      waitCount++;
+    }
+
+    if (!_isCounterLoaded) {
+      debugPrint('⚠️ Counter not loaded after 5 seconds, proceeding anyway');
+    }
+
     await _resetDailyCountersIfNeeded();
 
     final currentCount = mediaType == 'image'
