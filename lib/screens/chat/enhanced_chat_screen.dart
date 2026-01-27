@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../res/config/app_assets.dart';
@@ -108,6 +109,17 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   // Single stream for user status (avoid duplicate queries)
   Stream<DocumentSnapshot>? _userStatusStream;
 
+  // Daily media counters (SharedPreferences-based, same as group chat)
+  int _todayImageCount = 0;
+  int _todayVideoCount = 0;
+  int _todayAudioCount = 0;
+  DateTime? _lastMediaCountReset;
+  bool _isMediaOperationInProgress =
+      false; // Lock to prevent concurrent operations
+  bool _isCounterLoaded =
+      false; // Track if counter has been loaded from SharedPreferences
+  bool _isCounterLoading = false; // Prevent concurrent counter loads
+
   // Voice recording variables - lazy initialized to prevent crashes
   FlutterSoundRecorder? _audioRecorder;
   bool _isRecording = false;
@@ -149,9 +161,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   void initState() {
     super.initState();
 
+    debugPrint('🚀 ========== ENHANCED CHAT SCREEN OPENED ==========');
+    debugPrint(
+      '🚀 Chat with: ${widget.otherUser.name} (${widget.otherUser.uid})',
+    );
+    debugPrint('🚀 Current time: ${DateTime.now()}');
+
     try {
       // Cache user ID for use during dispose
       _cachedUserId = ref.read(currentUserIdProvider);
+      debugPrint('🚀 Cached UserId: $_cachedUserId');
 
       // Initialize single user status stream
       _userStatusStream = _firestore
@@ -172,6 +191,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       _setupAnimations();
       _scrollController.addListener(_scrollListener);
+
+      // Initialize daily media counter with retry mechanism
+      _initializeCounterWithRetry();
 
       // Defer non-critical tasks to after first frame
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -434,52 +456,55 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         appBar: _buildAppBar(isDarkMode),
         body: Stack(
           children: [
-            // Background - Theme gradient or default image
+            // Default background - always shows (for default theme)
             Positioned.fill(
-              child: _selectedTheme != 'default'
-                  ? Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            (chatThemeColors[_selectedTheme] ??
-                                    chatThemeColors['default']!)
-                                .first
-                                .withValues(alpha: 0.3),
-                            (chatThemeColors[_selectedTheme] ??
-                                    chatThemeColors['default']!)
-                                .last
-                                .withValues(alpha: 0.2),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                    )
-                  : Image.asset(
-                      AppAssets.homeBackgroundImage,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
+              child: Image.asset(
+                AppAssets.homeBackgroundImage,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+              ),
             ),
 
-            // Dark overlay with opacity (only for default theme)
-            if (_selectedTheme == 'default')
-              Positioned.fill(
-                child: Container(color: AppColors.darkOverlay(alpha: 0.6)),
-              ),
+            // Dark overlay - always shows (for default theme)
+            Positioned.fill(
+              child: Container(color: AppColors.darkOverlay(alpha: 0.6)),
+            ),
 
             // Main content
             SafeArea(
+              bottom:
+                  false, // Remove bottom padding to eliminate space below input
               child: Column(
                 children: [
                   if (_isSearching) _buildSearchResultsBar(isDarkMode),
                   Expanded(
-                    child: Stack(
-                      children: [
-                        _buildMessagesList(isDarkMode),
-                        if (_showScrollButton) _buildScrollToBottomButton(),
-                      ],
+                    child: Container(
+                      // Theme-based background for middle area only
+                      decoration: _selectedTheme != 'default'
+                          ? BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  (chatThemeColors[_selectedTheme] ??
+                                          chatThemeColors['default']!)
+                                      .first
+                                      .withValues(alpha: 0.3),
+                                  (chatThemeColors[_selectedTheme] ??
+                                          chatThemeColors['default']!)
+                                      .last
+                                      .withValues(alpha: 0.2),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            )
+                          : null, // No decoration for default theme (shows bg image)
+                      child: Stack(
+                        children: [
+                          _buildMessagesList(isDarkMode),
+                          if (_showScrollButton) _buildScrollToBottomButton(),
+                        ],
+                      ),
                     ),
                   ),
                   if (!_isMultiSelectMode && _replyToMessage != null)
@@ -547,12 +572,27 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0x66000000), // Fixed black with 40% opacity
+              Color(0x33000000), // Fixed black with 20% opacity
+              Color(0x00000000), // Transparent
+            ],
+          ),
+        ),
+      ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 0.5,
-          color: Colors.white.withValues(alpha: 0.3),
+          color: const Color(0x4DFFFFFF), // Fixed white with 30% opacity
         ),
       ),
       leading: IconButton(
@@ -1603,14 +1643,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         ? CrossAxisAlignment.end
                         : CrossAxisAlignment.start,
                     children: [
-                      if (message.replyToMessageId != null)
-                        _buildReplyBubble(
-                          message.replyToMessageId!,
-                          isMe,
-                          isDarkMode,
-                        ),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(1),
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                           child: Container(
@@ -1619,12 +1653,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                   (message.type == MessageType.image ||
                                       message.type == MessageType.video)
                                   ? 4
-                                  : 16,
+                                  : 12,
                               vertical:
                                   (message.type == MessageType.image ||
                                       message.type == MessageType.video)
                                   ? 4
-                                  : 12,
+                                  : 8,
                             ),
                             decoration: BoxDecoration(
                               gradient:
@@ -1649,13 +1683,26 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                         ? const Color.fromARGB(255, 46, 44, 44)
                                         : const Color.fromARGB(255, 68, 65, 65))
                                   : null, // Dark grey for received text only, not audio/video/image
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(12),
+                                topRight: const Radius.circular(12),
+                                bottomLeft: Radius.circular(isMe ? 12 : 1),
+                                bottomRight: Radius.circular(isMe ? 1 : 12),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: isMe
-                                  ? CrossAxisAlignment.end
+                                  ? CrossAxisAlignment.start
                                   : CrossAxisAlignment.start,
                               children: [
+                                // Reply bubble inside message card (card within card) - always on left
+                                if (message.replyToMessageId != null)
+                                  _buildReplyBubble(
+                                    message.replyToMessageId!,
+                                    isMe,
+                                    isDarkMode,
+                                  ),
+                                SizedBox(height: 5),
                                 if (message.type == MessageType.image &&
                                     (message.mediaUrl != null ||
                                         message.localPath != null))
@@ -1778,78 +1825,57 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                             false, // isDeleted is already handled separately
                                           ),
                                   ),
-                                // Time and status row (skip for audio - it has its own)
-                                if (message.type != MessageType.audio)
-                                  Padding(
-                                    padding:
-                                        (message.type == MessageType.image ||
-                                            message.type == MessageType.video)
-                                        ? const EdgeInsets.only(
-                                            left: 10,
-                                            right: 10,
-                                            bottom: 4,
-                                          )
-                                        : const EdgeInsets.only(top: 3),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (message.isEdited == true) ...[
-                                          Text(
-                                            'edited ',
-                                            style: TextStyle(
-                                              color: isMe
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.55,
-                                                    )
-                                                  : (isDarkMode
-                                                        ? Colors.grey[500]
-                                                        : Colors.grey[600]),
-                                              fontSize: 11,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                          ),
-                                        ],
-                                        // Time
-                                        Text(
-                                          _formatMessageTime(message.timestamp),
-                                          style: TextStyle(
-                                            color: isMe
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.55,
-                                                  )
-                                                : (isDarkMode
-                                                      ? Colors.grey[500]
-                                                      : Colors.grey[600]),
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                        // Status tick (only for my messages)
-                                        // For media messages (image/video/audio), don't show small loader
-                                        // as they already have their own upload indicators
-                                        if (isMe &&
-                                            !(message.status ==
-                                                    MessageStatus.sending &&
-                                                (message.type ==
-                                                        MessageType.image ||
-                                                    message.type ==
-                                                        MessageType.video ||
-                                                    message.type ==
-                                                        MessageType
-                                                            .audio))) ...[
-                                          const SizedBox(width: 4),
-                                          _buildMessageStatusIcon(
-                                            message.status,
-                                            isMe,
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
                         ),
                       ),
+                      // Time and status row outside card (skip for audio - it has its own)
+                      if (message.type != MessageType.audio)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: 2,
+                            left: 4,
+                            right: 4,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (message.isEdited == true) ...[
+                                Text(
+                                  'edited ',
+                                  style: TextStyle(
+                                    color: isDarkMode
+                                        ? Colors.grey[500]
+                                        : Colors.grey[600],
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                              // Time
+                              Text(
+                                _formatMessageTime(message.timestamp),
+                                style: TextStyle(
+                                  color: isDarkMode
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
+                                  fontSize: 11,
+                                ),
+                              ),
+                              // Status tick (only for my messages)
+                              if (isMe &&
+                                  !(message.status == MessageStatus.sending &&
+                                      (message.type == MessageType.image ||
+                                          message.type == MessageType.video ||
+                                          message.type ==
+                                              MessageType.audio))) ...[
+                                const SizedBox(width: 4),
+                                _buildMessageStatusIcon(message.status, isMe),
+                              ],
+                            ],
+                          ),
+                        ),
                       if (message.reactions != null &&
                           message.reactions!.isNotEmpty)
                         Container(
@@ -2349,7 +2375,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           .doc(messageId)
           .get(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox.shrink();
+        }
 
         final replyData = snapshot.data!.data() as Map<String, dynamic>?;
         if (replyData == null) return const SizedBox.shrink();
@@ -2360,66 +2388,47 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         final String replyToName = isReplyToSelf
             ? 'You'
             : widget.otherUser.name;
-        final Color accentColor = isReplyToSelf
-            ? Colors.purple
-            : Theme.of(context).primaryColor;
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 6),
+          margin: const EdgeInsets.only(left: 5, right: 5, top: 5, bottom: 0),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isMe
-                ? Colors.black.withValues(alpha: 0.2)
-                : Colors.grey[800]?.withValues(alpha: 0.5) ??
-                      Colors.grey.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(8),
+            color: (isMe ? Colors.white : Theme.of(context).primaryColor)
+                .withValues(alpha: 0.15),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(12),
+              topRight: const Radius.circular(12),
+              bottomLeft: Radius.circular(isMe ? 12 : 1),
+              bottomRight: Radius.circular(isMe ? 1 : 12),
+            ),
+            border: Border(
+              left: BorderSide(
+                color: isMe ? Colors.white70 : Theme.of(context).primaryColor,
+                width: 3,
+              ),
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Colored left bar
-              Container(
-                width: 4,
-                height: 45,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(8),
-                    bottomLeft: Radius.circular(8),
-                  ),
+              Text(
+                replyToName,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isMe ? Colors.white : Theme.of(context).primaryColor,
                 ),
               ),
-              // Reply content
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        replyToName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: accentColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        replyData['text'] ?? 'Message',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+              Text(
+                replyData['text'] ?? 'Photo',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isMe
+                      ? Colors.white.withValues(alpha: 0.8)
+                      : (isDarkMode ? Colors.grey[400] : Colors.grey[700]),
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -2430,133 +2439,144 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   Widget _buildReplyPreview(bool isDarkMode) {
     final bool isReplyingToSelf = _replyToMessage!.senderId == _currentUserId;
-    final Color accentColor = isReplyingToSelf
-        ? Colors.purple
-        : Theme.of(context).primaryColor;
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.5,
-        margin: const EdgeInsets.only(left: 12, bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: accentColor.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 3,
-              height: 32,
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    isReplyingToSelf ? 'You' : widget.otherUser.name,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: accentColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    _replyToMessage!.text ?? 'Message',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _replyToMessage = null;
-                });
-              },
-              child: Icon(
-                Icons.close,
-                size: 18,
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
-            ),
+    return Container(
+      margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x80000000), // Fixed black with 50% opacity
+            Color(0x99000000), // Fixed black with 60% opacity
           ],
         ),
+        border: Border.all(
+          color: const Color(0xFFE91E63), // Pink border
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 45,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE91E63), // Pink color
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isReplyingToSelf ? 'You' : widget.otherUser.name,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFE91E63), // Pink color
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _replyToMessage!.text ?? 'Photo',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[300], // Always light for dark background
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _replyToMessage = null),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.close,
+                color: Colors.grey[400], // Always light for dark background
+                size: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEditPreview(bool isDarkMode) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.5,
-        margin: const EdgeInsets.only(left: 12, bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 3,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Editing',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    _editingMessage!.text ?? 'Message',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            GestureDetector(
-              onTap: _cancelEdit,
-              child: Icon(
-                Icons.close,
-                size: 18,
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
-            ),
+    return Container(
+      margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x80000000), // Fixed black with 50% opacity
+            Color(0x99000000), // Fixed black with 60% opacity
           ],
         ),
+        border: Border.all(
+          color: Colors.orange, // Orange border matching edit theme
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 45,
+            decoration: BoxDecoration(
+              color: Colors.orange,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Editing message',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _editingMessage!.text ?? '',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[300], // Always light for dark background
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _cancelEdit,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.close,
+                color: Colors.grey[400], // Always light for dark background
+                size: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2735,18 +2755,23 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         // White border line at the top
-        Container(height: 0.5, color: Colors.white),
+        Container(
+          height: 0.5,
+          color: const Color(0x4DFFFFFF),
+        ), // Fixed white with 30% opacity
         // Input Area - Premium iMessage style
         Container(
-          padding: EdgeInsets.only(
-            left: 8,
-            right: 8,
-            top: 8,
-            bottom: _showEmojiPicker
-                ? 8
-                : MediaQuery.of(context).padding.bottom + 8,
+          padding: const EdgeInsets.only(left: 8, right: 8, top: 5, bottom: 8),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0x66000000), // Fixed black with 40% opacity
+                Color(0x80000000), // Fixed black with 50% opacity
+              ],
+            ),
           ),
-          decoration: const BoxDecoration(color: Colors.transparent),
           child: SafeArea(
             top: false,
             child: Row(
@@ -2756,14 +2781,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 GestureDetector(
                   onTap: _showCameraGalleryOptions,
                   child: Container(
-                    height: 48,
-                    width: 48,
+                    height: 52,
+                    width: 52,
                     margin: const EdgeInsets.only(bottom: 0, right: 8),
                     alignment: Alignment.center,
                     child: Icon(
                       Icons.add_circle,
                       color: Colors.white.withValues(alpha: 0.8),
-                      size: 40,
+                      size: 44,
                     ),
                   ),
                 ),
@@ -2795,9 +2820,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             hintText: 'Message',
                             showBlur: false,
                             decoration: const BoxDecoration(),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                            contentPadding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              top: 22,
+                              bottom: 2,
                             ),
                             onChanged: (text) {
                               setState(() {
@@ -2863,8 +2890,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           key: const ValueKey('send'),
                           onTap: _sendMessage,
                           child: Container(
-                            height: 36,
-                            width: 36,
+                            height: 42,
+                            width: 42,
                             margin: const EdgeInsets.only(bottom: 2),
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
@@ -3674,7 +3701,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       color: Colors.green.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.call_rounded,
                       color: Colors.green,
                       size: 28,
@@ -3691,7 +3718,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Start a voice call',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
@@ -3737,11 +3764,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                               borderRadius: BorderRadius.circular(12),
                               color: Colors.green,
                             ),
-                            child: Row(
+                            child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.call, color: Colors.white, size: 18),
-                                const SizedBox(width: 6),
+                                SizedBox(width: 6),
                                 Text(
                                   'Call',
                                   style: TextStyle(
@@ -4331,115 +4358,146 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   // Check daily media limit (4 images or 4 videos per day)
-  Future<bool> _checkDailyMediaLimit(String mediaType) async {
-    final currentUserId = _currentUserId;
-    final conversationId = _conversationId;
-    if (currentUserId == null || conversationId == null) return false;
-
-    try {
-      final oneDayAgo = DateTime.now().subtract(const Duration(hours: 24));
-
-      // Count media sent by this user in last 24 hours
-      final snapshot = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .where('senderId', isEqualTo: currentUserId)
-          .where('timestamp', isGreaterThan: Timestamp.fromDate(oneDayAgo))
-          .get();
-
-      int count = 0;
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        if (mediaType == 'image' && data['imageUrl'] != null) {
-          count++;
-        } else if (mediaType == 'video' && data['videoUrl'] != null) {
-          count++;
-        }
-      }
-
-      debugPrint('$mediaType count in last 24h: $count');
-      return count >= 4;
-    } catch (e) {
-      debugPrint('Error checking daily limit: $e');
-      return false; // Allow on error
-    }
-  }
-
   void _pickImage() async {
-    // Check daily limit first
-    final limitReached = await _checkDailyMediaLimit('image');
-    if (limitReached) {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
-          'Daily limit reached! You can only send 4 images per day in this chat.',
+          'Please wait for previous upload to complete',
         );
       }
       return;
     }
 
-    // Pick multiple images (max 4) like WhatsApp
-    final List<XFile> images = await _imagePicker.pickMultiImage(
-      imageQuality: 70, // Optimized for faster upload while maintaining quality
-      maxWidth: 1280, // Reduced for faster upload
-      maxHeight: 1280, // Reduced for faster upload
-    );
+    try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for image picker');
 
-    if (images.isEmpty) {
-      // Restore focus to message input
-      if (mounted) {
-        FocusScope.of(context).requestFocus(_messageFocusNode);
+      // Check daily limit first (1 image)
+      final wouldExceed = await _wouldExceedLimit('image', 1);
+      if (wouldExceed) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    // Limit to max 4 images
-    final selectedImages = images.take(4).toList();
+      // ⚠️ Don't increment counter yet - wait for user to actually pick images!
 
-    if (images.length > 4 && mounted) {
-      SnackBarHelper.showInfo(
-        context,
-        'Maximum 4 images allowed. First 4 images selected.',
+      // Pick multiple images (max 4) like WhatsApp
+      final List<XFile> images = await _imagePicker.pickMultiImage(
+        imageQuality: 70,
+        maxWidth: 1280,
+        maxHeight: 1280,
       );
-    }
 
-    // Show preview screen for multiple images
-    if (mounted) {
-      _showMediaPreviewScreen(
-        selectedImages.map((x) => File(x.path)).toList(),
-        isVideo: false,
+      if (images.isEmpty) {
+        // User cancelled - NO counter increment needed!
+        if (mounted) {
+          FocusScope.of(context).requestFocus(_messageFocusNode);
+        }
+        return;
+      }
+
+      // ✅ User picked images - NOW increment counter for 1 image
+      await _incrementMediaCounter('image', 1);
+      debugPrint(
+        '✅ Counter incremented for image upload (user confirmed selection)',
       );
+
+      // Limit to max 4 images
+      final selectedImages = images.take(4).toList();
+
+      if (images.length > 4 && mounted) {
+        SnackBarHelper.showInfo(
+          context,
+          'Maximum 4 images allowed. First 4 images selected.',
+        );
+      }
+
+      // Show preview screen for multiple images
+      if (mounted) {
+        _showMediaPreviewScreen(
+          selectedImages.map((x) => File(x.path)).toList(),
+          isVideo: false,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error in _pickImage: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to pick image');
+      }
+    } finally {
+      _isMediaOperationInProgress = false; // Always release lock
+      debugPrint('🔓 Lock released for image picker');
     }
   }
 
   void _takePhoto() async {
-    // Check daily limit first
-    final limitReached = await _checkDailyMediaLimit('image');
-    if (limitReached) {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
-          'Daily limit reached! You can only send 4 images per day in this chat.',
+          'Please wait for previous upload to complete',
         );
       }
       return;
     }
 
-    final XFile? photo = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 70, // Optimized for faster upload while maintaining quality
-      maxWidth: 1280, // Reduced for faster upload
-      maxHeight: 1280, // Reduced for faster upload
-    );
+    try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for camera');
 
-    if (photo != null) {
-      _uploadAndSendImage(File(photo.path));
-    }
+      // Check daily limit first
+      final wouldExceed = await _wouldExceedLimit('image', 1);
+      if (wouldExceed) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
+          );
+        }
+        return;
+      }
 
-    // Restore focus to message input
-    if (mounted) {
-      FocusScope.of(context).requestFocus(_messageFocusNode);
+      // ⚠️ Don't increment counter yet - wait for user to actually take photo!
+
+      final XFile? photo = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      );
+
+      if (photo != null) {
+        // ✅ User took photo - NOW increment counter
+        await _incrementMediaCounter('image', 1);
+
+        _uploadAndSendImage(File(photo.path));
+      } else {
+        // User cancelled camera - NO counter increment
+        debugPrint('📷 Camera cancelled by user, no counter increment');
+      }
+
+      // Restore focus to message input
+      if (mounted) {
+        FocusScope.of(context).requestFocus(_messageFocusNode);
+      }
+    } catch (e) {
+      debugPrint('❌ Error in _takePhoto: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to take photo');
+      }
+    } finally {
+      _isMediaOperationInProgress = false; // Always release lock
+      debugPrint('🔓 Lock released for camera');
     }
   }
 
@@ -4447,19 +4505,35 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     // Use a flag to prevent multiple simultaneous calls
     if (_isRecordingVideo) return;
 
-    // Check daily limit first
-    final limitReached = await _checkDailyMediaLimit('video');
-    if (limitReached) {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
-          'Daily limit reached! You can only send 4 videos per day in this chat.',
+          'Please wait for previous upload to complete',
         );
       }
       return;
     }
 
+    // Check daily limit first
+    final wouldExceed = await _wouldExceedLimit('video', 1);
+    if (wouldExceed) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
+        );
+      }
+      return;
+    }
+
+    // ⚠️ Don't increment counter yet - wait for user to actually record video!
+
     _isRecordingVideo = true;
+    _isMediaOperationInProgress = true; // Acquire lock
+    debugPrint('🔐 Lock acquired for video recording');
 
     try {
       // Request camera permission first
@@ -4585,9 +4659,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           return;
         }
 
+        // ✅ Video is valid - NOW increment counter before upload
+        await _incrementMediaCounter('video', 1);
+        debugPrint(
+          '✅ Counter incremented for video recording (user confirmed)',
+        );
+
         if (mounted) {
           _uploadAndSendVideo(videoFile);
         }
+      } else {
+        // User cancelled or video not recorded - NO counter increment
+        debugPrint('📹 Video recording cancelled/failed, no counter increment');
       }
 
       // Restore focus to message input
@@ -4603,22 +4686,43 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           'Failed to record video. Please try again.',
         );
       }
+    } finally {
+      _isRecordingVideo = false;
+      _isMediaOperationInProgress = false; // Always release lock
+      debugPrint('🔓 Lock released for video recording');
     }
   }
 
   void _pickVideo() async {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
+      }
+      return;
+    }
+
     try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for video picker');
+
       // Check daily limit first
-      final limitReached = await _checkDailyMediaLimit('video');
-      if (limitReached) {
+      final wouldExceed = await _wouldExceedLimit('video', 1);
+      if (wouldExceed) {
         if (mounted) {
           SnackBarHelper.showError(
             context,
-            'Daily limit reached! You can only send 4 videos per day in this chat.',
+            'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
           );
         }
         return;
       }
+
+      // ⚠️ Don't increment counter yet - wait for user to actually pick videos!
 
       // Pick multiple videos using pickMultipleMedia (max 4)
       final List<XFile> mediaFiles = await _imagePicker.pickMultipleMedia(
@@ -4745,6 +4849,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
+      // ✅ Valid videos found - NOW increment counter
+      await _incrementMediaCounter('video', 1);
+      debugPrint(
+        '✅ Counter incremented for video upload (user confirmed selection)',
+      );
+
       // Show preview screen for multiple videos
       if (mounted) {
         _showMediaPreviewScreen(validVideos, isVideo: true);
@@ -4757,6 +4867,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           'Failed to pick video. Please try again.',
         );
       }
+    } finally {
+      _isMediaOperationInProgress = false; // Always release lock
+      debugPrint('🔓 Lock released for video picker');
     }
   }
 
@@ -5199,6 +5312,43 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return;
     }
 
+    // 🔒 LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking audio...');
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
+      }
+      return;
+    }
+
+    // 📊 Check daily limit BEFORE uploading (4 audio messages per day)
+    final wouldExceed = await _wouldExceedLimit('audio', 1);
+    if (wouldExceed) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Already aap ki daily limit khatam ho gayi hai. Aap wait kare agle din ke liye.',
+        );
+      }
+      // Delete the recorded file since we're not sending it
+      try {
+        await file.delete();
+      } catch (e) {
+        debugPrint('Error deleting audio file: $e');
+      }
+      return;
+    }
+
+    // ✅ Passed limit check - increment counter
+    await _incrementMediaCounter('audio', 1);
+
+    // 🔐 Acquire media operation lock
+    _isMediaOperationInProgress = true;
+    debugPrint('🔐 Lock acquired for audio upload');
+
     final optimisticId =
         'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -5312,6 +5462,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           SnackBarHelper.showError(context, 'Failed to send voice message');
         }
       }
+    } finally {
+      // 🔓 Always release the media operation lock
+      _isMediaOperationInProgress = false;
+      debugPrint('🔓 Lock released for audio upload');
     }
   }
 
@@ -6539,6 +6693,300 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         });
   }
 
+  // ========== DAILY MEDIA COUNTER METHODS (SharedPreferences-based) ==========
+
+  /// Initialize counter with smart retry mechanism
+  void _initializeCounterWithRetry() {
+    debugPrint('🔄 ========== COUNTER INITIALIZATION STARTED ==========');
+    debugPrint('🔄 Attempting to load counters with retry mechanism...');
+
+    // Attempt 1: Immediate (likely to fail on cold start)
+    debugPrint('🔄 Attempt 1: Immediate load');
+    _loadDailyMediaCounts();
+
+    // Attempt 2: After first frame (auth might be ready)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isCounterLoaded && mounted) {
+        debugPrint(
+          '🔄 Attempt 2: Post-frame callback (userId may be ready now)',
+        );
+        _loadDailyMediaCounts();
+      } else if (_isCounterLoaded) {
+        debugPrint('✅ Counter already loaded in Attempt 1, skipping retry');
+      }
+    });
+
+    // Attempt 3: After 300ms (auth should definitely be ready)
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!_isCounterLoaded && mounted) {
+        debugPrint('🔄 Attempt 3: 300ms delayed retry (auth should be ready)');
+        _loadDailyMediaCounts();
+      } else if (_isCounterLoaded) {
+        debugPrint('✅ Counter already loaded, skipping 300ms retry');
+      }
+    });
+
+    // Attempt 4: Final retry after 1 second (fallback)
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!_isCounterLoaded && mounted) {
+        debugPrint('🔄 Attempt 4: 1s delayed retry (FINAL ATTEMPT)');
+        _loadDailyMediaCounts();
+      } else if (_isCounterLoaded) {
+        debugPrint('✅ Counter already loaded, no need for final retry');
+      }
+
+      // After final attempt, report status
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_isCounterLoaded) {
+          debugPrint('🎉 🎉 COUNTER SUCCESSFULLY LOADED! 🎉 🎉');
+        } else {
+          debugPrint('⚠️ ⚠️ COUNTER FAILED TO LOAD AFTER ALL RETRIES! ⚠️ ⚠️');
+        }
+      });
+    });
+  }
+
+  /// Load daily media counts from SharedPreferences
+  Future<void> _loadDailyMediaCounts() async {
+    debugPrint('📂 ========== LOADING COUNTERS (Enhanced Chat) ==========');
+    final currentUserId = _currentUserId;
+    final otherUserId =
+        widget.otherUser.uid; // Use otherUser.uid instead of conversationId!
+    debugPrint('📂 CurrentUserId: $currentUserId, OtherUserId: $otherUserId');
+    debugPrint('📂 _isCounterLoaded: $_isCounterLoaded');
+    debugPrint('📂 _isCounterLoading: $_isCounterLoading');
+
+    if (currentUserId == null) {
+      debugPrint('⚠️ ❌ Cannot load: currentUserId is null');
+      _isCounterLoaded = false;
+      return;
+    }
+
+    // Prevent duplicate loads - already loaded
+    if (_isCounterLoaded) {
+      debugPrint('⚠️ Counter already loaded, skipping');
+      return;
+    }
+
+    // Prevent concurrent loads - already loading
+    if (_isCounterLoading) {
+      debugPrint('⚠️ Counter load in progress, skipping');
+      return;
+    }
+
+    // Acquire loading lock
+    _isCounterLoading = true;
+    debugPrint('🔐 Counter loading lock acquired');
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Use sorted user IDs to ensure consistent key regardless of who opens chat first
+      final key = currentUserId.compareTo(otherUserId) < 0
+          ? '${currentUserId}_$otherUserId'
+          : '${otherUserId}_$currentUserId';
+      debugPrint('📂 Loading with key: $key');
+
+      final imageCount = prefs.getInt('${key}_imageCount') ?? 0;
+      final videoCount = prefs.getInt('${key}_videoCount') ?? 0;
+      final audioCount = prefs.getInt('${key}_audioCount') ?? 0;
+      final lastResetStr = prefs.getString('${key}_lastReset');
+
+      debugPrint('📂 Raw values from SharedPreferences:');
+      debugPrint('📂   Images: $imageCount');
+      debugPrint('📂   Videos: $videoCount');
+      debugPrint('📂   Audios: $audioCount');
+      debugPrint('📂   LastReset: $lastResetStr');
+
+      // Set loaded values
+      _todayImageCount = imageCount;
+      _todayVideoCount = videoCount;
+      _todayAudioCount = audioCount;
+
+      if (lastResetStr != null) {
+        _lastMediaCountReset = DateTime.parse(lastResetStr);
+        debugPrint('📂   Parsed lastReset: $_lastMediaCountReset');
+      } else {
+        debugPrint('📂   No lastReset found');
+      }
+
+      debugPrint(
+        '📂 BEFORE reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
+
+      // Check if 24 hours passed and reset if needed
+      await _resetDailyCountersIfNeeded();
+
+      debugPrint(
+        '📂 AFTER reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
+
+      _isCounterLoaded = true;
+    } catch (e) {
+      debugPrint('❌ ❌ Error loading media counts: $e');
+      _isCounterLoaded = true; // Set to true even on error to prevent blocking
+    } finally {
+      // Always release the loading lock
+      _isCounterLoading = false;
+      debugPrint('🔓 Counter loading lock released');
+    }
+  }
+
+  /// Save daily media counts to SharedPreferences
+  Future<void> _saveDailyMediaCounts() async {
+    final currentUserId = _currentUserId;
+    final otherUserId = widget.otherUser.uid;
+    if (currentUserId == null) {
+      debugPrint('⚠️ Cannot save counts: currentUserId is null');
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Use sorted user IDs to ensure consistent key (same as load)
+      final key = currentUserId.compareTo(otherUserId) < 0
+          ? '${currentUserId}_$otherUserId'
+          : '${otherUserId}_$currentUserId';
+
+      debugPrint('💾 SAVING to SharedPreferences:');
+      debugPrint('💾   Key: $key');
+      debugPrint('💾   Images: $_todayImageCount');
+      debugPrint('💾   Videos: $_todayVideoCount');
+      debugPrint('💾   Audios: $_todayAudioCount');
+
+      await prefs.setInt('${key}_imageCount', _todayImageCount);
+      await prefs.setInt('${key}_videoCount', _todayVideoCount);
+      await prefs.setInt('${key}_audioCount', _todayAudioCount);
+
+      if (_lastMediaCountReset != null) {
+        await prefs.setString(
+          '${key}_lastReset',
+          _lastMediaCountReset!.toIso8601String(),
+        );
+        debugPrint('💾   LastReset: $_lastMediaCountReset');
+      }
+    } catch (e) {
+      debugPrint('❌ ❌ Error saving media counts: $e');
+      debugPrint('❌ Stack: ${StackTrace.current}');
+    }
+  }
+
+  /// Reset daily counters if 24 hours passed
+  Future<void> _resetDailyCountersIfNeeded() async {
+    final now = DateTime.now();
+    debugPrint('🕐 _resetDailyCountersIfNeeded called');
+    debugPrint('🕐   Current time: $now');
+    debugPrint('🕐   Last reset: $_lastMediaCountReset');
+
+    // First time: just set the timestamp, don't reset counters
+    if (_lastMediaCountReset == null) {
+      debugPrint(
+        '🕐   First time - setting timestamp (NOT resetting counters)',
+      );
+      debugPrint(
+        '🕐   Current counters: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
+      _lastMediaCountReset = now;
+      await _saveDailyMediaCounts();
+      debugPrint('🕐   ✅ Media counter timer started (counters preserved)');
+      return;
+    }
+
+    final hoursSinceReset = now.difference(_lastMediaCountReset!).inHours;
+    debugPrint('🕐   Hours since last reset: $hoursSinceReset');
+
+    // After 24 hours: reset counters
+    if (hoursSinceReset >= 24) {
+      debugPrint('🔄   ⚠️ 24 hours passed - RESETTING COUNTERS');
+      debugPrint(
+        '🔄   Old values: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
+      _todayImageCount = 0;
+      _todayVideoCount = 0;
+      _todayAudioCount = 0;
+      _lastMediaCountReset = now;
+      await _saveDailyMediaCounts();
+      debugPrint('🔄   ✅ Daily media counters reset to 0');
+    } else {
+      debugPrint('🕐   ✅ Within 24 hours - counters preserved');
+    }
+  }
+
+  /// Check if adding 'count' items would exceed daily limit (4 per day)
+  Future<bool> _wouldExceedLimit(String mediaType, int count) async {
+    debugPrint('🔍 ========== WOULD EXCEED CHECK START ==========');
+    debugPrint('🔍 MediaType: $mediaType, Trying to add: $count');
+
+    // Load counter if not loaded
+    if (!_isCounterLoaded) {
+      debugPrint('⚠️ Counter not loaded, loading now...');
+      await _loadDailyMediaCounts();
+
+      // CRITICAL: If still not loaded after retry, userId is still null
+      // Block upload to prevent bypassing limit with counter = 0
+      if (!_isCounterLoaded) {
+        debugPrint('❌ BLOCKING: Counter still not loaded (userId likely null)');
+        return true; // Block upload if we can't verify counter
+      }
+    }
+
+    // Verify userId is available before proceeding
+    if (_currentUserId == null) {
+      debugPrint('❌ BLOCKING: userId is null, cannot verify limit');
+      return true; // Block upload if userId is null
+    }
+
+    await _resetDailyCountersIfNeeded();
+
+    final currentCount = mediaType == 'image'
+        ? _todayImageCount
+        : mediaType == 'video'
+        ? _todayVideoCount
+        : _todayAudioCount;
+
+    final newTotal = currentCount + count;
+    final wouldExceed = newTotal > 4;
+
+    debugPrint('📊 WOULD EXCEED RESULT:');
+    debugPrint('📊   - Current $mediaType count: $currentCount');
+    debugPrint('📊   - Trying to add: $count');
+    debugPrint('📊   - New total would be: $newTotal');
+    debugPrint('📊   - Would exceed limit of 4? $wouldExceed ($newTotal > 4)');
+    debugPrint('🔍 ========== WOULD EXCEED CHECK END ==========');
+
+    return wouldExceed;
+  }
+
+  /// Increment media counter and save to SharedPreferences
+  Future<void> _incrementMediaCounter(String mediaType, int count) async {
+    final oldCount = mediaType == 'image'
+        ? _todayImageCount
+        : mediaType == 'video'
+        ? _todayVideoCount
+        : _todayAudioCount;
+
+    if (mediaType == 'image') {
+      _todayImageCount += count;
+      debugPrint(
+        '📈 INCREMENT: Image counter: $oldCount → $_todayImageCount (+$count)',
+      );
+    } else if (mediaType == 'video') {
+      _todayVideoCount += count;
+      debugPrint(
+        '📈 INCREMENT: Video counter: $oldCount → $_todayVideoCount (+$count)',
+      );
+    } else if (mediaType == 'audio') {
+      _todayAudioCount += count;
+      debugPrint(
+        '📈 INCREMENT: Audio counter: $oldCount → $_todayAudioCount (+$count)',
+      );
+    }
+
+    await _saveDailyMediaCounts();
+    debugPrint('✅ Counter saved to SharedPreferences');
+  }
+
+  // ========== END DAILY MEDIA COUNTER METHODS ==========
+
   ///   Cleanup empty and duplicate call messages from Firestore
   Future<void> _cleanupEmptyCallMessages() async {
     if (_conversationId == null) return;
@@ -6744,7 +7192,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   Widget _buildSearchResultsBar(bool isDarkMode) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 18, bottom: 0),
       decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [

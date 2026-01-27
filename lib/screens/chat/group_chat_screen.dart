@@ -74,8 +74,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   int _todayVideoCount = 0;
   int _todayAudioCount = 0;
   DateTime? _lastMediaCountReset;
-  bool _isMediaOperationInProgress = false; // Lock to prevent concurrent operations
-  bool _isCounterLoaded = false; // Track if counter has been loaded from SharedPreferences
+  bool _isMediaOperationInProgress =
+      false; // Lock to prevent concurrent operations
+  bool _isCounterLoaded =
+      false; // Track if counter has been loaded from SharedPreferences
+  bool _isCounterLoading = false; // Prevent concurrent counter loads
 
   // Typing indicator
   List<String> _typingUsers = [];
@@ -131,13 +134,44 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
     _currentGroupName = widget.groupName;
     _groupChatService.markAsRead(widget.groupId);
     _scrollController.addListener(_onScroll);
     _scrollController.addListener(_scrollListener);
     _loadChatTheme();
-    _loadDailyMediaCounts(); // Load daily media limits from SharedPreferences
+
+    // Strategy: Try loading counter with progressive delays
+    // This handles the case where Firebase Auth takes time to initialize
+    _initializeCounterWithRetry();
+  }
+
+  // Initialize counter with smart retry mechanism
+  void _initializeCounterWithRetry() {
+    // Attempt 1: Immediate load
+    _loadDailyMediaCounts();
+
+    // Attempt 2: After first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isCounterLoaded && mounted) {
+        _loadDailyMediaCounts();
+      }
+    });
+
+    // Attempt 3: After 300ms
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!_isCounterLoaded && mounted) {
+        _loadDailyMediaCounts();
+      }
+    });
+
+    // Attempt 4: Final retry after 1 second
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!_isCounterLoaded && mounted) {
+        _loadDailyMediaCounts();
+      }
+    });
   }
 
   void _scrollListener() {
@@ -685,8 +719,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Remove optimistic message once real one is created
       if (mounted) {
         setState(() {
-          _optimisticMessages
-              .removeWhere((msg) => msg['id'] == optimisticCallMessageId);
+          _optimisticMessages.removeWhere(
+            (msg) => msg['id'] == optimisticCallMessageId,
+          );
         });
       }
 
@@ -863,13 +898,36 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Load daily media counts from SharedPreferences
   Future<void> _loadDailyMediaCounts() async {
-    debugPrint('📂 ========== LOADING COUNTERS FROM SHAREDPREFERENCES ==========');
+    debugPrint(
+      '📂 ========== LOADING COUNTERS FROM SHAREDPREFERENCES ==========',
+    );
     final currentUserId = _currentUserId;
+    debugPrint('📂 Current UserId: $currentUserId');
+    debugPrint('📂 _isCounterLoaded: $_isCounterLoaded');
+    debugPrint('📂 _isCounterLoading: $_isCounterLoading');
+
     if (currentUserId == null) {
-      debugPrint('⚠️ Cannot load: currentUserId is null, will retry later');
-      _isCounterLoaded = false; // Keep as false to allow retry when userId is available
+      debugPrint('⚠️ ❌ Cannot load: currentUserId is null, will retry later');
+      _isCounterLoaded =
+          false; // Keep as false to allow retry when userId is available
       return;
     }
+
+    // Prevent duplicate loads - already loaded
+    if (_isCounterLoaded) {
+      debugPrint('⚠️ Counter already loaded, skipping duplicate load');
+      return;
+    }
+
+    // Prevent concurrent loads - already loading
+    if (_isCounterLoading) {
+      debugPrint('⚠️ Counter load already in progress, skipping');
+      return;
+    }
+
+    // Acquire loading lock
+    _isCounterLoading = true;
+    debugPrint('🔐 Counter loading lock acquired');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -887,25 +945,38 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       debugPrint('📂   Audios: $audioCount');
       debugPrint('📂   LastReset: $lastResetStr');
 
+      // IMPORTANT: Set the loaded values BEFORE calling reset check
       _todayImageCount = imageCount;
       _todayVideoCount = videoCount;
       _todayAudioCount = audioCount;
 
       if (lastResetStr != null) {
         _lastMediaCountReset = DateTime.parse(lastResetStr);
+        debugPrint('📂   Parsed lastReset: $_lastMediaCountReset');
+      } else {
+        debugPrint('📂   No lastReset found in storage');
       }
+
+      debugPrint(
+        '📂 BEFORE reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
 
       // Check if 24 hours passed and reset if needed
       await _resetDailyCountersIfNeeded();
 
+      debugPrint(
+        '📂 AFTER reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
+
       _isCounterLoaded = true; // Mark counter as loaded
-      debugPrint('✅ COUNTERS LOADED SUCCESSFULLY:');
-      debugPrint('✅   Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
-      debugPrint('✅   _isCounterLoaded = true');
-      debugPrint('📂 ========== LOAD COMPLETE ==========');
     } catch (e) {
-      debugPrint('❌ Error loading media counts: $e');
+      debugPrint('❌ ❌ Error loading media counts: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
       _isCounterLoaded = true; // Set to true even on error to prevent blocking
+    } finally {
+      // Always release the loading lock
+      _isCounterLoading = false;
+      debugPrint('🔓 Counter loading lock released');
     }
   }
 
@@ -921,7 +992,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       final prefs = await SharedPreferences.getInstance();
       final key = '${widget.groupId}_$currentUserId';
 
-      debugPrint('💾 SAVING to SharedPreferences:');
+      debugPrint('💾 ========== SAVING COUNTERS TO STORAGE ==========');
       debugPrint('💾   Key: $key');
       debugPrint('💾   Images: $_todayImageCount');
       debugPrint('💾   Videos: $_todayVideoCount');
@@ -932,11 +1003,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       await prefs.setInt('${key}_audioCount', _todayAudioCount);
 
       if (_lastMediaCountReset != null) {
-        await prefs.setString('${key}_lastReset', _lastMediaCountReset!.toIso8601String());
+        await prefs.setString(
+          '${key}_lastReset',
+          _lastMediaCountReset!.toIso8601String(),
+        );
         debugPrint('💾   LastReset: $_lastMediaCountReset');
       }
 
-      debugPrint('✅ Save completed successfully');
+      // ✅ SAVE VERIFICATION: Read back to confirm values were saved correctly
     } catch (e) {
       debugPrint('❌ Error saving media counts: $e');
     }
@@ -945,23 +1019,41 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Reset daily counters if 24 hours passed
   Future<void> _resetDailyCountersIfNeeded() async {
     final now = DateTime.now();
+    debugPrint('🕐 _resetDailyCountersIfNeeded called');
+    debugPrint('🕐   Current time: $now');
+    debugPrint('🕐   Last reset: $_lastMediaCountReset');
 
     // First time: just set the timestamp, don't reset counters
     if (_lastMediaCountReset == null) {
+      debugPrint(
+        '🕐   First time - setting timestamp (NOT resetting counters)',
+      );
+      debugPrint(
+        '🕐   Current counters: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
       _lastMediaCountReset = now;
       await _saveDailyMediaCounts();
-      debugPrint('🕐 Media counter timer started');
+      debugPrint('🕐   ✅ Media counter timer started (counters preserved)');
       return;
     }
 
+    final hoursSinceReset = now.difference(_lastMediaCountReset!).inHours;
+    debugPrint('🕐   Hours since last reset: $hoursSinceReset');
+
     // After 24 hours: reset counters
-    if (now.difference(_lastMediaCountReset!).inHours >= 24) {
+    if (hoursSinceReset >= 24) {
+      debugPrint('🔄   ⚠️ 24 hours passed - RESETTING COUNTERS');
+      debugPrint(
+        '🔄   Old values: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+      );
       _todayImageCount = 0;
       _todayVideoCount = 0;
       _todayAudioCount = 0;
       _lastMediaCountReset = now;
       await _saveDailyMediaCounts();
-      debugPrint('🔄 Daily media counters reset after 24 hours');
+      debugPrint('🔄   ✅ Daily media counters reset to 0');
+    } else {
+      debugPrint('🕐   ✅ Within 24 hours - counters preserved');
     }
   }
 
@@ -994,8 +1086,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     final currentCount = mediaType == 'image'
         ? _todayImageCount
         : mediaType == 'video'
-            ? _todayVideoCount
-            : _todayAudioCount;
+        ? _todayVideoCount
+        : _todayAudioCount;
 
     final newTotal = currentCount + count;
     final wouldExceed = newTotal > 4;
@@ -1015,22 +1107,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     final oldCount = mediaType == 'image'
         ? _todayImageCount
         : mediaType == 'video'
-            ? _todayVideoCount
-            : _todayAudioCount;
+        ? _todayVideoCount
+        : _todayAudioCount;
 
     if (mediaType == 'image') {
       _todayImageCount += count;
-      debugPrint('📈 INCREMENT: Image counter: $oldCount → $_todayImageCount (+$count)');
+      debugPrint(
+        '📈 INCREMENT: Image counter: $oldCount → $_todayImageCount (+$count)',
+      );
     } else if (mediaType == 'video') {
       _todayVideoCount += count;
-      debugPrint('📈 INCREMENT: Video counter: $oldCount → $_todayVideoCount (+$count)');
+      debugPrint(
+        '📈 INCREMENT: Video counter: $oldCount → $_todayVideoCount (+$count)',
+      );
     } else if (mediaType == 'audio') {
       _todayAudioCount += count;
-      debugPrint('📈 INCREMENT: Audio counter: $oldCount → $_todayAudioCount (+$count)');
+      debugPrint(
+        '📈 INCREMENT: Audio counter: $oldCount → $_todayAudioCount (+$count)',
+      );
     }
 
     await _saveDailyMediaCounts();
-    debugPrint('✅ Counter saved to SharedPreferences');
   }
 
   // Pick image from gallery (max 4 images per selection, max 4 images per day)
@@ -1039,7 +1136,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_isMediaOperationInProgress) {
       debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
       }
       return;
     }
@@ -1084,7 +1184,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       // Passed check - now increment counter
       await _incrementMediaCounter('image', imagesToSend.length);
-      debugPrint('✅ Counter incremented: $_todayImageCount images');
 
       debugPrint('Sending ${imagesToSend.length} images');
 
@@ -1115,7 +1214,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_isMediaOperationInProgress) {
       debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
       }
       return;
     }
@@ -1151,7 +1253,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       // Passed check - now increment
       await _incrementMediaCounter('image', 1);
-      debugPrint('✅ Counter incremented: $_todayImageCount images');
 
       debugPrint('Photo taken: ${image.path}');
       await _sendImageMessage(File(image.path));
@@ -1287,7 +1388,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_isMediaOperationInProgress) {
       debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
       }
       return;
     }
@@ -1383,7 +1487,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
           // Passed check - now increment
           await _incrementMediaCounter('video', 1);
-          debugPrint('✅ Counter incremented: $_todayVideoCount videos');
 
           await _sendVideoMessage(videoFile);
         } catch (e) {
@@ -1412,7 +1515,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_isMediaOperationInProgress) {
       debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
       }
       return;
     }
@@ -1466,7 +1572,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
 
         await controller.dispose();
-        debugPrint('Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB');
+        debugPrint(
+          'Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
+        );
 
         // NEW APPROACH: Check BEFORE incrementing
         final wouldExceed = await _wouldExceedLimit('video', 1);
@@ -1609,83 +1717,156 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   void _showThemePicker() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDarkMode ? AppColors.darkCard : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDarkMode ? Colors.white24 : Colors.grey[300]!,
+              width: 1,
             ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                'Chat Theme',
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Choose Chat Theme',
                 style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black,
                 ),
               ),
-            ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: chatThemes.entries.map((entry) {
-                final isSelected = _currentTheme == entry.key;
-                return GestureDetector(
-                  onTap: () {
-                    _saveChatTheme(entry.key);
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: entry.value,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+              const SizedBox(height: 20),
+              // None/Default button
+              GestureDetector(
+                onTap: () {
+                  _saveChatTheme('default');
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _currentTheme == 'default'
+                        ? (isDarkMode
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Colors.grey[300])
+                        : (isDarkMode
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.grey[200]),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentTheme == 'default'
+                          ? (isDarkMode ? Colors.white : Colors.black)
+                          : (isDarkMode ? Colors.white24 : Colors.grey[400]!),
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.clear_rounded,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        size: 20,
                       ),
-                      shape: BoxShape.circle,
-                      border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
-                          : null,
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: entry.value[0].withValues(alpha: 0.5),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              ),
-                            ]
+                      const SizedBox(width: 8),
+                      Text(
+                        'None (Default)',
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.white : Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (_currentTheme == 'default') ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.check_circle,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                          size: 20,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Theme Colors',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: chatThemes.entries.map((entry) {
+                  final isSelected = _currentTheme == entry.key;
+                  return GestureDetector(
+                    onTap: () {
+                      _saveChatTheme(entry.key);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: entry.value,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? Colors.white : Colors.transparent,
+                          width: 3,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: entry.value.first.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 24,
+                            )
                           : null,
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 24)
-                        : null,
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white70 : Colors.grey[700],
                   ),
-                );
-              }).toList(),
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
-          ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2533,7 +2714,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       appBar: _buildAppBar(isDarkMode, currentUserId),
       body: Stack(
         children: [
-          // Background Image - Same as chat screen
+          // Default background - always shows (for default theme)
           Positioned.fill(
             child: Image.asset(
               AppAssets.homeBackgroundImage,
@@ -2542,270 +2723,330 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               height: double.infinity,
             ),
           ),
-          // Dark overlay - Heavier for better contrast
+
+          // Dark overlay - always shows (for default theme)
           Positioned.fill(
-            child: Container(color: AppColors.darkOverlay(alpha: 0.8)),
+            child: Container(color: AppColors.darkOverlay(alpha: 0.6)),
           ),
+
           // Content
           SafeArea(
+            bottom:
+                false, // Remove bottom padding to eliminate space below input
             child: Column(
               children: [
                 // Search bar when searching
                 if (_isSearching) _buildSearchBar(isDarkMode),
                 // Messages list with pagination
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _firestore
-                        .collection('conversations')
-                        .doc(widget.groupId)
-                        .collection('messages')
-                        .orderBy('timestamp', descending: true)
-                        .limit(_messagesPerPage)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting &&
-                          !snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final messages = snapshot.data?.docs ?? [];
-                      debugPrint(
-                        '💬 StreamBuilder received ${messages.length} messages from Firestore',
-                      );
-
-                      // Log system messages
-                      for (var doc in messages) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        if (data['isSystemMessage'] == true) {
-                          debugPrint(
-                            '💬 Found system message: id=${doc.id}, text="${data['text']}", actionType=${data['actionType']}, timestamp=${data['timestamp']}',
+                  child: Container(
+                    // Theme-based background for middle area only
+                    decoration: _currentTheme != 'default'
+                        ? BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                (chatThemes[_currentTheme] ??
+                                        chatThemes['default']!)
+                                    .first
+                                    .withValues(alpha: 0.3),
+                                (chatThemes[_currentTheme] ??
+                                        chatThemes['default']!)
+                                    .last
+                                    .withValues(alpha: 0.2),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          )
+                        : null, // No decoration for default theme (shows bg image)
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _firestore
+                          .collection('conversations')
+                          .doc(widget.groupId)
+                          .collection('messages')
+                          .orderBy('timestamp', descending: true)
+                          .limit(_messagesPerPage)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                                ConnectionState.waiting &&
+                            !snapshot.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
                           );
                         }
-                      }
 
-                      if (messages.isNotEmpty) {
-                        _lastDocument = messages.last;
-                        _hasMoreMessages = messages.length >= _messagesPerPage;
-                      }
+                        final messages = snapshot.data?.docs ?? [];
+                        debugPrint(
+                          '💬 StreamBuilder received ${messages.length} messages from Firestore',
+                        );
 
-                      // With reverse: true on ListView, we want newest messages first (index 0 = bottom)
-                      // Firestore query is already descending (newest first), so don't reverse
-
-                      // Combine optimistic messages (newest) with real messages
-                      var allMessages = [
-                        ..._optimisticMessages, // Newest (optimistic)
-                        ...messages.map(
-                          (doc) => {
-                            'id': doc.id,
-                            ...doc.data() as Map<String, dynamic>,
-                          },
-                        ), // Then real messages (newest to oldest)
-                      ];
-
-                      // Filter out messages deleted for current user
-                      allMessages = allMessages.where((msg) {
-                        final deletedFor = msg['deletedFor'] as List<dynamic>?;
-                        if (deletedFor != null &&
-                            deletedFor.contains(currentUserId)) {
-                          return false; // Hide message for this user
-                        }
-                        return true;
-                      }).toList();
-
-                      //   FILTER OUT 1-ON-1 MESSAGES FROM GROUP CHATS
-                      // Hide messages that are not group-related
-                      allMessages = allMessages.where((msg) {
-                        final callId = msg['callId'] as String?;
-                        final groupId = msg['groupId'] as String?;
-                        final actionType = msg['actionType'] as String?;
-
-                        // SKIP FILTER for group call system messages (actionType == 'call')
-                        // Group call IDs are from 'group_calls' collection (Firestore auto-IDs)
-                        if (actionType == 'call') {
-                          return true; // Always show group call messages
-                        }
-
-                        // Filter 1: If message has a callId but it's NOT a group call (doesn't start with "group_")
-                        if (callId != null &&
-                            callId.isNotEmpty &&
-                            !callId.startsWith('group_')) {
-                          debugPrint(
-                            '  Filtering out 1-on-1 call message from group chat: callId=$callId',
-                          );
-                          return false;
-                        }
-
-                        // Filter 2: If message has groupId but it doesn't match this group
-                        if (groupId != null &&
-                            groupId.isNotEmpty &&
-                            groupId != widget.groupId) {
-                          debugPrint(
-                            '  Filtering out message from different group: groupId=$groupId, expected=${widget.groupId}',
-                          );
-                          return false;
-                        }
-
-                        return true;
-                      }).toList();
-
-                      // Filter by search query
-                      if (_searchQuery.isNotEmpty) {
-                        allMessages = allMessages.where((msg) {
-                          final text = msg['text'] as String? ?? '';
-                          return text.toLowerCase().contains(
-                            _searchQuery.toLowerCase(),
-                          );
-                        }).toList();
-                      }
-
-                      if (allMessages.isEmpty) {
-                        return _buildEmptyState(isDarkMode);
-                      }
-
-                      _groupChatService.markAsRead(widget.groupId);
-
-                      // Only auto-scroll to bottom if user is already near bottom
-                      // This prevents forced scrolling when user is reading old messages
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!_isLoadingMore &&
-                            !_isSearching &&
-                            _scrollController.hasClients) {
-                          // With reverse: true, position 0 is bottom
-                          // Only auto-scroll if already within 200 pixels of bottom
-                          final isNearBottom =
-                              _scrollController.position.pixels < 200;
-                          if (isNearBottom) {
-                            _scrollToBottom();
+                        // Log system messages
+                        for (var doc in messages) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          if (data['isSystemMessage'] == true) {
+                            debugPrint(
+                              '💬 Found system message: id=${doc.id}, text="${data['text']}", actionType=${data['actionType']}, timestamp=${data['timestamp']}',
+                            );
                           }
                         }
-                      });
 
-                      // Calculate item count including header items
-                      // With reverse: true, header items go at END of array (display at TOP)
-                      int headerItemCount = 0;
-                      if (_isLoadingMore) {
-                        headerItemCount++;
-                      }
-                      if (_hasMoreMessages &&
-                          messages.length >= _messagesPerPage &&
-                          !_isSearching) {
-                        headerItemCount++;
-                      }
+                        if (messages.isNotEmpty) {
+                          _lastDocument = messages.last;
+                          _hasMoreMessages =
+                              messages.length >= _messagesPerPage;
+                        }
 
-                      final totalItemCount =
-                          allMessages.length + headerItemCount;
+                        // With reverse: true on ListView, we want newest messages first (index 0 = bottom)
+                        // Firestore query is already descending (newest first), so don't reverse
 
-                      return ListView.builder(
-                        controller: _scrollController,
-                        reverse: true,
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        itemCount: totalItemCount,
-                        itemBuilder: (context, index) {
-                          // Messages come first (indices 0 to allMessages.length - 1)
-                          if (index < allMessages.length) {
-                            final messageData = allMessages[index];
-                            final senderId =
-                                messageData['senderId'] as String? ?? '';
-                            final text = messageData['text'] as String? ?? '';
-                            final imageUrl = messageData['imageUrl'] as String?;
-                            final videoUrl = messageData['videoUrl'] as String?;
-                            final timestamp =
-                                messageData['timestamp'] as Timestamp?;
-                            final isSystemMessage =
-                                messageData['isSystemMessage'] ?? false;
-                            final isOptimistic =
-                                messageData['isOptimistic'] ?? false;
-                            final isMe = senderId == currentUserId;
-                            final readBy = List<String>.from(
-                              messageData['readBy'] ?? [],
+                        // Combine optimistic messages (newest) with real messages
+                        var allMessages = [
+                          ..._optimisticMessages, // Newest (optimistic)
+                          ...messages.map(
+                            (doc) => {
+                              'id': doc.id,
+                              ...doc.data() as Map<String, dynamic>,
+                            },
+                          ), // Then real messages (newest to oldest)
+                        ];
+
+                        // Filter out messages deleted for current user
+                        allMessages = allMessages.where((msg) {
+                          final deletedFor =
+                              msg['deletedFor'] as List<dynamic>?;
+                          if (deletedFor != null &&
+                              deletedFor.contains(currentUserId)) {
+                            return false; // Hide message for this user
+                          }
+                          return true;
+                        }).toList();
+
+                        //   FILTER OUT 1-ON-1 MESSAGES FROM GROUP CHATS
+                        // Hide messages that are not group-related
+                        allMessages = allMessages.where((msg) {
+                          final callId = msg['callId'] as String?;
+                          final groupId = msg['groupId'] as String?;
+                          final actionType = msg['actionType'] as String?;
+
+                          // SKIP FILTER for group call system messages (actionType == 'call')
+                          // Group call IDs are from 'group_calls' collection (Firestore auto-IDs)
+                          if (actionType == 'call') {
+                            return true; // Always show group call messages
+                          }
+
+                          // Filter 1: If message has a callId but it's NOT a group call (doesn't start with "group_")
+                          if (callId != null &&
+                              callId.isNotEmpty &&
+                              !callId.startsWith('group_')) {
+                            debugPrint(
+                              '  Filtering out 1-on-1 call message from group chat: callId=$callId',
                             );
-                            final replyToId =
-                                messageData['replyToMessageId'] as String?;
-                            final voiceUrl = messageData['voiceUrl'] as String?;
-                            final voiceDuration =
-                                messageData['voiceDuration'] as int?;
+                            return false;
+                          }
 
-                            if (isSystemMessage) {
-                              final actionType =
-                                  messageData['actionType'] as String?;
-                              debugPrint(
-                                '🔍 Rendering system message: text="$text", actionType=$actionType, timestamp=$timestamp',
+                          // Filter 2: If message has groupId but it doesn't match this group
+                          if (groupId != null &&
+                              groupId.isNotEmpty &&
+                              groupId != widget.groupId) {
+                            debugPrint(
+                              '  Filtering out message from different group: groupId=$groupId, expected=${widget.groupId}',
+                            );
+                            return false;
+                          }
+
+                          return true;
+                        }).toList();
+
+                        // Filter by search query
+                        if (_searchQuery.isNotEmpty) {
+                          allMessages = allMessages.where((msg) {
+                            final text = msg['text'] as String? ?? '';
+                            return text.toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            );
+                          }).toList();
+                        }
+
+                        if (allMessages.isEmpty) {
+                          return _buildEmptyState(isDarkMode);
+                        }
+
+                        _groupChatService.markAsRead(widget.groupId);
+
+                        // Only auto-scroll to bottom if user is already near bottom
+                        // This prevents forced scrolling when user is reading old messages
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!_isLoadingMore &&
+                              !_isSearching &&
+                              _scrollController.hasClients) {
+                            // With reverse: true, position 0 is bottom
+                            // Only auto-scroll if already within 200 pixels of bottom
+                            final isNearBottom =
+                                _scrollController.position.pixels < 200;
+                            if (isNearBottom) {
+                              _scrollToBottom();
+                            }
+                          }
+                        });
+
+                        // Calculate item count including header items
+                        // With reverse: true, header items go at END of array (display at TOP)
+                        int headerItemCount = 0;
+                        if (_isLoadingMore) {
+                          headerItemCount++;
+                        }
+                        if (_hasMoreMessages &&
+                            messages.length >= _messagesPerPage &&
+                            !_isSearching) {
+                          headerItemCount++;
+                        }
+
+                        final totalItemCount =
+                            allMessages.length + headerItemCount;
+
+                        return ListView.builder(
+                          controller: _scrollController,
+                          reverse: true,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          itemCount: totalItemCount,
+                          itemBuilder: (context, index) {
+                            // Messages come first (indices 0 to allMessages.length - 1)
+                            if (index < allMessages.length) {
+                              final messageData = allMessages[index];
+                              final senderId =
+                                  messageData['senderId'] as String? ?? '';
+                              final text = messageData['text'] as String? ?? '';
+                              final imageUrl =
+                                  messageData['imageUrl'] as String?;
+                              final videoUrl =
+                                  messageData['videoUrl'] as String?;
+                              final timestamp =
+                                  messageData['timestamp'] as Timestamp?;
+                              final isSystemMessage =
+                                  messageData['isSystemMessage'] ?? false;
+                              final isOptimistic =
+                                  messageData['isOptimistic'] ?? false;
+                              final isMe = senderId == currentUserId;
+                              final readBy = List<String>.from(
+                                messageData['readBy'] ?? [],
                               );
-                              return _buildSystemMessage(
-                                text,
-                                isDarkMode,
-                                messageData,
+                              final replyToId =
+                                  messageData['replyToMessageId'] as String?;
+                              final voiceUrl =
+                                  messageData['voiceUrl'] as String?;
+                              final voiceDuration =
+                                  messageData['voiceDuration'] as int?;
+
+                              if (isSystemMessage) {
+                                final actionType =
+                                    messageData['actionType'] as String?;
+                                debugPrint(
+                                  '🔍 Rendering system message: text="$text", actionType=$actionType, timestamp=$timestamp',
+                                );
+                                return _buildSystemMessage(
+                                  text,
+                                  isDarkMode,
+                                  messageData,
+                                );
+                              }
+
+                              return Dismissible(
+                                key: Key(messageData['id'] ?? 'msg_$index'),
+                                direction: _isMultiSelectMode
+                                    ? DismissDirection.none
+                                    : DismissDirection.startToEnd,
+                                confirmDismiss: (direction) async {
+                                  HapticFeedback.lightImpact();
+                                  setState(() {
+                                    _editingMessage = null;
+                                    _messageController.clear();
+                                    _replyToMessage = messageData;
+                                  });
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_messageFocusNode);
+                                  return false;
+                                },
+                                background: Container(
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.only(left: 20),
+                                  child: Icon(
+                                    Icons.reply,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    size: 24,
+                                  ),
+                                ),
+                                child: _buildMessageBubble(
+                                  messageData: messageData,
+                                  text: text,
+                                  imageUrl: imageUrl,
+                                  videoUrl: videoUrl,
+                                  senderId: senderId,
+                                  isMe: isMe,
+                                  timestamp: timestamp,
+                                  isDarkMode: isDarkMode,
+                                  isOptimistic: isOptimistic,
+                                  readBy: readBy,
+                                  replyToId: replyToId,
+                                  voiceUrl: voiceUrl,
+                                  voiceDuration: voiceDuration,
+                                ),
                               );
                             }
 
-                            return _buildMessageBubble(
-                              messageData: messageData,
-                              text: text,
-                              imageUrl: imageUrl,
-                              videoUrl: videoUrl,
-                              senderId: senderId,
-                              isMe: isMe,
-                              timestamp: timestamp,
-                              isDarkMode: isDarkMode,
-                              isOptimistic: isOptimistic,
-                              readBy: readBy,
-                              replyToId: replyToId,
-                              voiceUrl: voiceUrl,
-                              voiceDuration: voiceDuration,
-                            );
-                          }
+                            // Header items come after messages (display at top due to reverse: true)
+                            final headerIndex = index - allMessages.length;
 
-                          // Header items come after messages (display at top due to reverse: true)
-                          final headerIndex = index - allMessages.length;
-
-                          // Show "Load earlier messages" button
-                          if (headerIndex == 0 &&
-                              _hasMoreMessages &&
-                              messages.length >= _messagesPerPage &&
-                              !_isSearching) {
-                            return Center(
-                              child: TextButton(
-                                onPressed: _loadMoreMessages,
-                                child: Text(
-                                  'Load earlier messages',
-                                  style: TextStyle(
-                                    color: Theme.of(context).primaryColor,
+                            // Show "Load earlier messages" button
+                            if (headerIndex == 0 &&
+                                _hasMoreMessages &&
+                                messages.length >= _messagesPerPage &&
+                                !_isSearching) {
+                              return Center(
+                                child: TextButton(
+                                  onPressed: _loadMoreMessages,
+                                  child: Text(
+                                    'Load earlier messages',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }
+                              );
+                            }
 
-                          // Show loading indicator
-                          final loadingIndex =
-                              (_hasMoreMessages &&
-                                  messages.length >= _messagesPerPage &&
-                                  !_isSearching)
-                              ? 1
-                              : 0;
-                          if (headerIndex == loadingIndex && _isLoadingMore) {
-                            return const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                            // Show loading indicator
+                            final loadingIndex =
+                                (_hasMoreMessages &&
+                                    messages.length >= _messagesPerPage &&
+                                    !_isSearching)
+                                ? 1
+                                : 0;
+                            if (headerIndex == loadingIndex && _isLoadingMore) {
+                              return const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }
+                              );
+                            }
 
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    },
+                            return const SizedBox.shrink();
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
                 // Reply preview
@@ -2828,19 +3069,35 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   PreferredSizeWidget _buildAppBar(bool isDarkMode, String? currentUserId) {
     return AppBar(
-      backgroundColor: Colors.white.withValues(alpha: 0.1),
+      backgroundColor: Colors.transparent,
       elevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0x66000000), // Fixed black with 40% opacity
+              Color(0x33000000), // Fixed black with 20% opacity
+              Color(0x00000000), // Transparent
+            ],
+          ),
+        ),
+      ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(0.5),
         child: Container(
           height: 0.5,
-          color: Colors.white.withValues(alpha: 0.3),
+          color: const Color(0x4DFFFFFF), // Fixed white with 30% opacity
         ),
       ),
       leading: IconButton(
         icon: Icon(
           _isMultiSelectMode ? Icons.close : Icons.arrow_back_ios_rounded,
-          color: isDarkMode ? Colors.white : AppColors.iosBlue,
+          color: Colors.white, // Always white for solid dark appbar
           size: 22,
         ),
         onPressed: () {
@@ -2854,8 +3111,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       title: _isMultiSelectMode
           ? Text(
               '${_selectedMessageIds.length} selected',
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
+              style: const TextStyle(
+                color: Colors.white, // Always white for solid dark appbar
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
@@ -2961,9 +3218,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (_isMultiSelectMode) ...[
           // Forward button
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.forward,
-              color: isDarkMode ? Colors.white70 : AppColors.iosBlue,
+              color: Colors.white70, // Always white for solid dark appbar
               size: 24,
             ),
             onPressed: _selectedMessageIds.isNotEmpty
@@ -2984,8 +3241,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           IconButton(
             icon: Icon(
               Icons.videocam_rounded,
-              color: (isDarkMode ? Colors.white70 : AppColors.iosBlue)
-                  .withValues(alpha: 0.5),
+              color: Colors.white70.withValues(
+                alpha: 0.5,
+              ), // Always white for solid dark appbar
               size: 24,
             ),
             onPressed: null,
@@ -2993,9 +3251,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           ),
           // Audio call button
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.call_rounded,
-              color: isDarkMode ? Colors.white70 : AppColors.iosBlue,
+              color: Colors.white70, // Always white for solid dark appbar
               size: 24,
             ),
             onPressed: _startGroupAudioCall,
@@ -3006,7 +3264,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           IconButton(
             icon: Icon(
               _isSearching ? Icons.close_rounded : Icons.more_vert_rounded,
-              color: isDarkMode ? Colors.white70 : AppColors.iosBlue,
+              color: Colors.white70, // Always white for solid dark appbar
               size: 24,
             ),
             onPressed: _isSearching ? _toggleSearch : _showGroupInfo,
@@ -3017,7 +3275,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   Widget _buildSearchBar(bool isDarkMode) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 18, bottom: 0),
       color: isDarkMode ? AppColors.darkCard : Colors.grey[100],
       child: GlassTextField(
         controller: _searchController,
@@ -3076,9 +3334,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? Colors.black.withValues(alpha: 0.5)
-            : Colors.grey[200],
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x80000000), // Fixed black with 50% opacity
+            Color(0x99000000), // Fixed black with 60% opacity
+          ],
+        ),
         border: Border.all(
           color: const Color(0xFFE91E63), // Pink border
           width: 1.5,
@@ -3113,7 +3376,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   _replyToMessage!['text'] ?? 'Photo',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                    color: Colors.grey[300], // Always light for dark background
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3127,7 +3390,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               padding: const EdgeInsets.all(8),
               child: Icon(
                 Icons.close,
-                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                color: Colors.grey[400], // Always light for dark background
                 size: 20,
               ),
             ),
@@ -3142,9 +3405,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       margin: const EdgeInsets.only(left: 40, right: 80, top: 4, bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? Colors.black.withValues(alpha: 0.5)
-            : Colors.grey[200],
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x80000000), // Fixed black with 50% opacity
+            Color(0x99000000), // Fixed black with 60% opacity
+          ],
+        ),
         border: Border.all(
           color: Colors.orange, // Orange border matching edit theme
           width: 1.5,
@@ -3179,7 +3447,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   _editingMessage!['text'] ?? '',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                    color: Colors.grey[300], // Always light for dark background
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3193,7 +3461,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               padding: const EdgeInsets.all(8),
               child: Icon(
                 Icons.close,
-                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                color: Colors.grey[400], // Always light for dark background
                 size: 20,
               ),
             ),
@@ -3344,7 +3612,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_isMediaOperationInProgress) {
       debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+        SnackBarHelper.showError(
+          context,
+          'Please wait for previous upload to complete',
+        );
       }
       return;
     }
@@ -3378,7 +3649,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       // Only increment if passed check
       await _incrementMediaCounter('audio', 1);
-      debugPrint('✅ Counter incremented: $_todayAudioCount audios');
 
       // Create optimistic message ID
       final optimisticId =
@@ -3496,18 +3766,23 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             child: _buildMentionSuggestions(),
           ),
         // White border line at the top
-        Container(height: 0.5, color: Colors.white),
+        Container(
+          height: 0.5,
+          color: const Color(0x4DFFFFFF),
+        ), // Fixed white with 30% opacity
         // Input Area - Premium iMessage style
         Container(
-          padding: EdgeInsets.only(
-            left: 8,
-            right: 8,
-            top: 8,
-            bottom: _showEmojiPicker
-                ? 8
-                : MediaQuery.of(context).padding.bottom + 8,
+          padding: const EdgeInsets.only(left: 8, right: 8, top: 5, bottom: 8),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0x66000000), // Fixed black with 40% opacity
+                Color(0x80000000), // Fixed black with 50% opacity
+              ],
+            ),
           ),
-          decoration: const BoxDecoration(color: Colors.transparent),
           child: SafeArea(
             top: false,
             child: Row(
@@ -3517,14 +3792,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 GestureDetector(
                   onTap: _showAttachmentOptions,
                   child: Container(
-                    height: 48,
-                    width: 48,
+                    height: 52,
+                    width: 52,
                     margin: const EdgeInsets.only(bottom: 0, right: 8),
                     alignment: Alignment.center,
                     child: Icon(
                       Icons.add_circle,
                       color: Colors.white.withValues(alpha: 0.8),
-                      size: 40,
+                      size: 44,
                     ),
                   ),
                 ),
@@ -3553,9 +3828,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             hintText: 'Message',
                             showBlur: false,
                             decoration: const BoxDecoration(),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                            contentPadding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              top: 22,
+                              bottom: 2,
                             ),
                             onChanged: (text) {
                               setState(() {});
@@ -3618,8 +3895,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           key: const ValueKey('send'),
                           onTap: _sendMessage,
                           child: Container(
-                            height: 36,
-                            width: 36,
+                            height: 42,
+                            width: 42,
                             margin: const EdgeInsets.only(bottom: 2),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -4127,7 +4404,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               Flexible(
                 child: Column(
                   crossAxisAlignment: isMe
-                      ? CrossAxisAlignment.end
+                      ? CrossAxisAlignment.start
                       : CrossAxisAlignment.start,
                   children: [
                     if (!isMe)
@@ -4165,10 +4442,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             ? Border.all(color: Colors.blue, width: 2)
                             : null,
                         borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(18),
-                          topRight: const Radius.circular(18),
-                          bottomLeft: Radius.circular(isMe ? 18 : 4),
-                          bottomRight: Radius.circular(isMe ? 4 : 18),
+                          topLeft: const Radius.circular(12),
+                          topRight: const Radius.circular(12),
+                          bottomLeft: Radius.circular(isMe ? 12 : 1),
+                          bottomRight: Radius.circular(isMe ? 1 : 12),
                         ),
                         boxShadow: text.isNotEmpty
                             ? [
@@ -4181,7 +4458,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             : null,
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: isMe
+                            ? CrossAxisAlignment.start
+                            : CrossAxisAlignment.start,
                         children: [
                           // Reply preview
                           if (replyToId != null)
@@ -4200,10 +4479,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   topLeft: const Radius.circular(18),
                                   topRight: const Radius.circular(18),
                                   bottomLeft: text.isEmpty
-                                      ? Radius.circular(isMe ? 18 : 4)
+                                      ? Radius.circular(isMe ? 8 : 4)
                                       : Radius.zero,
                                   bottomRight: text.isEmpty
-                                      ? Radius.circular(isMe ? 4 : 18)
+                                      ? Radius.circular(isMe ? 4 : 8)
                                       : Radius.zero,
                                 ),
                               ),
@@ -4212,10 +4491,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   topLeft: const Radius.circular(16),
                                   topRight: const Radius.circular(16),
                                   bottomLeft: text.isEmpty
-                                      ? Radius.circular(isMe ? 16 : 2)
+                                      ? Radius.circular(isMe ? 12 : 2)
                                       : Radius.zero,
                                   bottomRight: text.isEmpty
-                                      ? Radius.circular(isMe ? 2 : 16)
+                                      ? Radius.circular(isMe ? 2 : 12)
                                       : Radius.zero,
                                 ),
                                 child: Stack(
@@ -4269,8 +4548,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                               strokeWidth: 3,
                                               valueColor:
                                                   AlwaysStoppedAnimation<Color>(
-                                                Colors.orange,
-                                              ),
+                                                    Colors.orange,
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -4704,12 +4983,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             _memberNames[replyData['senderId']] ?? 'Unknown';
 
         return Container(
-          margin: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 4),
+          margin: const EdgeInsets.only(left: 5, right: 5, top: 5, bottom: 0),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: (isMe ? Colors.white : Theme.of(context).primaryColor)
                 .withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(12),
+              topRight: const Radius.circular(12),
+              bottomLeft: Radius.circular(isMe ? 12 : 1),
+              bottomRight: Radius.circular(isMe ? 1 : 12),
+            ),
             border: Border(
               left: BorderSide(
                 color: isMe ? Colors.white70 : Theme.of(context).primaryColor,
