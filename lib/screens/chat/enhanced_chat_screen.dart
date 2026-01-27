@@ -137,6 +137,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   double _playbackProgress = 0.0;
   StreamSubscription? _playerSubscription;
 
+  // Optimistic messages (shown immediately before server confirms)
+  final List<Map<String, dynamic>> _optimisticMessages = [];
+
+  // Mention functionality
+  bool _showMentionSuggestions = false;
+  List<Map<String, dynamic>> _filteredUsers = [];
+  int _mentionStartIndex = -1;
+
   @override
   void initState() {
     super.initState();
@@ -479,6 +487,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   if (!_isMultiSelectMode && _editingMessage != null)
                     _buildEditPreview(isDarkMode),
                   if (!_isMultiSelectMode) _buildTypingIndicator(isDarkMode),
+                  // Mention suggestions (appears above input)
+                  if (!_isMultiSelectMode && _showMentionSuggestions)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: _buildMentionSuggestions(),
+                    ),
                   if (!_isMultiSelectMode) _buildMessageInput(isDarkMode),
                 ],
               ),
@@ -907,13 +921,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
                 // Debug: Print all call message data
                 debugPrint(
-                  '🔍 Call message found: id=${doc.id}, text="$text", callId=$callId, hasTimestamp=${timestamp != null}',
+                  '  Call message found: id=${doc.id}, text="$text", callId=$callId, hasTimestamp=${timestamp != null}',
                 );
 
                 // Filter out messages with empty text OR null timestamp
                 if (text == null || text.isEmpty || text.trim().isEmpty) {
                   debugPrint(
-                    '⚠️ Filtering out empty call message: ${doc.id}, text="$text"',
+                    '  Filtering out empty call message: ${doc.id}, text="$text"',
                   );
                   return false; // Skip empty call messages
                 }
@@ -921,7 +935,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 // Also filter out call messages with null/invalid timestamp (incomplete saves)
                 if (timestamp == null) {
                   debugPrint(
-                    '⚠️ Filtering out call message with null timestamp: ${doc.id}',
+                    '  Filtering out call message with null timestamp: ${doc.id}',
                   );
                   return false;
                 }
@@ -945,6 +959,70 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   if (senderId != currentUserId) {
                     return false; // Hide from receiver
                   }
+                }
+              }
+
+              // FILTER OUT GROUP MESSAGES FROM 1-ON-1 CHATS
+              // Hide group-related messages that shouldn't appear in 1-on-1 chats
+              final text = data['text'] as String?;
+              final actionType = data['actionType'] as String?;
+              final isSystemMessage = data['isSystemMessage'] as bool?;
+              final callId = data['callId'] as String?;
+              final groupId = data['groupId'] as String?;
+
+              // Filter 1: System messages (typically group-related)
+              if (isSystemMessage == true) {
+                debugPrint('  Filtering out system message from 1-on-1 chat');
+                return false;
+              }
+
+              // Filter 2: Messages with groupId field (definitely group-related)
+              if (groupId != null && groupId.isNotEmpty) {
+                debugPrint(
+                  '  Filtering out message with groupId from 1-on-1 chat: $groupId',
+                );
+                return false;
+              }
+
+              // Filter 3: Group call messages (callId starting with "group_")
+              if (callId != null && callId.startsWith('group_')) {
+                debugPrint(
+                  '  Filtering out group call message from 1-on-1 chat: callId=$callId',
+                );
+                return false;
+              }
+
+              // Filter 4: Text-based filtering for group-related keywords
+              if (text != null) {
+                final lowerText = text.toLowerCase();
+
+                // List of group-related keywords
+                final groupKeywords = [
+                  'group created',
+                  'joined the group',
+                  'left the group',
+                  'added you',
+                  'removed from',
+                  'group call',
+                  'joined', // Group calls have "joined" count
+                  'participants',
+                ];
+
+                for (final keyword in groupKeywords) {
+                  if (lowerText.contains(keyword)) {
+                    debugPrint(
+                      '  Filtering out message with keyword "$keyword": $text',
+                    );
+                    return false;
+                  }
+                }
+
+                // Special case: Call messages with "joined" (group-specific)
+                if (actionType == 'call' && lowerText.contains('joined')) {
+                  debugPrint(
+                    '  Filtering out group call message from 1-on-1 chat: $text',
+                  );
+                  return false;
                 }
               }
 
@@ -996,8 +1074,41 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           }
         });
 
-        // Combine stream messages with paginated older messages
-        final allDisplayMessages = <MessageModel>[...messages];
+        // Combine optimistic messages (newest) with real messages
+        final allDisplayMessages = <MessageModel>[
+          // Convert optimistic messages to MessageModel
+          ..._optimisticMessages.map((optimisticData) {
+            return MessageModel(
+              id: optimisticData['id'] as String,
+              senderId: optimisticData['senderId'] as String,
+              receiverId: optimisticData['receiverId'] as String,
+              chatId: _conversationId!,
+              text: optimisticData['text'] as String? ?? '',
+              mediaUrl:
+                  optimisticData['imageUrl'] as String? ??
+                  optimisticData['videoUrl'] as String?,
+              audioUrl: optimisticData['voiceUrl'] as String?,
+              audioDuration: optimisticData['voiceDuration'] as int?,
+              timestamp: (optimisticData['timestamp'] as Timestamp).toDate(),
+              status: MessageStatus.sending,
+              type: optimisticData['imageUrl'] != null
+                  ? MessageType.image
+                  : optimisticData['videoUrl'] != null
+                  ? MessageType.video
+                  : optimisticData['voiceUrl'] != null
+                  ? MessageType.audio
+                  : MessageType.text,
+              isEdited: false,
+              isDeleted: false,
+              metadata: {
+                'isOptimistic': true,
+                'isLocalFile': optimisticData['isLocalFile'] == true,
+              },
+            );
+          }),
+          // Add real messages
+          ...messages,
+        ];
 
         // Add older loaded messages (avoiding duplicates)
         // Also filter out messages deleted for current user and uploading media from receiver
@@ -1660,19 +1771,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                               letterSpacing: -0.2,
                                             ),
                                           )
-                                        : Text(
+                                        : _buildTextWithMentions(
                                             message.text!,
-                                            style: TextStyle(
-                                              color: isMe
-                                                  ? Colors.white
-                                                  : (isDarkMode
-                                                        ? Colors.white
-                                                        : AppColors
-                                                              .iosGrayDark),
-                                              fontSize: 16,
-                                              height: 1.35,
-                                              letterSpacing: -0.2,
-                                            ),
+                                            isMe,
+                                            isDarkMode,
+                                            false, // isDeleted is already handled separately
                                           ),
                                   ),
                                 // Time and status row (skip for audio - it has its own)
@@ -1721,7 +1824,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                           ),
                                         ),
                                         // Status tick (only for my messages)
-                                        if (isMe) ...[
+                                        // For media messages (image/video/audio), don't show small loader
+                                        // as they already have their own upload indicators
+                                        if (isMe &&
+                                            !(message.status ==
+                                                    MessageStatus.sending &&
+                                                (message.type ==
+                                                        MessageType.image ||
+                                                    message.type ==
+                                                        MessageType.video ||
+                                                    message.type ==
+                                                        MessageType
+                                                            .audio))) ...[
                                           const SizedBox(width: 4),
                                           _buildMessageStatusIcon(
                                             message.status,
@@ -2552,6 +2666,68 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     );
   }
 
+  Widget _buildMentionSuggestions() {
+    if (!_showMentionSuggestions || _filteredUsers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _filteredUsers.length,
+        separatorBuilder: (context, index) =>
+            Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+        itemBuilder: (context, index) {
+          final user = _filteredUsers[index];
+          final name = user['name'] as String;
+          final photo = user['photo'] as String?;
+          final userId = user['id'] as String;
+
+          return ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 4,
+            ),
+            leading: CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.grey[800],
+              backgroundImage: PhotoUrlHelper.isValidUrl(photo)
+                  ? CachedNetworkImageProvider(photo!)
+                  : null,
+              child: !PhotoUrlHelper.isValidUrl(photo)
+                  ? Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                    )
+                  : null,
+            ),
+            title: Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: () => _insertMention(userId, name),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildMessageInput(bool isDarkMode) {
     final hasText = _messageController.text.trim().isNotEmpty;
 
@@ -2627,6 +2803,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                               setState(() {
                                 _updateTypingStatus(text.isNotEmpty);
                               });
+                              // Handle @ mention detection
+                              _handleMentionDetection(text);
                             },
                             onSubmitted: (text) {
                               if (text.trim().isNotEmpty) {
@@ -4152,7 +4330,55 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     );
   }
 
+  // Check daily media limit (4 images or 4 videos per day)
+  Future<bool> _checkDailyMediaLimit(String mediaType) async {
+    final currentUserId = _currentUserId;
+    final conversationId = _conversationId;
+    if (currentUserId == null || conversationId == null) return false;
+
+    try {
+      final oneDayAgo = DateTime.now().subtract(const Duration(hours: 24));
+
+      // Count media sent by this user in last 24 hours
+      final snapshot = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .where('senderId', isEqualTo: currentUserId)
+          .where('timestamp', isGreaterThan: Timestamp.fromDate(oneDayAgo))
+          .get();
+
+      int count = 0;
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        if (mediaType == 'image' && data['imageUrl'] != null) {
+          count++;
+        } else if (mediaType == 'video' && data['videoUrl'] != null) {
+          count++;
+        }
+      }
+
+      debugPrint('$mediaType count in last 24h: $count');
+      return count >= 4;
+    } catch (e) {
+      debugPrint('Error checking daily limit: $e');
+      return false; // Allow on error
+    }
+  }
+
   void _pickImage() async {
+    // Check daily limit first
+    final limitReached = await _checkDailyMediaLimit('image');
+    if (limitReached) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Daily limit reached! You can only send 4 images per day in this chat.',
+        );
+      }
+      return;
+    }
+
     // Pick multiple images (max 4) like WhatsApp
     final List<XFile> images = await _imagePicker.pickMultiImage(
       imageQuality: 70, // Optimized for faster upload while maintaining quality
@@ -4188,6 +4414,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   void _takePhoto() async {
+    // Check daily limit first
+    final limitReached = await _checkDailyMediaLimit('image');
+    if (limitReached) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Daily limit reached! You can only send 4 images per day in this chat.',
+        );
+      }
+      return;
+    }
+
     final XFile? photo = await _imagePicker.pickImage(
       source: ImageSource.camera,
       imageQuality: 70, // Optimized for faster upload while maintaining quality
@@ -4208,6 +4446,19 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   void _recordVideo() async {
     // Use a flag to prevent multiple simultaneous calls
     if (_isRecordingVideo) return;
+
+    // Check daily limit first
+    final limitReached = await _checkDailyMediaLimit('video');
+    if (limitReached) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Daily limit reached! You can only send 4 videos per day in this chat.',
+        );
+      }
+      return;
+    }
+
     _isRecordingVideo = true;
 
     try {
@@ -4246,7 +4497,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       try {
         final video = await _imagePicker.pickVideo(
           source: ImageSource.camera,
-          maxDuration: const Duration(seconds: 30),
+          maxDuration: const Duration(seconds: 28), // Max 28 seconds
           preferredCameraDevice: CameraDevice.rear,
         );
         videoPath = video?.path;
@@ -4357,6 +4608,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   void _pickVideo() async {
     try {
+      // Check daily limit first
+      final limitReached = await _checkDailyMediaLimit('video');
+      if (limitReached) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Daily limit reached! You can only send 4 videos per day in this chat.',
+          );
+        }
+        return;
+      }
+
       // Pick multiple videos using pickMultipleMedia (max 4)
       final List<XFile> mediaFiles = await _imagePicker.pickMultipleMedia(
         maxWidth: 1280,
@@ -4405,7 +4668,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         );
       }
 
-      // Validate each video
+      // Validate each video (size + duration)
       final List<File> validVideos = [];
       for (final videoFile in selectedVideos) {
         // Small delay before file operations
@@ -4445,7 +4708,34 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
         if (fileSizeMB == 0) continue;
 
-        validVideos.add(videoFile);
+        // Check video duration (max 28 seconds)
+        final controller = VideoPlayerController.file(videoFile);
+        try {
+          await controller.initialize();
+          final duration = controller.value.duration;
+
+          if (duration.inSeconds > 28) {
+            if (mounted) {
+              SnackBarHelper.showError(
+                context,
+                'Video too long (${duration.inSeconds}s). Maximum 28 seconds allowed.',
+              );
+            }
+            await controller.dispose();
+            continue;
+          }
+
+          await controller.dispose();
+          debugPrint(
+            'Video validated: ${duration.inSeconds}s, ${fileSizeMB.toStringAsFixed(1)}MB',
+          );
+
+          validVideos.add(videoFile);
+        } catch (e) {
+          debugPrint('Error checking video duration: $e');
+          await controller.dispose();
+          continue;
+        }
       }
 
       if (validVideos.isEmpty) {
@@ -4498,268 +4788,30 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     });
   }
 
-  void _uploadAndSendVideo(File videoFile) async {
-    if (!mounted) return;
-    if (_conversationId == null || _currentUserId == null) return;
+  Future<void> _uploadAndSendVideo(File videoFile) async {
+    final currentUserId = _currentUserId;
+    final conversationId = _conversationId;
+    if (currentUserId == null || conversationId == null) return;
 
-    // Store values locally to avoid accessing widget after unmount
-    final conversationId = _conversationId!;
-    final currentUserId = _currentUserId!;
-    String otherUserId;
-    try {
-      otherUserId = widget.otherUser.uid;
-    } catch (e) {
-      return;
-    }
+    final optimisticId =
+        'optimistic_video_${DateTime.now().millisecondsSinceEpoch}';
 
-    DocumentReference? messageRef;
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'receiverId': widget.otherUser.uid,
+      'text': '',
+      'videoUrl': videoFile.path,
+      'isLocalFile': true,
+      'timestamp': Timestamp.now(),
+      'isOptimistic': true,
+    };
 
-    try {
-      // Check if file exists first
-      bool fileExists = false;
-      try {
-        fileExists = await videoFile.exists();
-      } catch (e) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Error accessing video file');
-        }
-        return;
-      }
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+    });
 
-      if (!fileExists) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Video file not found');
-        }
-        return;
-      }
-
-      // Check file size - limit to 25MB for stability
-      int fileSize = 0;
-      try {
-        fileSize = await videoFile.length();
-      } catch (e) {
-        debugPrint('Error getting file size: $e');
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Error reading video file');
-        }
-        return;
-      }
-
-      final fileSizeMB = fileSize / (1024 * 1024);
-
-      if (fileSizeMB > 25) {
-        if (mounted) {
-          SnackBarHelper.showError(
-            context,
-            'Video too large (${fileSizeMB.toStringAsFixed(1)}MB). Max size is 25MB.',
-          );
-        }
-        return;
-      }
-
-      if (fileSizeMB == 0) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Video file is empty');
-        }
-        return;
-      }
-
-      if (!mounted) return;
-
-      // Create message document reference first for immediate UI feedback
-      messageRef = _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc();
-
-      final now = DateTime.now();
-      final timestamp = now.millisecondsSinceEpoch;
-
-      // Create placeholder message with "sending" status immediately
-      final placeholderData = {
-        'id': messageRef.id,
-        'senderId': currentUserId,
-        'receiverId': otherUserId,
-        'chatId': conversationId,
-        'text': '',
-        'type': MessageType.video.index,
-        'mediaUrl': '', // Will be updated after upload
-        'status': MessageStatus.sending.index,
-        'timestamp': Timestamp.fromDate(now),
-        'isEdited': false,
-        'read': false,
-        'isRead': false,
-      };
-
-      // Set placeholder immediately for instant UI feedback
-      try {
-        await messageRef.set(placeholderData);
-      } catch (e) {
-        debugPrint('Error creating placeholder message: $e');
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Failed to send video');
-        }
-        return;
-      }
-
-      // Scroll to bottom immediately
-      if (mounted && _scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-
-      // Small delay to let UI update
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      if (!mounted) return;
-
-      // Upload to Firebase Storage
-      final storageRef = _storage.ref().child(
-        'chat_videos/$conversationId/video_$timestamp.mp4',
-      );
-
-      String downloadUrl;
-      try {
-        final uploadTask = storageRef.putFile(
-          videoFile,
-          SettableMetadata(contentType: 'video/mp4'),
-        );
-
-        // Wait for upload to complete
-        final snapshot = await uploadTask;
-        downloadUrl = await snapshot.ref.getDownloadURL();
-      } catch (e) {
-        debugPrint('Video upload error: $e');
-        // Update message status to failed
-        try {
-          await messageRef.update({'status': MessageStatus.failed.index});
-        } catch (_) {}
-        if (mounted) {
-          SnackBarHelper.showError(
-            context,
-            'Video upload failed. Please try again.',
-          );
-        }
-        return;
-      }
-
-      if (!mounted) return;
-
-      // Update message with actual video URL and delivered status
-      try {
-        await messageRef.update({
-          'mediaUrl': downloadUrl,
-          'status': MessageStatus.delivered.index,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        debugPrint('Error updating message: $e');
-      }
-
-      // Run these in background - don't await to prevent crashes
-      try {
-        final currentUserProfile = mounted
-            ? ref.read(currentUserProfileProvider).valueOrNull
-            : null;
-        final currentUserName = currentUserProfile?.name ?? 'Someone';
-
-        // Update conversation metadata
-        _firestore
-            .collection('conversations')
-            .doc(conversationId)
-            .update({
-              'lastMessage': '🎬 Video',
-              'lastMessageTime': FieldValue.serverTimestamp(),
-              'lastMessageSenderId': currentUserId,
-              'unreadCount.$otherUserId': FieldValue.increment(1),
-            })
-            .catchError((_) {});
-
-        // Send push notification for video (fire and forget)
-        NotificationService()
-            .sendNotificationToUser(
-              userId: otherUserId,
-              title: 'New Video from $currentUserName',
-              body: '🎬 Video',
-              type: 'message',
-              data: {'conversationId': conversationId},
-            )
-            .catchError((_) {});
-      } catch (e) {
-        debugPrint('Error updating conversation: $e');
-      }
-
-      // Delete local temp file after successful upload (in background)
-      Future.delayed(const Duration(seconds: 2), () async {
-        try {
-          if (videoFile.path.contains('cache') && await videoFile.exists()) {
-            await videoFile.delete();
-          }
-        } catch (_) {
-          // Ignore file deletion errors
-        }
-      });
-    } catch (e) {
-      debugPrint('Video send error: $e');
-      // Try to mark message as failed if it was created
-      if (messageRef != null) {
-        try {
-          await messageRef.update({'status': MessageStatus.failed.index});
-        } catch (_) {}
-      }
-      if (mounted) {
-        SnackBarHelper.showError(
-          context,
-          'Failed to send video. Please try again.',
-        );
-      }
-    }
-  }
-
-  void _uploadAndSendImage(File imageFile) async {
-    if (_conversationId == null || _currentUserId == null || !mounted) return;
-
-    DocumentReference? messageRef;
-
-    try {
-      // Create message document reference first for immediate UI feedback
-      messageRef = _firestore
-          .collection('conversations')
-          .doc(_conversationId!)
-          .collection('messages')
-          .doc();
-
-      final now = DateTime.now();
-      final timestamp = now.millisecondsSinceEpoch;
-
-      // Create placeholder message with "sending" status and LOCAL file path for preview
-      // This allows showing the image immediately while uploading (like WhatsApp)
-      final placeholderData = {
-        'id': messageRef.id,
-        'senderId': _currentUserId,
-        'receiverId': widget.otherUser.uid,
-        'chatId': _conversationId,
-        'text': '',
-        'type': MessageType.image.index,
-        'mediaUrl': '', // Will be updated after upload
-        'localPath':
-            imageFile.path, // Store local path for preview during upload
-        'status': MessageStatus.sending.index,
-        'uploadProgress': 0.0, // Track upload progress
-        'timestamp': Timestamp.fromDate(now),
-        'isEdited': false,
-        'read': false,
-        'isRead': false,
-      };
-
-      // Set placeholder immediately for instant UI feedback
-      await messageRef.set(placeholderData);
-
-      // Scroll to bottom immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
@@ -4767,69 +4819,218 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           curve: Curves.easeOut,
         );
       }
+    });
 
-      // Upload to Firebase Storage with progress tracking
-      final storageRef = _storage.ref().child(
-        'chat_images/${_conversationId!}/image_$timestamp.jpg',
+    _uploadAndSendVideoBackground(
+      videoFile,
+      optimisticId,
+      currentUserId,
+      conversationId,
+    );
+  }
+
+  Future<void> _uploadAndSendVideoBackground(
+    File videoFile,
+    String optimisticId,
+    String currentUserId,
+    String conversationId,
+  ) async {
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.mp4';
+      final ref = _storage.ref().child('chat_videos/$conversationId/$fileName');
+
+      final uploadTask = ref.putFile(
+        videoFile,
+        SettableMetadata(contentType: 'video/mp4'),
       );
+      final snapshot = await uploadTask;
+
+      if (!mounted) return;
+      final videoUrl = await snapshot.ref.getDownloadURL();
+
+      if (!mounted) return;
+
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .add({
+            'senderId': currentUserId,
+            'receiverId': widget.otherUser.uid,
+            'text': '',
+            'mediaUrl': videoUrl,
+            'type': MessageType.video.index,
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': MessageStatus.delivered.index,
+            'read': false,
+            'isRead': false,
+          });
+
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': '🎥 Video',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUserId,
+        'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
+      });
+
+      final currentUserProfile = this.ref
+          .read(currentUserProfileProvider)
+          .valueOrNull;
+      final currentUserName = currentUserProfile?.name ?? 'Someone';
+      NotificationService()
+          .sendNotificationToUser(
+            userId: widget.otherUser.uid,
+            title: 'New Video from $currentUserName',
+            body: '🎥 Video',
+            type: 'message',
+            data: {'conversationId': conversationId},
+          )
+          .catchError((_) {});
+
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+      }
+
+      Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          if (videoFile.path.contains('cache') && await videoFile.exists()) {
+            await videoFile.delete();
+          }
+        } catch (_) {}
+      });
+    } catch (e) {
+      debugPrint('Error uploading video: $e');
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          SnackBarHelper.showError(context, 'Failed to send video');
+        }
+      }
+    }
+  }
+
+  // Send image message with optimistic update
+  Future<void> _uploadAndSendImage(File imageFile) async {
+    final currentUserId = _currentUserId;
+    final conversationId = _conversationId;
+    if (currentUserId == null || conversationId == null) return;
+
+    // Create optimistic message ID
+    final optimisticId =
+        'optimistic_image_${DateTime.now().millisecondsSinceEpoch}';
+
+    // Create optimistic message - show immediately with local file
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'receiverId': widget.otherUser.uid,
+      'text': '',
+      'imageUrl': imageFile.path, // Local file path for immediate display
+      'isLocalFile': true, // Flag to indicate this is a local file
+      'timestamp': Timestamp.now(),
+      'isOptimistic': true,
+    };
+
+    // Add optimistic message and show immediately
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+    });
+
+    // Scroll to show the new message immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+
+    // Start upload in background (don't block UI)
+    _uploadAndSendImageBackground(
+      imageFile,
+      optimisticId,
+      currentUserId,
+      conversationId,
+    );
+  }
+
+  // Separate method to handle image upload in background
+  Future<void> _uploadAndSendImageBackground(
+    File imageFile,
+    String optimisticId,
+    String currentUserId,
+    String conversationId,
+  ) async {
+    try {
+      debugPrint('Starting image upload...');
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.jpg';
+      final storageRef = _storage.ref().child(
+        'chat_images/$conversationId/$fileName',
+      );
+
       final uploadTask = storageRef.putFile(
         imageFile,
         SettableMetadata(contentType: 'image/jpeg'),
       );
-
-      // Listen to upload progress and update Firestore
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        if (messageRef != null && mounted) {
-          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-          // Update progress in Firestore (throttled to avoid too many writes)
-          if (progress == 1.0 || (progress * 100).toInt() % 20 == 0) {
-            messageRef.update({'uploadProgress': progress}).catchError((_) {});
-          }
-        }
-      });
-
       final snapshot = await uploadTask;
 
       if (!mounted) return;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
+      final imageUrl = await snapshot.ref.getDownloadURL();
+      debugPrint('Image uploaded, URL: $imageUrl');
 
       if (!mounted) return;
 
-      // Update message with actual image URL and delivered status
-      // Remove localPath since we now have the cloud URL
-      await messageRef.update({
-        'mediaUrl': downloadUrl,
-        'localPath': FieldValue.delete(), // Remove local path
-        'uploadProgress': FieldValue.delete(), // Remove progress
-        'status': MessageStatus.delivered.index,
-        'timestamp': FieldValue.serverTimestamp(),
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .add({
+            'senderId': currentUserId,
+            'receiverId': widget.otherUser.uid,
+            'text': '',
+            'mediaUrl': imageUrl,
+            'type': MessageType.image.index,
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': MessageStatus.delivered.index,
+            'read': false,
+            'isRead': false,
+          });
+
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': '📷 Photo',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUserId,
+        'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
       });
 
-      // Run these in parallel for faster completion
-      final currentUserProfile = ref
+      final currentUserProfile = this.ref
           .read(currentUserProfileProvider)
           .valueOrNull;
       final currentUserName = currentUserProfile?.name ?? 'Someone';
+      NotificationService()
+          .sendNotificationToUser(
+            userId: widget.otherUser.uid,
+            title: 'New Photo from $currentUserName',
+            body: '📷 Photo',
+            type: 'message',
+            data: {'conversationId': conversationId},
+          )
+          .catchError((_) {});
 
-      await Future.wait([
-        // Update conversation metadata
-        _firestore.collection('conversations').doc(_conversationId!).update({
-          'lastMessage': '  Photo',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastMessageSenderId': _currentUserId,
-          'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
-        }),
-        // Send push notification for image
-        NotificationService().sendNotificationToUser(
-          userId: widget.otherUser.uid,
-          title: 'New Photo from $currentUserName',
-          body: '  Photo',
-          type: 'message',
-          data: {'conversationId': _conversationId},
-        ),
-      ]);
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+      }
 
-      // Delete local file after successful upload (delayed to ensure UI updated)
       Future.delayed(const Duration(seconds: 2), () async {
         try {
           if (imageFile.path.contains('cache') && await imageFile.exists()) {
@@ -4838,19 +5039,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         } catch (_) {}
       });
     } catch (e) {
-      debugPrint('Image send error: $e');
-      // Try to mark message as failed if it was created
-      if (messageRef != null) {
-        try {
-          await messageRef.update({
-            'status': MessageStatus.failed.index,
-            'localPath': FieldValue.delete(),
-            'uploadProgress': FieldValue.delete(),
-          });
-        } catch (_) {}
-      }
+      debugPrint('Error uploading image: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to send image: $e');
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          SnackBarHelper.showError(context, 'Failed to send image');
+        }
       }
     }
   }
@@ -4991,45 +5187,39 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   Future<void> _sendVoiceMessage(String filePath, int audioDuration) async {
-    if (_conversationId == null || _currentUserId == null) return;
+    final currentUserId = _currentUserId;
+    final conversationId = _conversationId;
+    if (currentUserId == null || conversationId == null) return;
 
-    try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        if (mounted) {
-          SnackBarHelper.showError(context, 'Recording file not found');
-        }
-        return;
+    final file = File(filePath);
+    if (!await file.exists()) {
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Recording file not found');
       }
+      return;
+    }
 
-      // Create message document reference first for immediate UI feedback
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(_conversationId!)
-          .collection('messages')
-          .doc();
+    final optimisticId =
+        'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
 
-      final now = DateTime.now();
-      final timestamp = now.millisecondsSinceEpoch;
+    final optimisticMessage = {
+      'id': optimisticId,
+      'senderId': currentUserId,
+      'receiverId': widget.otherUser.uid,
+      'text': '',
+      'voiceUrl': filePath,
+      'voiceDuration': audioDuration,
+      'isLocalFile': true,
+      'timestamp': Timestamp.now(),
+      'isOptimistic': true,
+    };
 
-      // Create placeholder message with "sending" status immediately
-      final placeholderData = {
-        'id': messageRef.id,
-        'senderId': _currentUserId,
-        'receiverId': widget.otherUser.uid,
-        'text': '',
-        'audioUrl': '', // Will be updated after upload
-        'audioDuration': audioDuration,
-        'type': MessageType.audio.index,
-        'status': MessageStatus.sending.index,
-        'timestamp': Timestamp.fromDate(now),
-        'read': false,
-      };
+    setState(() {
+      _optimisticMessages.add(optimisticMessage);
+      _recordingDuration = 0;
+    });
 
-      // Set placeholder immediately for instant UI feedback
-      await messageRef.set(placeholderData);
-
-      // Scroll to bottom immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
@@ -5037,58 +5227,90 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           curve: Curves.easeOut,
         );
       }
+    });
 
-      // Upload to Firebase Storage in background
-      final fileName = 'voice_${_currentUserId}_$timestamp.aac';
+    _uploadAndSendVoiceBackground(
+      file,
+      optimisticId,
+      currentUserId,
+      conversationId,
+      audioDuration,
+    );
+  }
+
+  Future<void> _uploadAndSendVoiceBackground(
+    File file,
+    String optimisticId,
+    String currentUserId,
+    String conversationId,
+    int audioDuration,
+  ) async {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'voice_${currentUserId}_$timestamp.aac';
       final storageRef = _storage
           .ref()
           .child('voice_messages')
-          .child(_conversationId!)
+          .child(conversationId)
           .child(fileName);
 
       final uploadTask = storageRef.putFile(
         file,
         SettableMetadata(contentType: 'audio/aac'),
       );
-
       final snapshot = await uploadTask;
       final audioUrl = await snapshot.ref.getDownloadURL();
 
-      // Update message with actual audio URL and delivered status
-      await messageRef.update({
-        'audioUrl': audioUrl,
-        'status': MessageStatus
-            .delivered
-            .index, // Double grey tick - delivered to server
-        'timestamp': FieldValue.serverTimestamp(),
+      if (!mounted) return;
+
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .add({
+            'senderId': currentUserId,
+            'receiverId': widget.otherUser.uid,
+            'text': '',
+            'audioUrl': audioUrl,
+            'audioDuration': audioDuration,
+            'type': MessageType.audio.index,
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': MessageStatus.delivered.index,
+            'read': false,
+          });
+
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': '🎤 Voice message',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUserId,
       });
 
-      // Run these in parallel for faster completion
-      await Future.wait([
-        // Update conversation metadata
-        _firestore.collection('conversations').doc(_conversationId!).update({
-          'lastMessage': '🎤 Voice message',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastMessageSenderId': _currentUserId,
-        }),
-        // Send notification to receiver
-        NotificationService().sendNotificationToUser(
-          userId: widget.otherUser.uid,
-          title: 'New Voice Message',
-          body: 'You received a voice message',
-          type: 'message',
-          data: {'conversationId': _conversationId},
-        ),
-        // Delete local file
-        file.delete(),
-      ]);
+      NotificationService()
+          .sendNotificationToUser(
+            userId: widget.otherUser.uid,
+            title: 'New Voice Message',
+            body: 'You received a voice message',
+            type: 'message',
+            data: {'conversationId': conversationId},
+          )
+          .catchError((_) {});
 
-      // Reset recording duration
-      _recordingDuration = 0;
-    } catch (e) {
-      debugPrint('Error sending voice message: $e');
+      await file.delete();
+
       if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to send voice message');
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error uploading voice message: $e');
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == optimisticId);
+        });
+        if (context.mounted) {
+          SnackBarHelper.showError(context, 'Failed to send voice message');
+        }
       }
     }
   }
@@ -5169,17 +5391,25 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   /// Build image message with WhatsApp-style upload preview
   /// Shows local image immediately with blur/progress overlay while uploading
   Widget _buildImageMessage(MessageModel message, bool isMe, bool isDarkMode) {
-    final hasLocalPath =
-        message.localPath != null && message.localPath!.isNotEmpty;
     final hasMediaUrl =
         message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final isLocalFile = message.metadata?['isLocalFile'] == true;
+    final isOptimistic = message.metadata?['isOptimistic'] == true;
 
-    // Border color - blue for both sender and receiver
-    const borderColor = Color(0xFF007AFF);
+    // Use local file for optimistic messages, network URL for delivered messages
+    final imageSource = isLocalFile
+        ? message.mediaUrl
+        : hasMediaUrl
+        ? message.mediaUrl
+        : null;
+
+    if (imageSource == null) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: borderColor, width: 2),
+        border: Border.all(color: const Color(0xFF007AFF), width: 2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ClipRRect(
@@ -5188,56 +5418,52 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
           child: Stack(
             children: [
-              // Image - Priority: cloud URL > local file > placeholder
-              if (hasMediaUrl)
-                // Show cloud image (uploaded) - PRIORITY
-                CachedNetworkImage(
-                  imageUrl: message.mediaUrl!,
-                  fit: BoxFit.cover,
-                  width: 220,
-                  height: 180,
-                  memCacheWidth: 400,
-                  memCacheHeight: 400,
-                  placeholder: (context, url) => Container(
-                    width: 220,
-                    height: 180,
-                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    width: 220,
-                    height: 180,
-                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                    child: const Icon(Icons.error_outline, color: Colors.red),
-                  ),
-                )
-              else if (hasLocalPath && File(message.localPath!).existsSync())
-                // Show local file while uploading (only if file exists)
-                Image.file(
-                  File(message.localPath!),
-                  fit: BoxFit.cover,
-                  width: 220,
-                  height: 180,
-                  errorBuilder: (context, error, stackTrace) {
-                    // If error loading file, show placeholder
-                    debugPrint('⚠️ Local image load error: $error');
-                    return Container(
-                      width: 220,
-                      height: 180,
-                      color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.image, color: Colors.grey, size: 40),
+              // Show local file or network image
+              isLocalFile
+                  ? Image.file(File(imageSource), width: 200, fit: BoxFit.cover)
+                  : CachedNetworkImage(
+                      imageUrl: imageSource,
+                      width: 200,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 200,
+                        height: 180,
+                        color: Colors.grey[300],
+                        child: const Center(child: CircularProgressIndicator()),
                       ),
-                    );
-                  },
-                )
-              else
-                // Fallback placeholder
-                Container(
-                  width: 220,
-                  height: 180,
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                  child: const Center(
-                    child: Icon(Icons.image, color: Colors.grey, size: 40),
+                      errorWidget: (context, url, error) => Container(
+                        width: 200,
+                        height: 180,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.error),
+                      ),
+                    ),
+              // Upload overlay for optimistic messages
+              if (isOptimistic)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.4),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.orange,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Uploading...',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -5252,117 +5478,73 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     bool isMe,
     bool isDarkMode,
   ) {
-    final isSending =
-        message.status == MessageStatus.sending ||
-        (message.mediaUrl == null || message.mediaUrl!.isEmpty);
-
-    // Border color - blue for both sender and receiver
-    const borderColor = Color(0xFF007AFF);
+    final isOptimistic = message.metadata?['isOptimistic'] == true;
+    final videoUrl = message.mediaUrl;
 
     return GestureDetector(
-      onTap: isSending
+      onTap: isOptimistic
           ? null
           : () {
-              // Open video in full screen player
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      _VideoPlayerScreen(videoUrl: message.mediaUrl!),
+                  builder: (context) => _VideoPlayerScreen(videoUrl: videoUrl!),
                 ),
               );
             },
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: borderColor, width: 3),
+          border: Border.all(
+            color: isOptimistic
+                ? Colors.orange.withOpacity(0.5)
+                : const Color(0xFF007AFF),
+            width: 2,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(9),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Video thumbnail placeholder
-                Container(
-                  width: 220,
-                  height: 180,
-                  color: Colors.black87,
-                  child: isSending
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white70,
-                            ),
-                          ),
-                        )
-                      : const Icon(
-                          Icons.videocam,
-                          color: Colors.white38,
-                          size: 50,
-                        ),
-                ),
-                // Play button overlay
-                if (!isSending)
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 36,
-                    ),
-                  ),
-                // Video label
-                Positioned(
-                  bottom: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.videocam, color: Colors.white, size: 14),
-                        SizedBox(width: 4),
-                        Text(
-                          'Video',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+        child: Stack(
+          children: [
+            // Video thumbnail or placeholder
+            Container(
+              width: 200,
+              height: 150,
+              color: Colors.black,
+              child: const Icon(
+                Icons.play_circle_outline,
+                size: 64,
+                color: Colors.white,
+              ),
             ),
-          ),
+            // Upload overlay
+            if (isOptimistic)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.orange,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Uploading...',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -5605,9 +5787,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     // isMe means current user was the CALLER (senderId = current user)
     // !isMe means current user was the RECEIVER
 
-    // Determine call text, icon, and color based on call type
-    String callText;
+    // Determine call text, icon, and color based on call type (WhatsApp style)
+    String callLabel; // "Incoming" or "Outgoing" or "Missed"
+    String callDurationText; // Duration like "0:45" or status text
     IconData callIcon;
+    IconData directionIcon; // Arrow icon for direction
     Color iconColor;
 
     if (isMissed) {
@@ -5616,22 +5800,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       if (isMe) {
         // Caller viewing their outgoing missed call (cancelled/no answer)
-        if (isVideoCall) {
-          callText = 'outgoing video call';
-          callIcon = Icons.videocam; // RED videocam_off
-        } else {
-          callText = 'outgoing voice call';
-          callIcon = Icons.phone; // RED phone_missed
-        }
+        callLabel = 'Outgoing';
+        callDurationText = isVideoCall ? 'Video call, cancelled' : 'Cancelled';
+        callIcon = isVideoCall ? Icons.videocam : Icons.phone;
+        directionIcon = Icons.call_made; // Outgoing arrow
       } else {
         // Receiver viewing their missed incoming call
-        if (isVideoCall) {
-          callText = 'Missed video call';
-          callIcon = Icons.videocam; // RED videocam_off
-        } else {
-          callText = 'Missed voice call';
-          callIcon = Icons.phone_missed; // RED phone_missed
-        }
+        callLabel = 'Missed';
+        callDurationText = isVideoCall ? 'Video call' : 'Voice call';
+        callIcon = Icons.phone_missed;
+        directionIcon = Icons.call_received; // Incoming arrow
       }
     } else {
       //   Answered call - GREEN color for all answered calls
@@ -5641,19 +5819,23 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         '  Setting GREEN color for answered call: isVideoCall=$isVideoCall',
       );
 
+      // Determine if incoming or outgoing
+      callLabel = isMe ? 'Outgoing' : 'Incoming';
+      directionIcon = isMe ? Icons.call_made : Icons.call_received;
+
       // Extract duration from stored text or show default
       final storedText = message.text ?? '';
       if (storedText.isNotEmpty && !storedText.contains('call')) {
-        callText = storedText; // Duration like "0:45" or "1:23"
+        callDurationText = storedText; // Duration like "0:45" or "1:23"
       } else {
-        callText = isVideoCall ? 'Video call' : 'Voice call';
+        callDurationText = isVideoCall ? 'Video call' : 'Voice call';
       }
 
-      // Set GREEN icons for answered calls (don't override callText!)
+      // Set GREEN icons for answered calls
       if (isVideoCall) {
-        callIcon = Icons.videocam; // GREEN videocam for answered video call
+        callIcon = Icons.videocam;
       } else {
-        callIcon = Icons.phone; // GREEN phone for answered voice call
+        callIcon = Icons.phone;
       }
     }
 
@@ -5662,7 +5844,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         ? 'RED'
         : (iconColor == const Color(0xFF25D366) ? 'GREEN(#25D366)' : 'UNKNOWN');
     debugPrint(
-      '🎨 Call Icon: $callIcon, Color: $colorHex, isMissed: $isMissed, isVideoCall: $isVideoCall, isMe: $isMe, text: "$callText"',
+      '  Call Icon: $callIcon, Color: $colorHex, isMissed: $isMissed, isVideoCall: $isVideoCall, isMe: $isMe, label: "$callLabel", duration: "$callDurationText"',
     );
 
     // Sanity check: Verify iconColor is actually set
@@ -5690,35 +5872,62 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Call icon with explicit color - force the color to apply
-          Icon(
-            callIcon,
-            size: 20,
-            color: iconColor,
-            semanticLabel: 'Call icon',
+          // Call icon inside circular background (WhatsApp style)
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: iconColor.withValues(alpha: 0.15),
+            ),
+            child: Icon(
+              callIcon,
+              size: 20,
+              color: iconColor,
+              semanticLabel: 'Call icon',
+            ),
           ),
           const SizedBox(width: 10),
-          // Call text and time in single line
+          // WhatsApp-style call info: direction + label, duration, time
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              // First line: Direction arrow + Call label (Incoming/Outgoing/Missed)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(directionIcon, size: 14, color: iconColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    callLabel,
+                    style: TextStyle(
+                      color: iconColor,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              // Second line: Call duration or status
               Text(
-                callText,
+                callDurationText,
                 style: TextStyle(
-                  color: isDarkMode ? Colors.white : const Color(0xFF111B21),
-                  fontSize: 14.5,
+                  color: isDarkMode ? Colors.white70 : const Color(0xFF667781),
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w400,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
+              // Third line: Time
               Text(
                 _formatMessageTime(message.timestamp),
                 style: TextStyle(
                   color: isDarkMode
                       ? const Color(0xFF8696A0)
                       : const Color(0xFF667781),
-                  fontSize: 12.5,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -5801,9 +6010,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     bool isMe, {
     bool isDarkMode = true,
   }) {
-    final isSending =
-        message.status == MessageStatus.sending ||
-        (message.audioUrl == null || message.audioUrl!.isEmpty);
+    final isOptimistic = message.metadata?['isOptimistic'] == true;
     final isCurrentlyPlaying =
         _currentlyPlayingMessageId == message.id && _isPlaying;
     final isThisMessage = _currentlyPlayingMessageId == message.id;
@@ -5868,26 +6075,32 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Play/Pause button
+          // Play/Pause button (or loading indicator)
           GestureDetector(
-            onTap: isSending
+            onTap: isOptimistic
                 ? null
                 : () => _playAudio(message.id, message.audioUrl!),
             child: Container(
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: isSending
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.9),
+                color: isOptimistic
+                    ? Colors.orange.withOpacity(0.9)
+                    : Colors.white.withOpacity(0.9),
                 shape: BoxShape.circle,
               ),
-              child: isSending
-                  ? Padding(
-                      padding: const EdgeInsets.all(7),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: isMe ? Colors.white : Colors.grey,
+              child: isOptimistic
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
                       ),
                     )
                   : Icon(
@@ -5918,11 +6131,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     width: 2,
                     height: heights[heightIndex] * 0.8,
                     decoration: BoxDecoration(
-                      color: isSending
-                          ? Colors.white.withValues(alpha: 0.4)
-                          : (isActive
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.4)),
+                      color: isActive
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.4),
                       borderRadius: BorderRadius.circular(1),
                     ),
                   );
@@ -5931,11 +6142,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             ),
           ),
           const SizedBox(width: 6),
-          // Duration only
+          // Duration
           Text(
-            isSending ? 'Sending...' : formatDuration(duration),
+            formatDuration(duration),
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: Colors.white.withOpacity(0.9),
               fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
@@ -5949,7 +6160,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   void _startAudioCall() async {
     // Prevent multiple rapid clicks
     if (_isStartingCall) {
-      debugPrint('⚠️ Call already being initiated, ignoring duplicate request');
+      debugPrint('  Call already being initiated, ignoring duplicate request');
       return;
     }
 
@@ -5966,7 +6177,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       if (activeCallsQuery.docs.isNotEmpty) {
         // User already has an active call
-        debugPrint('⚠️ User already has an active call, cannot start new call');
+        debugPrint('  User already has an active call, cannot start new call');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -6166,7 +6377,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       //   Safety check: if status is null/empty, don't create message
       if (status == null || status.isEmpty) {
         debugPrint(
-          '⚠️ Call status is null/empty, skipping message creation for callId: $callId',
+          '  Call status is null/empty, skipping message creation for callId: $callId',
         );
         return;
       }
@@ -6206,7 +6417,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       //   Final safety check: ensure msgText is not empty
       if (msgText.isEmpty) {
         debugPrint(
-          '⚠️ msgText is empty after status check, status=$status, skipping message creation',
+          '  msgText is empty after status check, status=$status, skipping message creation',
         );
         return;
       }
@@ -6215,7 +6426,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // If this function is called multiple times for same call, it will update instead of creating duplicates
       final messageId = 'call_$callId';
 
-      // ⚠️ CRITICAL: Triple-check msgText before saving (prevent empty messages)
+      //   CRITICAL: Triple-check msgText before saving (prevent empty messages)
       if (msgText.trim().isEmpty) {
         debugPrint(
           '  BLOCKED: Attempted to save call message with empty text! callId=$callId, status=$status',
@@ -6333,7 +6544,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     if (_conversationId == null) return;
 
     try {
-      debugPrint('🧹 Starting cleanup of empty and duplicate call messages...');
+      debugPrint('  Starting cleanup of empty and duplicate call messages...');
 
       final messagesSnapshot = await _firestore
           .collection('conversations')
@@ -6617,6 +6828,191 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
+  // Mention-related methods
+  // Handle mention (@) detection
+  void _handleMentionDetection(String text) {
+    final cursorPosition = _messageController.selection.baseOffset;
+
+    // Find the last @ before cursor
+    int atIndex = -1;
+    for (int i = cursorPosition - 1; i >= 0; i--) {
+      if (text[i] == '@') {
+        // Check if @ is at start or preceded by space
+        if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
+          atIndex = i;
+          break;
+        }
+      } else if (text[i] == ' ' || text[i] == '\n') {
+        // Stop at space before finding @
+        break;
+      }
+    }
+
+    if (atIndex != -1 && atIndex < cursorPosition) {
+      // Extract query after @
+      final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+
+      // For 1-to-1 chat, only show the other user
+      final otherUserName = widget.otherUser.name;
+      final otherUserPhoto = widget.otherUser.profileImageUrl;
+
+      if (otherUserName.toLowerCase().contains(query)) {
+        setState(() {
+          _mentionStartIndex = atIndex;
+          _filteredUsers = [
+            {
+              'id': widget.otherUser.uid,
+              'name': otherUserName,
+              'photo': otherUserPhoto,
+            },
+          ];
+          _showMentionSuggestions = true;
+        });
+      } else {
+        setState(() {
+          _showMentionSuggestions = false;
+          _filteredUsers = [];
+          _mentionStartIndex = -1;
+        });
+      }
+    } else {
+      setState(() {
+        _showMentionSuggestions = false;
+        _filteredUsers = [];
+        _mentionStartIndex = -1;
+      });
+    }
+  }
+
+  // Insert mention when user selects from suggestions
+  void _insertMention(String userId, String userName) {
+    final text = _messageController.text;
+    final cursorPosition = _messageController.selection.baseOffset;
+
+    // Replace from @ to cursor with @UserName
+    final beforeMention = text.substring(0, _mentionStartIndex);
+    final afterMention = text.substring(cursorPosition);
+    final mentionText = '@$userName ';
+
+    final newText = beforeMention + mentionText + afterMention;
+    final newCursorPosition = beforeMention.length + mentionText.length;
+
+    _messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newCursorPosition),
+    );
+
+    setState(() {
+      _showMentionSuggestions = false;
+      _filteredUsers = [];
+      _mentionStartIndex = -1;
+    });
+
+    // Keep focus on text field
+    _messageFocusNode.requestFocus();
+  }
+
+  // Build text with highlighted mentions
+  Widget _buildTextWithMentions(
+    String text,
+    bool isMe,
+    bool isDarkMode,
+    bool isDeleted,
+  ) {
+    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    final matches = regex.allMatches(text);
+
+    if (matches.isEmpty) {
+      // No mentions, return simple text
+      return Text(
+        text,
+        style: TextStyle(
+          color: isDeleted
+              ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
+              : (isMe
+                    ? Colors.white
+                    : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+          fontSize: 16,
+          height: 1.35,
+          letterSpacing: -0.2,
+          fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
+        ),
+      );
+    }
+
+    // Build rich text with highlighted mentions
+    final spans = <TextSpan>[];
+    int lastIndex = 0;
+
+    for (final match in matches) {
+      // Add text before mention
+      if (match.start > lastIndex) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex, match.start),
+            style: TextStyle(
+              color: isDeleted
+                  ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
+                  : (isMe
+                        ? Colors.white
+                        : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+            ),
+          ),
+        );
+      }
+
+      // Add highlighted mention
+      spans.add(
+        TextSpan(
+          text: match.group(0), // @Username
+          style: TextStyle(
+            color: isMe
+                ? Colors.white
+                : (isDarkMode
+                      ? const Color(0xFF64B5F6)
+                      : const Color(0xFF1976D2)),
+            fontWeight: FontWeight.w600,
+            backgroundColor: isMe
+                ? Colors.white.withValues(alpha: 0.2)
+                : (isDarkMode
+                      ? const Color(0xFF1976D2).withValues(alpha: 0.2)
+                      : const Color(0xFF64B5F6).withValues(alpha: 0.2)),
+          ),
+        ),
+      );
+
+      lastIndex = match.end;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: TextStyle(
+            color: isDeleted
+                ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
+                : (isMe
+                      ? Colors.white
+                      : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+          ),
+        ),
+      );
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 16,
+          height: 1.35,
+          letterSpacing: -0.2,
+          fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
+        ),
+        children: spans,
+      ),
+    );
+  }
+
   Widget _buildHighlightedText(String text, String query, TextStyle baseStyle) {
     if (query.isEmpty) return Text(text, style: baseStyle);
 
@@ -6868,7 +7264,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               ),
               const SizedBox(height: 16),
               const Text(
-                'Delete Conversation?',
+                'Clear Chat?',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 20,
@@ -6878,7 +7274,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'This will permanently delete all messages with ${widget.otherUser.name}. This action cannot be undone.',
+                'This will clear all messages from this chat for you. ${widget.otherUser.name} will still see all messages.',
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -6919,7 +7315,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         ),
                       ),
                       child: const Text(
-                        'Delete',
+                        'Clear',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -6937,122 +7333,69 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   Future<void> _deleteConversation() async {
-    debugPrint('🗑️ DELETE CONVERSATION STARTED');
+    debugPrint('🗑️ CLEAR CHAT STARTED');
     debugPrint('📝 Conversation ID: $_conversationId');
 
     if (_conversationId == null) {
-      debugPrint('❌ No conversation ID, returning');
-      if (mounted) {
-        SnackBarHelper.showError(context, 'No conversation to delete');
-      }
+      debugPrint('  No conversation ID, returning');
+      return;
+    }
+
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) {
+      debugPrint('  No current user ID, returning');
       return;
     }
 
     try {
       debugPrint('📡 Fetching messages from Firestore...');
 
-      // Delete all messages in batches (fast deletion without waiting for media)
+      // Get all messages in the conversation
       final messagesRef = _firestore
           .collection('conversations')
           .doc(_conversationId!)
           .collection('messages');
 
-      // Get all messages
       final messagesSnapshot = await messagesRef.get();
-      debugPrint('✅ Found ${messagesSnapshot.docs.length} messages to delete');
+      debugPrint(
+        '  Found ${messagesSnapshot.docs.length} messages to mark as deleted',
+      );
 
-      // Collect media URLs for background deletion
-      final mediaUrls = <String>[];
+      if (messagesSnapshot.docs.isEmpty) {
+        debugPrint('  No messages to clear');
+        return;
+      }
 
-      // Delete all message documents in batches
+      // Mark messages as deleted for current user only (not actually delete them)
       final batch = _firestore.batch();
 
-      if (messagesSnapshot.docs.isNotEmpty) {
-        for (final doc in messagesSnapshot.docs) {
-          final data = doc.data();
-
-          // Collect media URLs for later deletion
-          final mediaUrl =
-              data['mediaUrl'] as String? ?? data['imageUrl'] as String?;
-          if (mediaUrl != null && mediaUrl.isNotEmpty) {
-            mediaUrls.add(mediaUrl);
-          }
-
-          final voiceNoteUrl = data['voiceNoteUrl'] as String?;
-          if (voiceNoteUrl != null && voiceNoteUrl.isNotEmpty) {
-            mediaUrls.add(voiceNoteUrl);
-          }
-
-          // Delete message document
-          batch.delete(doc.reference);
-        }
-        debugPrint(
-          '🗂️ Prepared ${messagesSnapshot.docs.length} messages for deletion',
-        );
+      for (final doc in messagesSnapshot.docs) {
+        // Use set with merge to avoid errors if field doesn't exist
+        batch.set(doc.reference, {
+          'deletedFor': FieldValue.arrayUnion([currentUserId]),
+        }, SetOptions(merge: true));
       }
 
-      // Delete the conversation document
-      batch.delete(
-        _firestore.collection('conversations').doc(_conversationId!),
-      );
-      debugPrint('📄 Added conversation document to deletion batch');
-
-      // Commit batch deletion (this is fast)
-      debugPrint('💾 Committing batch delete...');
+      // Don't delete the conversation - just mark messages as deleted for this user
+      // Other user will still see all messages
+      debugPrint('💾 Committing batch update...');
       await batch.commit();
-      debugPrint('✅ BATCH DELETE SUCCESSFUL!');
+      debugPrint('  BATCH UPDATE SUCCESSFUL!');
 
-      // Delete media files in background (don't wait for it)
-      if (mediaUrls.isNotEmpty) {
-        debugPrint(
-          '🖼️ Deleting ${mediaUrls.length} media files in background',
-        );
-        _deleteMediaInBackground(mediaUrls);
-      }
+      debugPrint('🎉 CLEAR CHAT COMPLETED SUCCESSFULLY');
 
-      debugPrint('🎉 DELETE CONVERSATION COMPLETED SUCCESSFULLY');
-
-      // Navigate back to conversations screen and show success message
+      // Force UI rebuild to show empty chat immediately
       if (mounted) {
-        debugPrint('⬅️ Navigating back to conversations screen');
-
-        // Show success message first
-        SnackBarHelper.showSuccess(
-          context,
-          'Chat deleted! All messages cleared.',
-        );
-
-        // Navigate back - pop until we reach the main navigation screen
-        Navigator.of(context).popUntil((route) => route.isFirst);
-
-        debugPrint('✅ Successfully popped back to main screen');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('❌ DELETE CONVERSATION ERROR: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
-
-      if (mounted) {
-        SnackBarHelper.showError(
-          context,
-          'Delete failed: ${e.toString().substring(0, 100)}',
-        );
-      }
-    }
-  }
-
-  // Delete media files in background without blocking UI
-  void _deleteMediaInBackground(List<String> mediaUrls) {
-    debugPrint(
-      '🧹 Starting background media cleanup for ${mediaUrls.length} files...',
-    );
-    for (final url in mediaUrls) {
-      try {
-        _storage.refFromURL(url).delete().catchError((error) {
-          debugPrint('⚠️ Media deletion error (ignored): $error');
+        setState(() {
+          debugPrint('  Forcing UI rebuild after clear chat');
         });
-      } catch (e) {
-        debugPrint('⚠️ Media deletion exception (ignored): $e');
       }
+
+      // User stays on chat screen - no navigation
+      debugPrint('  User stays on chat screen');
+    } catch (e, stackTrace) {
+      debugPrint('  CLEAR CHAT ERROR: $e');
+      debugPrint('📚 Stack trace: $stackTrace');
     }
   }
 }
