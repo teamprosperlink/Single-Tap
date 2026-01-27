@@ -73,6 +73,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   int _todayImageCount = 0;
   int _todayVideoCount = 0;
   DateTime? _lastMediaCountReset;
+  bool _isMediaOperationInProgress = false; // Lock to prevent concurrent operations
 
   // Typing indicator
   List<String> _typingUsers = [];
@@ -971,7 +972,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Pick image from gallery (max 4 images per selection, max 4 images per day)
   Future<void> _pickImage() async {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+      }
+      return;
+    }
+
     try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for image picker');
+
       debugPrint('Opening gallery picker for multiple images...');
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
@@ -995,7 +1008,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       }
 
       // CRITICAL: Increment FIRST to prevent race condition
-      // If two users click rapidly, both will increment before checking
       await _incrementMediaCounter('image', imagesToSend.length);
       debugPrint('🔒 Counter incremented: $_todayImageCount images');
 
@@ -1030,12 +1042,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
       }
+    } finally {
+      _isMediaOperationInProgress = false; // Release lock
+      debugPrint('🔓 Lock released for image picker');
     }
   }
 
   // Take photo with camera (subject to daily limit)
   Future<void> _takePhoto() async {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+      }
+      return;
+    }
+
     try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for camera');
+
       debugPrint('Opening camera...');
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -1076,6 +1103,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to take photo: $e')));
       }
+    } finally {
+      _isMediaOperationInProgress = false; // Release lock
+      debugPrint('🔓 Lock released for camera');
     }
   }
 
@@ -1193,7 +1223,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Record video from camera (subject to daily limit)
   void _recordVideo() async {
     if (_isRecordingVideo) return;
+
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+      }
+      return;
+    }
+
     _isRecordingVideo = true;
+    _isMediaOperationInProgress = true; // Acquire lock
+    debugPrint('🔐 Lock acquired for video recording');
 
     try {
       final cameraStatus = await Permission.camera.request();
@@ -1301,12 +1343,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to record video');
       }
+    } finally {
+      _isMediaOperationInProgress = false; // Release lock
+      debugPrint('🔓 Lock released for video recording');
     }
   }
 
   // Pick video from gallery (max 4 videos per day, max 28 seconds each)
   void _pickVideo() async {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
+      }
+      return;
+    }
+
     try {
+      _isMediaOperationInProgress = true; // Acquire lock
+      debugPrint('🔐 Lock acquired for video picker');
+
       // Note: pickMultipleMedia is available in image_picker 0.8.9+
       // For now, let users pick one video at a time (they can repeat 4 times)
       final video = await _imagePicker.pickVideo(source: ImageSource.gallery);
@@ -1386,6 +1443,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to pick video');
       }
+    } finally {
+      _isMediaOperationInProgress = false; // Release lock
+      debugPrint('🔓 Lock released for video picker');
     }
   }
 
