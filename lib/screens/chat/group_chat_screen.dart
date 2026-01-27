@@ -851,9 +851,56 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  // Pick image from gallery (max 4 images)
+  // Check daily media limit (4 images or 4 videos per day)
+  Future<bool> _checkDailyMediaLimit(String mediaType) async {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return false;
+
+    try {
+      final oneDayAgo = DateTime.now().subtract(const Duration(hours: 24));
+
+      // Count media sent by this user in last 24 hours
+      final snapshot = await _firestore
+          .collection('conversations')
+          .doc(widget.groupId)
+          .collection('messages')
+          .where('senderId', isEqualTo: currentUserId)
+          .where('timestamp', isGreaterThan: Timestamp.fromDate(oneDayAgo))
+          .get();
+
+      int count = 0;
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        if (mediaType == 'image' && data['imageUrl'] != null) {
+          count++;
+        } else if (mediaType == 'video' && data['videoUrl'] != null) {
+          count++;
+        }
+      }
+
+      debugPrint('$mediaType count in last 24h: $count');
+      return count >= 4;
+    } catch (e) {
+      debugPrint('Error checking daily limit: $e');
+      return false; // Allow on error
+    }
+  }
+
+  // Pick image from gallery (max 4 images per selection, max 4 images per day)
   Future<void> _pickImage() async {
     try {
+      // Check daily limit first
+      final limitReached = await _checkDailyMediaLimit('image');
+      if (limitReached) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Daily limit reached! You can only send 4 images per day in this group.',
+          );
+        }
+        return;
+      }
+
       debugPrint('Opening gallery picker for multiple images...');
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
@@ -871,7 +918,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) {
           SnackBarHelper.showError(
             context,
-            'Maximum 4 images allowed. Only first 4 will be sent.',
+            'Maximum 4 images allowed per selection. Only first 4 will be sent.',
           );
         }
       }
@@ -893,9 +940,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Take photo with camera
+  // Take photo with camera (subject to daily limit)
   Future<void> _takePhoto() async {
     try {
+      // Check daily limit first
+      final limitReached = await _checkDailyMediaLimit('image');
+      if (limitReached) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Daily limit reached! You can only send 4 images per day in this group.',
+          );
+        }
+        return;
+      }
+
       debugPrint('Opening camera...');
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -1030,9 +1089,22 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Record video from camera
+  // Record video from camera (subject to daily limit)
   void _recordVideo() async {
     if (_isRecordingVideo) return;
+
+    // Check daily limit first
+    final limitReached = await _checkDailyMediaLimit('video');
+    if (limitReached) {
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          'Daily limit reached! You can only send 4 videos per day in this group.',
+        );
+      }
+      return;
+    }
+
     _isRecordingVideo = true;
 
     try {
@@ -1126,9 +1198,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Pick video from gallery (max 4 videos, max 28 seconds each)
+  // Pick video from gallery (max 4 videos per day, max 28 seconds each)
   void _pickVideo() async {
     try {
+      // Check daily limit first
+      final limitReached = await _checkDailyMediaLimit('video');
+      if (limitReached) {
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Daily limit reached! You can only send 4 videos per day in this group.',
+          );
+        }
+        return;
+      }
+
       // Note: pickMultipleMedia is available in image_picker 0.8.9+
       // For now, let users pick one video at a time (they can repeat 4 times)
       final video = await _imagePicker.pickVideo(source: ImageSource.gallery);
