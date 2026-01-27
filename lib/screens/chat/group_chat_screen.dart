@@ -72,6 +72,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Daily media counters (track in-progress uploads)
   int _todayImageCount = 0;
   int _todayVideoCount = 0;
+  int _todayAudioCount = 0;
   DateTime? _lastMediaCountReset;
   bool _isMediaOperationInProgress = false; // Lock to prevent concurrent operations
 
@@ -870,10 +871,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       final imageCount = prefs.getInt('${key}_imageCount') ?? 0;
       final videoCount = prefs.getInt('${key}_videoCount') ?? 0;
+      final audioCount = prefs.getInt('${key}_audioCount') ?? 0;
       final lastResetStr = prefs.getString('${key}_lastReset');
 
       _todayImageCount = imageCount;
       _todayVideoCount = videoCount;
+      _todayAudioCount = audioCount;
 
       if (lastResetStr != null) {
         _lastMediaCountReset = DateTime.parse(lastResetStr);
@@ -882,7 +885,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       // Check if 24 hours passed and reset if needed
       await _resetDailyCountersIfNeeded();
 
-      debugPrint('📊 Loaded counts: Images=$_todayImageCount, Videos=$_todayVideoCount');
+      debugPrint('📊 Loaded counts: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
     } catch (e) {
       debugPrint('Error loading media counts: $e');
     }
@@ -899,12 +902,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       await prefs.setInt('${key}_imageCount', _todayImageCount);
       await prefs.setInt('${key}_videoCount', _todayVideoCount);
+      await prefs.setInt('${key}_audioCount', _todayAudioCount);
 
       if (_lastMediaCountReset != null) {
         await prefs.setString('${key}_lastReset', _lastMediaCountReset!.toIso8601String());
       }
 
-      debugPrint('💾 Saved counts: Images=$_todayImageCount, Videos=$_todayVideoCount');
+      debugPrint('💾 Saved counts: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount');
     } catch (e) {
       debugPrint('Error saving media counts: $e');
     }
@@ -926,6 +930,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (now.difference(_lastMediaCountReset!).inHours >= 24) {
       _todayImageCount = 0;
       _todayVideoCount = 0;
+      _todayAudioCount = 0;
       _lastMediaCountReset = now;
       await _saveDailyMediaCounts();
       debugPrint('🔄 Daily media counters reset after 24 hours');
@@ -936,7 +941,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   Future<bool> _checkDailyMediaLimit(String mediaType) async {
     await _resetDailyCountersIfNeeded();
 
-    final currentCount = mediaType == 'image' ? _todayImageCount : _todayVideoCount;
+    final currentCount = mediaType == 'image'
+        ? _todayImageCount
+        : mediaType == 'video'
+            ? _todayVideoCount
+            : _todayAudioCount;
     final exceeds = currentCount > 4;
 
     debugPrint('📊 $mediaType check: Current=$currentCount, Exceeds limit? $exceeds');
@@ -952,6 +961,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     } else if (mediaType == 'video') {
       _todayVideoCount += count;
       debugPrint('📈 Video counter: $_todayVideoCount');
+    } else if (mediaType == 'audio') {
+      _todayAudioCount += count;
+      debugPrint('📈 Audio counter: $_todayAudioCount');
     }
 
     await _saveDailyMediaCounts();
@@ -965,6 +977,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     } else if (mediaType == 'video') {
       _todayVideoCount = (_todayVideoCount - count).clamp(0, 999);
       debugPrint('📉 Video counter rolled back: $_todayVideoCount');
+    } else if (mediaType == 'audio') {
+      _todayAudioCount = (_todayAudioCount - count).clamp(0, 999);
+      debugPrint('📉 Audio counter rolled back: $_todayAudioCount');
     }
 
     await _saveDailyMediaCounts();
@@ -3285,49 +3300,89 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   Future<void> _sendVoiceMessage(String filePath, int audioDuration) async {
-    final currentUserId = _currentUserId;
-    if (currentUserId == null) return;
-
-    final file = File(filePath);
-    if (!await file.exists()) {
+    // LOCK: Check if another media operation is in progress
+    if (_isMediaOperationInProgress) {
+      debugPrint('⏸️ Media operation already in progress, blocking...');
       if (mounted) {
-        SnackBarHelper.showError(context, 'Recording file not found');
+        SnackBarHelper.showError(context, 'Please wait for previous upload to complete');
       }
       return;
     }
 
-    // Create optimistic message ID
-    final optimisticId =
-        'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
+    _isMediaOperationInProgress = true; // Acquire lock
+    debugPrint('🔐 Lock acquired for audio recording');
 
-    // Create optimistic message - show immediately with local file
-    final optimisticMessage = {
-      'id': optimisticId,
-      'senderId': currentUserId,
-      'text': '',
-      'voiceUrl': filePath, // Local file path for immediate display
-      'voiceDuration': audioDuration,
-      'isLocalFile': true, // Flag to indicate this is a local file
-      'timestamp': Timestamp.now(),
-      'isSystemMessage': false,
-      'isOptimistic': true,
-      'readBy': [currentUserId],
-      if (_replyToMessage != null) 'replyToMessageId': _replyToMessage!['id'],
-    };
+    try {
+      final currentUserId = _currentUserId;
+      if (currentUserId == null) return;
 
-    // Add optimistic message and show immediately
-    setState(() {
-      _optimisticMessages.add(optimisticMessage);
-      _recordingDuration = 0; // Reset recording duration
-    });
+      final file = File(filePath);
+      if (!await file.exists()) {
+        if (mounted) {
+          SnackBarHelper.showError(context, 'Recording file not found');
+        }
+        return;
+      }
 
-    // Scroll to show the new message immediately
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+      // Increment FIRST to prevent race condition
+      await _incrementMediaCounter('audio', 1);
+      debugPrint('🔒 Counter incremented: $_todayAudioCount audios');
 
-    // Start upload in background (don't block UI)
-    _uploadAndSendVoice(file, optimisticId, currentUserId, audioDuration);
+      // Check if counter exceeds daily limit
+      final limitReached = await _checkDailyMediaLimit('audio');
+      if (limitReached) {
+        // Rollback
+        await _decrementMediaCounter('audio', 1);
+        if (mounted) {
+          SnackBarHelper.showError(
+            context,
+            'Daily limit reached! You can only send 4 voice messages per day in this group.',
+          );
+        }
+        return;
+      }
+
+      // Create optimistic message ID
+      final optimisticId =
+          'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Create optimistic message - show immediately with local file
+      final optimisticMessage = {
+        'id': optimisticId,
+        'senderId': currentUserId,
+        'text': '',
+        'voiceUrl': filePath, // Local file path for immediate display
+        'voiceDuration': audioDuration,
+        'isLocalFile': true, // Flag to indicate this is a local file
+        'timestamp': Timestamp.now(),
+        'isSystemMessage': false,
+        'isOptimistic': true,
+        'readBy': [currentUserId],
+        if (_replyToMessage != null) 'replyToMessageId': _replyToMessage!['id'],
+      };
+
+      // Add optimistic message and show immediately
+      setState(() {
+        _optimisticMessages.add(optimisticMessage);
+        _recordingDuration = 0; // Reset recording duration
+      });
+
+      // Scroll to show the new message immediately
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+
+      // Start upload in background (don't block UI)
+      _uploadAndSendVoice(file, optimisticId, currentUserId, audioDuration);
+    } catch (e) {
+      debugPrint('Error sending voice message: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to send voice message');
+      }
+    } finally {
+      _isMediaOperationInProgress = false; // Release lock
+      debugPrint('🔓 Lock released for audio recording');
+    }
   }
 
   // Separate method to handle voice upload in background
