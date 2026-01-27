@@ -866,8 +866,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     debugPrint('📂 ========== LOADING COUNTERS FROM SHAREDPREFERENCES ==========');
     final currentUserId = _currentUserId;
     if (currentUserId == null) {
-      debugPrint('⚠️ Cannot load: currentUserId is null, marking as loaded anyway');
-      _isCounterLoaded = true; // Mark as loaded to prevent blocking
+      debugPrint('⚠️ Cannot load: currentUserId is null, will retry later');
+      _isCounterLoaded = false; // Keep as false to allow retry when userId is available
       return;
     }
 
