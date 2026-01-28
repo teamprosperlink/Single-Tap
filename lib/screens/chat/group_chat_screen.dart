@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -4218,35 +4219,18 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       // WhatsApp-style positioning: right for caller, left for others
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 16),
         child: Align(
-          alignment: isCallerCurrentUser
-              ? Alignment.centerRight
-              : Alignment.centerLeft,
+          alignment: Alignment.centerLeft,
           child: Column(
-            crossAxisAlignment: isCallerCurrentUser
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Show caller name (only for non-callers)
-              if (!isCallerCurrentUser && callerName != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 12),
-                  child: Text(
-                    callerName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-                    ),
-                  ),
-                ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.4,
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                 decoration: BoxDecoration(
                   color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
                   borderRadius: BorderRadius.circular(12),
@@ -4255,37 +4239,67 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                     width: 1,
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(callIcon, size: 18, color: iconColor),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Show caller name inside card (only for non-callers)
+                    if (!isCallerCurrentUser && callerName != null) ...[
+                      Text(
+                        callerName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                      // Line below caller name
+                      Container(
+                        margin: const EdgeInsets.only(top: 4, bottom: 8),
+                        height: 1,
+                        color: Theme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.2),
+                      ),
+                    ],
+                    // Call info row
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          callText,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: isDarkMode
-                                ? Colors.grey[300]
-                                : Colors.grey[800],
+                        Icon(callIcon, size: 18, color: iconColor),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                callText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode
+                                      ? Colors.grey[300]
+                                      : Colors.grey[800],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (timestamp != null)
+                                Text(
+                                  DateFormat(
+                                    'MMM d, h:mm a',
+                                  ).format(timestamp.toDate()),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDarkMode
+                                        ? Colors.grey[500]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        if (timestamp != null)
-                          Text(
-                            DateFormat(
-                              'MMM d, h:mm a',
-                            ).format(timestamp.toDate()),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDarkMode
-                                  ? Colors.grey[500]
-                                  : Colors.grey[600],
-                            ),
-                          ),
                       ],
                     ),
                   ],
@@ -4363,9 +4377,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             mainAxisAlignment: isMe
-                ? MainAxisAlignment.end
+                ? MainAxisAlignment.start
                 : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Selection checkbox
               if (_isMultiSelectMode) ...[
@@ -4403,305 +4417,353 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ],
               Flexible(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: isMe
                       ? CrossAxisAlignment.start
                       : CrossAxisAlignment.start,
                   children: [
-                    if (!isMe)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 12, bottom: 4),
-                        child: Text(
-                          senderName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).primaryColor,
-                            fontWeight: FontWeight.w500,
-                          ),
+                    IntrinsicWidth(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.5,
                         ),
-                      ),
-                    Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7,
-                      ),
-                      decoration: BoxDecoration(
-                        // Only show gradient/color background if there's text
-                        // For image-only messages, use transparent background
-                        gradient: (isMe && text.isNotEmpty)
-                            ? LinearGradient(
-                                colors: themeColors,
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : null,
-                        color: (!isMe && text.isNotEmpty)
-                            ? (isDarkMode
-                                  ? AppColors.iosGrayDark
-                                  : AppColors.iosGrayTertiary)
-                            : null,
-                        border: (isMe && text.isNotEmpty)
-                            ? Border.all(color: Colors.blue, width: 2)
-                            : null,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(12),
-                          topRight: const Radius.circular(12),
-                          bottomLeft: Radius.circular(isMe ? 12 : 1),
-                          bottomRight: Radius.circular(isMe ? 1 : 12),
-                        ),
-                        boxShadow: text.isNotEmpty
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: isMe
-                            ? CrossAxisAlignment.start
-                            : CrossAxisAlignment.start,
-                        children: [
-                          // Reply preview
-                          if (replyToId != null)
-                            _buildReplyBubble(replyToId, isMe, isDarkMode),
-                          // Image
-                          if (imageUrl != null)
-                            Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: isOptimistic
-                                      ? Colors.orange.withValues(alpha: 0.5)
-                                      : AppColors.iosBlue,
-                                  width: 2,
-                                ),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(18),
-                                  topRight: const Radius.circular(18),
-                                  bottomLeft: text.isEmpty
-                                      ? Radius.circular(isMe ? 8 : 4)
-                                      : Radius.zero,
-                                  bottomRight: text.isEmpty
-                                      ? Radius.circular(isMe ? 4 : 8)
-                                      : Radius.zero,
-                                ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal:
+                                    (imageUrl != null || videoUrl != null)
+                                    ? 4
+                                    : (replyToId != null ? 6 : 4),
+                                vertical: (imageUrl != null || videoUrl != null)
+                                    ? 4
+                                    : (replyToId != null ? 4 : 2),
                               ),
-                              child: ClipRRect(
+                              decoration: BoxDecoration(
+                                // Only show gradient/color background if there's text
+                                // For image-only messages, use transparent background
+                                gradient: (isMe && text.isNotEmpty)
+                                    ? LinearGradient(
+                                        colors: themeColors,
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      )
+                                    : null,
+                                color: (!isMe && text.isNotEmpty)
+                                    ? (isDarkMode
+                                          ? AppColors.iosGrayDark
+                                          : AppColors.iosGrayTertiary)
+                                    : null,
+                                border: (isMe && text.isNotEmpty)
+                                    ? Border.all(color: Colors.blue, width: 2)
+                                    : null,
                                 borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: text.isEmpty
-                                      ? Radius.circular(isMe ? 12 : 2)
-                                      : Radius.zero,
-                                  bottomRight: text.isEmpty
-                                      ? Radius.circular(isMe ? 2 : 12)
-                                      : Radius.zero,
+                                  topLeft: const Radius.circular(12),
+                                  topRight: const Radius.circular(12),
+                                  bottomLeft: Radius.circular(isMe ? 12 : 5),
+                                  bottomRight: Radius.circular(isMe ? 5 : 12),
                                 ),
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    // Show local file or network image
-                                    messageData['isLocalFile'] == true
-                                        ? Image.file(
-                                            File(imageUrl),
-                                            width: 200,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : CachedNetworkImage(
-                                            imageUrl: imageUrl,
-                                            width: 200,
-                                            fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                Container(
-                                                  width: 200,
-                                                  height: 150,
-                                                  color: isDarkMode
-                                                      ? Colors.grey[800]
-                                                      : Colors.grey[300],
-                                                  child: const Center(
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
+                                boxShadow: text.isNotEmpty
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.05,
+                                          ),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.start
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  // Sender name at top inside card (for received messages)
+                                  if (!isMe) ...[
+                                    Text(
+                                      senderName,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).primaryColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    // Line below sender name
+                                    Container(
+                                      margin: const EdgeInsets.only(
+                                        top: 4,
+                                        bottom: 8,
+                                      ),
+                                      height: 1,
+                                      color: Theme.of(
+                                        context,
+                                      ).primaryColor.withValues(alpha: 0.2),
+                                    ),
+                                  ],
+                                  // Reply preview
+                                  if (replyToId != null) ...[
+                                    _buildReplyBubble(
+                                      replyToId,
+                                      isMe,
+                                      isDarkMode,
+                                    ),
+                                    Container(
+                                      margin: const EdgeInsets.only(
+                                        top: 4,
+                                        bottom: 4,
+                                      ),
+                                      height: 1,
+                                      color:
+                                          (isMe
+                                                  ? Colors.white
+                                                  : Theme.of(
+                                                      context,
+                                                    ).primaryColor)
+                                              .withValues(alpha: 0.2),
+                                    ),
+                                  ],
+                                  // Image
+                                  if (imageUrl != null)
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: isOptimistic
+                                              ? Colors.orange.withValues(
+                                                  alpha: 0.5,
+                                                )
+                                              : AppColors.iosBlue,
+                                          width: 2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            // Show local file or network image
+                                            messageData['isLocalFile'] == true
+                                                ? Image.file(
+                                                    File(imageUrl),
+                                                    width: 200,
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : CachedNetworkImage(
+                                                    imageUrl: imageUrl,
+                                                    width: 200,
+                                                    fit: BoxFit.cover,
+                                                    placeholder:
+                                                        (
+                                                          context,
+                                                          url,
+                                                        ) => Container(
+                                                          width: 200,
+                                                          height: 150,
+                                                          color: isDarkMode
+                                                              ? Colors.grey[800]
+                                                              : Colors
+                                                                    .grey[300],
+                                                          child: const Center(
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                    errorWidget:
+                                                        (
+                                                          context,
+                                                          url,
+                                                          error,
+                                                        ) => const Icon(
+                                                          Icons.error_outline,
+                                                          color: Colors.red,
                                                         ),
                                                   ),
+                                            // Show uploading overlay for optimistic messages
+                                            if (isOptimistic)
+                                              Container(
+                                                width: 200,
+                                                height: 150,
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.3,
                                                 ),
-                                            errorWidget:
-                                                (context, url, error) =>
-                                                    const Icon(
-                                                      Icons.error_outline,
-                                                      color: Colors.red,
+                                                child: const Center(
+                                                  child: SizedBox(
+                                                    width: 32,
+                                                    height: 32,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 3,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(Colors.orange),
                                                     ),
-                                          ),
-                                    // Show uploading overlay for optimistic messages
-                                    if (isOptimistic)
-                                      Container(
-                                        width: 200,
-                                        height: 150,
-                                        color: Colors.black.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                        child: const Center(
-                                          child: SizedBox(
-                                            width: 32,
-                                            height: 32,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 3,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.orange,
                                                   ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          // Video
-                          if (videoUrl != null)
-                            GestureDetector(
-                              onTap: isOptimistic
-                                  ? null
-                                  : () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              VideoPlayerScreen(
-                                                videoUrl: videoUrl,
-                                                isLocalFile:
-                                                    messageData['isLocalFile'] ==
-                                                    true,
+                                                ),
                                               ),
-                                        ),
-                                      );
-                                    },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: isOptimistic
-                                        ? Colors.orange.withValues(alpha: 0.5)
-                                        : AppColors.iosBlue,
-                                    width: 2,
-                                  ),
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(18),
-                                    topRight: const Radius.circular(18),
-                                    bottomLeft: text.isEmpty
-                                        ? Radius.circular(isMe ? 18 : 4)
-                                        : Radius.zero,
-                                    bottomRight: text.isEmpty
-                                        ? Radius.circular(isMe ? 4 : 18)
-                                        : Radius.zero,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(16),
-                                    topRight: const Radius.circular(16),
-                                    bottomLeft: text.isEmpty
-                                        ? Radius.circular(isMe ? 16 : 2)
-                                        : Radius.zero,
-                                    bottomRight: text.isEmpty
-                                        ? Radius.circular(isMe ? 2 : 16)
-                                        : Radius.zero,
-                                  ),
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        width: 200,
-                                        height: 150,
-                                        color: Colors.black,
-                                        child: Icon(
-                                          Icons.video_library,
-                                          color: isOptimistic
-                                              ? Colors.white38
-                                              : Colors.white54,
-                                          size: 48,
+                                          ],
                                         ),
                                       ),
-                                      // Show uploading indicator for optimistic messages
-                                      if (isOptimistic)
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.7,
-                                            ),
-                                            shape: BoxShape.circle,
+                                    ),
+                                  // Video
+                                  if (videoUrl != null)
+                                    GestureDetector(
+                                      onTap: isOptimistic
+                                          ? null
+                                          : () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      VideoPlayerScreen(
+                                                        videoUrl: videoUrl,
+                                                        isLocalFile:
+                                                            messageData['isLocalFile'] ==
+                                                            true,
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: isOptimistic
+                                                ? Colors.orange.withValues(
+                                                    alpha: 0.5,
+                                                  )
+                                                : AppColors.iosBlue,
+                                            width: 2,
                                           ),
-                                          child: const SizedBox(
-                                            width: 32,
-                                            height: 32,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 3,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.orange,
-                                                  ),
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.6,
-                                            ),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.play_arrow,
-                                            color: Colors.white,
-                                            size: 32,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              Container(
+                                                width: 200,
+                                                height: 150,
+                                                color: Colors.black,
+                                                child: Icon(
+                                                  Icons.video_library,
+                                                  color: isOptimistic
+                                                      ? Colors.white38
+                                                      : Colors.white54,
+                                                  size: 48,
+                                                ),
+                                              ),
+                                              // Show uploading indicator for optimistic messages
+                                              if (isOptimistic)
+                                                Container(
+                                                  padding: const EdgeInsets.all(
+                                                    12,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withValues(alpha: 0.7),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const SizedBox(
+                                                    width: 32,
+                                                    height: 32,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 3,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(Colors.orange),
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                Container(
+                                                  padding: const EdgeInsets.all(
+                                                    12,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withValues(alpha: 0.6),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.play_arrow,
+                                                    color: Colors.white,
+                                                    size: 32,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  // Voice message
+                                  if (voiceUrl != null && voiceUrl.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.all(4),
+                                      child: _buildAudioMessagePlayer(
+                                        messageId: messageId,
+                                        voiceUrl: voiceUrl,
+                                        voiceDuration: voiceDuration ?? 0,
+                                        isMe: isMe,
+                                        isDarkMode: isDarkMode,
+                                        isOptimistic: isOptimistic,
+                                        isLocalFile:
+                                            messageData['isLocalFile'] == true,
+                                      ),
+                                    ),
+                                  // Text with mention highlighting
+                                  if (text.isNotEmpty)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                        left:
+                                            imageUrl != null || videoUrl != null
+                                            ? 10
+                                            : 5,
+                                        right:
+                                            imageUrl != null || videoUrl != null
+                                            ? 10
+                                            : 5,
+                                        top:
+                                            imageUrl != null || videoUrl != null
+                                            ? 8
+                                            : 3,
+                                        bottom:
+                                            imageUrl != null || videoUrl != null
+                                            ? 4
+                                            : 5,
+                                      ),
+                                      child: _buildTextWithMentions(
+                                        text,
+                                        isMe,
+                                        isDarkMode,
+                                        messageData['isDeleted'] == true,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          // Voice message
-                          if (voiceUrl != null && voiceUrl.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: _buildAudioMessagePlayer(
-                                messageId: messageId,
-                                voiceUrl: voiceUrl,
-                                voiceDuration: voiceDuration ?? 0,
-                                isMe: isMe,
-                                isDarkMode: isDarkMode,
-                                isOptimistic: isOptimistic,
-                                isLocalFile: messageData['isLocalFile'] == true,
-                              ),
-                            ),
-                          // Text with mention highlighting
-                          if (text.isNotEmpty)
-                            Padding(
-                              padding: EdgeInsets.only(
-                                left: 14,
-                                right: 14,
-                                top: imageUrl != null || videoUrl != null
-                                    ? 8
-                                    : 10,
-                                bottom: 4,
-                              ),
-                              child: _buildTextWithMentions(
-                                text,
-                                isMe,
-                                isDarkMode,
-                                messageData['isDeleted'] == true,
-                              ),
-                            ),
-                        ],
+                          ),
+                        ),
                       ),
                     ),
                     // Timestamp and read status - outside the bubble
                     Padding(
-                      padding: const EdgeInsets.only(left: 4, right: 4, top: 4),
+                      padding: EdgeInsets.only(
+                        left: 4,
+                        right: 4,
+                        top: replyToId != null ? 4 : 1,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -4983,8 +5045,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             _memberNames[replyData['senderId']] ?? 'Unknown';
 
         return Container(
-          margin: const EdgeInsets.only(left: 5, right: 5, top: 5, bottom: 0),
-          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(left: 2, right: 5, top: 2, bottom: 0),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: (isMe ? Colors.white : Theme.of(context).primaryColor)
                 .withValues(alpha: 0.15),

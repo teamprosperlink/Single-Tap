@@ -1577,263 +1577,252 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             );
           },
           child: Padding(
-            padding: EdgeInsets.only(
-              bottom: 6,
-              left: isMe ? 60 : 0,
-              right: isMe ? 0 : 60,
-            ),
+            padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
             child: Row(
               mainAxisAlignment: isMe
                   ? MainAxisAlignment.end
                   : MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (!isMe && showAvatar)
-                  Container(
-                    margin: const EdgeInsets.only(right: 8, bottom: 2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        width: 2,
-                      ),
-                      // boxShadow: [
-                      //   BoxShadow(
-                      //     color: Colors.black.withValues(alpha: 0.15),
-                      //     blurRadius: 8,
-                      //     offset: const Offset(0, 2),
-                      //   ),
-                      // ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: AppColors.iosBlue.withValues(
-                        alpha: 0.15,
-                      ),
-                      backgroundImage:
-                          PhotoUrlHelper.isValidUrl(
-                            widget.otherUser.profileImageUrl,
-                          )
-                          ? CachedNetworkImageProvider(
-                              widget.otherUser.profileImageUrl!,
-                            )
-                          : null,
-                      child:
-                          !PhotoUrlHelper.isValidUrl(
-                            widget.otherUser.profileImageUrl,
-                          )
-                          ? Text(
-                              widget.otherUser.name.isNotEmpty
-                                  ? widget.otherUser.name[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.iosBlue,
-                              ),
-                            )
-                          : null,
-                    ),
-                  )
-                else if (!isMe)
-                  const SizedBox(width: 40),
                 Flexible(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: isMe
                         ? CrossAxisAlignment.end
                         : CrossAxisAlignment.start,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.5,
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              horizontal:
-                                  (message.type == MessageType.image ||
-                                      message.type == MessageType.video)
-                                  ? 4
-                                  : (message.replyToMessageId != null ? 6 : 4),
-                              vertical:
-                                  (message.type == MessageType.image ||
-                                      message.type == MessageType.video)
-                                  ? 4
-                                  : (message.replyToMessageId != null ? 4 : 2),
-                            ),
-                            decoration: BoxDecoration(
-                              gradient:
-                                  isMe &&
-                                      message.type != MessageType.audio &&
-                                      message.type != MessageType.video &&
-                                      message.type != MessageType.image
-                                  ? LinearGradient(
-                                      colors:
-                                          chatThemeColors[_selectedTheme] ??
-                                          chatThemeColors['default']!,
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    )
-                                  : null,
-                              color:
-                                  !isMe &&
-                                      message.type != MessageType.audio &&
-                                      message.type != MessageType.video &&
-                                      message.type != MessageType.image
-                                  ? (isDarkMode
-                                        ? const Color.fromARGB(255, 32, 32, 32)
-                                        : Colors.grey[200])
-                                  : null, // Grey for received text only, not audio/video/image
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(12),
-                                topRight: const Radius.circular(12),
-                                bottomLeft: Radius.circular(isMe ? 12 : 5),
-                                bottomRight: Radius.circular(isMe ? 5 : 12),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: isMe
-                                  ? CrossAxisAlignment.start
-                                  : CrossAxisAlignment.start,
-                              children: [
-                                // Reply bubble inside message card (card within card) - always on left
-                                if (message.replyToMessageId != null) ...[
-                                  _buildReplyBubble(
-                                    message.replyToMessageId!,
-                                    isMe,
-                                    isDarkMode,
+                      IntrinsicWidth(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.5,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      (message.type == MessageType.image ||
+                                          message.type == MessageType.video)
+                                      ? 4
+                                      : (message.replyToMessageId != null
+                                            ? 6
+                                            : 4),
+                                  vertical:
+                                      (message.type == MessageType.image ||
+                                          message.type == MessageType.video)
+                                      ? 4
+                                      : (message.replyToMessageId != null
+                                            ? 4
+                                            : 2),
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient:
+                                      isMe &&
+                                          message.type != MessageType.audio &&
+                                          message.type != MessageType.video &&
+                                          message.type != MessageType.image
+                                      ? LinearGradient(
+                                          colors:
+                                              chatThemeColors[_selectedTheme] ??
+                                              chatThemeColors['default']!,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : null,
+                                  color:
+                                      !isMe &&
+                                          message.type != MessageType.audio &&
+                                          message.type != MessageType.video &&
+                                          message.type != MessageType.image
+                                      ? (isDarkMode
+                                            ? const Color.fromARGB(
+                                                255,
+                                                32,
+                                                32,
+                                                32,
+                                              )
+                                            : Colors.grey[200])
+                                      : null, // Grey for received text only, not audio/video/image
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(12),
+                                    topRight: const Radius.circular(12),
+                                    bottomLeft: Radius.circular(isMe ? 12 : 5),
+                                    bottomRight: Radius.circular(isMe ? 5 : 12),
                                   ),
-                                  SizedBox(height: 5),
-                                ],
-                                if (message.type == MessageType.image &&
-                                    (message.mediaUrl != null ||
-                                        message.localPath != null))
-                                  _buildImageMessage(message, isMe, isDarkMode),
-                                // Video message player UI
-                                if (message.type == MessageType.video &&
-                                    message.mediaUrl != null)
-                                  _buildVideoMessagePlayer(
-                                    message,
-                                    isMe,
-                                    isDarkMode,
-                                  ),
-                                // Audio message player UI with time/status below
-                                if (message.type == MessageType.audio &&
-                                    message.audioUrl != null)
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _buildAudioMessagePlayer(
-                                        message,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: isMe
+                                      ? CrossAxisAlignment.start
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    // Reply bubble inside message card (card within card) - always on left
+                                    if (message.replyToMessageId != null) ...[
+                                      _buildReplyBubble(
+                                        message.replyToMessageId!,
                                         isMe,
-                                        isDarkMode: isDarkMode,
+                                        isDarkMode,
                                       ),
-                                      // Time and status below audio player (always show time, hide ticks when sending)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 4,
+                                      Container(
+                                        margin: const EdgeInsets.only(
                                           top: 4,
+                                          bottom: 4,
                                         ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (message.isEdited == true) ...[
-                                              Text(
-                                                'edited ',
-                                                style: TextStyle(
-                                                  color: isMe
-                                                      ? Colors.white.withValues(
-                                                          alpha: 0.55,
-                                                        )
-                                                      : (isDarkMode
-                                                            ? Colors.grey[500]
-                                                            : Colors.grey[600]),
-                                                  fontSize: 11,
-                                                  fontStyle: FontStyle.italic,
-                                                ),
-                                              ),
-                                            ],
-                                            // Time (always show)
-                                            Text(
-                                              _formatMessageTime(
-                                                message.timestamp,
-                                              ),
-                                              style: TextStyle(
-                                                color: isMe
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.55,
-                                                      )
-                                                    : (isDarkMode
-                                                          ? Colors.grey[500]
-                                                          : Colors.grey[600]),
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                            // Status tick (only for my messages, hide when sending)
-                                            if (isMe &&
-                                                message.status !=
-                                                    MessageStatus.sending &&
-                                                message.audioUrl != null &&
-                                                message
-                                                    .audioUrl!
-                                                    .isNotEmpty) ...[
-                                              const SizedBox(width: 4),
-                                              _buildMessageStatusIcon(
-                                                message.status,
-                                                isMe,
-                                              ),
-                                            ],
-                                          ],
-                                        ),
+                                        height: 1,
+                                        color:
+                                            (isMe
+                                                    ? Colors.white
+                                                    : Theme.of(
+                                                        context,
+                                                      ).primaryColor)
+                                                .withValues(alpha: 0.2),
                                       ),
                                     ],
-                                  ),
-                                if (message.text != null &&
-                                    message.text!.isNotEmpty)
-                                  Padding(
-                                    padding:
-                                        (message.type == MessageType.image ||
-                                            message.type == MessageType.video)
-                                        ? const EdgeInsets.only(
-                                            left: 10,
-                                            right: 10,
-                                            top: 8,
-                                            bottom: 4,
-                                          )
-                                        : EdgeInsets.all(
-                                            message.replyToMessageId != null
-                                                ? 0
-                                                : 10,
-                                          ),
-                                    child:
-                                        searchQuery != null &&
-                                            searchQuery.isNotEmpty
-                                        ? _buildHighlightedText(
-                                            message.text!,
-                                            searchQuery,
-                                            TextStyle(
-                                              color: isMe
-                                                  ? Colors.white
-                                                  : (isDarkMode
-                                                        ? Colors.white
-                                                        : AppColors
-                                                              .iosGrayDark),
-                                              fontSize: 16,
-                                              height: 1.35,
-                                              letterSpacing: -0.2,
-                                            ),
-                                          )
-                                        : _buildTextWithMentions(
-                                            message.text!,
+                                    if (message.type == MessageType.image &&
+                                        (message.mediaUrl != null ||
+                                            message.localPath != null))
+                                      _buildImageMessage(
+                                        message,
+                                        isMe,
+                                        isDarkMode,
+                                      ),
+                                    // Video message player UI
+                                    if (message.type == MessageType.video &&
+                                        message.mediaUrl != null)
+                                      _buildVideoMessagePlayer(
+                                        message,
+                                        isMe,
+                                        isDarkMode,
+                                      ),
+                                    // Audio message player UI with time/status below
+                                    if (message.type == MessageType.audio &&
+                                        message.audioUrl != null)
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          _buildAudioMessagePlayer(
+                                            message,
                                             isMe,
-                                            isDarkMode,
-                                            false, // isDeleted is already handled separately
+                                            isDarkMode: isDarkMode,
                                           ),
-                                  ),
-                              ],
+                                          // Time and status below audio player (always show time, hide ticks when sending)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 4,
+                                              top: 4,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (message.isEdited ==
+                                                    true) ...[
+                                                  Text(
+                                                    'edited ',
+                                                    style: TextStyle(
+                                                      color: isMe
+                                                          ? Colors.white
+                                                                .withValues(
+                                                                  alpha: 0.55,
+                                                                )
+                                                          : (isDarkMode
+                                                                ? Colors
+                                                                      .grey[500]
+                                                                : Colors
+                                                                      .grey[600]),
+                                                      fontSize: 11,
+                                                      fontStyle:
+                                                          FontStyle.italic,
+                                                    ),
+                                                  ),
+                                                ],
+                                                // Time (always show)
+                                                Text(
+                                                  _formatMessageTime(
+                                                    message.timestamp,
+                                                  ),
+                                                  style: TextStyle(
+                                                    color: isMe
+                                                        ? Colors.white
+                                                              .withValues(
+                                                                alpha: 0.55,
+                                                              )
+                                                        : (isDarkMode
+                                                              ? Colors.grey[500]
+                                                              : Colors
+                                                                    .grey[600]),
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                // Status tick (only for my messages, hide when sending)
+                                                if (isMe &&
+                                                    message.status !=
+                                                        MessageStatus.sending &&
+                                                    message.audioUrl != null &&
+                                                    message
+                                                        .audioUrl!
+                                                        .isNotEmpty) ...[
+                                                  const SizedBox(width: 4),
+                                                  _buildMessageStatusIcon(
+                                                    message.status,
+                                                    isMe,
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    if (message.text != null &&
+                                        message.text!.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            (message.type ==
+                                                    MessageType.image ||
+                                                message.type ==
+                                                    MessageType.video)
+                                            ? const EdgeInsets.only(
+                                                left: 10,
+                                                right: 10,
+                                                top: 8,
+                                                bottom: 4,
+                                              )
+                                            : const EdgeInsets.only(
+                                                left: 5,
+                                                right: 5,
+                                                top: 3,
+                                                bottom: 5,
+                                              ),
+                                        child:
+                                            searchQuery != null &&
+                                                searchQuery.isNotEmpty
+                                            ? _buildHighlightedText(
+                                                message.text!,
+                                                searchQuery,
+                                                TextStyle(
+                                                  color: isMe
+                                                      ? Colors.white
+                                                      : (isDarkMode
+                                                            ? Colors.white
+                                                            : AppColors
+                                                                  .iosGrayDark),
+                                                  fontSize: 16,
+                                                  height: 1.35,
+                                                  letterSpacing: -0.2,
+                                                ),
+                                              )
+                                            : _buildTextWithMentions(
+                                                message.text!,
+                                                isMe,
+                                                isDarkMode,
+                                                false, // isDeleted is already handled separately
+                                              ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -5664,49 +5653,52 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           ),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Stack(
-          children: [
-            // Video thumbnail or placeholder
-            Container(
-              width: 200,
-              height: 150,
-              color: Colors.black,
-              child: const Icon(
-                Icons.play_circle_outline,
-                size: 64,
-                color: Colors.white,
-              ),
-            ),
-            // Upload overlay
-            if (isOptimistic)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.orange,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Uploading...',
-                        style: TextStyle(
-                          color: Colors.orange,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Stack(
+            children: [
+              // Video thumbnail or placeholder
+              Container(
+                width: 200,
+                height: 150,
+                color: Colors.black,
+                child: const Icon(
+                  Icons.play_circle_outline,
+                  size: 64,
+                  color: Colors.white,
                 ),
               ),
-          ],
+              // Upload overlay
+              if (isOptimistic)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.orange,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Uploading...',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
