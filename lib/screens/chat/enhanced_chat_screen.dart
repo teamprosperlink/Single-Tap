@@ -1644,21 +1644,24 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         : CrossAxisAlignment.start,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(1),
+                        borderRadius: BorderRadius.circular(10),
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                           child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.5,
+                            ),
                             padding: EdgeInsets.symmetric(
                               horizontal:
                                   (message.type == MessageType.image ||
                                       message.type == MessageType.video)
                                   ? 4
-                                  : 12,
+                                  : (message.replyToMessageId != null ? 6 : 4),
                               vertical:
                                   (message.type == MessageType.image ||
                                       message.type == MessageType.video)
                                   ? 4
-                                  : 8,
+                                  : (message.replyToMessageId != null ? 4 : 2),
                             ),
                             decoration: BoxDecoration(
                               gradient:
@@ -1680,14 +1683,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                       message.type != MessageType.video &&
                                       message.type != MessageType.image
                                   ? (isDarkMode
-                                        ? const Color.fromARGB(255, 46, 44, 44)
-                                        : const Color.fromARGB(255, 68, 65, 65))
-                                  : null, // Dark grey for received text only, not audio/video/image
+                                        ? const Color.fromARGB(255, 32, 32, 32)
+                                        : Colors.grey[200])
+                                  : null, // Grey for received text only, not audio/video/image
                               borderRadius: BorderRadius.only(
                                 topLeft: const Radius.circular(12),
                                 topRight: const Radius.circular(12),
-                                bottomLeft: Radius.circular(isMe ? 12 : 1),
-                                bottomRight: Radius.circular(isMe ? 1 : 12),
+                                bottomLeft: Radius.circular(isMe ? 12 : 5),
+                                bottomRight: Radius.circular(isMe ? 5 : 12),
                               ),
                             ),
                             child: Column(
@@ -1696,13 +1699,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                   : CrossAxisAlignment.start,
                               children: [
                                 // Reply bubble inside message card (card within card) - always on left
-                                if (message.replyToMessageId != null)
+                                if (message.replyToMessageId != null) ...[
                                   _buildReplyBubble(
                                     message.replyToMessageId!,
                                     isMe,
                                     isDarkMode,
                                   ),
-                                SizedBox(height: 5),
+                                  SizedBox(height: 5),
+                                ],
                                 if (message.type == MessageType.image &&
                                     (message.mediaUrl != null ||
                                         message.localPath != null))
@@ -1799,7 +1803,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                             top: 8,
                                             bottom: 4,
                                           )
-                                        : EdgeInsets.zero,
+                                        : EdgeInsets.all(
+                                            message.replyToMessageId != null
+                                                ? 0
+                                                : 10,
+                                          ),
                                     child:
                                         searchQuery != null &&
                                             searchQuery.isNotEmpty
@@ -1833,8 +1841,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       // Time and status row outside card (skip for audio - it has its own)
                       if (message.type != MessageType.audio)
                         Padding(
-                          padding: const EdgeInsets.only(
-                            top: 2,
+                          padding: EdgeInsets.only(
+                            top: message.replyToMessageId != null ? 4 : 1,
                             left: 4,
                             right: 4,
                           ),
@@ -2390,8 +2398,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             : widget.otherUser.name;
 
         return Container(
-          margin: const EdgeInsets.only(left: 5, right: 5, top: 5, bottom: 0),
-          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(left: 2, right: 5, top: 2, bottom: 0),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: (isMe ? Colors.white : Theme.of(context).primaryColor)
                 .withValues(alpha: 0.15),
@@ -7160,6 +7168,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       showBlur: false,
       decoration: const BoxDecoration(),
       contentPadding: EdgeInsets.zero,
+      textAlign: TextAlign.center,
       onChanged: (value) {
         _performSearch(value);
       },

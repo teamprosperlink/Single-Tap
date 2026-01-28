@@ -95,6 +95,9 @@ class GlassTextField extends StatelessWidget {
   /// Custom decoration for the container
   final BoxDecoration? decoration;
 
+  /// Text alignment (default: TextAlign.start)
+  final TextAlign? textAlign;
+
   const GlassTextField({
     super.key,
     this.controller,
@@ -124,6 +127,7 @@ class GlassTextField extends StatelessWidget {
     this.backgroundAlpha = 0.15,
     this.showBlur = true,
     this.decoration,
+    this.textAlign,
   });
 
   /// Factory constructor for search field variant
@@ -229,6 +233,7 @@ class GlassTextField extends StatelessWidget {
       focusNode: focusNode,
       autofocus: autofocus,
       maxLength: maxLength,
+      textAlign: textAlign ?? TextAlign.start,
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: hintStyle ??
