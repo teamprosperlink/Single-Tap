@@ -34,8 +34,7 @@ class GroupAudioCallScreen extends StatefulWidget {
   State<GroupAudioCallScreen> createState() => _GroupAudioCallScreenState();
 }
 
-class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
-    with SingleTickerProviderStateMixin {
+class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GroupVoiceCallService _groupVoiceCallService = GroupVoiceCallService();
 
@@ -50,9 +49,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
   bool _isEndingCall = false;
   bool _isMinimizing = false; // Track if minimizing (not ending) the call
 
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
   // Track participant info: participantId -> {name, photoUrl, isActive, isMuted, joinedAt}
   final Map<String, Map<String, dynamic>> _participantInfo = {};
   StreamSubscription? _participantsSubscription;
@@ -61,16 +57,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
   void initState() {
     super.initState();
     debugPrint('  GroupAudioCallScreen: initState - callId=${widget.callId}');
-
-    // Initialize pulse animation
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
 
     // Initialize call start time
     _callStartTime = DateTime.now();
@@ -98,7 +84,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         // Duplicate userId found - skip it
         duplicateCount++;
         debugPrint(
-          '⚠️ Skipping duplicate participant: $userId (${participant['name']})',
+          '  Skipping duplicate participant: $userId (${participant['name']})',
         );
       }
     }
@@ -284,7 +270,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     _callTimer?.cancel();
     _missedCallTimer?.cancel();
     _participantsSubscription?.cancel();
-    _pulseController.dispose();
 
     // Clean up WebRTC - but only if NOT minimizing
     // When minimizing, we want to keep the call running in background
@@ -595,7 +580,23 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
       try {
         // Update participant status to false (leave the call)
         await _updateParticipantStatus(false);
-        debugPrint('🔴 Background: Participant status updated');
+        debugPrint(' Background: Participant status updated');
+
+        // Safety check: if no active participants remain, mark call as ended
+        try {
+          final activeSnapshot = await _firestore
+              .collection('group_calls')
+              .doc(widget.callId)
+              .collection('participants')
+              .where('isActive', isEqualTo: true)
+              .get();
+          if (activeSnapshot.docs.isEmpty) {
+            await _updateCallStatus('ended');
+            debugPrint(' Background: No active participants - call marked as ENDED');
+          }
+        } catch (e) {
+          debugPrint(' Background: Error checking active participants: $e');
+        }
 
         // Update system message with call duration and participant count
         final callDoc = await _firestore
@@ -607,15 +608,31 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
           final systemMessageId = callData?['systemMessageId'] as String?;
           final groupId = callData?['groupId'] as String?;
 
-          // Count OTHER participants who joined (exclude current user)
-          final activeParticipantCount = _participantInfo.entries
+          // Get ALL participants who joined (including current user)
+          final joinedParticipantIds = _participantInfo.entries
               .where(
                 (entry) =>
-                    entry.key != widget.userId &&
-                    (entry.value['isActive'] == true ||
-                        entry.value['wasActive'] == true),
+                    entry.value['isActive'] == true ||
+                    entry.value['wasActive'] == true,
               )
+              .map((entry) => entry.key)
+              .toList();
+
+          // Count OTHER participants who joined (exclude current user for message)
+          final activeParticipantCount = joinedParticipantIds
+              .where((id) => id != widget.userId)
               .length;
+
+          // Save joined participants info to the group_calls document
+          await _firestore
+              .collection('group_calls')
+              .doc(widget.callId)
+              .update({
+                'joinedParticipants': joinedParticipantIds,
+                'joinedCount': joinedParticipantIds.length,
+                'totalMembers': _participantInfo.length,
+              });
+          debugPrint(' Background: Saved joinedParticipants: $joinedParticipantIds');
 
           if (systemMessageId != null && groupId != null) {
             // Update the system message with call details
@@ -631,11 +648,11 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
                       ? 'Voice call • ${_formatDuration(_callDuration)} • $activeParticipantCount joined'
                       : 'Missed call',
                 });
-            debugPrint('🔴 Background: System message updated');
+            debugPrint(' Background: System message updated');
           }
         }
       } catch (e) {
-        debugPrint('🔴 Background: Error updating Firestore: $e');
+        debugPrint(' Background: Error updating Firestore: $e');
       }
     });
   }
@@ -653,77 +670,87 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
   }
 
   Future<void> _endCall() async {
-    debugPrint('🔴 _endCall: Method called, _isEndingCall=$_isEndingCall');
+    debugPrint(' _endCall: Method called, _isEndingCall=$_isEndingCall');
 
     // Double-check guard for rapid clicks
     if (_isEndingCall) {
-      debugPrint('🔴 _endCall: Already ending, ignoring duplicate call');
+      debugPrint(' _endCall: Already ending, ignoring duplicate call');
       return;
     }
 
     // Set flag immediately to block rapid clicks
     _isEndingCall = true;
-    debugPrint('🔴 _endCall: Flag set to true');
+    debugPrint(' _endCall: Flag set to true');
 
     // CRITICAL: Cancel participant listener FIRST to prevent interference
     _participantsSubscription?.cancel();
     _participantsSubscription = null;
-    debugPrint('🔴 _endCall: Participant listener cancelled');
+    debugPrint(' _endCall: Participant listener cancelled');
 
     // Cancel timers
     _callTimer?.cancel();
     _missedCallTimer?.cancel();
-    debugPrint('🔴 _endCall: Timers cancelled');
+    debugPrint(' _endCall: Timers cancelled');
 
     // Hide floating overlay if showing
     if (FloatingCallService().isShowing) {
       FloatingCallService().hide();
-      debugPrint('🔴 _endCall: Floating overlay hidden');
+      debugPrint(' _endCall: Floating overlay hidden');
     }
 
     try {
-      debugPrint('🔴 _endCall: Starting WebRTC cleanup...');
+      debugPrint(' _endCall: Starting WebRTC cleanup...');
       // Leave WebRTC call
       await _groupVoiceCallService.leaveCall();
-      debugPrint('🔴 _endCall: WebRTC call left');
+      debugPrint(' _endCall: WebRTC call left');
 
-      // Check if anyone else is currently active
-      final othersActive = _participantInfo.entries
-          .where((entry) =>
-              entry.key != widget.userId &&
-              entry.value['isActive'] == true)
-          .isNotEmpty;
+      // Query Firestore directly for active participants (not stale local data)
+      // This is critical when called from floating overlay after screen is disposed
+      bool othersActive = false;
+      try {
+        final activeSnapshot = await _firestore
+            .collection('group_calls')
+            .doc(widget.callId)
+            .collection('participants')
+            .where('isActive', isEqualTo: true)
+            .get();
+        othersActive = activeSnapshot.docs
+            .where((doc) => doc.id != widget.userId)
+            .isNotEmpty;
+      } catch (e) {
+        debugPrint(' _endCall: Error querying active participants: $e');
+      }
 
-      debugPrint('🔴 _endCall: othersActive=$othersActive, callDuration=$_callDuration');
+      debugPrint(' _endCall: othersActive=$othersActive, callDuration=$_callDuration');
 
       // Always mark call as ended if no one else is active
       // This ensures the banner disappears when caller leaves
       if (!othersActive) {
-        debugPrint('🔴 _endCall: No others active - marking call as ENDED');
+        debugPrint(' _endCall: No others active - marking call as ENDED');
         try {
           await _updateCallStatus('ended');
-          debugPrint('🔴 _endCall: ✅ Status updated to ENDED');
+          debugPrint(' _endCall:   Status updated to ENDED');
         } catch (e) {
-          debugPrint('🔴 _endCall: ❌ Error updating status: $e');
+          debugPrint(' _endCall:   Error updating status: $e');
         }
       } else {
-        debugPrint('🔴 _endCall: Others still active - keeping call active');
+        debugPrint(' _endCall: Others still active - keeping call active');
       }
 
       // Update Firestore in background (non-blocking)
       _updateFirestoreInBackground();
 
     } catch (e) {
-      debugPrint('🔴 _endCall: ERROR - $e');
+      debugPrint(' _endCall: ERROR - $e');
     }
 
     // Navigate back immediately (don't wait for Firestore)
-    debugPrint('🔴 _endCall: Navigating back...');
+    debugPrint(' _endCall: Navigating back...');
     if (mounted) {
       Navigator.pop(context);
-      debugPrint('🔴 _endCall: ✅ Navigation completed');
+      debugPrint(' _endCall:   Navigation completed');
     } else {
-      debugPrint('  _endCall: ⚠️ Not mounted, skipping navigation');
+      debugPrint('  _endCall:   Not mounted, skipping navigation');
     }
   }
 
@@ -782,6 +809,15 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         await _endCall();
       },
     );
+
+    // If no one has joined yet, continue the 39-sec missed call timer in floating overlay
+    if (_callDuration == 0) {
+      final remainingSeconds = 39 - _callWaitTime;
+      if (remainingSeconds > 0) {
+        FloatingCallService().startAutoEndTimer(remainingSeconds);
+        debugPrint('GroupAudioCallScreen: Auto-end timer transferred to floating overlay ($remainingSeconds sec)');
+      }
+    }
 
     // Pop this screen (but call continues in background)
     if (mounted) {
@@ -890,10 +926,37 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
           SafeArea(
             child: Column(
               children: [
-                // Header
+                // Header (buttons only)
                 _buildHeader(),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
+
+                // Profile circle
+                _buildCurrentUserProfile(),
+
+                const SizedBox(height: 16),
+
+                // Group name
+                Text(
+                  widget.groupName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_participantInfo.length} ${_participantInfo.length == 1 ? 'participant' : 'participants'}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
 
                 // Call duration - only show when someone has joined
                 if (activeParticipants.isNotEmpty)
@@ -915,12 +978,12 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
                     style: const TextStyle(color: Colors.white54, fontSize: 14),
                   ),
 
-                const Spacer(),
+                const SizedBox(height: 16),
 
                 // Participants grid
                 _buildParticipantsGrid(activeParticipants),
 
-                const Spacer(),
+                const Spacer(flex: 3),
 
                 // Controls
                 _buildControls(),
@@ -963,40 +1026,8 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
             ),
           ),
 
-          // Center: Group Name & Info
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.groupName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${_participantInfo.length} ${_participantInfo.length == 1 ? 'participant' : 'participants'}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 6),
-              // Call date/time/day
-              Text(
-                _formatCallDateTime(_callStartTime),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
+          // Center: empty spacer to keep Stack height for buttons
+          const SizedBox(height: 40),
 
           // Right: Add participant button
           Align(
@@ -1020,6 +1051,48 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentUserProfile() {
+    final currentUserPhoto =
+        _participantInfo[widget.userId]?['photoUrl'] as String?;
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade400, Colors.blue.shade600],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.3),
+            blurRadius: 20,
+            spreadRadius: 5,
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: currentUserPhoto != null && currentUserPhoto.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: currentUserPhoto,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => const Icon(
+                  Icons.person,
+                  size: 40,
+                  color: Colors.white,
+                ),
+                errorWidget: (context, url, error) => const Icon(
+                  Icons.person,
+                  size: 40,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.person, size: 40, color: Colors.white),
       ),
     );
   }
@@ -1291,7 +1364,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Re-called ${memberName}'),
+            content: Text('Re-called $memberName'),
             backgroundColor: const Color(0xFF25D366),
             duration: const Duration(seconds: 2),
           ),
@@ -1341,25 +1414,12 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
 
     // Show waiting message when no one has joined yet
     if (connectedParticipants.isEmpty) {
-      return SingleChildScrollView(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.people_outline_rounded,
-                size: 64,
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Waiting for others to join...',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 16,
-                ),
-              ),
-            ],
+      return Center(
+        child: Text(
+          'Waiting for others to join...',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.6),
+            fontSize: 16,
           ),
         ),
       );
@@ -1446,7 +1506,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
     }
 
     // Size adjustments based on isLarge flag
-    final avatarSize = isLarge ? 100.0 : 60.0;
+    final avatarSize = isLarge ? 80.0 : 50.0;
     final avatarBorderWidth = isLarge ? 3.0 : 2.5;
     final namefontSize = isLarge ? 16.0 : 12.0;
     final statusFontSize = isLarge ? 11.0 : 9.0;
@@ -1483,10 +1543,8 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Profile picture with pulse/waveform animation
-            ScaleTransition(
-              scale: _pulseAnimation,
-              child: Container(
+            // Profile picture
+            Container(
                 width: avatarSize,
                 height: avatarSize,
                 decoration: BoxDecoration(
@@ -1597,7 +1655,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen>
                   ],
                 ),
               ),
-            ),
 
             const SizedBox(height: 12),
 

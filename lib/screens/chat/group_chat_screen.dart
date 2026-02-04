@@ -27,6 +27,7 @@ import '../../providers/other providers/app_providers.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../call/group_audio_call_screen.dart';
+import '../../services/floating_call_service.dart';
 import 'group_info_screen.dart';
 import 'video_player_screen.dart';
 
@@ -107,10 +108,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   // Scroll button
   bool _showScrollButton = false;
-
-  // Track app state without triggering rebuilds (CallKit should not refresh chat)
-  bool _isAppInBackground = false;
-  bool _isCallKitVisible = false;
 
   // Call state - prevent multiple simultaneous call operations
   bool _isStartingCall = false;
@@ -242,18 +239,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Do NOT call setState to prevent rebuilds when CallKit appears
-    // Just track state silently
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      _isAppInBackground = true;
-      _isCallKitVisible = true;
       // Clear typing status without rebuilding UI
       _groupChatService.clearTypingStatus(widget.groupId);
-    } else if (state == AppLifecycleState.resumed) {
-      // Reset state without rebuilding
-      _isAppInBackground = false;
-      _isCallKitVisible = false;
     }
   }
 
@@ -2975,6 +2964,36 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
         final callData = activeCallDoc.data() as Map<String, dynamic>;
         final callId = activeCallDoc.id;
+
+        // Hide banner if user already has this call in floating overlay
+        final floatingService = FloatingCallService();
+        if (floatingService.isShowing && floatingService.callId == callId) {
+          return const SizedBox.shrink();
+        }
+
+        // Safety net: auto-end stale calls older than 39 sec with no active participants
+        final createdAt = callData['createdAt'] as Timestamp?;
+        if (createdAt != null) {
+          final callAge = DateTime.now().difference(createdAt.toDate()).inSeconds;
+          if (callAge > 45) {
+            // Check if any participants are active before auto-ending
+            activeCallDoc.reference
+                .collection('participants')
+                .where('isActive', isEqualTo: true)
+                .get()
+                .then((snap) {
+              if (snap.docs.isEmpty) {
+                debugPrint('Safety net: Auto-ending stale call $callId (age: ${callAge}s, no active participants)');
+                _firestore.collection('group_calls').doc(callId).update({
+                  'status': 'ended',
+                  'endedAt': FieldValue.serverTimestamp(),
+                });
+              }
+            }).catchError((e) {
+              debugPrint('Safety net: Error checking stale call: $e');
+            });
+          }
+        }
 
         return StreamBuilder<QuerySnapshot>(
           stream: activeCallDoc.reference

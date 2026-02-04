@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Service to manage floating call overlay (WhatsApp-style PiP)
 class FloatingCallService {
@@ -8,14 +10,12 @@ class FloatingCallService {
 
   OverlayEntry? _overlayEntry;
   bool _isShowing = false;
+  Timer? _autoEndTimer;
+  VoidCallback? _onEndCall;
 
   // Call info
   String? _callId;
-  String? _groupId;
   String? _userId;
-  String? _groupName;
-  int _callDuration = 0;
-  List<String> _participantNames = [];
 
   bool get isShowing => _isShowing;
   String? get callId => _callId;
@@ -37,11 +37,8 @@ class FloatingCallService {
     }
 
     _callId = callId;
-    _groupId = groupId;
     _userId = userId;
-    _groupName = groupName;
-    _participantNames = participantNames;
-    _callDuration = 0;
+    _onEndCall = onEndCall;
 
     _overlayEntry = OverlayEntry(
       builder: (context) => FloatingCallWidget(
@@ -54,9 +51,6 @@ class FloatingCallService {
           hide();
           onEndCall();
         },
-        onDurationUpdate: (duration) {
-          _callDuration = duration;
-        },
       ),
     );
 
@@ -65,29 +59,63 @@ class FloatingCallService {
     debugPrint('FloatingCallService: Overlay shown for call $callId');
   }
 
-  /// Update call duration
-  void updateDuration(int duration) {
-    _callDuration = duration;
+  /// Start auto-end timer for missed calls (no one joins within timeout)
+  void startAutoEndTimer(int remainingSeconds) {
+    _autoEndTimer?.cancel();
+    if (remainingSeconds <= 0) remainingSeconds = 1;
+
+    debugPrint('FloatingCallService: Auto-end timer started ($remainingSeconds sec remaining)');
+
+    _autoEndTimer = Timer(Duration(seconds: remainingSeconds), () async {
+      if (!_isShowing || _callId == null || _userId == null) return;
+
+      try {
+        // Query Firestore directly for active participants
+        final activeSnapshot = await FirebaseFirestore.instance
+            .collection('group_calls')
+            .doc(_callId)
+            .collection('participants')
+            .where('isActive', isEqualTo: true)
+            .get();
+
+        final othersActive = activeSnapshot.docs
+            .where((doc) => doc.id != _userId)
+            .isNotEmpty;
+
+        if (!othersActive) {
+          debugPrint('FloatingCallService: Auto-end - no one joined, ending call');
+          // Trigger end call (which hides overlay + cleans up WebRTC + updates Firestore)
+          final endCall = _onEndCall;
+          hide();
+          endCall?.call();
+        } else {
+          debugPrint('FloatingCallService: Auto-end - someone joined, keeping call');
+        }
+      } catch (e) {
+        debugPrint('FloatingCallService: Auto-end timer error: $e');
+      }
+    });
   }
 
   /// Hide and remove overlay
   void hide() {
+    _autoEndTimer?.cancel();
+    _autoEndTimer = null;
     if (_overlayEntry != null) {
       _overlayEntry!.remove();
       _overlayEntry = null;
       _isShowing = false;
       _callId = null;
-      _groupId = null;
       _userId = null;
-      _groupName = null;
-      _participantNames = [];
-      _callDuration = 0;
+      _onEndCall = null;
       debugPrint('FloatingCallService: Overlay hidden');
     }
   }
 
   /// Dispose the service
   void dispose() {
+    _autoEndTimer?.cancel();
+    _autoEndTimer = null;
     hide();
   }
 }
@@ -100,7 +128,6 @@ class FloatingCallWidget extends StatefulWidget {
   final List<String> participantNames;
   final Function(BuildContext) onTap;
   final VoidCallback onEndCall;
-  final Function(int) onDurationUpdate;
 
   const FloatingCallWidget({
     super.key,
@@ -110,7 +137,6 @@ class FloatingCallWidget extends StatefulWidget {
     required this.participantNames,
     required this.onTap,
     required this.onEndCall,
-    required this.onDurationUpdate,
   });
 
   @override
@@ -132,7 +158,6 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         setState(() {
           _duration++;
         });
-        widget.onDurationUpdate(_duration);
         _startTimer();
       }
     });

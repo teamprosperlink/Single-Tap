@@ -35,6 +35,7 @@ import '../../services/active_chat_service.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../call/voice_call_screen.dart';
 // import '../call/video_call_screen.dart'; // Video calling disabled
+import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat_common.dart';
 import '../home/main_navigation_screen.dart';
@@ -6326,22 +6327,49 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           .collection('calls')
           .where('participants', arrayContains: _currentUserId)
           .where('status', whereIn: ['calling', 'ringing', 'connected'])
-          .limit(1)
+          .limit(5)
           .get();
 
       if (activeCallsQuery.docs.isNotEmpty) {
-        // User already has an active call
-        debugPrint('  User already has an active call, cannot start new call');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You already have an active call'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-          setState(() => _isStartingCall = false);
+        bool hasGenuinelyActiveCall = false;
+
+        for (final activeDoc in activeCallsQuery.docs) {
+          final activeData = activeDoc.data();
+          final activeStatus = activeData['status'] as String?;
+          final timestamp = activeData['timestamp'] as Timestamp?;
+          final callAge = timestamp != null
+              ? DateTime.now().difference(timestamp.toDate()).inSeconds
+              : 9999;
+
+          // Stale thresholds: calling/ringing > 60s, connected > 2min
+          final isStale = (activeStatus == 'calling' || activeStatus == 'ringing')
+              ? callAge > 60
+              : callAge > 120; // connected
+
+          if (isStale) {
+            debugPrint('  Stale call detected (${callAge}s old, status=$activeStatus) - auto-cleaning ${activeDoc.id}');
+            await _firestore.collection('calls').doc(activeDoc.id).update({
+              'status': activeStatus == 'connected' ? 'ended' : 'missed',
+              'endedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            hasGenuinelyActiveCall = true;
+          }
         }
-        return;
+
+        if (hasGenuinelyActiveCall) {
+          debugPrint('  User already has a genuinely active call');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You already have an active call'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            setState(() => _isStartingCall = false);
+          }
+          return;
+        }
       }
     } catch (e) {
       debugPrint('Error checking active calls: $e');
@@ -6409,6 +6437,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     if (mounted) {
       setState(() => _isStartingCall = false);
+      // Skip if call was minimized (floating overlay still active)
+      final floatingService = FloatingCallService();
+      if (floatingService.isShowing && floatingService.callId == callDoc.id) {
+        debugPrint('EnhancedChatScreen: Call minimized, skipping status check');
+        return;
+      }
       _checkCallStatusAndAddMessage(callDoc.id, isVideo: false);
     }
   }

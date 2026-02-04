@@ -3,9 +3,12 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_profile.dart';
 import '../../widgets/floating_particles.dart';
 import '../../services/other services/voice_call_service.dart';
+import '../../services/floating_call_service.dart';
 
 class VoiceCallScreen extends StatefulWidget {
   final String callId;
@@ -23,13 +26,9 @@ class VoiceCallScreen extends StatefulWidget {
   State<VoiceCallScreen> createState() => _VoiceCallScreenState();
 }
 
-class _VoiceCallScreenState extends State<VoiceCallScreen>
-    with SingleTickerProviderStateMixin {
+class _VoiceCallScreenState extends State<VoiceCallScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final VoiceCallService _voiceCallService = VoiceCallService();
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
   String _callStatus = 'calling';
   Timer? _callTimer;
@@ -40,6 +39,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
   StreamSubscription? _callSubscription;
   bool _webrtcConnected = false;
   bool _isEndingCall = false; // Flag to prevent multiple end call clicks
+  bool _isMinimizing = false; // Track if minimizing (not ending) the call
 
   static const int _callTimeoutSeconds = 39; // Mark as missed after 39 seconds
 
@@ -49,9 +49,6 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
     debugPrint(
       '  VoiceCallScreen: initState - callId=${widget.callId}, isOutgoing=${widget.isOutgoing}, otherUser=${widget.otherUser.name} (${widget.otherUser.uid})',
     );
-
-    // Initialize animation synchronously - MUST happen before first build
-    _setupAnimation();
 
     // Use post-frame callback for async operations
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -173,17 +170,6 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
       debugPrint('  VoiceCallScreen: Error in _joinCall: $e');
       debugPrint('  VoiceCallScreen: Stack trace: $stackTrace');
     }
-  }
-
-  void _setupAnimation() {
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
   }
 
   void _listenToCallStatus() {
@@ -469,13 +455,100 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
       _callSubscription?.cancel();
       _callSubscription = null;
     } catch (_) {}
-    try {
-      _voiceCallService.leaveCall();
-    } catch (_) {}
-    try {
-      _pulseController.dispose();
-    } catch (_) {}
+    // Only leave WebRTC if NOT minimizing
+    if (!_isMinimizing) {
+      try {
+        _voiceCallService.leaveCall();
+      } catch (_) {}
+    } else {
+      debugPrint('VoiceCallScreen: Disposing - keeping call active (minimized)');
+    }
     super.dispose();
+  }
+
+  /// Minimize call to floating overlay
+  void _minimizeCall() {
+    debugPrint('VoiceCallScreen: Minimizing call...');
+    _isMinimizing = true;
+
+    final callId = widget.callId;
+    final otherUser = widget.otherUser;
+    final isOutgoing = widget.isOutgoing;
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    // Show floating overlay
+    FloatingCallService().showFloatingCall(
+      context: context,
+      callId: callId,
+      groupId: callId,
+      userId: currentUserId,
+      groupName: otherUser.name,
+      participantNames: [otherUser.name],
+      onTap: (overlayContext) {
+        debugPrint('FloatingCall: Tapped - expanding to full screen');
+        FloatingCallService().hide();
+        Navigator.push(
+          overlayContext,
+          MaterialPageRoute(
+            builder: (context) => VoiceCallScreen(
+              callId: callId,
+              otherUser: otherUser,
+              isOutgoing: isOutgoing,
+            ),
+          ),
+        );
+      },
+      onEndCall: () async {
+        debugPrint('FloatingCall: End call pressed (1-to-1)');
+        await _endCall();
+      },
+    );
+
+    // Listen for call status changes while minimized (auto-end if other person hangs up)
+    StreamSubscription? statusListener;
+    statusListener = FirebaseFirestore.instance
+        .collection('calls')
+        .doc(callId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!FloatingCallService().isShowing || FloatingCallService().callId != callId) {
+        statusListener?.cancel();
+        return;
+      }
+      final status = snapshot.data()?['status'] as String?;
+      if (status == 'ended' || status == 'missed' || status == 'declined') {
+        debugPrint('FloatingCall: Call $status by other user - auto-ending');
+        statusListener?.cancel();
+        FloatingCallService().hide();
+        _voiceCallService.leaveCall();
+      }
+    });
+
+    // If call not yet connected, start 39-sec missed call timer for 1-to-1 calls
+    if (_callStatus == 'calling' || _callStatus == 'ringing') {
+      Timer(const Duration(seconds: _callTimeoutSeconds), () async {
+        if (!FloatingCallService().isShowing || FloatingCallService().callId != callId) return;
+        try {
+          final doc = await FirebaseFirestore.instance.collection('calls').doc(callId).get();
+          final status = doc.data()?['status'] as String?;
+          if (status == 'calling' || status == 'ringing') {
+            debugPrint('FloatingCall: 39s timeout - marking 1-to-1 call as missed');
+            await FirebaseFirestore.instance.collection('calls').doc(callId).update({
+              'status': 'missed',
+              'missedAt': FieldValue.serverTimestamp(),
+            });
+            // Listener above will auto-hide overlay and leave call
+          }
+        } catch (e) {
+          debugPrint('FloatingCall: Timeout check error: $e');
+        }
+      });
+    }
+
+    if (mounted) {
+      Navigator.pop(context);
+    }
+    debugPrint('VoiceCallScreen: Call minimized to floating overlay');
   }
 
   @override
@@ -521,7 +594,32 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 60),
+                // Minimize button
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16, top: 8),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: Colors.white70,
+                          size: 24,
+                        ),
+                        onPressed: _minimizeCall,
+                        tooltip: 'Minimize',
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 _buildUserInfo(),
                 const SizedBox(height: 40),
                 _buildCallStatus(),
@@ -539,33 +637,43 @@ class _VoiceCallScreenState extends State<VoiceCallScreen>
   Widget _buildUserInfo() {
     return Column(
       children: [
-        AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _callStatus == 'calling' ? _pulseAnimation.value : 1.0,
-              child: Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withValues(alpha: 0.4),
-                      blurRadius: 30,
-                      spreadRadius: 10,
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.phone, size: 70, color: Colors.white),
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [Colors.blue.shade400, Colors.blue.shade600],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withValues(alpha: 0.3),
+                blurRadius: 20,
+                spreadRadius: 5,
               ),
-            );
-          },
+            ],
+          ),
+          child: ClipOval(
+            child: widget.otherUser.photoUrl != null &&
+                    widget.otherUser.photoUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: widget.otherUser.photoUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Colors.white,
+                    ),
+                    errorWidget: (context, url, error) => const Icon(
+                      Icons.person,
+                      size: 40,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.person, size: 40, color: Colors.white),
+          ),
         ),
         const SizedBox(height: 24),
         Text(

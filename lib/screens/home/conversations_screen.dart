@@ -1,11 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'dart:async';
-
 import '../../models/conversation_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
@@ -18,6 +17,7 @@ import '../chat/enhanced_chat_screen.dart';
 import '../chat/create_group_screen.dart';
 import '../chat/group_chat_screen.dart';
 import '../call/voice_call_screen.dart';
+import '../call/group_audio_call_screen.dart';
 import '../../services/notification_service.dart';
 
 class ConversationsScreen extends StatefulWidget {
@@ -49,6 +49,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   bool _isCallSelectionMode = false;
   final Set<String> _selectedCallIds = {};
 
+  // Call data from Firestore listeners (always active)
+  List<DocumentSnapshot> _individualCalls = [];
+  List<DocumentSnapshot> _groupCalls = [];
+  bool _callsLoading = true;
+  StreamSubscription? _individualCallsSub;
+  StreamSubscription? _groupCallsSub;
+
   // Conversation selection mode (for Chats and Groups tabs)
   bool _isConversationSelectionMode = false;
   final Set<String> _selectedConversationIds = {};
@@ -64,10 +71,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _currentTabIndex = _tabController.index;
       });
     });
+    _startCallsListeners();
   }
 
   @override
   void dispose() {
+    _individualCallsSub?.cancel();
+    _groupCallsSub?.cancel();
     try {
       _tabController.dispose();
     } catch (_) {}
@@ -76,6 +86,90 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     } catch (_) {}
     disposeVoiceSearch(); // From VoiceSearchMixin
     super.dispose();
+  }
+
+  void _startCallsListeners() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      debugPrint('CallsTab: currentUserId is null, skipping listeners');
+      return;
+    }
+
+    // Cancel existing listeners before creating new ones
+    _individualCallsSub?.cancel();
+    _groupCallsSub?.cancel();
+
+    debugPrint('CallsTab: Starting listeners for user $currentUserId');
+
+    _individualCallsSub = _firestore
+        .collection('calls')
+        .where('participants', arrayContains: currentUserId)
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .snapshots()
+        .listen((snapshot) {
+      debugPrint('CallsTab: Individual calls received: ${snapshot.docs.length}');
+      if (mounted) {
+        setState(() {
+          _individualCalls = snapshot.docs;
+          _callsLoading = false;
+        });
+      }
+    }, onError: (e) {
+      debugPrint('CallsTab: Individual calls error: $e');
+      // Fallback: try without orderBy (in case index doesn't exist)
+      _individualCallsSub = _firestore
+          .collection('calls')
+          .where('participants', arrayContains: currentUserId)
+          .snapshots()
+          .listen((snapshot) {
+        debugPrint('CallsTab: Individual calls (fallback) received: ${snapshot.docs.length}');
+        if (mounted) {
+          setState(() {
+            _individualCalls = snapshot.docs;
+            _callsLoading = false;
+          });
+        }
+      }, onError: (e2) {
+        debugPrint('CallsTab: Individual calls fallback error: $e2');
+        if (mounted) setState(() => _callsLoading = false);
+      });
+    });
+
+    _groupCallsSub = _firestore
+        .collection('group_calls')
+        .where('participants', arrayContains: currentUserId)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .listen((snapshot) {
+      debugPrint('CallsTab: Group calls received: ${snapshot.docs.length}');
+      if (mounted) {
+        setState(() {
+          _groupCalls = snapshot.docs;
+          _callsLoading = false;
+        });
+      }
+    }, onError: (e) {
+      debugPrint('CallsTab: Group calls error: $e');
+      // Fallback: try without orderBy (in case index doesn't exist)
+      _groupCallsSub = _firestore
+          .collection('group_calls')
+          .where('participants', arrayContains: currentUserId)
+          .snapshots()
+          .listen((snapshot) {
+        debugPrint('CallsTab: Group calls (fallback) received: ${snapshot.docs.length}');
+        if (mounted) {
+          setState(() {
+            _groupCalls = snapshot.docs;
+            _callsLoading = false;
+          });
+        }
+      }, onError: (e2) {
+        debugPrint('CallsTab: Group calls fallback error: $e2');
+        if (mounted) setState(() => _callsLoading = false);
+      });
+    });
   }
 
   void _startVoiceSearch() {
@@ -577,6 +671,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return const Center(child: Text('Please login to see calls'));
     }
 
+    // Safety: ensure listeners are running (handles hot reload)
+    if (_individualCallsSub == null && _groupCallsSub == null) {
+      debugPrint('CallsTab: Listeners not active, restarting...');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startCallsListeners();
+      });
+    }
+
     return Column(
       children: [
         // Selection mode header
@@ -614,115 +716,67 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
               ],
             ),
-          )
-        else
-          Expanded(
-            child: StreamBuilder<List<DocumentSnapshot>>(
-              stream: _getCombinedCallsStream(currentUserId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  debugPrint('Calls error: ${snapshot.error}');
-                  return _buildEmptyCallsState(isDarkMode);
-                }
-
-                final allCalls = snapshot.data ?? [];
-                if (allCalls.isEmpty) {
-                  return _buildEmptyCallsState(isDarkMode);
-                }
-
-                // Sort by timestamp (descending)
-                allCalls.sort((a, b) {
-                  final aData = a.data() as Map<String, dynamic>;
-                  final bData = b.data() as Map<String, dynamic>;
-                  final aTime = aData['timestamp'] as Timestamp? ??
-                               aData['createdAt'] as Timestamp?;
-                  final bTime = bData['timestamp'] as Timestamp? ??
-                               bData['createdAt'] as Timestamp?;
-                  if (aTime == null && bTime == null) return 0;
-                  if (aTime == null) return 1;
-                  if (bTime == null) return -1;
-                  return bTime.compareTo(aTime);
-                });
-
-                // Prefetch user data
-                _prefetchUserDataForCalls(allCalls, currentUserId);
-
-                // Filter by search
-                final filteredCalls = _filterCallsBySearch(allCalls, currentUserId);
-
-                if (filteredCalls.isEmpty) {
-                  return _buildEmptyCallsState(isDarkMode);
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.only(top: 8),
-                  itemCount: filteredCalls.length,
-                  itemBuilder: (context, index) {
-                    final callDoc = filteredCalls[index];
-                    final callData = callDoc.data() as Map<String, dynamic>;
-                    final isGroupCall = callData.containsKey('groupId');
-
-                    return _buildCallTileWithDelete(
-                      callDoc.id,
-                      callData,
-                      isDarkMode,
-                      currentUserId,
-                      isGroupCall: isGroupCall,
-                    );
-                  },
-                );
-              },
-            ),
           ),
+        // Call list (always visible, uses data from _startCallsListeners)
+        Expanded(
+          child: Builder(
+            builder: (context) {
+              if (_callsLoading && _individualCalls.isEmpty && _groupCalls.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final allCalls = [..._individualCalls, ..._groupCalls];
+
+              if (allCalls.isEmpty) {
+                return _buildEmptyCallsState(isDarkMode);
+              }
+
+              // Sort by timestamp (descending)
+              allCalls.sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aTime = aData['timestamp'] as Timestamp? ??
+                             aData['createdAt'] as Timestamp?;
+                final bTime = bData['timestamp'] as Timestamp? ??
+                             bData['createdAt'] as Timestamp?;
+                if (aTime == null && bTime == null) return 0;
+                if (aTime == null) return 1;
+                if (bTime == null) return -1;
+                return bTime.compareTo(aTime);
+              });
+
+              // Prefetch user data
+              _prefetchUserDataForCalls(allCalls, currentUserId);
+
+              // Filter by search
+              final filteredCalls = _filterCallsBySearch(allCalls, currentUserId);
+
+              if (filteredCalls.isEmpty) {
+                return _buildEmptyCallsState(isDarkMode);
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.only(top: 8),
+                itemCount: filteredCalls.length,
+                itemBuilder: (context, index) {
+                  final callDoc = filteredCalls[index];
+                  final callData = callDoc.data() as Map<String, dynamic>;
+                  final isGroupCall = callData.containsKey('groupId');
+
+                  return _buildCallTileWithDelete(
+                    callDoc.id,
+                    callData,
+                    isDarkMode,
+                    currentUserId,
+                    isGroupCall: isGroupCall,
+                  );
+                },
+              );
+            },
+          ),
+        ),
       ],
     );
-  }
-
-  Stream<List<DocumentSnapshot>> _getCombinedCallsStream(String currentUserId) {
-    // Create a controller to combine both streams
-    final controller = StreamController<List<DocumentSnapshot>>();
-
-    final individualCallsStream = _firestore
-        .collection('calls')
-        .where('participants', arrayContains: currentUserId)
-        .limit(50)
-        .snapshots();
-
-    final groupCallsStream = _firestore
-        .collection('group_calls')
-        .where('participants', arrayContains: currentUserId)
-        .limit(50)
-        .snapshots();
-
-    List<DocumentSnapshot>? lastIndividualCalls;
-    List<DocumentSnapshot>? lastGroupCalls;
-
-    // Subscribe to individual calls
-    final sub1 = individualCallsStream.listen((snapshot) {
-      lastIndividualCalls = snapshot.docs;
-      if (lastGroupCalls != null) {
-        controller.add([...lastIndividualCalls!, ...lastGroupCalls!]);
-      }
-    });
-
-    // Subscribe to group calls
-    final sub2 = groupCallsStream.listen((snapshot) {
-      lastGroupCalls = snapshot.docs;
-      if (lastIndividualCalls != null) {
-        controller.add([...lastIndividualCalls!, ...lastGroupCalls!]);
-      }
-    });
-
-    controller.onCancel = () {
-      sub1.cancel();
-      sub2.cancel();
-    };
-
-    return controller.stream;
   }
 
   void _prefetchUserDataForCalls(
@@ -1099,10 +1153,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         decoration: BoxDecoration(
           color: Colors.red,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
@@ -1171,8 +1225,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final otherUserId = isOutgoing ? receiverId : callerId;
     final callStatus = callData['status'] ?? 'unknown';
     final callType = callData['type'] ?? 'voice';
-    final timestamp = callData['timestamp'] as Timestamp?;
+    final timestamp = callData['timestamp'] as Timestamp? ?? callData['createdAt'] as Timestamp?;
     final participants = List<String>.from(callData['participants'] ?? []);
+    final groupId = callData['groupId'] as String?;
 
     // Get user data from cache (prefetched earlier)
     final userData = _userCache[otherUserId];
@@ -1186,12 +1241,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
+    // For group calls, get the caller's profile photo
+    final callerData = _userCache[callerId];
+    final callerPhotoUrl = callerData?['photoUrl'];
+    final fixedCallerPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(callerPhotoUrl);
+    String callerName = callerData?['name'] ?? callerData?['displayName'] ?? '';
+    if (callerName.isEmpty) callerName = 'Unknown';
+    final callerInitial = callerName.isNotEmpty ? callerName[0].toUpperCase() : '?';
+
     // Check if it's a group call (more than 2 participants)
     final groupCallCheck = participants.length > 2;
     final finalIsGroupCall = isGroupCall || groupCallCheck;
 
     // Get group name for group calls
     final groupName = callData['groupName'] as String? ?? 'Group Call';
+
+    // Get joined participants info (saved when call ends)
+    final joinedParticipants = List<String>.from(callData['joinedParticipants'] ?? []);
+    final joinedCount = callData['joinedCount'] as int? ?? joinedParticipants.length;
+    final totalMembers = callData['totalMembers'] as int? ?? participants.length;
 
     // Determine call status icon and color
     IconData statusIcon;
@@ -1212,23 +1280,31 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         leading: finalIsGroupCall
-            ? _buildGroupAvatarStack(participants, currentUserId)
+            ? _buildUserAvatar(
+                photoUrl: fixedCallerPhotoUrl,
+                initial: callerInitial,
+                radius: 22,
+                context: context,
+                uniqueId: callerId,
+              )
             : _buildUserAvatar(
                 photoUrl: fixedPhotoUrl,
                 initial: initial,
-                radius: 26,
+                radius: 22,
                 context: context,
                 uniqueId: otherUserId,
               ),
@@ -1238,24 +1314,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               : formatDisplayName(displayName),
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: 16,
+            fontSize: 15,
             color: isDarkMode ? Colors.white : Colors.black,
           ),
         ),
         subtitle: Row(
           children: [
-            Icon(statusIcon, size: 16, color: statusColor),
+            Icon(statusIcon, size: 14, color: statusColor),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 finalIsGroupCall
-                    ? '${participants.length} ${participants.length == 1 ? 'person' : 'people'} • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
+                    ? '${joinedCount > 0 ? '$joinedCount joined' : 'No one joined'} • $totalMembers members • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
                     : (timestamp != null
                         ? timeago.format(timestamp.toDate())
                         : 'Unknown time'),
                 style: TextStyle(
                   color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
               ),
             ),
@@ -1266,13 +1342,21 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             callType == 'video' ? Icons.videocam : Icons.call,
             color: Theme.of(context).primaryColor,
           ),
-          onPressed: () => _initiateCall(otherUserId, callType == 'video'),
+          onPressed: () {
+            if (finalIsGroupCall && groupId != null) {
+              _initiateGroupCall(groupId, groupName, participants);
+            } else {
+              _initiateCall(otherUserId, callType == 'video');
+            }
+          },
         ),
-        onTap: () => _showCallDetails(
-          callData,
-          finalIsGroupCall ? groupName : formatDisplayName(displayName),
-          isDarkMode,
-        ),
+        onTap: () {
+          if (finalIsGroupCall && groupId != null) {
+            _initiateGroupCall(groupId, groupName, participants);
+          } else {
+            _initiateCall(otherUserId, false);
+          }
+        },
       ),
     );
   }
@@ -1474,6 +1558,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
         ),
       );
+
+      // After call ends, add call message to conversation
+      await _addCallMessageToConversation(
+        callId: callDoc.id,
+        currentUserId: currentUserId,
+        otherUserId: userId,
+      );
     } catch (e) {
       debugPrint('Error initiating call: $e');
       if (mounted) {
@@ -1488,119 +1579,304 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
-  void _showCallDetails(
-    Map<String, dynamic> callData,
-    String displayName,
-    bool isDarkMode,
-  ) {
-    final timestamp = callData['timestamp'] as Timestamp?;
-    final duration = callData['duration'] ?? 0;
-    final callStatus = callData['status'] ?? 'unknown';
+  /// Add call message to the 1-to-1 conversation after call ends
+  Future<void> _addCallMessageToConversation({
+    required String callId,
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    try {
+      // Small delay to ensure Firestore update from call screen has propagated
+      await Future.delayed(const Duration(milliseconds: 500));
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+      final callDoc = await _firestore.collection('calls').doc(callId).get();
+      if (!callDoc.exists) return;
+
+      final data = callDoc.data()!;
+      final status = data['status'] as String?;
+      final duration = data['duration'];
+      final callerId = data['callerId'] as String?;
+
+      // Only the caller creates the message to prevent duplicates
+      if (callerId != currentUserId) return;
+
+      if (status == null || status.isEmpty) return;
+
+      int durationSeconds = 0;
+      if (duration is int) {
+        durationSeconds = duration;
+      } else if (duration is double) {
+        durationSeconds = duration.toInt();
+      }
+
+      // MessageType indices: voiceCall=8, missedCall=9
+      int msgType;
+      String msgText;
+
+      if (status == 'ended' || status == 'completed') {
+        msgType = 8; // voiceCall
+        msgText = durationSeconds > 0
+            ? 'Voice call (${durationSeconds ~/ 60}:${(durationSeconds % 60).toString().padLeft(2, '0')})'
+            : 'Voice call';
+      } else if (status == 'rejected' || status == 'declined' || status == 'busy') {
+        msgType = 9; // missedCall
+        msgText = 'Voice call declined';
+      } else if (status == 'missed' || status == 'timeout' || status == 'canceled' || status == 'no_answer') {
+        msgType = 9; // missedCall
+        msgText = 'Missed voice call';
+      } else {
+        if (durationSeconds > 0) {
+          msgType = 8; // voiceCall
+          msgText = 'Voice call (${durationSeconds ~/ 60}:${(durationSeconds % 60).toString().padLeft(2, '0')})';
+        } else {
+          msgType = 9; // missedCall
+          msgText = 'Missed voice call';
+        }
+      }
+
+      // Find conversation between the two users
+      final convQuery = await _firestore
+          .collection('conversations')
+          .where('participants', arrayContains: currentUserId)
+          .get();
+
+      String? conversationId;
+      for (final doc in convQuery.docs) {
+        final data = doc.data();
+        final isGroup = data['isGroup'] as bool? ?? false;
+        if (isGroup) continue; // Skip group conversations
+        final participants = List<String>.from(data['participants'] ?? []);
+        if (participants.contains(otherUserId)) {
+          conversationId = doc.id;
+          break;
+        }
+      }
+
+      if (conversationId == null) return;
+
+      // Use deterministic message ID to prevent duplicates
+      final messageId = 'call_$callId';
+
+      // Add call message to conversation
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .set({
+        'senderId': currentUserId,
+        'receiverId': otherUserId,
+        'chatId': conversationId,
+        'text': msgText,
+        'type': msgType,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 1, // MessageStatus.sent
+        'read': false,
+        'isRead': false,
+        'callId': callId,
+        'callDuration': durationSeconds,
+      }, SetOptions(merge: true));
+
+      // Update last message in conversation
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': 'Voice call',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUserId,
+      });
+
+      debugPrint('Call message added to conversation $conversationId');
+    } catch (e) {
+      debugPrint('Error adding call message to conversation: $e');
+    }
+  }
+
+  /// Initiate a group audio call from the Calls tab
+  void _initiateGroupCall(String groupId, String groupName, List<String> participants) async {
+    HapticFeedback.lightImpact();
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      // Clean up old stuck group calls
+      final oldGroupCalls = await _firestore
+          .collection('group_calls')
+          .where('participants', arrayContains: currentUserId)
+          .where('status', whereIn: ['calling', 'ringing', 'active', 'connected'])
+          .limit(5)
+          .get();
+
+      final now = DateTime.now();
+      bool hasActiveGroupCall = false;
+
+      for (final doc in oldGroupCalls.docs) {
+        final data = doc.data();
+        final createdAt = data['createdAt'] as Timestamp?;
+        final callAge = createdAt != null
+            ? now.difference(createdAt.toDate()).inSeconds
+            : 9999;
+        final status = data['status'] as String?;
+        final isStale = (status == 'calling' || status == 'ringing')
+            ? callAge > 120
+            : callAge > 300;
+
+        if (isStale) {
+          await _firestore.collection('group_calls').doc(doc.id).update({
+            'status': 'ended',
+            'endedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          hasActiveGroupCall = true;
+        }
+      }
+
+      if (hasActiveGroupCall) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You already have an active call'),
+              duration: Duration(seconds: 2),
             ),
-            const SizedBox(height: 24),
-            Text(
-              displayName,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildCallDetailRow(
-              'Status',
-              callStatus.toString().toUpperCase(),
-              isDarkMode,
-            ),
-            _buildCallDetailRow(
-              'Time',
-              timestamp != null
-                  ? _formatCallTime(timestamp.toDate())
-                  : 'Unknown',
-              isDarkMode,
-            ),
-            if (duration > 0)
-              _buildCallDetailRow(
-                'Duration',
-                _formatDuration(duration),
-                isDarkMode,
-              ),
-            const SizedBox(height: 24),
-          ],
+          );
+        }
+        return;
+      }
+
+      // Get current user info
+      final currentUserDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final currentUserName = currentUserDoc.data()?['name'] ?? 'Unknown';
+      final currentUserPhoto = currentUserDoc.data()?['photoUrl'];
+
+      // Get fresh group members from the conversation
+      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      if (!groupDoc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Group not found'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final groupData = groupDoc.data()!;
+      final memberIds = List<String>.from(groupData['participants'] ?? []);
+      final actualGroupName = groupData['groupName'] as String? ?? groupName;
+
+      // Create group call document
+      final callDoc = await _firestore.collection('group_calls').add({
+        'groupId': groupId,
+        'groupName': actualGroupName,
+        'callerId': currentUserId,
+        'callerName': currentUserName,
+        'participants': memberIds,
+        'isVideo': false,
+        'status': 'calling',
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Create participant subcollection entries
+      final batch = _firestore.batch();
+      final participantDetails = <Map<String, dynamic>>[];
+
+      for (final memberId in memberIds) {
+        final isCurrentUser = memberId == currentUserId;
+        final memberDoc = await _firestore.collection('users').doc(memberId).get();
+        final memberName = memberDoc.data()?['name'] ?? 'Unknown';
+        final memberPhoto = memberDoc.data()?['photoUrl'];
+
+        batch.set(
+          _firestore.collection('group_calls').doc(callDoc.id).collection('participants').doc(memberId),
+          {
+            'userId': memberId,
+            'name': memberName,
+            'photoUrl': memberPhoto,
+            'isActive': isCurrentUser,
+            'createdAt': FieldValue.serverTimestamp(),
+          },
+        );
+
+        participantDetails.add({
+          'userId': memberId,
+          'name': memberName,
+          'photoUrl': memberPhoto,
+        });
+      }
+      await batch.commit();
+
+      // Create system message in group chat (matching sendSystemMessage format)
+      final systemMsgDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .collection('messages')
+          .add({
+        'text': 'Voice call',
+        'timestamp': Timestamp.now(),
+        'isSystemMessage': true,
+        'actionType': 'call',
+        'callId': callDoc.id,
+        'callerId': currentUserId,
+        'callerName': currentUserName,
+        'callDuration': 0,
+        'participantCount': 0,
+      });
+
+      // Update conversation's last message so it shows in chat list
+      await _firestore.collection('conversations').doc(groupId).update({
+        'lastMessage': 'Voice call',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+      });
+
+      // Update call doc with system message ID
+      await _firestore.collection('group_calls').doc(callDoc.id).update({
+        'systemMessageId': systemMsgDoc.id,
+      });
+
+      // Send notifications to other members
+      for (final memberId in memberIds) {
+        if (memberId == currentUserId) continue;
+        NotificationService().sendNotificationToUser(
+          userId: memberId,
+          title: '$currentUserName is calling',
+          body: actualGroupName,
+          type: 'group_call',
+          data: {
+            'callId': callDoc.id,
+            'groupId': groupId,
+            'groupName': actualGroupName,
+            'callerId': currentUserId,
+            'callerName': currentUserName,
+            'callerPhoto': currentUserPhoto,
+          },
+        );
+      }
+
+      // Navigate to GroupAudioCallScreen
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GroupAudioCallScreen(
+            callId: callDoc.id,
+            groupId: groupId,
+            userId: currentUserId,
+            userName: currentUserName,
+            groupName: actualGroupName,
+            participants: participantDetails,
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildCallDetailRow(String label, String value, bool isDarkMode) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
-              fontSize: 14,
-            ),
+      );
+    } catch (e) {
+      debugPrint('Error initiating group call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start group call: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatCallTime(DateTime time) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final callDate = DateTime(time.year, time.month, time.day);
-
-    String timeStr =
-        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-
-    if (callDate == today) {
-      return 'Today, $timeStr';
-    } else if (callDate == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday, $timeStr';
-    } else {
-      return '${time.day}/${time.month}/${time.year}, $timeStr';
+        );
+      }
     }
-  }
-
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final secs = seconds % 60;
-    if (minutes > 0) {
-      return '$minutes min ${secs}s';
-    }
-    return '${secs}s';
   }
 
   Widget _buildConversationTile(
@@ -1848,99 +2124,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  /// Build group avatar stack showing multiple participants
-  Widget _buildGroupAvatarStack(List<String> participants, String currentUserId) {
-    // Get up to 4 other participants (excluding current user)
-    final otherParticipants = participants
-        .where((id) => id != currentUserId)
-        .take(4)
-        .toList();
-
-    const avatarSize = 22.0;
-    const stackRadius = 26.0;
-
-    return SizedBox(
-      width: stackRadius * 2,
-      height: stackRadius * 2,
-      child: Stack(
-        children: List.generate(otherParticipants.length, (index) {
-          final userId = otherParticipants[index];
-          final userData = _userCache[userId];
-          final name = userData?['name'] ?? 'U';
-          final photoUrl = userData?['photoUrl'];
-          final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-          // Position avatars in a 2x2 grid for up to 4 participants
-          final row = index ~/ 2;
-          final col = index % 2;
-          final offsetX = col == 0 ? 0.0 : stackRadius;
-          final offsetY = row == 0 ? 0.0 : stackRadius;
-
-          return Positioned(
-            left: offsetX,
-            top: offsetY,
-            child: Container(
-              width: avatarSize,
-              height: avatarSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.8),
-                  width: 1.5,
-                ),
-              ),
-              child: ClipOval(
-                child: photoUrl != null && photoUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: PhotoUrlHelper.fixGooglePhotoUrl(photoUrl) ?? photoUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                          child: Center(
-                            child: Text(
-                              initial,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                          child: Center(
-                            child: Text(
-                              initial,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                        child: Center(
-                          child: Text(
-                            initial,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
 
   /// Build user avatar with proper error handling for profile photos
   Widget _buildUserAvatar({
