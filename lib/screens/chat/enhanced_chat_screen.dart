@@ -161,16 +161,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   void initState() {
     super.initState();
 
-    debugPrint('🚀 ========== ENHANCED CHAT SCREEN OPENED ==========');
+    debugPrint('  ========== ENHANCED CHAT SCREEN OPENED ==========');
     debugPrint(
-      '🚀 Chat with: ${widget.otherUser.name} (${widget.otherUser.uid})',
+      '  Chat with: ${widget.otherUser.name} (${widget.otherUser.uid})',
     );
-    debugPrint('🚀 Current time: ${DateTime.now()}');
+    debugPrint('  Current time: ${DateTime.now()}');
 
     try {
       // Cache user ID for use during dispose
       _cachedUserId = ref.read(currentUserIdProvider);
-      debugPrint('🚀 Cached UserId: $_cachedUserId');
+      debugPrint('  Cached UserId: $_cachedUserId');
 
       // Initialize single user status stream
       _userStatusStream = _firestore
@@ -1577,7 +1577,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             );
           },
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
+            padding: const EdgeInsets.only(bottom: 8, left: 4, right: 4),  // Increased spacing
             child: Row(
               mainAxisAlignment: isMe
                   ? MainAxisAlignment.end
@@ -1597,7 +1597,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             maxWidth: MediaQuery.of(context).size.width * 0.5,
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                               child: Container(
@@ -1606,16 +1606,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                       (message.type == MessageType.image ||
                                           message.type == MessageType.video)
                                       ? 4
-                                      : (message.replyToMessageId != null
-                                            ? 6
-                                            : 4),
+                                      : 6,
                                   vertical:
                                       (message.type == MessageType.image ||
                                           message.type == MessageType.video)
                                       ? 4
-                                      : (message.replyToMessageId != null
-                                            ? 4
-                                            : 2),
+                                      : 6,
                                 ),
                                 decoration: BoxDecoration(
                                   gradient:
@@ -1636,21 +1632,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                           message.type != MessageType.audio &&
                                           message.type != MessageType.video &&
                                           message.type != MessageType.image
-                                      ? (isDarkMode
-                                            ? const Color.fromARGB(
-                                                255,
-                                                32,
-                                                32,
-                                                32,
-                                              )
-                                            : Colors.grey[200])
-                                      : null, // Grey for received text only, not audio/video/image
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(12),
-                                    topRight: const Radius.circular(12),
-                                    bottomLeft: Radius.circular(isMe ? 12 : 5),
-                                    bottomRight: Radius.circular(isMe ? 5 : 12),
-                                  ),
+                                      ? Colors.black.withValues(alpha: 0.6)
+                                      : null,
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -2817,11 +2801,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             hintText: 'Message',
                             showBlur: false,
                             decoration: const BoxDecoration(),
-                            contentPadding: const EdgeInsets.only(
-                              left: 16,
-                              right: 16,
-                              top: 22,
-                              bottom: 2,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
                             onChanged: (text) {
                               setState(() {
@@ -4358,7 +4340,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   void _pickImage() async {
     // LOCK: Check if another media operation is in progress
     if (_isMediaOperationInProgress) {
-      debugPrint('⏸️ Media operation already in progress, blocking...');
+      debugPrint('  Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -4370,7 +4352,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     try {
       _isMediaOperationInProgress = true; // Acquire lock
-      debugPrint('🔐 Lock acquired for image picker');
+      debugPrint('  Lock acquired for image picker');
 
       // Check daily limit first (1 image)
       final wouldExceed = await _wouldExceedLimit('image', 1);
@@ -4384,7 +4366,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ⚠️ Don't increment counter yet - wait for user to actually pick images!
+      //   Don't increment counter yet - wait for user to actually pick images!
 
       // Pick multiple images (max 4) like WhatsApp
       final List<XFile> images = await _imagePicker.pickMultiImage(
@@ -4401,10 +4383,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ✅ User picked images - NOW increment counter for 1 image
+      //  User picked images - NOW increment counter for 1 image
       await _incrementMediaCounter('image', 1);
       debugPrint(
-        '✅ Counter incremented for image upload (user confirmed selection)',
+        ' Counter incremented for image upload (user confirmed selection)',
       );
 
       // Limit to max 4 images
@@ -4425,20 +4407,20 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         );
       }
     } catch (e) {
-      debugPrint('❌ Error in _pickImage: $e');
+      debugPrint('  Error in _pickImage: $e');
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to pick image');
       }
     } finally {
       _isMediaOperationInProgress = false; // Always release lock
-      debugPrint('🔓 Lock released for image picker');
+      debugPrint('  Lock released for image picker');
     }
   }
 
   void _takePhoto() async {
     // LOCK: Check if another media operation is in progress
     if (_isMediaOperationInProgress) {
-      debugPrint('⏸️ Media operation already in progress, blocking...');
+      debugPrint('  Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -4450,7 +4432,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     try {
       _isMediaOperationInProgress = true; // Acquire lock
-      debugPrint('🔐 Lock acquired for camera');
+      debugPrint('  Lock acquired for camera');
 
       // Check daily limit first
       final wouldExceed = await _wouldExceedLimit('image', 1);
@@ -4464,7 +4446,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ⚠️ Don't increment counter yet - wait for user to actually take photo!
+      //   Don't increment counter yet - wait for user to actually take photo!
 
       final XFile? photo = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -4474,7 +4456,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
 
       if (photo != null) {
-        // ✅ User took photo - NOW increment counter
+        //  User took photo - NOW increment counter
         await _incrementMediaCounter('image', 1);
 
         _uploadAndSendImage(File(photo.path));
@@ -4488,13 +4470,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         FocusScope.of(context).requestFocus(_messageFocusNode);
       }
     } catch (e) {
-      debugPrint('❌ Error in _takePhoto: $e');
+      debugPrint('  Error in _takePhoto: $e');
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to take photo');
       }
     } finally {
       _isMediaOperationInProgress = false; // Always release lock
-      debugPrint('🔓 Lock released for camera');
+      debugPrint('  Lock released for camera');
     }
   }
 
@@ -4504,7 +4486,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // LOCK: Check if another media operation is in progress
     if (_isMediaOperationInProgress) {
-      debugPrint('⏸️ Media operation already in progress, blocking...');
+      debugPrint('  Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -4526,11 +4508,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return;
     }
 
-    // ⚠️ Don't increment counter yet - wait for user to actually record video!
+    //   Don't increment counter yet - wait for user to actually record video!
 
     _isRecordingVideo = true;
     _isMediaOperationInProgress = true; // Acquire lock
-    debugPrint('🔐 Lock acquired for video recording');
+    debugPrint('  Lock acquired for video recording');
 
     try {
       // Request camera permission first
@@ -4656,18 +4638,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           return;
         }
 
-        // ✅ Video is valid - NOW increment counter before upload
+        //  Video is valid - NOW increment counter before upload
         await _incrementMediaCounter('video', 1);
-        debugPrint(
-          '✅ Counter incremented for video recording (user confirmed)',
-        );
+        debugPrint(' Counter incremented for video recording (user confirmed)');
 
         if (mounted) {
           _uploadAndSendVideo(videoFile);
         }
       } else {
         // User cancelled or video not recorded - NO counter increment
-        debugPrint('📹 Video recording cancelled/failed, no counter increment');
+        debugPrint('  Video recording cancelled/failed, no counter increment');
       }
 
       // Restore focus to message input
@@ -4686,14 +4666,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     } finally {
       _isRecordingVideo = false;
       _isMediaOperationInProgress = false; // Always release lock
-      debugPrint('🔓 Lock released for video recording');
+      debugPrint('  Lock released for video recording');
     }
   }
 
   void _pickVideo() async {
     // LOCK: Check if another media operation is in progress
     if (_isMediaOperationInProgress) {
-      debugPrint('⏸️ Media operation already in progress, blocking...');
+      debugPrint('  Media operation already in progress, blocking...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -4705,7 +4685,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     try {
       _isMediaOperationInProgress = true; // Acquire lock
-      debugPrint('🔐 Lock acquired for video picker');
+      debugPrint('  Lock acquired for video picker');
 
       // Check daily limit first
       final wouldExceed = await _wouldExceedLimit('video', 1);
@@ -4719,7 +4699,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ⚠️ Don't increment counter yet - wait for user to actually pick videos!
+      //   Don't increment counter yet - wait for user to actually pick videos!
 
       // Pick multiple videos using pickMultipleMedia (max 4)
       final List<XFile> mediaFiles = await _imagePicker.pickMultipleMedia(
@@ -4846,10 +4826,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         return;
       }
 
-      // ✅ Valid videos found - NOW increment counter
+      //  Valid videos found - NOW increment counter
       await _incrementMediaCounter('video', 1);
       debugPrint(
-        '✅ Counter incremented for video upload (user confirmed selection)',
+        ' Counter incremented for video upload (user confirmed selection)',
       );
 
       // Show preview screen for multiple videos
@@ -4866,7 +4846,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       }
     } finally {
       _isMediaOperationInProgress = false; // Always release lock
-      debugPrint('🔓 Lock released for video picker');
+      debugPrint('  Lock released for video picker');
     }
   }
 
@@ -5311,7 +5291,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // 🔒 LOCK: Check if another media operation is in progress
     if (_isMediaOperationInProgress) {
-      debugPrint('⏸️ Media operation already in progress, blocking audio...');
+      debugPrint('  Media operation already in progress, blocking audio...');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -5321,7 +5301,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return;
     }
 
-    // 📊 Check daily limit BEFORE uploading (4 audio messages per day)
+    //   Check daily limit BEFORE uploading (4 audio messages per day)
     final wouldExceed = await _wouldExceedLimit('audio', 1);
     if (wouldExceed) {
       if (mounted) {
@@ -5339,12 +5319,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return;
     }
 
-    // ✅ Passed limit check - increment counter
+    //  Passed limit check - increment counter
     await _incrementMediaCounter('audio', 1);
 
-    // 🔐 Acquire media operation lock
+    //   Acquire media operation lock
     _isMediaOperationInProgress = true;
-    debugPrint('🔐 Lock acquired for audio upload');
+    debugPrint('  Lock acquired for audio upload');
 
     final optimisticId =
         'optimistic_voice_${DateTime.now().millisecondsSinceEpoch}';
@@ -5460,9 +5440,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
       }
     } finally {
-      // 🔓 Always release the media operation lock
+      //   Always release the media operation lock
       _isMediaOperationInProgress = false;
-      debugPrint('🔓 Lock released for audio upload');
+      debugPrint('  Lock released for audio upload');
     }
   }
 
@@ -5560,11 +5540,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF007AFF), width: 2),
-        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOptimistic
+              ? Colors.orange.withValues(alpha: 0.5)
+              : isMe
+              ? const Color(0xFF007AFF)
+              : Colors.black.withValues(alpha: 0.6),
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
           child: Stack(
@@ -5647,14 +5634,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         decoration: BoxDecoration(
           border: Border.all(
             color: isOptimistic
-                ? Colors.orange.withOpacity(0.5)
-                : const Color(0xFF007AFF),
+                ? Colors.orange.withValues(alpha: 0.5)
+                : isMe
+                ? const Color(0xFF007AFF)
+                : Colors.black.withValues(alpha: 0.6),
             width: 2,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           child: Stack(
             children: [
               // Video thumbnail or placeholder
@@ -5674,7 +5663,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -6011,9 +6000,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     final callWidget = Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF1F2C33)
-            : const Color(0xFFFFFFFF).withValues(alpha: 0.9),
+        gradient: isMe
+            ? LinearGradient(
+                colors:
+                    chatThemeColors[_selectedTheme] ??
+                    chatThemeColors['default']!,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: !isMe ? Colors.black.withValues(alpha: 0.6) : null,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
@@ -6032,12 +6028,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: iconColor.withValues(alpha: 0.15),
+              color: isMe
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : iconColor.withValues(alpha: 0.15),
             ),
             child: Icon(
               callIcon,
               size: 20,
-              color: iconColor,
+              color: isMe ? Colors.white : iconColor,
               semanticLabel: 'Call icon',
             ),
           ),
@@ -6051,12 +6049,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(directionIcon, size: 14, color: iconColor),
+                  Icon(
+                    directionIcon,
+                    size: 14,
+                    color: isMe ? Colors.white : iconColor,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     callLabel,
                     style: TextStyle(
-                      color: iconColor,
+                      color: isMe ? Colors.white : iconColor,
                       fontSize: 14.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -6067,8 +6069,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               // Second line: Call duration or status
               Text(
                 callDurationText,
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white70 : const Color(0xFF667781),
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w400,
                 ),
@@ -6078,9 +6080,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               Text(
                 _formatMessageTime(message.timestamp),
                 style: TextStyle(
-                  color: isDarkMode
-                      ? const Color(0xFF8696A0)
-                      : const Color(0xFF667781),
+                  color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 12,
                 ),
               ),
@@ -6590,7 +6590,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       // Add message to conversation
       debugPrint(
-        '💾 Saving call message: id=$messageId, type=${msgType.index}, text="$msgText", status=$status',
+        '  Saving call message: id=$messageId, type=${msgType.index}, text="$msgText", status=$status',
       );
 
       //   Determine correct senderId based on who initiated the call
@@ -6604,7 +6604,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           : _currentUserId;
 
       debugPrint(
-        '💡 Message will be saved with senderId=$messageSenderId (caller=$callerId, currentUser=$_currentUserId)',
+        '  Message will be saved with senderId=$messageSenderId (caller=$callerId, currentUser=$_currentUserId)',
       );
 
       //   Use merge: true to avoid overwriting existing data if message already exists
@@ -6634,7 +6634,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           .collection('conversations')
           .doc(_conversationId!)
           .update({
-            'lastMessage': isVideo ? '📹 Video call' : '  Voice call',
+            'lastMessage': isVideo ? '  Video call' : '  Voice call',
             'lastMessageTime': FieldValue.serverTimestamp(),
             'lastMessageSenderId': _currentUserId,
           });
@@ -6674,7 +6674,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 // If empty call message detected, delete it immediately
                 if (text == null || text.trim().isEmpty) {
                   debugPrint(
-                    '🚨 GUARD: Empty call message detected! Deleting immediately: ${doc.id}',
+                    '  GUARD: Empty call message detected! Deleting immediately: ${doc.id}',
                   );
                   doc.reference
                       .delete()
@@ -6697,50 +6697,50 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   /// Initialize counter with smart retry mechanism
   void _initializeCounterWithRetry() {
-    debugPrint('🔄 ========== COUNTER INITIALIZATION STARTED ==========');
-    debugPrint('🔄 Attempting to load counters with retry mechanism...');
+    debugPrint('  ========== COUNTER INITIALIZATION STARTED ==========');
+    debugPrint('  Attempting to load counters with retry mechanism...');
 
     // Attempt 1: Immediate (likely to fail on cold start)
-    debugPrint('🔄 Attempt 1: Immediate load');
+    debugPrint('  Attempt 1: Immediate load');
     _loadDailyMediaCounts();
 
     // Attempt 2: After first frame (auth might be ready)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isCounterLoaded && mounted) {
         debugPrint(
-          '🔄 Attempt 2: Post-frame callback (userId may be ready now)',
+          '  Attempt 2: Post-frame callback (userId may be ready now)',
         );
         _loadDailyMediaCounts();
       } else if (_isCounterLoaded) {
-        debugPrint('✅ Counter already loaded in Attempt 1, skipping retry');
+        debugPrint(' Counter already loaded in Attempt 1, skipping retry');
       }
     });
 
     // Attempt 3: After 300ms (auth should definitely be ready)
     Future.delayed(const Duration(milliseconds: 300), () {
       if (!_isCounterLoaded && mounted) {
-        debugPrint('🔄 Attempt 3: 300ms delayed retry (auth should be ready)');
+        debugPrint('  Attempt 3: 300ms delayed retry (auth should be ready)');
         _loadDailyMediaCounts();
       } else if (_isCounterLoaded) {
-        debugPrint('✅ Counter already loaded, skipping 300ms retry');
+        debugPrint(' Counter already loaded, skipping 300ms retry');
       }
     });
 
     // Attempt 4: Final retry after 1 second (fallback)
     Future.delayed(const Duration(seconds: 1), () {
       if (!_isCounterLoaded && mounted) {
-        debugPrint('🔄 Attempt 4: 1s delayed retry (FINAL ATTEMPT)');
+        debugPrint('  Attempt 4: 1s delayed retry (FINAL ATTEMPT)');
         _loadDailyMediaCounts();
       } else if (_isCounterLoaded) {
-        debugPrint('✅ Counter already loaded, no need for final retry');
+        debugPrint(' Counter already loaded, no need for final retry');
       }
 
       // After final attempt, report status
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_isCounterLoaded) {
-          debugPrint('🎉 🎉 COUNTER SUCCESSFULLY LOADED! 🎉 🎉');
+          debugPrint('    COUNTER SUCCESSFULLY LOADED!    ');
         } else {
-          debugPrint('⚠️ ⚠️ COUNTER FAILED TO LOAD AFTER ALL RETRIES! ⚠️ ⚠️');
+          debugPrint('    COUNTER FAILED TO LOAD AFTER ALL RETRIES!    ');
         }
       });
     });
@@ -6748,35 +6748,35 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   /// Load daily media counts from SharedPreferences
   Future<void> _loadDailyMediaCounts() async {
-    debugPrint('📂 ========== LOADING COUNTERS (Enhanced Chat) ==========');
+    debugPrint('  ========== LOADING COUNTERS (Enhanced Chat) ==========');
     final currentUserId = _currentUserId;
     final otherUserId =
         widget.otherUser.uid; // Use otherUser.uid instead of conversationId!
-    debugPrint('📂 CurrentUserId: $currentUserId, OtherUserId: $otherUserId');
-    debugPrint('📂 _isCounterLoaded: $_isCounterLoaded');
-    debugPrint('📂 _isCounterLoading: $_isCounterLoading');
+    debugPrint('  CurrentUserId: $currentUserId, OtherUserId: $otherUserId');
+    debugPrint('  _isCounterLoaded: $_isCounterLoaded');
+    debugPrint('  _isCounterLoading: $_isCounterLoading');
 
     if (currentUserId == null) {
-      debugPrint('⚠️ ❌ Cannot load: currentUserId is null');
+      debugPrint('    Cannot load: currentUserId is null');
       _isCounterLoaded = false;
       return;
     }
 
     // Prevent duplicate loads - already loaded
     if (_isCounterLoaded) {
-      debugPrint('⚠️ Counter already loaded, skipping');
+      debugPrint('  Counter already loaded, skipping');
       return;
     }
 
     // Prevent concurrent loads - already loading
     if (_isCounterLoading) {
-      debugPrint('⚠️ Counter load in progress, skipping');
+      debugPrint('  Counter load in progress, skipping');
       return;
     }
 
     // Acquire loading lock
     _isCounterLoading = true;
-    debugPrint('🔐 Counter loading lock acquired');
+    debugPrint('  Counter loading lock acquired');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -6784,18 +6784,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       final key = currentUserId.compareTo(otherUserId) < 0
           ? '${currentUserId}_$otherUserId'
           : '${otherUserId}_$currentUserId';
-      debugPrint('📂 Loading with key: $key');
+      debugPrint('  Loading with key: $key');
 
       final imageCount = prefs.getInt('${key}_imageCount') ?? 0;
       final videoCount = prefs.getInt('${key}_videoCount') ?? 0;
       final audioCount = prefs.getInt('${key}_audioCount') ?? 0;
       final lastResetStr = prefs.getString('${key}_lastReset');
 
-      debugPrint('📂 Raw values from SharedPreferences:');
-      debugPrint('📂   Images: $imageCount');
-      debugPrint('📂   Videos: $videoCount');
-      debugPrint('📂   Audios: $audioCount');
-      debugPrint('📂   LastReset: $lastResetStr');
+      debugPrint('  Raw values from SharedPreferences:');
+      debugPrint('    Images: $imageCount');
+      debugPrint('    Videos: $videoCount');
+      debugPrint('    Audios: $audioCount');
+      debugPrint('    LastReset: $lastResetStr');
 
       // Set loaded values
       _todayImageCount = imageCount;
@@ -6804,30 +6804,30 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       if (lastResetStr != null) {
         _lastMediaCountReset = DateTime.parse(lastResetStr);
-        debugPrint('📂   Parsed lastReset: $_lastMediaCountReset');
+        debugPrint('    Parsed lastReset: $_lastMediaCountReset');
       } else {
-        debugPrint('📂   No lastReset found');
+        debugPrint('    No lastReset found');
       }
 
       debugPrint(
-        '📂 BEFORE reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+        '  BEFORE reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
       );
 
       // Check if 24 hours passed and reset if needed
       await _resetDailyCountersIfNeeded();
 
       debugPrint(
-        '📂 AFTER reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+        '  AFTER reset check - Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
       );
 
       _isCounterLoaded = true;
     } catch (e) {
-      debugPrint('❌ ❌ Error loading media counts: $e');
+      debugPrint('    Error loading media counts: $e');
       _isCounterLoaded = true; // Set to true even on error to prevent blocking
     } finally {
       // Always release the loading lock
       _isCounterLoading = false;
-      debugPrint('🔓 Counter loading lock released');
+      debugPrint('  Counter loading lock released');
     }
   }
 
@@ -6836,7 +6836,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     final currentUserId = _currentUserId;
     final otherUserId = widget.otherUser.uid;
     if (currentUserId == null) {
-      debugPrint('⚠️ Cannot save counts: currentUserId is null');
+      debugPrint('  Cannot save counts: currentUserId is null');
       return;
     }
 
@@ -6847,11 +6847,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           ? '${currentUserId}_$otherUserId'
           : '${otherUserId}_$currentUserId';
 
-      debugPrint('💾 SAVING to SharedPreferences:');
-      debugPrint('💾   Key: $key');
-      debugPrint('💾   Images: $_todayImageCount');
-      debugPrint('💾   Videos: $_todayVideoCount');
-      debugPrint('💾   Audios: $_todayAudioCount');
+      debugPrint('  SAVING to SharedPreferences:');
+      debugPrint('    Key: $key');
+      debugPrint('    Images: $_todayImageCount');
+      debugPrint('    Videos: $_todayVideoCount');
+      debugPrint('    Audios: $_todayAudioCount');
 
       await prefs.setInt('${key}_imageCount', _todayImageCount);
       await prefs.setInt('${key}_videoCount', _todayVideoCount);
@@ -6862,76 +6862,74 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           '${key}_lastReset',
           _lastMediaCountReset!.toIso8601String(),
         );
-        debugPrint('💾   LastReset: $_lastMediaCountReset');
+        debugPrint('    LastReset: $_lastMediaCountReset');
       }
     } catch (e) {
-      debugPrint('❌ ❌ Error saving media counts: $e');
-      debugPrint('❌ Stack: ${StackTrace.current}');
+      debugPrint('    Error saving media counts: $e');
+      debugPrint('  Stack: ${StackTrace.current}');
     }
   }
 
   /// Reset daily counters if 24 hours passed
   Future<void> _resetDailyCountersIfNeeded() async {
     final now = DateTime.now();
-    debugPrint('🕐 _resetDailyCountersIfNeeded called');
-    debugPrint('🕐   Current time: $now');
-    debugPrint('🕐   Last reset: $_lastMediaCountReset');
+    debugPrint('  _resetDailyCountersIfNeeded called');
+    debugPrint('    Current time: $now');
+    debugPrint('    Last reset: $_lastMediaCountReset');
 
     // First time: just set the timestamp, don't reset counters
     if (_lastMediaCountReset == null) {
+      debugPrint('    First time - setting timestamp (NOT resetting counters)');
       debugPrint(
-        '🕐   First time - setting timestamp (NOT resetting counters)',
-      );
-      debugPrint(
-        '🕐   Current counters: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+        '    Current counters: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
       );
       _lastMediaCountReset = now;
       await _saveDailyMediaCounts();
-      debugPrint('🕐   ✅ Media counter timer started (counters preserved)');
+      debugPrint('     Media counter timer started (counters preserved)');
       return;
     }
 
     final hoursSinceReset = now.difference(_lastMediaCountReset!).inHours;
-    debugPrint('🕐   Hours since last reset: $hoursSinceReset');
+    debugPrint('    Hours since last reset: $hoursSinceReset');
 
     // After 24 hours: reset counters
     if (hoursSinceReset >= 24) {
-      debugPrint('🔄   ⚠️ 24 hours passed - RESETTING COUNTERS');
+      debugPrint('      24 hours passed - RESETTING COUNTERS');
       debugPrint(
-        '🔄   Old values: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
+        '    Old values: Images=$_todayImageCount, Videos=$_todayVideoCount, Audios=$_todayAudioCount',
       );
       _todayImageCount = 0;
       _todayVideoCount = 0;
       _todayAudioCount = 0;
       _lastMediaCountReset = now;
       await _saveDailyMediaCounts();
-      debugPrint('🔄   ✅ Daily media counters reset to 0');
+      debugPrint('     Daily media counters reset to 0');
     } else {
-      debugPrint('🕐   ✅ Within 24 hours - counters preserved');
+      debugPrint('     Within 24 hours - counters preserved');
     }
   }
 
   /// Check if adding 'count' items would exceed daily limit (4 per day)
   Future<bool> _wouldExceedLimit(String mediaType, int count) async {
-    debugPrint('🔍 ========== WOULD EXCEED CHECK START ==========');
-    debugPrint('🔍 MediaType: $mediaType, Trying to add: $count');
+    debugPrint('  ========== WOULD EXCEED CHECK START ==========');
+    debugPrint('  MediaType: $mediaType, Trying to add: $count');
 
     // Load counter if not loaded
     if (!_isCounterLoaded) {
-      debugPrint('⚠️ Counter not loaded, loading now...');
+      debugPrint('  Counter not loaded, loading now...');
       await _loadDailyMediaCounts();
 
       // CRITICAL: If still not loaded after retry, userId is still null
       // Block upload to prevent bypassing limit with counter = 0
       if (!_isCounterLoaded) {
-        debugPrint('❌ BLOCKING: Counter still not loaded (userId likely null)');
+        debugPrint('  BLOCKING: Counter still not loaded (userId likely null)');
         return true; // Block upload if we can't verify counter
       }
     }
 
     // Verify userId is available before proceeding
     if (_currentUserId == null) {
-      debugPrint('❌ BLOCKING: userId is null, cannot verify limit');
+      debugPrint('  BLOCKING: userId is null, cannot verify limit');
       return true; // Block upload if userId is null
     }
 
@@ -6946,12 +6944,12 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     final newTotal = currentCount + count;
     final wouldExceed = newTotal > 4;
 
-    debugPrint('📊 WOULD EXCEED RESULT:');
-    debugPrint('📊   - Current $mediaType count: $currentCount');
-    debugPrint('📊   - Trying to add: $count');
-    debugPrint('📊   - New total would be: $newTotal');
-    debugPrint('📊   - Would exceed limit of 4? $wouldExceed ($newTotal > 4)');
-    debugPrint('🔍 ========== WOULD EXCEED CHECK END ==========');
+    debugPrint('  WOULD EXCEED RESULT:');
+    debugPrint('    - Current $mediaType count: $currentCount');
+    debugPrint('    - Trying to add: $count');
+    debugPrint('    - New total would be: $newTotal');
+    debugPrint('    - Would exceed limit of 4? $wouldExceed ($newTotal > 4)');
+    debugPrint('  ========== WOULD EXCEED CHECK END ==========');
 
     return wouldExceed;
   }
@@ -6982,7 +6980,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
 
     await _saveDailyMediaCounts();
-    debugPrint('✅ Counter saved to SharedPreferences');
+    debugPrint(' Counter saved to SharedPreferences');
   }
 
   // ========== END DAILY MEDIA COUNTER METHODS ==========
@@ -7827,11 +7825,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       // Don't delete the conversation - just mark messages as deleted for this user
       // Other user will still see all messages
-      debugPrint('💾 Committing batch update...');
+      debugPrint('  Committing batch update...');
       await batch.commit();
       debugPrint('  BATCH UPDATE SUCCESSFUL!');
 
-      debugPrint('🎉 CLEAR CHAT COMPLETED SUCCESSFULLY');
+      debugPrint('  CLEAR CHAT COMPLETED SUCCESSFULLY');
 
       // Force UI rebuild to show empty chat immediately
       if (mounted) {
@@ -10200,7 +10198,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   Future<void> _initializeVideo() async {
     try {
       debugPrint(
-        '📹 _VideoPlayerWidget: Initializing with URL: ${widget.videoUrl}',
+        '  _VideoPlayerWidget: Initializing with URL: ${widget.videoUrl}',
       );
 
       // Validate URL
@@ -10217,14 +10215,14 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
       _videoController!.addListener(() {
         if (_videoController!.value.hasError) {
           debugPrint(
-            '📹 _VideoPlayerWidget: Video error - ${_videoController!.value.errorDescription}',
+            '  _VideoPlayerWidget: Video error - ${_videoController!.value.errorDescription}',
           );
         }
       });
 
       await _videoController!.initialize();
       debugPrint(
-        '📹 _VideoPlayerWidget: Video initialized - duration: ${_videoController!.value.duration}',
+        '  _VideoPlayerWidget: Video initialized - duration: ${_videoController!.value.duration}',
       );
 
       if (mounted) {
@@ -10246,7 +10244,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
             ),
           ),
           errorBuilder: (context, errorMessage) {
-            debugPrint('📹 _VideoPlayerWidget: Chewie error - $errorMessage');
+            debugPrint('  _VideoPlayerWidget: Chewie error - $errorMessage');
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -10270,7 +10268,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         });
       }
     } catch (e) {
-      debugPrint('📹 _VideoPlayerWidget: Error initializing video: $e');
+      debugPrint('  _VideoPlayerWidget: Error initializing video: $e');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -10724,7 +10722,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
   Future<void> _initializePlayer() async {
     try {
       debugPrint(
-        '📹 VideoPlayerScreen: Initializing with URL: ${widget.videoUrl}',
+        '  VideoPlayerScreen: Initializing with URL: ${widget.videoUrl}',
       );
 
       // Validate URL
@@ -10742,7 +10740,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
       controller.addListener(() {
         if (controller.value.hasError) {
           debugPrint(
-            '📹 VideoPlayerScreen: Video error - ${controller.value.errorDescription}',
+            '  VideoPlayerScreen: Video error - ${controller.value.errorDescription}',
           );
           if (mounted && _error == null) {
             setState(() {
@@ -10755,7 +10753,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
 
       await controller.initialize();
       debugPrint(
-        '📹 VideoPlayerScreen: Video initialized - duration: ${controller.value.duration}',
+        '  VideoPlayerScreen: Video initialized - duration: ${controller.value.duration}',
       );
 
       if (!mounted) return;
@@ -10783,7 +10781,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
           ),
         ),
         errorBuilder: (context, errorMessage) {
-          debugPrint('📹 VideoPlayerScreen: Chewie error - $errorMessage');
+          debugPrint('  VideoPlayerScreen: Chewie error - $errorMessage');
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -10812,7 +10810,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
         });
       }
     } catch (e) {
-      debugPrint('📹 VideoPlayerScreen: Exception - $e');
+      debugPrint('  VideoPlayerScreen: Exception - $e');
       if (mounted) {
         setState(() {
           _isLoading = false;

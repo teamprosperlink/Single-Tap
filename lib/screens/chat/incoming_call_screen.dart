@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import '../../models/user_profile.dart';
-import '../../models/message_model.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../call/voice_call_screen.dart';

@@ -177,16 +177,18 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         // Filter for images and exclude deleted messages
         final allDocs = snapshot.data!.docs;
 
-        print('📊 TOTAL MESSAGES: ${allDocs.length}');
+        print('  TOTAL MESSAGES: ${allDocs.length}');
 
         // Check first few messages to see their structure
         for (var i = 0; i < (allDocs.length > 3 ? 3 : allDocs.length); i++) {
           final data = allDocs[i].data() as Map<String, dynamic>;
-          print('📊 MESSAGE $i FIELDS: ${data.keys.toList()}');
+          print('  MESSAGE $i FIELDS: ${data.keys.toList()}');
           print('   - imageUrl: ${data['imageUrl']}');
           print('   - videoUrl: ${data['videoUrl']}');
           final text = data['text']?.toString() ?? '';
-          print('   - text: ${text.length > 30 ? text.substring(0, 30) : text}');
+          print(
+            '   - text: ${text.length > 30 ? text.substring(0, 30) : text}',
+          );
         }
 
         final photos = allDocs.where((doc) {
@@ -216,7 +218,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('📊 PHOTOS FOUND: ${photos.length}');
+        print('  PHOTOS FOUND: ${photos.length}');
 
         if (photos.isEmpty) {
           return _buildEmptyState(
@@ -347,7 +349,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                                   .collection('messages')
                                   .doc(doc.id)
                                   .set({
-                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                    'deletedFor': FieldValue.arrayUnion([
+                                      _currentUserId,
+                                    ]),
                                   }, SetOptions(merge: true));
 
                               if (context.mounted) {
@@ -426,7 +430,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('🎥 VIDEOS FOUND: ${videos.length}');
+        print('  VIDEOS FOUND: ${videos.length}');
 
         if (videos.isEmpty) {
           return _buildEmptyState(
@@ -571,7 +575,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                                   .collection('messages')
                                   .doc(doc.id)
                                   .set({
-                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                    'deletedFor': FieldValue.arrayUnion([
+                                      _currentUserId,
+                                    ]),
                                   }, SetOptions(merge: true));
 
                               if (context.mounted) {
@@ -856,7 +862,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                                   .collection('messages')
                                   .doc(doc.id)
                                   .set({
-                                    'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                                    'deletedFor': FieldValue.arrayUnion([
+                                      _currentUserId,
+                                    ]),
                                   }, SetOptions(merge: true));
 
                               if (context.mounted) {
@@ -884,122 +892,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     );
   }
 
-  Widget _buildMediaItem(MessageModel message, bool isDarkMode) {
-    final isImage = message.mediaUrl != null && _isImageUrl(message.mediaUrl!);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1A2B3D) : const Color(0xFFF0F2F5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            if (isImage) {
-              _showFullScreenImage(message.mediaUrl!);
-            } else {
-              _openUrl(message.mediaUrl!);
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Thumbnail or icon
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: isDarkMode
-                        ? const Color(0xFF0A1828)
-                        : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: isImage
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: message.mediaUrl!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error_outline),
-                          ),
-                        )
-                      : Icon(
-                          _getFileIcon(message.mediaUrl!),
-                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                          size: 28,
-                        ),
-                ),
-                const SizedBox(width: 12),
-                // File info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isImage ? 'Photo' : _getFileName(message.mediaUrl!),
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        timeago.format(message.timestamp),
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white60 : Colors.black45,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Forward arrow
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: isDarkMode ? Colors.white30 : Colors.black26,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhotoGridItem(MessageModel message, bool isDarkMode) {
-    return GestureDetector(
-      onTap: () => _showFullScreenImage(message.mediaUrl!),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1A2B3D) : const Color(0xFFF0F2F5),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: CachedNetworkImage(
-            imageUrl: message.mediaUrl!,
-            fit: BoxFit.cover,
-            placeholder: (context, url) =>
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            errorWidget: (context, url, error) =>
-                const Icon(Icons.error_outline),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildLinkItem(MessageModel message, bool isDarkMode) {
     final urls = _extractUrls(message.text!);
@@ -1104,7 +997,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                           .collection('messages')
                           .doc(message.id)
                           .set({
-                            'deletedFor': FieldValue.arrayUnion([_currentUserId]),
+                            'deletedFor': FieldValue.arrayUnion([
+                              _currentUserId,
+                            ]),
                           }, SetOptions(merge: true));
 
                       if (context.mounted) {
@@ -1126,92 +1021,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     );
   }
 
-  Widget _buildFileItem(MessageModel message, bool isDarkMode) {
-    final fileName = _getFileName(message.mediaUrl!);
-    final fileExtension = _getFileExtension(message.mediaUrl!);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1A2B3D) : const Color(0xFFF0F2F5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _openUrl(message.mediaUrl!),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: _getFileColor(fileExtension).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _getFileIcon(message.mediaUrl!),
-                        color: _getFileColor(fileExtension),
-                        size: 24,
-                      ),
-                      if (fileExtension.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          fileExtension.toUpperCase(),
-                          style: TextStyle(
-                            color: _getFileColor(fileExtension),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        fileName,
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        timeago.format(message.timestamp),
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white60 : Colors.black45,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: isDarkMode ? Colors.white30 : Colors.black26,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyState(bool isDarkMode, String title, String subtitle) {
     return Center(

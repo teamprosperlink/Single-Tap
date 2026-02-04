@@ -212,18 +212,18 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        if (post.description != null) ...[
-                          Text(
-                            post.description!,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 14,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        ...[
+                        Text(
+                          post.description!,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
                           ),
-                          const SizedBox(height: 4),
-                        ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                         Row(
                           children: [
                             if (post.price != null && post.price! > 0) ...[
@@ -276,7 +276,6 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
 
   IconData _getPostIcon(PostModel post) {
     final intent = post.intentAnalysis;
-    if (intent == null) return Icons.article_outlined;
 
     final domain = intent['domain']?.toString().toLowerCase() ?? '';
     if (domain.contains('marketplace') || domain.contains('buy') || domain.contains('sell')) {

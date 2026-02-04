@@ -131,10 +131,18 @@ class GroupVoiceCallService {
     _remoteDescriptionSet[participantId] = false;
     _pendingIceCandidates[participantId] = [];
 
-    // Add local audio tracks
+    // Add local audio tracks with error handling
     if (_localStream != null) {
-      for (var track in _localStream!.getAudioTracks()) {
-        await pc.addTrack(track, _localStream!);
+      try {
+        final audioTracks = _localStream!.getAudioTracks();
+        for (var track in audioTracks) {
+          await pc.addTrack(track, _localStream!);
+        }
+      } catch (e) {
+        debugPrint('GroupVoiceCallService: Error adding track (stream may be disposed): $e');
+        // Close the peer connection and rethrow
+        await pc.close();
+        throw Exception('Failed to add audio track: $e');
       }
     }
 
@@ -194,6 +202,12 @@ class GroupVoiceCallService {
       'GroupVoiceCallService: Joining group call $callId as user $userId',
     );
 
+    // Check if already in this call (happens when expanding from minimized state)
+    if (_isInCall && _currentCallId == callId && _currentUserId == userId) {
+      debugPrint('GroupVoiceCallService: Already in this call, skipping join');
+      return true;
+    }
+
     if (!_isInitialized) {
       final success = await initialize();
       if (!success) return false;
@@ -206,13 +220,17 @@ class GroupVoiceCallService {
       // Get local audio stream
       await _getLocalStream();
 
-      // Mark self as active in Firestore
+      // Mark self as active in Firestore (use set with merge to handle new joiners)
       await _firestore
           .collection('group_calls')
           .doc(callId)
           .collection('participants')
           .doc(userId)
-          .update({'isActive': true, 'joinedAt': FieldValue.serverTimestamp()});
+          .set({
+            'userId': userId,
+            'isActive': true,
+            'joinedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       _isInCall = true;
 
@@ -232,7 +250,9 @@ class GroupVoiceCallService {
   void _listenForParticipants() {
     if (_currentCallId == null || _currentUserId == null) return;
 
-    debugPrint('GroupVoiceCallService: Starting participant listener...');
+    debugPrint(
+      'GroupVoiceCallService: 👥 Starting participant listener for $_currentCallId',
+    );
 
     _callStatusListener = _firestore
         .collection('group_calls')
@@ -240,55 +260,94 @@ class GroupVoiceCallService {
         .collection('participants')
         .where('isActive', isEqualTo: true)
         .snapshots()
-        .listen((snapshot) async {
-          for (var change in snapshot.docChanges) {
-            final participantId = change.doc.id;
+        .listen(
+          (snapshot) async {
+            debugPrint(
+              '    Participant snapshot: ${snapshot.docs.length} active participants',
+            );
 
-            // Skip self
-            if (participantId == _currentUserId) continue;
-
-            if (change.type == DocumentChangeType.added) {
-              // New participant joined
-              debugPrint(
-                'GroupVoiceCallService:   Participant $participantId joined',
-              );
-              await _connectToParticipant(participantId);
-
+            for (var change in snapshot.docChanges) {
+              final participantId = change.doc.id;
               final participantData = change.doc.data();
+              final isActive = participantData?['isActive'] as bool? ?? false;
               final participantName = participantData?['name'] ?? 'Unknown';
-              onParticipantJoined?.call(participantId, participantName);
-            } else if (change.type == DocumentChangeType.removed ||
-                change.doc.data()?['isActive'] == false) {
-              // Participant left
+
               debugPrint(
-                'GroupVoiceCallService:   Participant $participantId left',
+                '    Change type: ${change.type}, participantId: $participantId, isActive: $isActive, name: $participantName',
               );
-              await _disconnectFromParticipant(participantId);
-              onParticipantLeft?.call(participantId);
+
+              // Skip self
+              if (participantId == _currentUserId) {
+                debugPrint('     Skipping self ($participantId)');
+                continue;
+              }
+
+              // Handle participant joining (both added and modified with isActive:true)
+              if ((change.type == DocumentChangeType.added ||
+                      change.type == DocumentChangeType.modified) &&
+                  isActive) {
+                // Check if not already connected
+                if (!_peerConnections.containsKey(participantId)) {
+                  debugPrint(
+                    '    Participant $participantId (name: $participantName) joined',
+                  );
+                  await _connectToParticipant(participantId);
+                  onParticipantJoined?.call(participantId, participantName);
+                } else {
+                  debugPrint(
+                    '     Already connected to $participantId, skipping',
+                  );
+                }
+              }
+              // Handle participant leaving (removed or modified with isActive:false)
+              else if (change.type == DocumentChangeType.removed || !isActive) {
+                debugPrint(
+                  '    Participant $participantId left (type: ${change.type})',
+                );
+                await _disconnectFromParticipant(participantId);
+                onParticipantLeft?.call(participantId);
+              }
             }
-          }
-        });
+          },
+          onError: (error) {
+            debugPrint('    Participant listener error: $error');
+          },
+        );
   }
 
   /// Connect to a specific participant
   Future<void> _connectToParticipant(String participantId) async {
-    debugPrint('GroupVoiceCallService: Connecting to $participantId');
+    debugPrint(
+      'GroupVoiceCallService:   Connecting to $participantId from $_currentUserId',
+    );
+
+    // Safety check: Don't connect if not in call or stream is disposed
+    if (!_isInCall || _localStream == null) {
+      debugPrint('GroupVoiceCallService: Skipping connection - not in call or stream disposed');
+      return;
+    }
 
     // Create peer connection
     final pc = await _createPeerConnection(participantId);
 
     // Determine who initiates (lexicographic order of user IDs)
     final shouldInitiate = _currentUserId!.compareTo(participantId) < 0;
+    debugPrint(
+      '    Comparison: $_currentUserId vs $participantId = ${_currentUserId!.compareTo(participantId)} (should initiate: $shouldInitiate)',
+    );
 
     if (shouldInitiate) {
       // We initiate - create offer
-      debugPrint('GroupVoiceCallService: Creating offer for $participantId');
-      await _createOffer(participantId, pc);
+      debugPrint('    Creating offer for $participantId (we initiate)');
+      try {
+        await _createOffer(participantId, pc);
+        debugPrint('    Offer creation completed for $participantId');
+      } catch (e) {
+        debugPrint('    Error creating offer for $participantId: $e');
+      }
     } else {
       // They initiate - wait for offer
-      debugPrint(
-        'GroupVoiceCallService: Waiting for offer from $participantId',
-      );
+      debugPrint('    Waiting for offer from $participantId (they initiate)');
     }
 
     // Listen for signaling from this participant
@@ -447,7 +506,7 @@ class GroupVoiceCallService {
           // Handle offer
           if (data['offer'] != null) {
             debugPrint(
-              'GroupVoiceCallService: 📥 Received offer from $participantId',
+              'GroupVoiceCallService:   Received offer from $participantId',
             );
             await _handleOffer(
               participantId,
@@ -458,7 +517,7 @@ class GroupVoiceCallService {
           // Handle answer
           if (data['answer'] != null) {
             debugPrint(
-              'GroupVoiceCallService: 📥 Received answer from $participantId',
+              'GroupVoiceCallService:   Received answer from $participantId',
             );
             await _handleAnswer(
               participantId,

@@ -15,6 +15,7 @@ import '../models/user_profile.dart';
 import '../screens/chat/enhanced_chat_screen.dart';
 import '../screens/call/voice_call_screen.dart';
 import '../screens/call/group_audio_call_screen.dart';
+import '../screens/call/incoming_group_audio_call_screen.dart';
 import 'active_chat_service.dart';
 
 /// Global navigator key for notification navigation
@@ -38,6 +39,12 @@ class NotificationService {
   final ActiveChatService _activeChatService = ActiveChatService();
 
   String? _fcmToken;
+
+  /// Track shown notifications to prevent duplicates
+  final Set<String> _shownNotificationIds = {};
+
+  /// Track recent notification content to prevent duplicate displays within 5 seconds
+  final Map<String, DateTime> _recentNotifications = {};
 
   /// Optional callback for custom navigation handling
   NotificationNavigationCallback? onNotificationTap;
@@ -319,7 +326,8 @@ class NotificationService {
             debugPrint(
               '  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
             );
-            navigatorKey.currentState!.push(
+            // Use pushReplacement to avoid underlying page refresh
+            navigatorKey.currentState!.pushReplacement(
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) {
                   return VoiceCallScreen(
@@ -761,8 +769,11 @@ class NotificationService {
   ) async {
     final type = data['type'] as String?;
 
+    debugPrint('  🔔 Notification tapped - type: $type, data: $data');
+
     // If custom callback is set, use it
     if (onNotificationTap != null) {
+      debugPrint('   Using custom callback for notification tap');
       onNotificationTap!(type ?? 'unknown', data);
       return;
     }
@@ -770,21 +781,27 @@ class NotificationService {
     // Default navigation handling
     switch (type) {
       case 'message':
+        debugPrint('  💬 Navigating to chat');
         await _navigateToChat(data);
         break;
       case 'call':
+        debugPrint('  ☎️  Navigating to call');
         await _navigateToCall(data);
         break;
       case 'group_audio_call':
+        debugPrint('    Navigating to group audio call');
         await _navigateToGroupCall(data);
         break;
       case 'inquiry':
+        debugPrint('  ❓ Navigating to inquiries');
         await _navigateToInquiries(data);
         break;
       case 'connection_request':
+        debugPrint('  🤝 Navigating to connections');
         await _navigateToConnections(data);
         break;
       default:
+        debugPrint('  ⚠️  Unknown notification type: $type');
         break;
     }
   }
@@ -983,6 +1000,13 @@ class NotificationService {
       return;
     }
 
+    // Don't show incoming call screen to the caller
+    final currentUserId = _auth.currentUser?.uid;
+    if (callerId == currentUserId) {
+      debugPrint('  _navigateToGroupCall: Current user is the caller, skipping');
+      return;
+    }
+
     // Check if call is still active before navigating
     try {
       final callDoc = await _firestore
@@ -998,8 +1022,11 @@ class NotificationService {
       final callStatus = callData?['status'] as String?;
       debugPrint('  _navigateToGroupCall: Call status = $callStatus');
 
-      // Only show incoming call screen if call is still in 'calling' or 'ringing' state
-      if (callStatus != 'calling' && callStatus != 'ringing') {
+      // Only show incoming call screen if call is still active (calling, ringing, or active)
+      // Note: 'active' is included because caller sets status to active immediately
+      if (callStatus != 'calling' &&
+          callStatus != 'ringing' &&
+          callStatus != 'active') {
         debugPrint(
           '  _navigateToGroupCall: Call already ended, status=$callStatus',
         );
@@ -1025,78 +1052,74 @@ class NotificationService {
       return;
     }
 
-    debugPrint(
-      '  _navigateToGroupCall: Showing CallKit incoming group call UI',
-    );
+    debugPrint('   _navigateToGroupCall: Showing full-screen incoming call UI');
 
-    // Show CallKit incoming call UI (like WhatsApp) for group calls
-    final callKitParams = CallKitParams(
-      id: callId,
-      nameCaller: callerName,
-      appName: 'Supper',
-      avatar: callerPhoto,
-      handle: 'Group Voice Call - $groupName',
-      type: 0, // Audio call
-      textAccept: 'Accept',
-      textDecline: 'Decline',
-      missedCallNotification: const NotificationParams(
-        showNotification: true,
-        isShowCallback: false,
-        subtitle: 'Missed Group Call',
-        callbackText: 'Call back',
-      ),
-      duration: 60000,
-      extra: <String, dynamic>{
-        'callId': callId,
-        'callerId': callerId,
-        'callerName': callerName,
-        'callerPhoto': callerPhoto,
-        'groupId': groupId,
-        'groupName': groupName,
-        'isGroupCall': true,
-      },
-      headers: <String, dynamic>{},
-      android: const AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
-        backgroundColor: '#0f0f23',
-        backgroundUrl: '',
-        actionColor: '#4CAF50',
-        textColor: '#FFFFFF',
-        incomingCallNotificationChannelName: 'Incoming Calls',
-        missedCallNotificationChannelName: 'Missed Calls',
-        isShowCallID: false,
-        isShowFullLockedScreen: true,
-      ),
-      ios: const IOSParams(
-        iconName: 'CallKitLogo',
-        handleType: 'generic',
-        supportsVideo: false,
-        maximumCallGroups: 1,
-        maximumCallsPerCallGroup: 1,
-        audioSessionMode: 'default',
-        audioSessionActive: true,
-        audioSessionPreferredSampleRate: 44100.0,
-        audioSessionPreferredIOBufferDuration: 0.005,
-        supportsDTMF: false,
-        supportsHolding: false,
-        supportsGrouping: false,
-        supportsUngrouping: false,
-        ringtonePath: 'system_ringtone_default',
-      ),
-    );
-
-    await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
-
-    // Update call status to ringing
     try {
-      await _firestore.collection('group_calls').doc(callId).update({
-        'status': 'ringing',
-        'ringingAt': FieldValue.serverTimestamp(),
-      });
+      // Fetch all participants for the incoming call screen
+      debugPrint('    Fetching participants for group call...');
+      final participantsData = <Map<String, dynamic>>[];
+      final participants =
+          (await _firestore.collection('group_calls').doc(callId).get())
+                  .data()?['participants']
+              as List? ??
+          [];
+
+      for (final participantId in participants) {
+        try {
+          final userDoc = await _firestore
+              .collection('users')
+              .doc(participantId as String)
+              .get();
+
+          if (userDoc.exists) {
+            final userData = userDoc.data();
+            participantsData.add({
+              'userId': participantId,
+              'name': userData?['name'] ?? 'Unknown',
+              'photoUrl': userData?['photoUrl'],
+            });
+          }
+        } catch (e) {
+          debugPrint('  ⚠️  Error fetching participant $participantId: $e');
+        }
+      }
+
+      debugPrint('    Fetched ${participantsData.length} participants');
+
+      // Get current user ID
+      final currentUserId = _auth.currentUser?.uid;
+      if (currentUserId == null) {
+        debugPrint('    Current user ID is null');
+        return;
+      }
+
+      debugPrint('    Navigating to IncomingGroupAudioCallScreen');
+
+      // Navigate to IncomingGroupAudioCallScreen (full-screen UI)
+      if (navigatorKey.currentState != null) {
+        navigatorKey.currentState!.push(
+          MaterialPageRoute(
+            builder: (context) => IncomingGroupAudioCallScreen(
+              callId: callId,
+              groupId: groupId,
+              groupName: groupName,
+              callerId: callerId,
+              callerName: callerName,
+              callerPhoto: callerPhoto,
+              currentUserId: currentUserId,
+              currentUserName: _auth.currentUser?.displayName ?? 'User',
+              participants: participantsData,
+            ),
+          ),
+        );
+      }
+
+      debugPrint('    IncomingGroupAudioCallScreen shown (full screen)');
+
+      // Don't update call status - let it remain as is (calling or active)
+      // Each user's ringing status is tracked in their participant document
     } catch (e) {
-      debugPrint('  Error updating group call status: $e');
+      debugPrint('    Error navigating to group call: $e');
     }
   }
 
@@ -1116,6 +1139,31 @@ class NotificationService {
     String? payload,
     String channelId = 'chat_messages',
   }) async {
+    // Create unique key for this notification content
+    final notificationKey = '$title|$body';
+    final now = DateTime.now();
+
+    // Check if same notification was shown recently (within 5 seconds)
+    if (_recentNotifications.containsKey(notificationKey)) {
+      final lastShown = _recentNotifications[notificationKey]!;
+      final difference = now.difference(lastShown).inSeconds;
+
+      if (difference < 5) {
+        debugPrint(
+          '  Skipping duplicate notification (shown $difference seconds ago): $title',
+        );
+        return;
+      }
+    }
+
+    // Update recent notifications map
+    _recentNotifications[notificationKey] = now;
+
+    // Clean up old entries (remove entries older than 10 seconds)
+    _recentNotifications.removeWhere((key, time) {
+      return now.difference(time).inSeconds > 10;
+    });
+
     final androidDetails = AndroidNotificationDetails(
       channelId,
       channelId == 'chat_messages'
@@ -1183,61 +1231,188 @@ class NotificationService {
 
   void startListeningForGroupCalls() {
     final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      debugPrint('    startListeningForGroupCalls: currentUserId is NULL');
+      return;
+    }
 
-    debugPrint('  Starting group call listener for user: $currentUserId');
+    debugPrint('========================================');
+    debugPrint('    Starting group call listener for user: $currentUserId');
+    debugPrint('========================================');
 
     _groupCallListener = _firestore
         .collection('group_calls')
         .where('participants', arrayContains: currentUserId)
-        .where('status', isEqualTo: 'calling')
         .snapshots()
-        .listen((snapshot) async {
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              final callData = change.doc.data();
-              if (callData == null) continue;
+        .listen(
+          (snapshot) async {
+            debugPrint('========================================');
+            debugPrint(
+              '   Group call snapshot received: ${snapshot.docs.length} docs, ${snapshot.docChanges.length} changes',
+            );
+            debugPrint('========================================');
 
-              final callId = change.doc.id;
-              final callerId = callData['callerId'] as String?;
-              final callerName = callData['callerName'] as String?;
-              final groupId = callData['groupId'] as String?;
-              final groupName = callData['groupName'] as String?;
+            for (var change in snapshot.docChanges) {
+              debugPrint('    Document change type: ${change.type}');
 
-              // Don't show notification to the caller
-              if (callerId == currentUserId) continue;
+              if (change.type == DocumentChangeType.added) {
+                final callData = change.doc.data();
+                if (callData == null) {
+                  debugPrint('    Call data is null');
+                  continue;
+                }
 
-              debugPrint(' NEW GROUP CALL DETECTED: $callId from $callerName');
+                final callId = change.doc.id;
+                final callerId = callData['callerId'] as String?;
+                final callerName = callData['callerName'] as String?;
+                final groupId = callData['groupId'] as String?;
+                final groupName = callData['groupName'] as String?;
+                final participants = callData['participants'] as List?;
+                final status = callData['status'] as String?;
 
-              // Get caller photo
-              String? callerPhoto;
-              try {
-                final callerDoc = await _firestore
-                    .collection('users')
-                    .doc(callerId)
-                    .get();
-                callerPhoto = callerDoc.data()?['photoUrl'] as String?;
-              } catch (e) {
-                debugPrint('Error fetching caller photo: $e');
+                debugPrint(
+                  '    Call detected: callId=$callId, callerId=$callerId, callerName=$callerName, status=$status',
+                );
+                debugPrint('    Participants in call: $participants');
+                debugPrint(
+                  '    CurrentUserId: $currentUserId, Is currentUser the caller? ${callerId == currentUserId}',
+                );
+
+                // Filter by status in code instead of query
+                if (status != 'calling' &&
+                    status != 'active' &&
+                    status != 'connected' &&
+                    status != 'ringing') {
+                  debugPrint('     Skipping - call status is $status');
+                  continue;
+                }
+
+                // Don't show notification to the caller
+                if (callerId == currentUserId) {
+                  debugPrint('     Skipping - current user is the caller');
+                  continue;
+                }
+
+                debugPrint(
+                  '    NEW GROUP CALL DETECTED: $callId from $callerName',
+                );
+
+                // Get caller photo
+                String? callerPhoto;
+                try {
+                  final callerDoc = await _firestore
+                      .collection('users')
+                      .doc(callerId)
+                      .get();
+                  callerPhoto = callerDoc.data()?['photoUrl'] as String?;
+                  debugPrint('    Fetched caller photo: $callerPhoto');
+                } catch (e) {
+                  debugPrint('    Error fetching caller photo: $e');
+                }
+
+                // Show full-screen incoming call UI (not CallKit)
+                debugPrint(
+                  '    Calling _navigateToGroupCall with callId=$callId, groupName=$groupName',
+                );
+                try {
+                  await _navigateToGroupCall({
+                    'callId': callId,
+                    'callerId': callerId,
+                    'callerName': callerName ?? 'Someone',
+                    'callerPhoto': callerPhoto,
+                    'groupId': groupId,
+                    'groupName': groupName ?? 'Unknown Group',
+                  });
+                } catch (e) {
+                  debugPrint('    Error in _navigateToGroupCall: $e');
+                }
+              } else if (change.type == DocumentChangeType.modified) {
+                debugPrint('    Document modified: ${change.doc.id}');
+              } else if (change.type == DocumentChangeType.removed) {
+                debugPrint('     Document removed: ${change.doc.id}');
               }
-
-              // Show CallKit incoming call UI
-              await _navigateToGroupCall({
-                'callId': callId,
-                'callerId': callerId,
-                'callerName': callerName ?? 'Someone',
-                'callerPhoto': callerPhoto,
-                'groupId': groupId,
-                'groupName': groupName ?? 'Unknown Group',
-              });
             }
-          }
-        });
+          },
+          onError: (error) {
+            debugPrint('    Group call listener error: $error');
+          },
+        );
   }
 
   void stopListeningForGroupCalls() {
     _groupCallListener?.cancel();
     _groupCallListener = null;
+  }
+
+  /// Test method to verify the listener can access group call documents
+  Future<void> testGroupCallDocumentAccess() async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      debugPrint('    testGroupCallDocumentAccess: currentUserId is NULL');
+      return;
+    }
+
+    debugPrint(
+      '    Testing group call document access for user: $currentUserId',
+    );
+
+    try {
+      // Test 1: Can we read ANY group_calls documents?
+      final allCalls = await _firestore
+          .collection('group_calls')
+          .limit(5)
+          .get();
+      debugPrint(
+        '    Total group_calls documents in system: ${allCalls.docs.length}',
+      );
+      for (var doc in allCalls.docs) {
+        final status = doc['status'];
+        final participants = doc['participants'] as List?;
+        debugPrint(
+          '    - Doc ${doc.id}: status=$status, participants=$participants',
+        );
+      }
+
+      // Test 2: Can we query with arrayContains?
+      final userCalls = await _firestore
+          .collection('group_calls')
+          .where('participants', arrayContains: currentUserId)
+          .limit(5)
+          .get();
+      debugPrint(
+        '    Group calls where user is participant: ${userCalls.docs.length}',
+      );
+      for (var doc in userCalls.docs) {
+        final status = doc['status'];
+        final callerId = doc['callerId'];
+        debugPrint('    - Doc ${doc.id}: status=$status, callerId=$callerId');
+      }
+
+      // Test 3: Can we query with compound condition?
+      final activeUserCalls = await _firestore
+          .collection('group_calls')
+          .where('participants', arrayContains: currentUserId)
+          .where('status', isEqualTo: 'calling')
+          .limit(5)
+          .get();
+      debugPrint(
+        '    Active group calls for user: ${activeUserCalls.docs.length}',
+      );
+      for (var doc in activeUserCalls.docs) {
+        final callerId = doc['callerId'];
+        final groupName = doc['groupName'];
+        debugPrint(
+          '    - Doc ${doc.id}: callerId=$callerId, groupName=$groupName',
+        );
+      }
+
+      debugPrint('    All document access tests passed!');
+    } catch (e) {
+      debugPrint('    Error testing document access: $e');
+      if (e.toString().contains('index')) {
+        debugPrint('  💡 This might be a Firestore composite index issue');
+      }
+    }
   }
 
   /// when a call document is created in Firestore
@@ -1315,9 +1490,22 @@ class NotificationService {
 
   /// Process and show new notifications (call this from a listener)
   Future<void> processNewNotification(Map<String, dynamic> notification) async {
+    final notificationId = notification['id'] as String?;
+
+    // Prevent duplicate notifications - check if already shown
+    if (notificationId != null &&
+        _shownNotificationIds.contains(notificationId)) {
+      debugPrint('  Skipping duplicate notification: $notificationId');
+      return;
+    }
+
     final title = notification['title'] as String? ?? 'Notification';
     final body = notification['body'] as String? ?? '';
-    final notificationId = notification['id'] as String?;
+
+    // Add to shown notifications set
+    if (notificationId != null) {
+      _shownNotificationIds.add(notificationId);
+    }
 
     // Show local notification
     await _showLocalNotification(
@@ -1330,6 +1518,13 @@ class NotificationService {
     // Mark as read after showing
     if (notificationId != null) {
       await markNotificationAsRead(notificationId);
+    }
+
+    // Clean up old entries from set (keep last 100 to prevent memory leak)
+    if (_shownNotificationIds.length > 100) {
+      final excess = _shownNotificationIds.length - 100;
+      final toRemove = _shownNotificationIds.take(excess).toList();
+      _shownNotificationIds.removeAll(toRemove);
     }
   }
 
@@ -1423,6 +1618,73 @@ class NotificationService {
 
   /// Get current FCM token (for debugging)
   String? get fcmToken => _fcmToken;
+
+  /// Debug method: Verify FCM token is saved in Firestore
+  Future<void> verifyFCMTokenSetup() async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      debugPrint('❌ No current user');
+      return;
+    }
+
+    debugPrint('========================================');
+    debugPrint('🔍 FCM TOKEN VERIFICATION');
+    debugPrint('========================================');
+
+    // Get local token
+    final localToken = await _fcm.getToken();
+    debugPrint('📱 Local FCM token: ${localToken?.substring(0, 20)}...');
+
+    // Get Firestore token
+    try {
+      final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final firestoreToken = userDoc.data()?['fcmToken'] as String?;
+      debugPrint('☁️  Firestore FCM token: ${firestoreToken?.substring(0, 20)}...');
+
+      if (localToken == firestoreToken) {
+        debugPrint('✅ Tokens match - FCM setup is correct!');
+      } else {
+        debugPrint('⚠️  Tokens DO NOT match - updating Firestore...');
+        await _updateFCMToken();
+        debugPrint('✅ Firestore token updated');
+      }
+    } catch (e) {
+      debugPrint('❌ Error checking Firestore token: $e');
+    }
+
+    debugPrint('========================================');
+  }
+
+  /// Debug method: Test sending a notification to self
+  Future<void> testSelfNotification() async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      debugPrint('❌ No current user');
+      return;
+    }
+
+    debugPrint('========================================');
+    debugPrint('🧪 TESTING SELF NOTIFICATION');
+    debugPrint('========================================');
+
+    try {
+      await sendNotificationToUser(
+        userId: currentUserId,
+        title: 'Test Notification',
+        body: 'This is a test notification from the app',
+        type: 'test',
+        data: {'testTime': DateTime.now().toIso8601String()},
+      );
+
+      debugPrint('✅ Test notification created in Firestore');
+      debugPrint('⏳ Cloud Function should send FCM in 1-2 seconds...');
+      debugPrint('📱 Check if notification appears on device');
+    } catch (e) {
+      debugPrint('❌ Error sending test notification: $e');
+    }
+
+    debugPrint('========================================');
+  }
 
   /// Check if all required permissions for calls are granted
   Future<bool> checkCallPermissions() async {

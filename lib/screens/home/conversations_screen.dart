@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'dart:async';
 
 import '../../models/conversation_model.dart';
 import '../../models/user_profile.dart';
@@ -16,7 +17,8 @@ import '../../mixins/voice_search_mixin.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../chat/create_group_screen.dart';
 import '../chat/group_chat_screen.dart';
-import '../call/call_history_screen.dart';
+import '../call/voice_call_screen.dart';
+import '../../services/notification_service.dart';
 
 class ConversationsScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -575,11 +577,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return const Center(child: Text('Please login to see calls'));
     }
 
-    // Use a simpler query without orderBy to avoid index requirement
-    // Sort client-side instead
     return Column(
       children: [
-        // Selection mode header or actions bar
+        // Selection mode header
         if (_isCallSelectionMode)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -617,12 +617,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           )
         else
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('calls')
-                  .where('participants', arrayContains: currentUserId)
-                  .limit(50)
-                  .snapshots(),
+            child: StreamBuilder<List<DocumentSnapshot>>(
+              stream: _getCombinedCallsStream(currentUserId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -633,75 +629,49 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   return _buildEmptyCallsState(isDarkMode);
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                final allCalls = snapshot.data ?? [];
+                if (allCalls.isEmpty) {
                   return _buildEmptyCallsState(isDarkMode);
                 }
 
-                // Sort client-side by timestamp (descending)
-                final calls = snapshot.data!.docs.toList();
-                calls.sort((a, b) {
+                // Sort by timestamp (descending)
+                allCalls.sort((a, b) {
                   final aData = a.data() as Map<String, dynamic>;
                   final bData = b.data() as Map<String, dynamic>;
-                  final aTime = aData['timestamp'] as Timestamp?;
-                  final bTime = bData['timestamp'] as Timestamp?;
+                  final aTime = aData['timestamp'] as Timestamp? ??
+                               aData['createdAt'] as Timestamp?;
+                  final bTime = bData['timestamp'] as Timestamp? ??
+                               bData['createdAt'] as Timestamp?;
                   if (aTime == null && bTime == null) return 0;
                   if (aTime == null) return 1;
                   if (bTime == null) return -1;
                   return bTime.compareTo(aTime);
                 });
 
-                // Prefetch all user data for calls
-                final userIds = <String>[];
-                for (var doc in calls) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final callerId = data['callerId'] as String? ?? '';
-                  final receiverId = data['receiverId'] as String? ?? '';
-                  if (callerId != currentUserId && callerId.isNotEmpty) {
-                    userIds.add(callerId);
-                  }
-                  if (receiverId != currentUserId && receiverId.isNotEmpty) {
-                    userIds.add(receiverId);
-                  }
+                // Prefetch user data
+                _prefetchUserDataForCalls(allCalls, currentUserId);
+
+                // Filter by search
+                final filteredCalls = _filterCallsBySearch(allCalls, currentUserId);
+
+                if (filteredCalls.isEmpty) {
+                  return _buildEmptyCallsState(isDarkMode);
                 }
 
-                return FutureBuilder<void>(
-                  future: _prefetchUsers(userIds),
-                  builder: (context, prefetchSnapshot) {
-                    // Filter by search query using cached names
-                    final filteredCalls = _searchQuery.isEmpty
-                        ? calls
-                        : calls.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final callerId = data['callerId'] as String? ?? '';
-                            final receiverId =
-                                data['receiverId'] as String? ?? '';
-                            final otherUserId = callerId == currentUserId
-                                ? receiverId
-                                : callerId;
-                            final userData = _userCache[otherUserId];
-                            final name = (userData?['name'] ?? '')
-                                .toString()
-                                .toLowerCase();
-                            return name.contains(_searchQuery);
-                          }).toList();
+                return ListView.builder(
+                  padding: const EdgeInsets.only(top: 8),
+                  itemCount: filteredCalls.length,
+                  itemBuilder: (context, index) {
+                    final callDoc = filteredCalls[index];
+                    final callData = callDoc.data() as Map<String, dynamic>;
+                    final isGroupCall = callData.containsKey('groupId');
 
-                    if (filteredCalls.isEmpty) {
-                      return _buildEmptyCallsState(isDarkMode);
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.only(top: 8),
-                      itemCount: filteredCalls.length,
-                      itemBuilder: (context, index) {
-                        final callDoc = filteredCalls[index];
-                        final callData = callDoc.data() as Map<String, dynamic>;
-                        return _buildCallTileWithDelete(
-                          callDoc.id,
-                          callData,
-                          isDarkMode,
-                          currentUserId,
-                        );
-                      },
+                    return _buildCallTileWithDelete(
+                      callDoc.id,
+                      callData,
+                      isDarkMode,
+                      currentUserId,
+                      isGroupCall: isGroupCall,
                     );
                   },
                 );
@@ -710,6 +680,105 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
       ],
     );
+  }
+
+  Stream<List<DocumentSnapshot>> _getCombinedCallsStream(String currentUserId) {
+    // Create a controller to combine both streams
+    final controller = StreamController<List<DocumentSnapshot>>();
+
+    final individualCallsStream = _firestore
+        .collection('calls')
+        .where('participants', arrayContains: currentUserId)
+        .limit(50)
+        .snapshots();
+
+    final groupCallsStream = _firestore
+        .collection('group_calls')
+        .where('participants', arrayContains: currentUserId)
+        .limit(50)
+        .snapshots();
+
+    List<DocumentSnapshot>? lastIndividualCalls;
+    List<DocumentSnapshot>? lastGroupCalls;
+
+    // Subscribe to individual calls
+    final sub1 = individualCallsStream.listen((snapshot) {
+      lastIndividualCalls = snapshot.docs;
+      if (lastGroupCalls != null) {
+        controller.add([...lastIndividualCalls!, ...lastGroupCalls!]);
+      }
+    });
+
+    // Subscribe to group calls
+    final sub2 = groupCallsStream.listen((snapshot) {
+      lastGroupCalls = snapshot.docs;
+      if (lastIndividualCalls != null) {
+        controller.add([...lastIndividualCalls!, ...lastGroupCalls!]);
+      }
+    });
+
+    controller.onCancel = () {
+      sub1.cancel();
+      sub2.cancel();
+    };
+
+    return controller.stream;
+  }
+
+  void _prefetchUserDataForCalls(
+    List<DocumentSnapshot> calls,
+    String currentUserId,
+  ) {
+    final userIds = <String>[];
+    for (var doc in calls) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      if (data.containsKey('groupId')) {
+        // Group call - prefetch all participants
+        final participants = List<String>.from(data['participants'] ?? []);
+        userIds.addAll(participants.where((id) => !_userCache.containsKey(id)));
+      } else {
+        // Individual call
+        final callerId = data['callerId'] as String? ?? '';
+        final receiverId = data['receiverId'] as String? ?? '';
+        if (callerId != currentUserId && callerId.isNotEmpty) {
+          userIds.add(callerId);
+        }
+        if (receiverId != currentUserId && receiverId.isNotEmpty) {
+          userIds.add(receiverId);
+        }
+      }
+    }
+    if (userIds.isNotEmpty) {
+      _prefetchUsers(userIds);
+    }
+  }
+
+  List<DocumentSnapshot> _filterCallsBySearch(
+    List<DocumentSnapshot> calls,
+    String currentUserId,
+  ) {
+    if (_searchQuery.isEmpty) {
+      return calls;
+    }
+
+    return calls.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      if (data.containsKey('groupId')) {
+        // Group call - search by group name
+        final groupName = data['groupName'] as String? ?? '';
+        return groupName.toLowerCase().contains(_searchQuery);
+      } else {
+        // Individual call - search by contact name
+        final callerId = data['callerId'] as String? ?? '';
+        final receiverId = data['receiverId'] as String? ?? '';
+        final otherUserId = callerId == currentUserId ? receiverId : callerId;
+        final userData = _userCache[otherUserId];
+        final name = (userData?['name'] ?? '').toString().toLowerCase();
+        return name.contains(_searchQuery);
+      }
+    }).toList();
   }
 
   void _enterCallSelectionMode() {
@@ -1017,8 +1086,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     String callId,
     Map<String, dynamic> callData,
     bool isDarkMode,
-    String currentUserId,
-  ) {
+    String currentUserId, {
+    bool isGroupCall = false,
+  }) {
     final isSelected = _selectedCallIds.contains(callId);
 
     return Dismissible(
@@ -1078,6 +1148,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   callData,
                   isDarkMode,
                   currentUserId,
+                  isGroupCall: isGroupCall,
                 ),
               ),
             ],
@@ -1091,8 +1162,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Widget _buildCallTileOptimized(
     Map<String, dynamic> callData,
     bool isDarkMode,
-    String currentUserId,
-  ) {
+    String currentUserId, {
+    bool isGroupCall = false,
+  }) {
     final callerId = callData['callerId'] ?? '';
     final receiverId = callData['receiverId'] ?? '';
     final isOutgoing = callerId == currentUserId;
@@ -1100,6 +1172,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final callStatus = callData['status'] ?? 'unknown';
     final callType = callData['type'] ?? 'voice';
     final timestamp = callData['timestamp'] as Timestamp?;
+    final participants = List<String>.from(callData['participants'] ?? []);
 
     // Get user data from cache (prefetched earlier)
     final userData = _userCache[otherUserId];
@@ -1112,6 +1185,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final photoUrl = userData?['photoUrl'];
     final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+
+    // Check if it's a group call (more than 2 participants)
+    final groupCallCheck = participants.length > 2;
+    final finalIsGroupCall = isGroupCall || groupCallCheck;
+
+    // Get group name for group calls
+    final groupName = callData['groupName'] as String? ?? 'Group Call';
 
     // Determine call status icon and color
     IconData statusIcon;
@@ -1143,15 +1223,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: _buildUserAvatar(
-          photoUrl: fixedPhotoUrl,
-          initial: initial,
-          radius: 26,
-          context: context,
-          uniqueId: otherUserId,
-        ),
+        leading: finalIsGroupCall
+            ? _buildGroupAvatarStack(participants, currentUserId)
+            : _buildUserAvatar(
+                photoUrl: fixedPhotoUrl,
+                initial: initial,
+                radius: 26,
+                context: context,
+                uniqueId: otherUserId,
+              ),
         title: Text(
-          formatDisplayName(displayName),
+          finalIsGroupCall
+              ? groupName
+              : formatDisplayName(displayName),
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,
@@ -1162,13 +1246,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           children: [
             Icon(statusIcon, size: 16, color: statusColor),
             const SizedBox(width: 4),
-            Text(
-              timestamp != null
-                  ? timeago.format(timestamp.toDate())
-                  : 'Unknown time',
-              style: TextStyle(
-                color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
-                fontSize: 13,
+            Expanded(
+              child: Text(
+                finalIsGroupCall
+                    ? '${participants.length} ${participants.length == 1 ? 'person' : 'people'} • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
+                    : (timestamp != null
+                        ? timeago.format(timestamp.toDate())
+                        : 'Unknown time'),
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -1182,7 +1270,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         ),
         onTap: () => _showCallDetails(
           callData,
-          formatDisplayName(displayName),
+          finalIsGroupCall ? groupName : formatDisplayName(displayName),
           isDarkMode,
         ),
       ),
@@ -1221,15 +1309,183 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
+  Future<void> _cleanupOldStuckCalls(String currentUserId) async {
+    try {
+      final now = DateTime.now();
+      final fiveMinutesAgo = now.subtract(const Duration(minutes: 5));
+
+      final oldCalls = await _firestore
+          .collection('calls')
+          .where('participants', arrayContains: currentUserId)
+          .where('status', whereIn: ['calling', 'ringing'])
+          .get();
+
+      // End calls that are stuck in calling/ringing state for more than 5 minutes
+      final batch = _firestore.batch();
+      int cleanedCount = 0;
+
+      for (var doc in oldCalls.docs) {
+        final timestamp = doc.data()['timestamp'] as Timestamp?;
+        if (timestamp != null && timestamp.toDate().isBefore(fiveMinutesAgo)) {
+          batch.update(doc.reference, {
+            'status': 'ended',
+            'endedAt': FieldValue.serverTimestamp(),
+          });
+          cleanedCount++;
+          debugPrint('Cleaned up old stuck call: ${doc.id}');
+        }
+      }
+
+      if (cleanedCount > 0) {
+        await batch.commit();
+        debugPrint('Cleaned up $cleanedCount old stuck calls');
+      }
+    } catch (e) {
+      debugPrint('Error cleaning up old calls: $e');
+      // Continue with call initiation even if cleanup fails
+    }
+  }
+
   void _initiateCall(String userId, bool isVideo) async {
-    // TODO: Implement call initiation
+    // Prevent video calls (feature disabled)
+    if (isVideo) {
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video calling is not available'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isVideo ? 'Video calling coming soon!' : 'Calling...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      // Clean up old stuck calls (older than 5 minutes) before starting a new one
+      await _cleanupOldStuckCalls(currentUserId);
+
+      // Get current user profile for call details
+      final currentUserDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      final currentUserName = currentUserDoc.data()?['name'] ?? 'Unknown';
+      final currentUserPhoto = currentUserDoc.data()?['photoUrl'];
+
+      // Get receiver's profile
+      final receiverDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (!receiverDoc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('User not found'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final receiverName = receiverDoc.data()?['name'] ?? 'Unknown';
+      final receiverPhoto = receiverDoc.data()?['photoUrl'];
+
+      // Check if user already has a recent active call (within last 5 minutes)
+      final now = DateTime.now();
+      final fiveMinutesAgo = now.subtract(const Duration(minutes: 5));
+
+      final activeCallsQuery = await _firestore
+          .collection('calls')
+          .where('participants', arrayContains: currentUserId)
+          .where('status', whereIn: ['calling', 'ringing', 'connected'])
+          .limit(5)
+          .get();
+
+      // Filter for recent calls only (created in last 5 minutes)
+      final recentActiveCalls = activeCallsQuery.docs.where((doc) {
+        final timestamp = doc.data()['timestamp'] as Timestamp?;
+        if (timestamp == null) return false;
+        return timestamp.toDate().isAfter(fiveMinutesAgo);
+      }).toList();
+
+      if (recentActiveCalls.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You already have an active call'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create call document in Firestore
+      final callDoc = await _firestore.collection('calls').add({
+        'callerId': currentUserId,
+        'receiverId': userId,
+        'callerName': currentUserName,
+        'callerPhoto': currentUserPhoto,
+        'receiverName': receiverName,
+        'receiverPhoto': receiverPhoto,
+        'participants': [currentUserId, userId],
+        'status': 'calling',
+        'type': 'audio',
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      // Get receiver's profile for navigation
+      final receiverProfile = UserProfile.fromMap(receiverDoc.data()!, userId);
+
+      // Send call notification to receiver (fire and forget)
+      NotificationService().sendNotificationToUser(
+        userId: userId,
+        title: 'Incoming Call',
+        body: '$currentUserName is calling you',
+        type: 'call',
+        data: {
+          'callId': callDoc.id,
+          'callerId': currentUserId,
+          'callerName': currentUserName,
+          'callerPhoto': currentUserPhoto,
+        },
+      );
+
+      // Navigate to voice call screen
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VoiceCallScreen(
+            callId: callDoc.id,
+            otherUser: receiverProfile,
+            isOutgoing: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error initiating call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start call: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   void _showCallDetails(
@@ -1588,6 +1844,100 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Build group avatar stack showing multiple participants
+  Widget _buildGroupAvatarStack(List<String> participants, String currentUserId) {
+    // Get up to 4 other participants (excluding current user)
+    final otherParticipants = participants
+        .where((id) => id != currentUserId)
+        .take(4)
+        .toList();
+
+    const avatarSize = 22.0;
+    const stackRadius = 26.0;
+
+    return SizedBox(
+      width: stackRadius * 2,
+      height: stackRadius * 2,
+      child: Stack(
+        children: List.generate(otherParticipants.length, (index) {
+          final userId = otherParticipants[index];
+          final userData = _userCache[userId];
+          final name = userData?['name'] ?? 'U';
+          final photoUrl = userData?['photoUrl'];
+          final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+          // Position avatars in a 2x2 grid for up to 4 participants
+          final row = index ~/ 2;
+          final col = index % 2;
+          final offsetX = col == 0 ? 0.0 : stackRadius;
+          final offsetY = row == 0 ? 0.0 : stackRadius;
+
+          return Positioned(
+            left: offsetX,
+            top: offsetY,
+            child: Container(
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.8),
+                  width: 1.5,
+                ),
+              ),
+              child: ClipOval(
+                child: photoUrl != null && photoUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: PhotoUrlHelper.fixGooglePhotoUrl(photoUrl) ?? photoUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                          child: Center(
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                          child: Center(
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                        child: Center(
+                          child: Text(
+                            initial,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }

@@ -8,7 +8,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/other widgets/user_avatar.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../widgets/app_background.dart';
 import '../../res/utils/photo_url_helper.dart';
@@ -66,7 +65,6 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   static const Duration _locationCacheDuration = Duration(seconds: 90);
 
   // Filter options
-  final bool _filterByExactLocation = false;
   bool _filterByInterests = false;
   bool _filterByGender = false;
   bool _filterByConnectionTypes = false;
@@ -781,31 +779,6 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         return false;
       }).toList();
     }
-  }
-
-  void _showMyProfile() {
-    if (_userProfile == null) return;
-
-    // Create ExtendedUserProfile from current user's data
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    final myProfile = ExtendedUserProfile.fromMap(_userProfile!, userId);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ProfileDetailBottomSheet(
-        user: myProfile,
-        isOwnProfile:
-            true, // This is own profile - hide Connect/Message buttons
-        onEdit: () {
-          Navigator.pop(context); // Close the profile detail sheet
-          _showEditProfile(); // Show the edit sheet
-        },
-      ),
-    );
   }
 
   void _showEditProfile() {

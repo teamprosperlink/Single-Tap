@@ -254,7 +254,7 @@ class DataFixService {
         }
       }
 
-      debugPrint('\n📊 Diagnostic Results:');
+      debugPrint('\n  Diagnostic Results:');
       debugPrint('  Total conversations: ${snapshot.docs.length}');
       debugPrint('  Group convs with wrong ID: $groupConvsWithWrongId');
       debugPrint(

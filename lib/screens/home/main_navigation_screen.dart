@@ -44,7 +44,6 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _currentIndex = 0;
-  int _unreadMessageCount = 0;
   late TabController _tabController;
 
   // Stream subscription for cleanup
@@ -149,10 +148,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // Start listening for group audio calls (Firestore real-time listener)
     try {
-      NotificationService().startListeningForGroupCalls();
-      debugPrint('  Group call listener initialized in MainNavigationScreen');
+      final notificationService = NotificationService();
+      debugPrint('========================================');
+      debugPrint('  INITIALIZING GROUP CALL LISTENER');
+      debugPrint('========================================');
+      notificationService.startListeningForGroupCalls();
+      debugPrint('    Group call listener initialized in MainNavigationScreen');
+
+      // Run diagnostic test to verify document access
+      debugPrint('  Running diagnostic test...');
+      notificationService.testGroupCallDocumentAccess().then((_) {
+        debugPrint('  Diagnostic test completed');
+      });
     } catch (e) {
-      debugPrint('Error starting group call listener: $e');
+      debugPrint('   ERROR starting group call listener: $e');
+      debugPrint('   Stack trace: ${StackTrace.current}');
     }
 
     // Run these async operations without blocking
@@ -822,7 +832,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               for (var doc in snap.docs) {
                 total += ((doc["unreadCount"]?[user.uid] ?? 0) as num).toInt();
               }
-              setState(() => _unreadMessageCount = total);
+              // Unread count updated
+              setState(() {});
               NotificationService().updateBadgeCount(total);
             } catch (e) {
               debugPrint('Error processing unread count: $e');

@@ -52,7 +52,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final data = message.data;
     final type = data['type'] as String?;
 
-    // For call notifications, show full-screen CallKit UI (like WhatsApp)
+    print('[FCM] Background message received - type: $type');
+
+    // For 1-to-1 call notifications
     if (type == 'call') {
       final callId = data['callId'] as String?;
       final callerId = data['callerId'] as String?;
@@ -92,6 +94,67 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           );
         } catch (e) {
           print('[FCM] Error showing incoming call: $e');
+        }
+      }
+    }
+    // For GROUP call notifications (WhatsApp-style)
+    else if (type == 'group_call') {
+      print('[FCM] Group call notification received in background');
+      final callId = data['callId'] as String?;
+      final callerId = data['callerId'] as String?;
+      final callerName = data['callerName'] as String? ?? 'Someone';
+      final callerPhoto = data['callerPhoto'] as String?;
+      final groupId = data['groupId'] as String?;
+      final groupName = data['groupName'] as String? ?? 'Group Call';
+
+      if (callId == null || groupId == null) {
+        print('[FCM] Missing callId or groupId');
+        return;
+      }
+
+      // Verify call is still active before showing notification
+      try {
+        final callDoc = await FirebaseFirestore.instance
+            .collection('group_calls')
+            .doc(callId)
+            .get();
+
+        if (!callDoc.exists) {
+          print('[FCM] Call document does not exist');
+          return;
+        }
+
+        final callStatus = callDoc.data()?['status'] as String?;
+        print('[FCM] Call status: $callStatus');
+
+        // Allow 'calling', 'ringing', or 'active' status
+        if (callStatus != 'calling' &&
+            callStatus != 'ringing' &&
+            callStatus != 'active') {
+          print('[FCM] Call not active, status: $callStatus');
+          return;
+        }
+
+        // Show full-screen incoming call UI using CallKit
+        print('[FCM] Showing group call notification');
+        await showFullScreenIncomingCall(
+          callId: callId,
+          callerId: callerId ?? '',
+          callerName: '$callerName ($groupName)',
+          callerPhoto: callerPhoto,
+        );
+      } catch (e) {
+        print('[FCM] Error verifying group call: $e');
+        // If we can't verify, still show the call
+        try {
+          await showFullScreenIncomingCall(
+            callId: callId,
+            callerId: callerId ?? '',
+            callerName: '$callerName ($groupName)',
+            callerPhoto: callerPhoto,
+          );
+        } catch (e) {
+          print('[FCM] Error showing incoming group call: $e');
         }
       }
     }
