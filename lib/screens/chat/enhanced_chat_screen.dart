@@ -2220,6 +2220,17 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           );
         }
 
+        // If this is a call message, also delete the call document
+        final callId = data['callId'] as String?;
+        if (callId != null && callId.isNotEmpty) {
+          try {
+            await _firestore.collection('calls').doc(callId).delete();
+            debugPrint('Deleted call document: $callId');
+          } catch (e) {
+            debugPrint('Error deleting call document $callId: $e');
+          }
+        }
+
         // Add to batch
         if (isAlreadyDeleted) {
           batch.delete(messageDoc.reference);
@@ -4130,6 +4141,19 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             'deletedFor': FieldValue.arrayUnion([currentUserId]),
           });
 
+      // If this is a call message, also add to deletedFor in calls collection
+      // Message ID format for calls is 'call_{callId}'
+      if (message.id.startsWith('call_')) {
+        final callId = message.id.substring(5); // Remove 'call_' prefix
+        try {
+          await _firestore.collection('calls').doc(callId).update({
+            'deletedFor': FieldValue.arrayUnion([currentUserId]),
+          });
+        } catch (e) {
+          debugPrint('Error adding deletedFor to calls collection: $e');
+        }
+      }
+
       // Remove from local cached messages to update UI immediately
       _loadedMessages.removeWhere((doc) => doc.id == message.id);
       _allMessages.removeWhere((m) => m.id == message.id);
@@ -4177,6 +4201,37 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           await ref.delete();
         } catch (e) {
           debugPrint('Error deleting audio file: $e');
+        }
+      }
+
+      // If this is a call message, also delete the call document from calls collection
+      // Message ID format for calls is 'call_{callId}'
+      if (message.id.startsWith('call_')) {
+        final callId = message.id.substring(5); // Remove 'call_' prefix
+        try {
+          await _firestore.collection('calls').doc(callId).delete();
+          debugPrint('Deleted call document: $callId');
+        } catch (e) {
+          debugPrint('Error deleting call document $callId: $e');
+        }
+      } else {
+        // Also check if message has callId field in Firestore (for messages not using call_ prefix)
+        try {
+          final messageDoc = await _firestore
+              .collection('conversations')
+              .doc(_conversationId!)
+              .collection('messages')
+              .doc(message.id)
+              .get();
+          if (messageDoc.exists) {
+            final callId = messageDoc.data()?['callId'] as String?;
+            if (callId != null && callId.isNotEmpty) {
+              await _firestore.collection('calls').doc(callId).delete();
+              debugPrint('Deleted call document from callId field: $callId');
+            }
+          }
+        } catch (e) {
+          debugPrint('Error checking/deleting call from callId field: $e');
         }
       }
 

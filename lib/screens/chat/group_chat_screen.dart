@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -672,7 +673,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               'status': 'ended',
               'endedAt': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true));
-            debugPrint('  ✅ Cleaned: $callId');
+            debugPrint('    Cleaned: $callId');
           } catch (e) {
             debugPrint('  ❌ Cleanup failed $callId: $e');
           }
@@ -694,7 +695,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         return;
       }
 
-      debugPrint('✅ No active calls, proceeding');
+      debugPrint('  No active calls, proceeding');
 
       // Get group members
       final members = await _groupChatService.getGroupMembers(widget.groupId);
@@ -2524,6 +2525,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             );
                           },
                         ),
+                      // Save Image option (if has image)
+                      if (message['imageUrl'] != null &&
+                          (message['imageUrl'] as String).isNotEmpty)
+                        _buildMessageOption(
+                          icon: Icons.download,
+                          label: 'Save Image',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveImage(message['imageUrl'] as String);
+                          },
+                        ),
                       if (isMe &&
                           message['text'] != null &&
                           (message['text'] as String).isNotEmpty)
@@ -2598,7 +2610,241 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
+  // ==================== SAVE IMAGE METHOD ====================
+
+  Future<void> _saveImage(String imageUrl) async {
+    try {
+      // Request storage permission
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        // Try photos permission for Android 13+
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save image',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving image...');
+      }
+
+      // Download image using Dio
+      final response = await Dio().get(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      // Get the Pictures directory
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      // Create directory if not exists
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      // Save file
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      // Notify media scanner on Android to show in gallery
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Image saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save image: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save image: $e');
+      }
+    }
+  }
+
   // ==================== DELETE MESSAGE METHODS ====================
+
+  /// Show delete options for call messages
+  void _showCallDeleteOptions(Map<String, dynamic>? messageData) {
+    if (messageData == null) return;
+
+    final messageId = messageData['id'] as String?;
+    if (messageId == null) return;
+
+    final callId = messageData['callId'] as String?;
+
+    HapticFeedback.mediumImpact();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {},
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C3E50),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMessageOption(
+                        icon: Icons.check_circle_outline,
+                        label: 'Select',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _enterMultiSelectMode(messageId);
+                        },
+                      ),
+                      _buildMessageOption(
+                        icon: Icons.delete,
+                        label: 'Delete',
+                        isDestructive: true,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          // Delete for current user only (hide from this user's screen)
+                          await _deleteCallForMe(messageId, callId);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Delete call message for current user only
+  /// Adds user to deletedFor array in message AND group_calls document
+  Future<void> _deleteCallForMe(String messageId, String? callId) async {
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+
+    debugPrint('=== _deleteCallForMe ===');
+    debugPrint('messageId: $messageId');
+    debugPrint('callId: $callId');
+    debugPrint('currentUserId: $currentUserId');
+
+    bool messageDeleted = false;
+    // ignore: unused_local_variable
+    bool callDeleted = false;
+
+    // 1. Add current user to deletedFor array in message document
+    try {
+      await _firestore
+          .collection('conversations')
+          .doc(widget.groupId)
+          .collection('messages')
+          .doc(messageId)
+          .update({
+            'deletedFor': FieldValue.arrayUnion([currentUserId]),
+          });
+      messageDeleted = true;
+      debugPrint('Message deletedFor updated successfully');
+    } catch (e) {
+      debugPrint('Error updating message deletedFor: $e');
+    }
+
+    // 2. Also add to deletedFor in group_calls document (for Calls tab)
+    if (callId != null && callId.isNotEmpty) {
+      try {
+        // First check if document exists
+        final callDoc = await _firestore.collection('group_calls').doc(callId).get();
+        if (callDoc.exists) {
+          await _firestore.collection('group_calls').doc(callId).update({
+            'deletedFor': FieldValue.arrayUnion([currentUserId]),
+          });
+          callDeleted = true;
+          debugPrint('group_calls deletedFor updated successfully');
+        } else {
+          debugPrint('group_calls document does not exist: $callId');
+          // Still consider it success since message is hidden
+          callDeleted = true;
+        }
+      } catch (e) {
+        debugPrint('Error updating group_calls deletedFor: $e');
+        // Don't show error if message was deleted successfully
+        if (messageDeleted) {
+          callDeleted = true; // Consider it partial success
+        }
+      }
+    } else {
+      // No callId, try to find by systemMessageId
+      debugPrint('No callId, trying to find group_calls by systemMessageId...');
+      try {
+        final callQuery = await _firestore
+            .collection('group_calls')
+            .where('systemMessageId', isEqualTo: messageId)
+            .where('groupId', isEqualTo: widget.groupId)
+            .limit(1)
+            .get();
+
+        if (callQuery.docs.isNotEmpty) {
+          await callQuery.docs.first.reference.update({
+            'deletedFor': FieldValue.arrayUnion([currentUserId]),
+          });
+          callDeleted = true;
+          debugPrint('Found and updated group_calls by systemMessageId');
+        } else {
+          debugPrint('No group_calls found by systemMessageId');
+          callDeleted = messageDeleted; // Success if message was deleted
+        }
+      } catch (e) {
+        debugPrint('Error finding group_calls by systemMessageId: $e');
+        callDeleted = messageDeleted;
+      }
+    }
+
+    // Show result
+    if (messageDeleted) {
+      debugPrint('Call deleted for user: $currentUserId');
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete call'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   /// Show WhatsApp-style delete dialog with glass effect
   Future<String?> _showDeleteDialog({
@@ -2768,6 +3014,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   /// Delete message for everyone - WhatsApp style "This message was deleted"
   Future<void> _deleteMessageForEveryone(String messageId) async {
+    debugPrint('=== _deleteMessageForEveryone START ===');
+    debugPrint('messageId: $messageId');
+    debugPrint('groupId: ${widget.groupId}');
+
     try {
       // Get the message first to check for media
       final messageDoc = await _firestore
@@ -2777,9 +3027,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           .doc(messageId)
           .get();
 
-      if (!messageDoc.exists) return;
+      debugPrint('messageDoc.exists: ${messageDoc.exists}');
+
+      if (!messageDoc.exists) {
+        debugPrint('ERROR: Message document does not exist!');
+        return;
+      }
 
       final messageData = messageDoc.data()!;
+      debugPrint('messageData: $messageData');
 
       // Delete media from Firebase Storage if exists
       final imageUrl = messageData['imageUrl'] as String?;
@@ -2813,7 +3069,50 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
       }
 
+      // If this is a call system message, also delete the group_calls document
+      final callId = messageData['callId'] as String?;
+      final isSystemMessage = messageData['isSystemMessage'] as bool? ?? false;
+      final actionType = messageData['actionType'] as String?;
+
+      debugPrint('=== DELETE CALL CHECK ===');
+      debugPrint('messageId: $messageId');
+      debugPrint('callId: $callId');
+      debugPrint('isSystemMessage: $isSystemMessage');
+      debugPrint('actionType: $actionType');
+      debugPrint('messageData keys: ${messageData.keys.toList()}');
+
+      if (callId != null && callId.isNotEmpty) {
+        try {
+          debugPrint('Attempting to delete group_calls doc with callId: $callId');
+          await _firestore.collection('group_calls').doc(callId).delete();
+          debugPrint('SUCCESS: Deleted group call document: $callId');
+        } catch (e) {
+          debugPrint('ERROR: Failed to delete group call document $callId: $e');
+        }
+      } else if (isSystemMessage && actionType == 'call') {
+        // Try to find and delete the group_calls doc by systemMessageId
+        debugPrint('No callId, trying systemMessageId lookup...');
+        try {
+          final callQuery = await _firestore
+              .collection('group_calls')
+              .where('systemMessageId', isEqualTo: messageId)
+              .where('groupId', isEqualTo: widget.groupId)
+              .limit(1)
+              .get();
+          debugPrint('Found ${callQuery.docs.length} group_calls docs by systemMessageId');
+          for (final doc in callQuery.docs) {
+            await doc.reference.delete();
+            debugPrint('SUCCESS: Deleted group call by systemMessageId: ${doc.id}');
+          }
+        } catch (e) {
+          debugPrint('ERROR: Failed to find/delete group call by systemMessageId: $e');
+        }
+      } else {
+        debugPrint('NOT A CALL MESSAGE - skipping group_calls deletion');
+      }
+
       // Mark message as deleted (WhatsApp style - shows "This message was deleted")
+      debugPrint('Marking message as deleted in Firestore...');
       await _firestore
           .collection('conversations')
           .doc(widget.groupId)
@@ -2826,10 +3125,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             'audioUrl': null,
             'voiceUrl': null,
             'voiceDuration': null,
+            'callId': null,
+            'callerId': null,
+            'callerName': null,
+            'callDuration': null,
+            'participantCount': null,
             'deletedAt': FieldValue.serverTimestamp(),
           });
+      debugPrint('=== _deleteMessageForEveryone SUCCESS ===');
     } catch (e) {
-      debugPrint('Error deleting message for everyone: $e');
+      debugPrint('=== _deleteMessageForEveryone ERROR: $e ===');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -4825,6 +5130,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 children: [
                   GestureDetector(
                     onTap: () => _handleCallCardTap(callId, callDuration),
+                    onLongPress: () => _showCallDeleteOptions(messageData),
                     child: Container(
                       constraints: BoxConstraints(
                         maxWidth: MediaQuery.of(context).size.width * 0.4,

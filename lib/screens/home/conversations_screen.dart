@@ -725,7 +725,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final allCalls = [..._individualCalls, ..._groupCalls];
+              var allCalls = [..._individualCalls, ..._groupCalls];
+
+              // Filter out calls deleted for current user
+              allCalls = allCalls.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final deletedFor = data['deletedFor'] as List<dynamic>?;
+                if (deletedFor != null && deletedFor.contains(currentUserId)) {
+                  return false; // Hide this call for current user
+                }
+                return true;
+              }).toList();
 
               if (allCalls.isEmpty) {
                 return _buildEmptyCallsState(isDarkMode);
@@ -865,19 +875,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Future<void> _selectAllCalls() async {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return;
-
-    final snapshot = await _firestore
-        .collection('calls')
-        .where('participants', arrayContains: currentUserId)
-        .limit(50)
-        .get();
-
     setState(() {
       _selectedCallIds.clear();
-      for (final doc in snapshot.docs) {
+      // Add all individual call IDs
+      for (final doc in _individualCalls) {
         _selectedCallIds.add(doc.id);
+      }
+      // Add all group call IDs (prefixed to distinguish collection)
+      for (final doc in _groupCalls) {
+        _selectedCallIds.add('group_${doc.id}');
       }
     });
   }
@@ -888,27 +894,100 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
     if (!confirmed) return;
 
-    final batch = _firestore.batch();
-    for (final callId in _selectedCallIds) {
-      batch.delete(_firestore.collection('calls').doc(callId));
-    }
+    debugPrint('CallsTab: Deleting ${_selectedCallIds.length} selected calls');
+    final selectedCopy = Set<String>.from(_selectedCallIds);
 
+    // Immediately remove from local state for instant UI feedback
+    setState(() {
+      for (final callId in selectedCopy) {
+        if (callId.startsWith('group_')) {
+          final actualId = callId.substring(6);
+          _groupCalls.removeWhere((doc) => doc.id == actualId);
+        } else {
+          _individualCalls.removeWhere((doc) => doc.id == callId);
+        }
+      }
+    });
+    _exitCallSelectionMode();
+
+    // Delete from Firestore - also delete linked chat messages
     try {
-      await batch.commit();
+      final currentUserId = _auth.currentUser?.uid ?? '';
+
+      for (final callId in selectedCopy) {
+        if (callId.startsWith('group_')) {
+          // Group call - delete system message from group chat
+          final actualId = callId.substring(6);
+          debugPrint('CallsTab: Deleting group call: $actualId');
+
+          final callDoc = await _firestore.collection('group_calls').doc(actualId).get();
+          if (callDoc.exists) {
+            final data = callDoc.data();
+            final systemMessageId = data?['systemMessageId'] as String?;
+            final groupId = data?['groupId'] as String?;
+            if (systemMessageId != null && groupId != null) {
+              await _firestore
+                  .collection('conversations')
+                  .doc(groupId)
+                  .collection('messages')
+                  .doc(systemMessageId)
+                  .delete();
+              debugPrint('CallsTab: Deleted group call system message: $systemMessageId');
+            }
+          }
+          await _firestore.collection('group_calls').doc(actualId).delete();
+        } else {
+          // Individual call - delete message from chat
+          debugPrint('CallsTab: Deleting individual call: $callId');
+
+          final callDoc = await _firestore.collection('calls').doc(callId).get();
+          if (callDoc.exists) {
+            final data = callDoc.data()!;
+            final callerId = data['callerId'] as String? ?? '';
+            final receiverId = data['receiverId'] as String? ?? '';
+            final otherUserId = callerId == currentUserId ? receiverId : callerId;
+
+            if (otherUserId.isNotEmpty) {
+              final convQuery = await _firestore
+                  .collection('conversations')
+                  .where('participants', arrayContains: currentUserId)
+                  .get();
+              for (final doc in convQuery.docs) {
+                final convData = doc.data();
+                final isGroup = convData['isGroup'] as bool? ?? false;
+                if (isGroup) continue;
+                final participants = List<String>.from(convData['participants'] ?? []);
+                if (participants.contains(otherUserId)) {
+                  await _firestore
+                      .collection('conversations')
+                      .doc(doc.id)
+                      .collection('messages')
+                      .doc('call_$callId')
+                      .delete();
+                  debugPrint('CallsTab: Deleted call message from conversation ${doc.id}');
+                  break;
+                }
+              }
+            }
+          }
+          await _firestore.collection('calls').doc(callId).delete();
+        }
+      }
+      debugPrint('CallsTab: All calls deleted successfully');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_selectedCallIds.length} calls deleted'),
+            content: Text('${selectedCopy.length} calls deleted'),
             duration: const Duration(seconds: 2),
           ),
         );
       }
-      _exitCallSelectionMode();
     } catch (e) {
+      debugPrint('CallsTab: Error deleting calls: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete calls'),
+          SnackBar(
+            content: Text('Failed to delete calls: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -916,9 +995,76 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
-  Future<void> _deleteSingleCall(String callId) async {
+  Future<void> _deleteSingleCall(String callId, {bool isGroupCall = false}) async {
+    debugPrint('CallsTab: Deleting single call: $callId, isGroup: $isGroupCall');
+
+    // Immediately remove from local state for instant UI feedback
+    setState(() {
+      if (isGroupCall) {
+        _groupCalls.removeWhere((doc) => doc.id == callId);
+      } else {
+        _individualCalls.removeWhere((doc) => doc.id == callId);
+      }
+    });
+
     try {
-      await _firestore.collection('calls').doc(callId).delete();
+      if (isGroupCall) {
+        // Read group call doc first to get linked message info
+        final callDoc = await _firestore.collection('group_calls').doc(callId).get();
+        if (callDoc.exists) {
+          final data = callDoc.data();
+          final systemMessageId = data?['systemMessageId'] as String?;
+          final groupId = data?['groupId'] as String?;
+          // Delete the system message from the group conversation
+          if (systemMessageId != null && groupId != null) {
+            await _firestore
+                .collection('conversations')
+                .doc(groupId)
+                .collection('messages')
+                .doc(systemMessageId)
+                .delete();
+            debugPrint('CallsTab: Deleted group call system message: $systemMessageId');
+          }
+        }
+        await _firestore.collection('group_calls').doc(callId).delete();
+      } else {
+        // Read individual call doc to get participants
+        final callDoc = await _firestore.collection('calls').doc(callId).get();
+        if (callDoc.exists) {
+          final data = callDoc.data()!;
+          final callerId = data['callerId'] as String? ?? '';
+          final receiverId = data['receiverId'] as String? ?? '';
+          final currentUserId = _auth.currentUser?.uid ?? '';
+          final otherUserId = callerId == currentUserId ? receiverId : callerId;
+
+          // Find the conversation and delete the call message
+          if (otherUserId.isNotEmpty) {
+            final convQuery = await _firestore
+                .collection('conversations')
+                .where('participants', arrayContains: currentUserId)
+                .get();
+            for (final doc in convQuery.docs) {
+              final convData = doc.data();
+              final isGroup = convData['isGroup'] as bool? ?? false;
+              if (isGroup) continue;
+              final participants = List<String>.from(convData['participants'] ?? []);
+              if (participants.contains(otherUserId)) {
+                // Delete the call message (ID format: call_{callId})
+                await _firestore
+                    .collection('conversations')
+                    .doc(doc.id)
+                    .collection('messages')
+                    .doc('call_$callId')
+                    .delete();
+                debugPrint('CallsTab: Deleted call message from conversation ${doc.id}');
+                break;
+              }
+            }
+          }
+        }
+        await _firestore.collection('calls').doc(callId).delete();
+      }
+      debugPrint('CallsTab: Call $callId deleted successfully');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -928,10 +1074,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         );
       }
     } catch (e) {
+      debugPrint('CallsTab: Error deleting call $callId: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete call'),
+          SnackBar(
+            content: Text('Failed to delete call: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1143,10 +1290,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     String currentUserId, {
     bool isGroupCall = false,
   }) {
-    final isSelected = _selectedCallIds.contains(callId);
+    // Use prefixed ID for group calls to distinguish collection
+    final selectionId = isGroupCall ? 'group_$callId' : callId;
+    final isSelected = _selectedCallIds.contains(selectionId);
 
     return Dismissible(
-      key: Key(callId),
+      key: Key(selectionId),
       direction: _isCallSelectionMode
           ? DismissDirection.none
           : DismissDirection.endToStart,
@@ -1161,22 +1310,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
-        return await _showDeleteCallConfirmation(1);
-      },
-      onDismissed: (direction) {
-        _deleteSingleCall(callId);
+        final confirmed = await _showDeleteCallConfirmation(1);
+        if (confirmed) {
+          // Delete here and return false - let setState handle UI removal
+          _deleteSingleCall(callId, isGroupCall: isGroupCall);
+        }
+        return false; // Always return false - we handle removal via setState
       },
       child: GestureDetector(
         onLongPress: () {
           if (!_isCallSelectionMode) {
             HapticFeedback.mediumImpact();
             _enterCallSelectionMode();
-            _toggleCallSelection(callId);
+            _toggleCallSelection(selectionId);
           }
         },
         onTap: () {
           if (_isCallSelectionMode) {
-            _toggleCallSelection(callId);
+            _toggleCallSelection(selectionId);
           }
         },
         child: Container(
@@ -1193,7 +1344,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   padding: const EdgeInsets.only(left: 12),
                   child: Checkbox(
                     value: isSelected,
-                    onChanged: (_) => _toggleCallSelection(callId),
+                    onChanged: (_) => _toggleCallSelection(selectionId),
                     activeColor: Theme.of(context).primaryColor,
                   ),
                 ),
@@ -1261,22 +1412,31 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final joinedCount = callData['joinedCount'] as int? ?? joinedParticipants.length;
     final totalMembers = callData['totalMembers'] as int? ?? participants.length;
 
-    // Determine call status icon and color
+    // Determine call status icon, color and label
     IconData statusIcon;
     Color statusColor;
+    String statusLabel;
 
-    if (callStatus == 'missed') {
+    if (callStatus == 'missed' || callStatus == 'no_answer' || callStatus == 'timeout') {
       statusIcon = Icons.call_missed;
       statusColor = Colors.red;
-    } else if (callStatus == 'declined') {
+      statusLabel = 'Missed';
+    } else if (callStatus == 'declined' || callStatus == 'rejected' || callStatus == 'busy') {
       statusIcon = Icons.call_missed_outgoing;
       statusColor = Colors.red;
+      statusLabel = isOutgoing ? 'Declined' : 'Missed';
+    } else if (callStatus == 'canceled' || callStatus == 'cancelled') {
+      statusIcon = Icons.call_missed_outgoing;
+      statusColor = Colors.red;
+      statusLabel = 'Cancelled';
     } else if (isOutgoing) {
       statusIcon = Icons.call_made;
       statusColor = Colors.green;
+      statusLabel = 'Outgoing';
     } else {
       statusIcon = Icons.call_received;
       statusColor = Colors.green;
+      statusLabel = 'Incoming';
     }
 
     return Container(
@@ -1325,12 +1485,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             Expanded(
               child: Text(
                 finalIsGroupCall
-                    ? '${joinedCount > 0 ? '$joinedCount joined' : 'No one joined'} • $totalMembers members • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
-                    : (timestamp != null
-                        ? timeago.format(timestamp.toDate())
-                        : 'Unknown time'),
+                    ? '$statusLabel • ${joinedCount > 0 ? '$joinedCount joined' : 'No one joined'} • $totalMembers members • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
+                    : '$statusLabel • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}',
                 style: TextStyle(
-                  color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                  color: callStatus == 'missed' || callStatus == 'declined' || callStatus == 'rejected' || callStatus == 'no_answer' || callStatus == 'timeout' || callStatus == 'busy'
+                      ? Colors.red.withValues(alpha: 0.8)
+                      : (isDarkMode ? Colors.grey[500] : Colors.grey[600]),
                   fontSize: 12,
                 ),
               ),

@@ -801,7 +801,7 @@ class NotificationService {
         await _navigateToConnections(data);
         break;
       default:
-        debugPrint('  ⚠️  Unknown notification type: $type');
+        debugPrint('     Unknown notification type: $type');
         break;
     }
   }
@@ -1080,7 +1080,7 @@ class NotificationService {
             });
           }
         } catch (e) {
-          debugPrint('  ⚠️  Error fetching participant $participantId: $e');
+          debugPrint('     Error fetching participant $participantId: $e');
         }
       }
 
@@ -1623,7 +1623,7 @@ class NotificationService {
   Future<void> verifyFCMTokenSetup() async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      debugPrint('❌ No current user');
+      debugPrint('  No current user');
       return;
     }
 
@@ -1633,23 +1633,23 @@ class NotificationService {
 
     // Get local token
     final localToken = await _fcm.getToken();
-    debugPrint('📱 Local FCM token: ${localToken?.substring(0, 20)}...');
+    debugPrint('  Local FCM token: ${localToken?.substring(0, 20)}...');
 
     // Get Firestore token
     try {
       final userDoc = await _firestore.collection('users').doc(currentUserId).get();
       final firestoreToken = userDoc.data()?['fcmToken'] as String?;
-      debugPrint('☁️  Firestore FCM token: ${firestoreToken?.substring(0, 20)}...');
+      debugPrint('   Firestore FCM token: ${firestoreToken?.substring(0, 20)}...');
 
       if (localToken == firestoreToken) {
-        debugPrint('✅ Tokens match - FCM setup is correct!');
+        debugPrint('  Tokens match - FCM setup is correct!');
       } else {
-        debugPrint('⚠️  Tokens DO NOT match - updating Firestore...');
+        debugPrint('   Tokens DO NOT match - updating Firestore...');
         await _updateFCMToken();
-        debugPrint('✅ Firestore token updated');
+        debugPrint('  Firestore token updated');
       }
     } catch (e) {
-      debugPrint('❌ Error checking Firestore token: $e');
+      debugPrint('  Error checking Firestore token: $e');
     }
 
     debugPrint('========================================');
@@ -1659,12 +1659,12 @@ class NotificationService {
   Future<void> testSelfNotification() async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      debugPrint('❌ No current user');
+      debugPrint('  No current user');
       return;
     }
 
     debugPrint('========================================');
-    debugPrint('🧪 TESTING SELF NOTIFICATION');
+    debugPrint('  TESTING SELF NOTIFICATION');
     debugPrint('========================================');
 
     try {
@@ -1676,11 +1676,11 @@ class NotificationService {
         data: {'testTime': DateTime.now().toIso8601String()},
       );
 
-      debugPrint('✅ Test notification created in Firestore');
-      debugPrint('⏳ Cloud Function should send FCM in 1-2 seconds...');
-      debugPrint('📱 Check if notification appears on device');
+      debugPrint('  Test notification created in Firestore');
+      debugPrint('  Cloud Function should send FCM in 1-2 seconds...');
+      debugPrint('  Check if notification appears on device');
     } catch (e) {
-      debugPrint('❌ Error sending test notification: $e');
+      debugPrint('  Error sending test notification: $e');
     }
 
     debugPrint('========================================');
