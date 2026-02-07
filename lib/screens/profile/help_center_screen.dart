@@ -1,5 +1,7 @@
-import 'dart:ui';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../home/main_navigation_screen.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -9,8 +11,6 @@ class HelpCenterScreen extends StatefulWidget {
 }
 
 class _HelpCenterScreenState extends State<HelpCenterScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
   int? _expandedIndex;
 
   final List<_HelpCategory> _categories = [
@@ -130,29 +130,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     ),
   ];
 
-  List<_HelpCategory> get _filteredCategories {
-    if (_searchQuery.isEmpty) return _categories;
-
-    return _categories.map((category) {
-      final filteredFaqs = category.faqs.where((faq) =>
-        faq.question.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-        faq.answer.toLowerCase().contains(_searchQuery.toLowerCase())
-      ).toList();
-
-      return _HelpCategory(
-        title: category.title,
-        icon: category.icon,
-        color: category.color,
-        faqs: filteredFaqs,
-      );
-    }).where((category) => category.faqs.isNotEmpty).toList();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -161,78 +138,79 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+            });
+          },
+        ),
         title: const Text(
           'Help Center',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 0.5,
+            color: Colors.white.withValues(alpha: 0.2),
+          ),
+        ),
       ),
-      body: Column(
+      extendBodyBehindAppBar: true,
+      body: Stack(
         children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
+          // Background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/logo/home_background.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Search for help...',
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                      prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.5)),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.grey.shade900, Colors.black],
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
                   ),
-                ),
+                );
+              },
+            ),
+          ),
+
+          // Blur overlay
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.6),
               ),
             ),
           ),
 
-          // Categories and FAQs
-          Expanded(
-            child: _filteredCategories.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.white.withValues(alpha: 0.3)),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No results found',
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _filteredCategories.length,
+          // Content
+          SafeArea(
+            child: Column(
+              children: [
+                // Categories and FAQs
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _categories.length,
                     itemBuilder: (context, categoryIndex) {
-                      final category = _filteredCategories[categoryIndex];
+                      final category = _categories[categoryIndex];
                       return _buildCategorySection(category, categoryIndex);
                     },
                   ),
-          ),
+                ),
 
-          // Contact support button
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: _buildContactSupportButton(),
+              ],
+            ),
           ),
         ],
       ),
@@ -248,12 +226,12 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: category.color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(category.icon, color: category.color, size: 20),
+                child: Icon(category.icon, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 12),
               Text(
@@ -341,61 +319,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     );
   }
 
-  Widget _buildContactSupportButton() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue.withValues(alpha: 0.2), Colors.purple.withValues(alpha: 0.2)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.support_agent, color: Colors.blue, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Still need help?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Contact our support team',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _HelpCategory {

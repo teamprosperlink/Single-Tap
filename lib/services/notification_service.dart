@@ -1243,6 +1243,7 @@ class NotificationService {
     _groupCallListener = _firestore
         .collection('group_calls')
         .where('participants', arrayContains: currentUserId)
+        .limit(10) // Limit to recent calls to reduce Firebase reads
         .snapshots()
         .listen(
           (snapshot) async {

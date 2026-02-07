@@ -17,13 +17,16 @@ import 'product_detail_screen.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
+  /// Global key to access HomeScreenState from outside
+  static final GlobalKey<HomeScreenState> globalKey = GlobalKey<HomeScreenState>();
+
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
+class HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final UniversalIntentService _intentService = UniversalIntentService();
   final RealtimeMatchingService _realtimeService = RealtimeMatchingService();
@@ -47,6 +50,9 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _timer;
 
   final List<Map<String, dynamic>> _conversation = [];
+
+  // Current chat ID for auto-save (ChatGPT style)
+  String? _currentChatId;
 
   // Voice recording state
   bool _isRecording = false;
@@ -102,6 +108,84 @@ class _HomeScreenState extends State<HomeScreen>
     _chatScrollController.dispose();
     _speech.stop();
     super.dispose();
+  }
+
+  /// Reset for new chat (ChatGPT style - conversation is auto-saved)
+  Future<void> saveConversationAndReset() async {
+    debugPrint('Starting new chat (previous auto-saved)');
+    _resetConversation();
+  }
+
+  /// Load a conversation from chat history
+  Future<void> loadConversation(String chatId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('chat_history')
+          .doc(chatId)
+          .get();
+
+      if (!doc.exists) {
+        debugPrint('Chat not found: $chatId');
+        return;
+      }
+
+      final data = doc.data()!;
+      final messages = List<Map<String, dynamic>>.from(data['messages'] ?? []);
+
+      setState(() {
+        _conversation.clear();
+        _matches.clear();
+        _intentController.clear();
+        _currentChatId = chatId;
+
+        // Restore messages
+        for (var msg in messages) {
+          _conversation.add({
+            'text': msg['text'],
+            'isUser': msg['isUser'],
+            'timestamp': msg['timestamp'] is Timestamp
+                ? (msg['timestamp'] as Timestamp).toDate()
+                : DateTime.now(),
+            'type': msg['type'],
+            'data': msg['data'],
+          });
+        }
+      });
+
+      debugPrint('Loaded conversation: $chatId with ${messages.length} messages');
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+    } catch (e) {
+      debugPrint('Error loading conversation: $e');
+    }
+  }
+
+  /// Reset conversation to initial state
+  void _resetConversation() {
+    setState(() {
+      _conversation.clear();
+      _matches.clear();
+      _intentController.clear();
+      _currentChatId = null; // Reset chat ID for new conversation
+
+      // Add welcome message
+      _conversation.add({
+        'text': 'Hi! I\'m your Supper assistant. What would you like to find today?',
+        'isUser': false,
+        'timestamp': DateTime.now(),
+      });
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  }
+
+  /// Check if there's an active conversation worth saving
+  bool get hasActiveConversation {
+    return _conversation.any((msg) => msg['isUser'] == true);
   }
 
   void _scrollToBottom() {
@@ -252,6 +336,68 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (_shouldProcessForMatches(userMessage)) {
       await _processWithIntent(userMessage);
+    }
+
+    // Auto-save conversation to chat history (ChatGPT style)
+    await _autoSaveConversation(userMessage);
+  }
+
+  /// Auto-save conversation after each message (ChatGPT style)
+  Future<void> _autoSaveConversation(String userMessage) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final messagesToSave = _conversation.map((msg) {
+        // Convert DateTime to Timestamp for Firestore
+        final timestamp = msg['timestamp'];
+        final firestoreTimestamp = timestamp is DateTime
+            ? Timestamp.fromDate(timestamp)
+            : timestamp;
+
+        return <String, dynamic>{
+          'text': msg['text'],
+          'isUser': msg['isUser'],
+          'timestamp': firestoreTimestamp,
+          'type': msg['type'],
+          'data': msg['data'],
+        };
+      }).toList();
+
+      // Get title from first user message
+      final userMessages = _conversation.where((msg) => msg['isUser'] == true).toList();
+      final firstUserMessage = userMessages.isNotEmpty
+          ? userMessages.first['text'] as String? ?? 'Chat'
+          : userMessage;
+      final title = firstUserMessage.length > 50
+          ? '${firstUserMessage.substring(0, 50)}...'
+          : firstUserMessage;
+
+      if (_currentChatId == null) {
+        // Create new chat history document
+        final docRef = await FirebaseFirestore.instance.collection('chat_history').add({
+          'userId': userId,
+          'title': title,
+          'messages': messagesToSave,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        _currentChatId = docRef.id;
+        debugPrint('New chat created: $_currentChatId');
+        // Note: Drawer will refresh when opened, no need to call refreshChatHistory here
+      } else {
+        // Update existing chat history document
+        await FirebaseFirestore.instance
+            .collection('chat_history')
+            .doc(_currentChatId)
+            .update({
+          'messages': messagesToSave,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('Chat updated: $_currentChatId');
+      }
+    } catch (e) {
+      debugPrint('Error auto-saving conversation: $e');
     }
   }
 
@@ -1869,32 +2015,44 @@ class _HomeScreenState extends State<HomeScreen>
 
     // If it's a food results message, show food cards
     if (type == 'food_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildResultsWidget(data, isDarkMode, 'food');
     }
     // If it's an electric results message, show electric cards
     if (type == 'electric_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildResultsWidget(data, isDarkMode, 'electric');
     }
     // If it's a house results message, show house cards
     if (type == 'house_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildResultsWidget(data, isDarkMode, 'house');
     }
     // If it's a place results message, show place cards
     if (type == 'place_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildResultsWidget(data, isDarkMode, 'place');
     }
     // If it's a news results message, show news cards
     if (type == 'news_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildNewsResultsWidget(data, isDarkMode);
     }
     // If it's a reels results message, show reels cards
     if (type == 'reels_results') {
-      final data = message['data'] as List<Map<String, dynamic>>;
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
       return _buildReelsResultsWidget(data, isDarkMode);
     }
 

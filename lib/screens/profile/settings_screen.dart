@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
+import '../home/main_navigation_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../res/config/app_colors.dart';
+import '../../widgets/app_background.dart';
 import '../../services/auth_service.dart';
 import '../performance_debug_screen.dart';
 import '../login/choose_account_type_screen.dart';
@@ -17,10 +20,9 @@ import '../location/location_settings_screen.dart';
 import 'terms_of_service_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'safety_tips_screen.dart';
-import 'help_center_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../widgets/coming_soon_widget.dart';
+import 'personalization_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -86,10 +88,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeState = ref.watch(themeProvider);
-    final isDark = themeState.isDarkMode;
-    final isGlass = themeState.isGlassmorphism;
+    ref.watch(themeProvider); // Keep for theme state changes
     final authService = AuthService(); // ignore: unused_local_variable
+
+    // Always use dark theme style since we're using AppBackground
+    const bool isDark = true;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -99,85 +102,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: AppBar(
-              title: const Text(
-                'Settings',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
               ),
-              backgroundColor: isGlass
-                  ? Colors.white.withValues(alpha: 0.7)
-                  : (isDark
-                        ? Colors.black.withValues(alpha: 0.8)
-                        : Colors.white.withValues(alpha: 0.9)),
-              elevation: 0,
-              centerTitle: false,
+              child: AppBar(
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context);
+                    // Open drawer after returning
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                    });
+                  },
+                ),
+                title: const Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                centerTitle: true,
+              ),
             ),
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          // iOS 16 Glassmorphism gradient background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isGlass
-                    ? [
-                        const Color(0xFFE3F2FD).withValues(alpha: 0.8),
-                        const Color(0xFFF3E5F5).withValues(alpha: 0.6),
-                        const Color(0xFFE8F5E9).withValues(alpha: 0.4),
-                        const Color(0xFFFFF3E0).withValues(alpha: 0.3),
-                      ]
-                    : isDark
-                    ? [Colors.black, const Color(0xFF1C1C1E)]
-                    : [const Color(0xFFF5F5F7), Colors.white],
-              ),
-            ),
-          ),
-
-          // Floating glass circles for depth
-          if (isGlass) ...[
-            Positioned(
-              top: -50,
-              right: -50,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.iosPurple.withValues(alpha: 0.3),
-                      AppColors.iosPurple.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 100,
-              left: -80,
-              child: Container(
-                width: 250,
-                height: 250,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.iosBlue.withValues(alpha: 0.2),
-                      AppColors.iosBlue.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-
-          ListView(
+      body: AppBackground(
+        showParticles: true,
+        overlayOpacity: 0.7,
+        child: ListView(
             padding: const EdgeInsets.only(
-              top: kToolbarHeight + 60,
+              top: kToolbarHeight + 40,
               left: 16,
               right: 16,
               bottom: 16,
@@ -190,70 +158,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.iosBlue,
                 isDark: isDark,
               ),
-              const SizedBox(height: 12),
-              _buildSettingsCard(
-                isDark: isDark,
-                isGlass: isGlass,
-                children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.visibility_outlined),
-                    title: const Text('Discoverable on Live Connect'),
-                    subtitle: const Text(
-                      'Allow others to find you in nearby people',
+              const SizedBox(height: 8),
+              _buildIndividualSwitchItem(
+                icon: Icons.visibility_outlined,
+                title: 'Discoverable on Live Connect',
+                subtitle: 'Allow others to find you in nearby people',
+                value: _discoveryModeEnabled,
+                onChanged: (value) {
+                  setState(() => _discoveryModeEnabled = value);
+                  _updatePreference('discoveryModeEnabled', value);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        value
+                            ? 'You are now discoverable on Live Connect'
+                            : 'You are now hidden from Live Connect searches',
+                      ),
+                      backgroundColor: value ? Colors.green : Colors.orange,
+                      duration: const Duration(seconds: 2),
                     ),
-                    value: _discoveryModeEnabled,
-                    onChanged: (value) {
-                      setState(() => _discoveryModeEnabled = value);
-                      _updatePreference('discoveryModeEnabled', value);
-
-                      // Show feedback
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            value
-                                ? 'You are now discoverable on Live Connect'
-                                : 'You are now hidden from Live Connect searches',
-                          ),
-                          backgroundColor: value ? Colors.green : Colors.orange,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.security_outlined),
-                    title: const Text('Privacy'),
-                    subtitle: const Text('Manage your privacy settings'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      // TODO: Navigate to privacy settings
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.lock_outline),
-                    title: const Text('Security'),
-                    subtitle: const Text('Password and authentication'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showSecurityOptions(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.block_outlined),
-                    title: const Text('Blocked Users'),
-                    subtitle: const Text('Manage blocked accounts'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showBlockedUsers(context);
-                    },
-                  ),
-                ],
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.security_outlined,
+                title: 'Privacy',
+                subtitle: 'Manage your privacy settings',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PersonalizationScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.lock_outline,
+                title: 'Security',
+                subtitle: 'Password and authentication',
+                onTap: () {
+                  _showSecurityOptions(context);
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.block_outlined,
+                title: 'Blocked Users',
+                subtitle: 'Manage blocked accounts',
+                onTap: () {
+                  _showBlockedUsers(context);
+                },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
 
               // Notifications Section
               _buildSectionHeader(
@@ -262,61 +219,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.iosOrange,
                 isDark: isDark,
               ),
-              const SizedBox(height: 12),
-              _buildSettingsCard(
-                isDark: isDark,
-                isGlass: isGlass,
-                children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.message_outlined),
-                    title: const Text('Message Notifications'),
-                    subtitle: const Text('New messages from matches'),
-                    value: _messageNotifications,
-                    onChanged: (value) {
-                      setState(() => _messageNotifications = value);
-                      _updatePreference('messageNotifications', value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    secondary: const Icon(Icons.favorite_outline),
-                    title: const Text('Match Notifications'),
-                    subtitle: const Text('Someone matched with you'),
-                    value: _matchNotifications,
-                    onChanged: (value) {
-                      setState(() => _matchNotifications = value);
-                      _updatePreference('matchNotifications', value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    secondary: const Icon(Icons.people_outline),
-                    title: const Text('Connection Requests'),
-                    subtitle: const Text('New connection requests'),
-                    value: _connectionRequestNotifications,
-                    onChanged: (value) {
-                      setState(() => _connectionRequestNotifications = value);
-                      _updatePreference(
-                        'connectionRequestNotifications',
-                        value,
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    secondary: const Icon(Icons.campaign_outlined),
-                    title: const Text('Promotional'),
-                    subtitle: const Text('Updates and offers'),
-                    value: _promotionalNotifications,
-                    onChanged: (value) {
-                      setState(() => _promotionalNotifications = value);
-                      _updatePreference('promotionalNotifications', value);
-                    },
-                  ),
-                ],
+              const SizedBox(height: 8),
+              _buildIndividualSwitchItem(
+                icon: Icons.message_outlined,
+                title: 'Message Notifications',
+                subtitle: 'New messages from matches',
+                value: _messageNotifications,
+                onChanged: (value) {
+                  setState(() => _messageNotifications = value);
+                  _updatePreference('messageNotifications', value);
+                },
+              ),
+              _buildIndividualSwitchItem(
+                icon: Icons.favorite_outline,
+                title: 'Match Notifications',
+                subtitle: 'Someone matched with you',
+                value: _matchNotifications,
+                onChanged: (value) {
+                  setState(() => _matchNotifications = value);
+                  _updatePreference('matchNotifications', value);
+                },
+              ),
+              _buildIndividualSwitchItem(
+                icon: Icons.people_outline,
+                title: 'Connection Requests',
+                subtitle: 'New connection requests',
+                value: _connectionRequestNotifications,
+                onChanged: (value) {
+                  setState(() => _connectionRequestNotifications = value);
+                  _updatePreference('connectionRequestNotifications', value);
+                },
+              ),
+              _buildIndividualSwitchItem(
+                icon: Icons.campaign_outlined,
+                title: 'Promotional',
+                subtitle: 'Updates and offers',
+                value: _promotionalNotifications,
+                onChanged: (value) {
+                  setState(() => _promotionalNotifications = value);
+                  _updatePreference('promotionalNotifications', value);
+                },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
 
               // App Settings Section
               _buildSectionHeader(
@@ -325,74 +270,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.iosGreen,
                 isDark: isDark,
               ),
-              const SizedBox(height: 12),
-              _buildSettingsCard(
-                isDark: isDark,
-                isGlass: isGlass,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.language_outlined),
-                    title: const Text('Language'),
-                    subtitle: const Text('English'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      // TODO: Language selection
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: const Text('Location'),
-                    subtitle: const Text('Manage location settings'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LocationSettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.storage_outlined),
-                    title: const Text('Storage & Data'),
-                    subtitle: const Text('Network usage and storage'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showStorageOptions(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.cleaning_services_outlined),
-                    title: const Text('Clear Cache'),
-                    subtitle: const Text('Free up storage space'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showClearCacheDialog(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.speed_outlined),
-                    title: const Text('Performance Debug'),
-                    subtitle: const Text('Monitor app performance'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PerformanceDebugScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+              const SizedBox(height: 8),
+              _buildIndividualItem(
+                icon: Icons.location_on_outlined,
+                title: 'Location',
+                subtitle: 'Manage location settings',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LocationSettingsScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.storage_outlined,
+                title: 'Storage & Data',
+                subtitle: 'Network usage and storage',
+                onTap: () {
+                  _showStorageOptions(context);
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.cleaning_services_outlined,
+                title: 'Clear Cache',
+                subtitle: 'Free up storage space',
+                onTap: () {
+                  _showClearCacheDialog(context);
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.speed_outlined,
+                title: 'Performance Debug',
+                subtitle: 'Monitor app performance',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PerformanceDebugScreen(),
+                    ),
+                  );
+                },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
 
               // Coming Soon Section
               _buildSectionHeader(
@@ -401,114 +323,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.iosPink,
                 isDark: isDark,
               ),
-              const SizedBox(height: 12),
-              _buildSettingsCard(
-                isDark: isDark,
-                isGlass: isGlass,
-                children: [
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.amber.withValues(alpha: 0.3), Colors.orange.withValues(alpha: 0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.workspace_premium, color: Colors.amber, size: 20),
-                    ),
-                    title: const Text('Premium'),
-                    subtitle: const Text('Unlock exclusive features'),
-                    trailing: _buildComingSoonBadge(),
-                    onTap: () {
-                      showComingSoonDialog(
-                        context,
-                        featureName: 'Premium Subscription',
-                        description: 'Unlock unlimited matches, priority visibility, advanced filters, and ad-free experience.',
-                        icon: Icons.workspace_premium,
-                        color: Colors.amber,
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.purple.withValues(alpha: 0.3), Colors.pink.withValues(alpha: 0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.event, color: Colors.purple, size: 20),
-                    ),
-                    title: const Text('Events'),
-                    subtitle: const Text('Discover local events'),
-                    trailing: _buildComingSoonBadge(),
-                    onTap: () {
-                      showComingSoonDialog(
-                        context,
-                        featureName: 'Events',
-                        description: 'Create and discover local events, meetups, and gatherings in your area.',
-                        icon: Icons.event,
-                        color: Colors.purple,
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.withValues(alpha: 0.3), Colors.cyan.withValues(alpha: 0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.groups, color: Colors.blue, size: 20),
-                    ),
-                    title: const Text('Groups'),
-                    subtitle: const Text('Join interest-based groups'),
-                    trailing: _buildComingSoonBadge(),
-                    onTap: () {
-                      showComingSoonDialog(
-                        context,
-                        featureName: 'Groups',
-                        description: 'Create and join interest-based groups to connect with like-minded people.',
-                        icon: Icons.groups,
-                        color: Colors.blue,
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.green.withValues(alpha: 0.3), Colors.teal.withValues(alpha: 0.3)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.auto_stories, color: Colors.green, size: 20),
-                    ),
-                    title: const Text('Stories'),
-                    subtitle: const Text('Share your moments'),
-                    trailing: _buildComingSoonBadge(),
-                    onTap: () {
-                      showComingSoonDialog(
-                        context,
-                        featureName: 'Stories',
-                        description: 'Share photos and videos that disappear after 24 hours with your connections.',
-                        icon: Icons.auto_stories,
-                        color: Colors.green,
-                      );
-                    },
-                  ),
-                ],
+              const SizedBox(height: 8),
+              _buildComingSoonItem(
+                icon: Icons.workspace_premium,
+                title: 'Premium',
+                subtitle: 'Unlock exclusive features',
+                colors: [Colors.amber, Colors.orange],
+                onTap: () {
+                  showComingSoonDialog(
+                    context,
+                    featureName: 'Premium Subscription',
+                    description: 'Unlock unlimited matches, priority visibility, advanced filters, and ad-free experience.',
+                    icon: Icons.workspace_premium,
+                    color: Colors.amber,
+                  );
+                },
+              ),
+              _buildComingSoonItem(
+                icon: Icons.event,
+                title: 'Events',
+                subtitle: 'Discover local events',
+                colors: [Colors.purple, Colors.pink],
+                onTap: () {
+                  showComingSoonDialog(
+                    context,
+                    featureName: 'Events',
+                    description: 'Create and discover local events, meetups, and gatherings in your area.',
+                    icon: Icons.event,
+                    color: Colors.purple,
+                  );
+                },
+              ),
+              _buildComingSoonItem(
+                icon: Icons.groups,
+                title: 'Groups',
+                subtitle: 'Join interest-based groups',
+                colors: [Colors.blue, Colors.cyan],
+                onTap: () {
+                  showComingSoonDialog(
+                    context,
+                    featureName: 'Groups',
+                    description: 'Create and join interest-based groups to connect with like-minded people.',
+                    icon: Icons.groups,
+                    color: Colors.blue,
+                  );
+                },
+              ),
+              _buildComingSoonItem(
+                icon: Icons.auto_stories,
+                title: 'Stories',
+                subtitle: 'Share your moments',
+                colors: [Colors.green, Colors.teal],
+                onTap: () {
+                  showComingSoonDialog(
+                    context,
+                    featureName: 'Stories',
+                    description: 'Share photos and videos that disappear after 24 hours with your connections.',
+                    icon: Icons.auto_stories,
+                    color: Colors.green,
+                  );
+                },
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
 
               // Support Section
               _buildSectionHeader(
@@ -517,120 +394,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.iosTeal,
                 isDark: isDark,
               ),
-              const SizedBox(height: 12),
-              _buildSettingsCard(
-                isDark: isDark,
-                isGlass: isGlass,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.help_outline),
-                    title: const Text('Help Center'),
-                    subtitle: const Text('Get help and support'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HelpCenterScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.shield_outlined),
-                    title: const Text('Safety Tips'),
-                    subtitle: const Text('Stay safe while connecting'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SafetyTipsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.person_add_outlined),
-                    title: const Text('Invite Friends'),
-                    subtitle: const Text('Share Supper with friends'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _shareApp();
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('About'),
-                    subtitle: const Text('Version 1.0.0'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showAboutDialog(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.description_outlined),
-                    title: const Text('Terms of Service'),
-                    subtitle: const Text('Read our terms of service'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const TermsOfServiceScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.privacy_tip_outlined),
-                    title: const Text('Privacy Policy'),
-                    subtitle: const Text('Read our privacy policy'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PrivacyPolicyScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.feedback_outlined),
-                    title: const Text('Send Feedback'),
-                    subtitle: const Text('Help us improve the app'),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showFeedbackDialog(context);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.bug_report_outlined),
-                    title: const Text('Report a Problem'),
-                    subtitle: const Text(
-                      'Let us know if something isn\'t working',
+              const SizedBox(height: 8),
+              _buildIndividualItem(
+                icon: Icons.shield_outlined,
+                title: 'Safety Tips',
+                subtitle: 'Stay safe while connecting',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SafetyTipsScreen(),
                     ),
-                    trailing: const Icon(CupertinoIcons.chevron_forward),
-                    onTap: () {
-                      _showReportProblemDialog(context);
-                    },
-                  ),
-                ],
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.info_outline,
+                title: 'About',
+                subtitle: 'Version 1.0.0',
+                onTap: () {
+                  _showAboutDialog(context);
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.description_outlined,
+                title: 'Terms of Service',
+                subtitle: 'Read our terms of service',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TermsOfServiceScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Privacy Policy',
+                subtitle: 'Read our privacy policy',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.feedback_outlined,
+                title: 'Send Feedback',
+                subtitle: 'Help us improve the app',
+                onTap: () {
+                  _showFeedbackDialog(context);
+                },
+              ),
+              _buildIndividualItem(
+                icon: Icons.bug_report_outlined,
+                title: 'Report a Problem',
+                subtitle: 'Let us know if something isn\'t working',
+                onTap: () {
+                  _showReportProblemDialog(context);
+                },
               ),
 
               const SizedBox(height: 40),
             ],
           ),
-        ],
-      ),
+        ),
     );
   }
 
@@ -664,44 +496,101 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildSettingsCard({
-    required bool isDark,
-    required bool isGlass,
-    required List<Widget> children,
+  Widget _buildIndividualItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Widget? trailing,
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: isGlass ? 20 : 0,
-          sigmaY: isGlass ? 20 : 0,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
         ),
-        child: Container(
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isGlass
-                  ? [
-                      Colors.white.withValues(alpha: 0.6),
-                      Colors.white.withValues(alpha: 0.3),
-                    ]
-                  : isDark
-                  ? [const Color(0xFF2C2C2E), const Color(0xFF1C1C1E)]
-                  : [Colors.white, Colors.grey[50]!],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isGlass
-                  ? Colors.white.withValues(alpha: 0.3)
-                  : isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.grey.withValues(alpha: 0.2),
-              width: 1,
-            ),
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Column(children: children),
+          child: Icon(icon, color: Colors.white, size: 20),
         ),
+        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
+        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+        trailing: trailing ?? Icon(CupertinoIcons.chevron_forward, color: Colors.white.withValues(alpha: 0.5)),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildIndividualSwitchItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: SwitchListTile(
+        secondary: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
+        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+        value: value,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildComingSoonItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Color> colors,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
+        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+        trailing: _buildComingSoonBadge(),
+        onTap: onTap,
       ),
     );
   }
@@ -1074,7 +963,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         color: Colors.grey,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -1169,7 +1058,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
                         ],
                       ),
                     const Text(
@@ -1547,7 +1436,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('We\'d love to hear your thoughts!'),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             TextField(
               controller: feedbackController,
               maxLines: 5,
@@ -1634,7 +1523,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     setDialogState(() => selectedCategory = value!);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 TextField(
                   controller: problemController,
                   maxLines: 5,
@@ -1716,14 +1605,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Share app function
-  void _shareApp() {
-    Share.share(
-      'Check out Supper - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
-      subject: 'Join me on Supper!',
-    );
-  }
-
   // About dialog
   void _showAboutDialog(BuildContext context) {
     showDialog(
@@ -1779,7 +1660,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Icon(Icons.copyright, size: 16, color: Colors.white.withValues(alpha: 0.5)),

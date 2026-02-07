@@ -27,9 +27,15 @@ import '../../services/location services/location_service.dart';
 import '../../services/notification_service.dart';
 import '../../models/message_model.dart';
 
+// widgets
+import '../../widgets/app_drawer.dart';
+
 class MainNavigationScreen extends StatefulWidget {
   final int? initialIndex;
   final String? loginAccountType; // Account type from login screen
+
+  // Static GlobalKey for Scaffold to open drawer from external screens
+  static final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
   const MainNavigationScreen({
     super.key,
@@ -55,6 +61,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final LocationService _location = LocationService();
+
 
   static const String _screenIndexKey = 'last_screen_index';
 
@@ -823,6 +830,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     _unreadSubscription = _firestore
         .collection("conversations")
         .where("participants", arrayContains: user.uid)
+        .limit(50) // Limit to reduce Firebase reads
         .snapshots()
         .listen(
           (snap) {
@@ -848,7 +856,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   Widget _buildScreen() {
     switch (_currentIndex) {
       case 0:
-        return const HomeScreen();
+        return HomeScreen(key: HomeScreen.globalKey);
       case 1:
         return const ConversationsScreen(); // Chat/Messages screen
       case 2:
@@ -867,7 +875,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       case 6:
         return const BusinessMainScreen();
       default:
-        return const HomeScreen();
+        return HomeScreen(key: HomeScreen.globalKey);
     }
   }
 
@@ -977,9 +985,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // For Home screen - show with icon-based bottom navigation (same as Messages screen)
     return Scaffold(
+      key: MainNavigationScreen.scaffoldKey,
       extendBodyBehindAppBar: true,
       extendBody: true,
       backgroundColor: Colors.transparent,
+      endDrawer: AppDrawer(
+        key: AppDrawer.globalKey,
+        onNewChat: () async {
+          // Reset for new chat (conversations are auto-saved)
+          await HomeScreen.globalKey.currentState?.saveConversationAndReset();
+          // Navigate to home screen
+          setState(() => _currentIndex = 0);
+        },
+        onLoadChat: (chatId) async {
+          // Load conversation from history (ChatGPT style)
+          await HomeScreen.globalKey.currentState?.loadConversation(chatId);
+          // Navigate to home screen
+          setState(() => _currentIndex = 0);
+        },
+        onNavigate: (index) {
+          setState(() {
+            _currentIndex = index;
+            if (index <= 3) {
+              _tabController.index = _convertToTabIndex(index);
+            }
+          });
+          _saveScreenIndex(index);
+        },
+      ),
       appBar: AppBar(
         centerTitle: false,
         toolbarHeight: 56,
@@ -1009,7 +1042,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             child: GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                Scaffold.of(context).openEndDrawer();
+                // Refresh chat list when drawer opens (not on every message)
+                AppDrawer.globalKey.currentState?.refreshChatHistory();
+                MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
               },
               child: Container(
                 width: 40,
@@ -1050,7 +1085,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       ),
       body: Stack(
         children: [
-          const HomeScreen(),
+          HomeScreen(key: HomeScreen.globalKey),
 
           // Swipe gesture detector for Feed
           Positioned(

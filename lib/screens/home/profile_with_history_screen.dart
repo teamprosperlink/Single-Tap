@@ -11,9 +11,10 @@ import '../../widgets/other widgets/user_avatar.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
+import 'package:share_plus/share_plus.dart';
 import '../profile/settings_screen.dart';
 import '../profile/profile_edit_screen.dart';
-import '../../services/data_fix_service.dart';
+import 'main_navigation_screen.dart';
 
 class ProfileWithHistoryScreen extends ConsumerStatefulWidget {
   const ProfileWithHistoryScreen({super.key});
@@ -573,341 +574,6 @@ class _ProfileWithHistoryScreenState
     }
   }
 
-  // 🔧 TEMPORARY DEBUG METHOD - Remove after data is fixed
-  Future<void> _runDataFix() async {
-    if (!mounted) return;
-
-    // Show confirmation dialog first
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Fix Conversation Data'),
-        content: const Text(
-          'This will fix the isGroup field in all conversations to ensure:\n\n'
-          '• Group call messages appear only in group chats\n'
-          '• 1-on-1 call messages appear only in 1-on-1 chats\n\n'
-          'This is a one-time fix and is safe to run.\n\n'
-          'Continue?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Run Fix'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true || !mounted) return;
-
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Fixing conversation data...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final dataFixService = DataFixService();
-      final result = await dataFixService.fixConversationIsGroupField();
-
-      if (!mounted) return;
-
-      // Close loading dialog
-      Navigator.pop(context);
-
-      // Show result
-      if (result['success'] == true) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Success!'),
-              ],
-            ),
-            content: Text(
-              'Fixed ${result['fixedConversations']} out of ${result['totalConversations']} conversations.\n\n'
-              '${result['message']}',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Error'),
-              ],
-            ),
-            content: Text('Failed to fix data:\n\n${result['error']}'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('  Error running data fix: $e');
-
-      if (!mounted) return;
-
-      // Close loading dialog
-      Navigator.pop(context);
-
-      // Show error
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.error, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Error'),
-            ],
-          ),
-          content: Text('An error occurred:\n\n$e'),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  //   TEMPORARY DEBUG METHOD - Cleanup broken conversations
-  Future<void> _runCleanup() async {
-    if (!mounted) return;
-
-    // First run diagnostics to show what will be deleted
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Scanning conversations...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final dataFixService = DataFixService();
-      final diagnostics = await dataFixService.diagnoseConversations();
-
-      if (!mounted) return;
-
-      // Close loading dialog
-      Navigator.pop(context);
-
-      if (diagnostics['error'] != null) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Error'),
-              ],
-            ),
-            content: Text('Failed to scan:\n\n${diagnostics['error']}'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      final totalIssues = diagnostics['totalIssues'] ?? 0;
-
-      if (totalIssues == 0) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('All Good!'),
-              ],
-            ),
-            content: const Text('No broken conversations found.'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      // Show confirmation with details
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Cleanup Broken Conversations'),
-          content: Text(
-            'Found $totalIssues broken conversation(s).\n\n'
-            'These conversations have:\n'
-            '• Wrong ID format\n'
-            '• Mismatched isGroup field\n'
-            '• Group messages in 1-on-1 chats\n\n'
-            'Delete these broken conversations?\n\n'
-            '⚠️ This cannot be undone!',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm != true || !mounted) return;
-
-      // Show deleting dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Deleting broken conversations...'),
-            ],
-          ),
-        ),
-      );
-
-      final result = await dataFixService.cleanupBrokenConversations();
-
-      if (!mounted) return;
-
-      // Close loading dialog
-      Navigator.pop(context);
-
-      // Show result
-      if (result['success'] == true) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Success!'),
-              ],
-            ),
-            content: Text(
-              'Deleted ${result['deletedCount']} broken conversation(s).\n\n'
-              'Please restart the app for changes to take effect.',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Error'),
-              ],
-            ),
-            content: Text('Failed to cleanup:\n\n${result['error']}'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('  Error running cleanup: $e');
-
-      if (!mounted) return;
-
-      // Close any open dialogs
-      Navigator.pop(context);
-
-      // Show error
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.error, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Error'),
-            ],
-          ),
-          content: Text('An error occurred:\n\n$e'),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
   void _showInterestsDialog() {
     HapticFeedback.lightImpact();
 
@@ -1191,16 +857,38 @@ class _ProfileWithHistoryScreenState
         child: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: AppBar(
-              elevation: 0,
-              backgroundColor: Colors.black.withValues(alpha: 0.3),
-              automaticallyImplyLeading: false,
-              centerTitle: true,
-              title: const Text(
-                'Profile',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: AppBar(
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context);
+                    // Open drawer after returning
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                    });
+                  },
+                ),
+                centerTitle: true,
+                title: const Text(
+                  'Profile',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -1429,408 +1117,309 @@ class _ProfileWithHistoryScreenState
                             ),
                           ),
 
-                          // Edit Profile Card
+                          // Active Status Card
                           Container(
                             width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.1),
                               ),
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
+                            child: ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: _showOnlineStatus
+                                      ? AppColors.iosGreen.withValues(
+                                          alpha: 0.2,
+                                        )
+                                      : Colors.white.withValues(
+                                          alpha: 0.15,
+                                        ),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'Edit Profile',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  trailing: Icon(
-                                    Icons.arrow_forward_ios,
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    size: 16,
-                                  ),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const ProfileEditScreen(),
-                                      ),
-                                    );
-                                  },
+                                child: Icon(
+                                  _showOnlineStatus
+                                      ? CupertinoIcons.circle_fill
+                                      : CupertinoIcons.circle,
+                                  color: _showOnlineStatus
+                                      ? AppColors.iosGreen
+                                      : Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              title: Text(
+                                'Active Status',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: Transform.scale(
+                                scale: 0.9,
+                                child: CupertinoSwitch(
+                                  value: _showOnlineStatus,
+                                  onChanged: _isStatusLoading
+                                      ? null
+                                      : _updateOnlineStatusPreference,
+                                  activeTrackColor: AppColors.iosGreen,
                                 ),
                               ),
                             ),
                           ),
 
-                          // Account Type Card
+                          // Edit Profile Card
                           Container(
                             width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.1),
                               ),
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
+                            child: ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: Builder(
-                                  builder: (context) {
-                                    final accountType =
-                                        _userProfile?['accountType']
-                                            ?.toString()
-                                            .toLowerCase() ??
-                                        'personal';
-                                    final isBusiness =
-                                        accountType == 'business';
-                                    debugPrint(
-                                      'Account Type from Firestore: ${_userProfile?['accountType']} -> isBusiness: $isBusiness',
-                                    );
-                                    return ListTile(
-                                      leading: Container(
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.15,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          isBusiness
-                                              ? Icons.business
-                                              : Icons.person,
-                                          color: Colors.white,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      title: const Text(
-                                        'Account Type',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      trailing: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.15,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          isBusiness ? 'Business' : 'Personal',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                child: const Icon(
+                                  Icons.edit,
+                                  color: Colors.white,
+                                  size: 20,
                                 ),
                               ),
+                              title: Text(
+                                'Edit Profile',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ProfileEditScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                          // Account Type Card (non-interactive)
+                          IgnorePointer(
+                            child: Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                ),
+                              ),
+                              child: Builder(
+                                builder: (context) {
+                                  final accountType =
+                                      _userProfile?['accountType']
+                                          ?.toString()
+                                          .toLowerCase() ??
+                                      'personal';
+                                  final isBusiness =
+                                      accountType == 'business';
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 14,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            isBusiness
+                                                ? Icons.business
+                                                : Icons.person,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Text(
+                                            'Account Type',
+                                            style: TextStyle(
+                                              color: Colors.white.withValues(alpha: 0.9),
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isBusiness ? 'Business' : 'Personal',
+                                            style: TextStyle(
+                                              color: Colors.white.withValues(alpha: 0.7),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+
+                          // Invite Friends Card
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.person_add,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              title: Text(
+                                'Invite Friends',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Share Supper with friends',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 14,
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              onTap: () {
+                                Share.share(
+                                  'Check out Supper - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
+                                  subject: 'Join me on Supper!',
+                                );
+                              },
                             ),
                           ),
 
                           // Settings Card
                           Container(
                             width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.1),
                               ),
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
+                            child: ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.settings,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'Settings',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  trailing: Icon(
-                                    Icons.arrow_forward_ios,
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    size: 16,
-                                  ),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const SettingsScreen(),
-                                      ),
-                                    );
-                                  },
+                                child: const Icon(
+                                  Icons.settings,
+                                  color: Colors.white,
+                                  size: 20,
                                 ),
                               ),
+                              title: Text(
+                                'Settings',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const SettingsScreen(),
+                                  ),
+                                );
+                              },
                             ),
                           ),
 
-                          // Active Status Card
-                          Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
-                                ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: _showOnlineStatus
-                                          ? AppColors.iosGreen.withValues(
-                                              alpha: 0.2,
-                                            )
-                                          : Colors.white.withValues(
-                                              alpha: 0.15,
-                                            ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      _showOnlineStatus
-                                          ? CupertinoIcons.circle_fill
-                                          : CupertinoIcons.circle,
-                                      color: _showOnlineStatus
-                                          ? AppColors.iosGreen
-                                          : Colors.white.withValues(alpha: 0.7),
-                                      size: 22,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'Active Status',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  trailing: Transform.scale(
-                                    scale: 0.9,
-                                    child: CupertinoSwitch(
-                                      value: _showOnlineStatus,
-                                      onChanged: _isStatusLoading
-                                          ? null
-                                          : _updateOnlineStatusPreference,
-                                      activeTrackColor: AppColors.iosGreen,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // 🔧 TEMPORARY DEBUG BUTTON - Fix Conversation Data
-                          // TODO: Remove this button after running the fix once
-                          Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.orange.withValues(alpha: 0.3),
-                                  Colors.red.withValues(alpha: 0.3),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.orange.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
-                                ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.build_circle,
-                                      color: Colors.orange,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    '🔧 Fix Conversation Data',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  subtitle: const Text(
-                                    'Run once to fix group/1-on-1 chat messages',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  trailing: Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.orange.withValues(alpha: 0.9),
-                                    size: 28,
-                                  ),
-                                  onTap: _runDataFix,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          //   TEMPORARY DEBUG BUTTON - Cleanup Broken Conversations
-                          // TODO: Remove this button after running the fix once
-                          Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.red.withValues(alpha: 0.3),
-                                  Colors.purple.withValues(alpha: 0.3),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.red.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
-                                ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.3),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.delete_sweep,
-                                      color: Colors.red,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    '  Cleanup Broken Chats',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  subtitle: const Text(
-                                    'Delete conversations with wrong structure',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  trailing: Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.red.withValues(alpha: 0.9),
-                                    size: 28,
-                                  ),
-                                  onTap: _runCleanup,
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),

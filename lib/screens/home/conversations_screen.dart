@@ -65,20 +65,45 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     super.initState();
     initSpeech(); // From VoiceSearchMixin
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      setState(() {
-        _currentTabIndex = _tabController.index;
-      });
+    _tabController.addListener(_onTabChanged);
+  }
+
+  /// Handle tab changes - start/stop listeners based on active tab
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+
+    final newIndex = _tabController.index;
+    final previousIndex = _currentTabIndex;
+
+    setState(() {
+      _currentTabIndex = newIndex;
     });
-    _startCallsListeners();
+
+    // Stop call listeners when leaving Calls tab (index 2)
+    if (previousIndex == 2 && newIndex != 2) {
+      _stopCallsListeners();
+    }
+
+    // Start call listeners when entering Calls tab (index 2)
+    if (newIndex == 2 && previousIndex != 2) {
+      _startCallsListeners();
+    }
+  }
+
+  /// Stop call listeners to save Firebase resources
+  void _stopCallsListeners() {
+    debugPrint('CallsTab: Stopping call listeners');
+    _individualCallsSub?.cancel();
+    _individualCallsSub = null;
+    _groupCallsSub?.cancel();
+    _groupCallsSub = null;
   }
 
   @override
   void dispose() {
-    _individualCallsSub?.cancel();
-    _groupCallsSub?.cancel();
+    _stopCallsListeners();
     try {
+      _tabController.removeListener(_onTabChanged);
       _tabController.dispose();
     } catch (_) {}
     try {
@@ -105,7 +130,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         .collection('calls')
         .where('participants', arrayContains: currentUserId)
         .orderBy('timestamp', descending: true)
-        .limit(100)
+        .limit(30) // Reduced limit to save Firebase costs
         .snapshots()
         .listen((snapshot) {
       debugPrint('CallsTab: Individual calls received: ${snapshot.docs.length}');
@@ -117,10 +142,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       }
     }, onError: (e) {
       debugPrint('CallsTab: Individual calls error: $e');
+      // Cancel original listener before creating fallback
+      _individualCallsSub?.cancel();
       // Fallback: try without orderBy (in case index doesn't exist)
       _individualCallsSub = _firestore
           .collection('calls')
           .where('participants', arrayContains: currentUserId)
+          .limit(50) // Add limit to reduce reads
           .snapshots()
           .listen((snapshot) {
         debugPrint('CallsTab: Individual calls (fallback) received: ${snapshot.docs.length}');
@@ -140,7 +168,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         .collection('group_calls')
         .where('participants', arrayContains: currentUserId)
         .orderBy('createdAt', descending: true)
-        .limit(100)
+        .limit(30) // Reduced limit to save Firebase costs
         .snapshots()
         .listen((snapshot) {
       debugPrint('CallsTab: Group calls received: ${snapshot.docs.length}');
@@ -152,10 +180,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       }
     }, onError: (e) {
       debugPrint('CallsTab: Group calls error: $e');
+      // Cancel original listener before creating fallback
+      _groupCallsSub?.cancel();
       // Fallback: try without orderBy (in case index doesn't exist)
       _groupCallsSub = _firestore
           .collection('group_calls')
           .where('participants', arrayContains: currentUserId)
+          .limit(50) // Add limit to reduce reads
           .snapshots()
           .listen((snapshot) {
         debugPrint('CallsTab: Group calls (fallback) received: ${snapshot.docs.length}');
@@ -601,10 +632,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
                       // OLD: Also check deletedBy field for backwards compatibility
                       if (conv.isGroup) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final deletedBy = data['deletedBy'] as List<dynamic>?;
-                        if (deletedBy != null && deletedBy.contains(currentUserId)) {
-                          continue; // Skip this conversation
+                        final rawData = doc.data();
+                        if (rawData != null) {
+                          final data = rawData as Map<String, dynamic>;
+                          final deletedBy = data['deletedBy'] as List<dynamic>?;
+                          if (deletedBy != null && deletedBy.contains(currentUserId)) {
+                            continue; // Skip this conversation
+                          }
                         }
                       }
 
@@ -729,7 +763,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
               // Filter out calls deleted for current user
               allCalls = allCalls.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
+                final rawData = doc.data();
+                if (rawData == null) return false;
+                final data = rawData as Map<String, dynamic>;
                 final deletedFor = data['deletedFor'] as List<dynamic>?;
                 if (deletedFor != null && deletedFor.contains(currentUserId)) {
                   return false; // Hide this call for current user
@@ -743,8 +779,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
               // Sort by timestamp (descending)
               allCalls.sort((a, b) {
-                final aData = a.data() as Map<String, dynamic>;
-                final bData = b.data() as Map<String, dynamic>;
+                final aRaw = a.data();
+                final bRaw = b.data();
+                if (aRaw == null && bRaw == null) return 0;
+                if (aRaw == null) return 1;
+                if (bRaw == null) return -1;
+                final aData = aRaw as Map<String, dynamic>;
+                final bData = bRaw as Map<String, dynamic>;
                 final aTime = aData['timestamp'] as Timestamp? ??
                              aData['createdAt'] as Timestamp?;
                 final bTime = bData['timestamp'] as Timestamp? ??
@@ -770,7 +811,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 itemCount: filteredCalls.length,
                 itemBuilder: (context, index) {
                   final callDoc = filteredCalls[index];
-                  final callData = callDoc.data() as Map<String, dynamic>;
+                  final rawData = callDoc.data();
+                  if (rawData == null) return const SizedBox.shrink();
+                  final callData = rawData as Map<String, dynamic>;
                   final isGroupCall = callData.containsKey('groupId');
 
                   return _buildCallTileWithDelete(
@@ -795,7 +838,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   ) {
     final userIds = <String>[];
     for (var doc in calls) {
-      final data = doc.data() as Map<String, dynamic>;
+      final rawData = doc.data();
+      if (rawData == null) continue;
+      final data = rawData as Map<String, dynamic>;
 
       if (data.containsKey('groupId')) {
         // Group call - prefetch all participants
@@ -827,7 +872,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return calls.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
+      final rawData = doc.data();
+      if (rawData == null) return false;
+      final data = rawData as Map<String, dynamic>;
 
       if (data.containsKey('groupId')) {
         // Group call - search by group name
@@ -2727,7 +2774,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
         final Set<String> otherUserIds = {};
         for (var doc in convSnapshot.data!.docs) {
-          final data = doc.data() as Map<String, dynamic>;
+          final rawData = doc.data();
+          if (rawData == null) continue;
+          final data = rawData as Map<String, dynamic>;
           final participants = List<String>.from(data['participants'] ?? []);
           for (var participant in participants) {
             if (participant != currentUserId) {

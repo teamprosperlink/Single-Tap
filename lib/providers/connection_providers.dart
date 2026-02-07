@@ -16,6 +16,7 @@ final pendingRequestsProvider = StreamProvider<List<Map<String, dynamic>>>((
       .where('receiverId', isEqualTo: userId)
       .where('status', isEqualTo: 'pending')
       .orderBy('createdAt', descending: true)
+      .limit(20) // Limit to reduce Firebase reads
       .snapshots()
       .map((snapshot) {
         return snapshot.docs.map((doc) {
@@ -48,6 +49,7 @@ final sentRequestsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
       .where('senderId', isEqualTo: userId)
       .where('status', isEqualTo: 'pending')
       .orderBy('createdAt', descending: true)
+      .limit(20) // Limit to reduce Firebase reads
       .snapshots()
       .map((snapshot) {
         return snapshot.docs.map((doc) {

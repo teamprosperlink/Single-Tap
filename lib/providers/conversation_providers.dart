@@ -85,6 +85,7 @@ final conversationsStreamProvider = StreamProvider<List<ConversationModel>>((
   return FirebaseFirestore.instance
       .collection('conversations')
       .where('participants', arrayContains: userId)
+      .limit(50) // Limit to reduce Firebase reads
       .snapshots()
       .map((snapshot) {
         final conversations = <ConversationModel>[];
