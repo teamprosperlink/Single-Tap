@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/currency_utils.dart';
 
 /// Order status enum
 enum OrderStatus {
@@ -374,31 +375,20 @@ class BusinessOrder {
                        status != OrderStatus.reviewed;
 
   /// Get formatted total amount
-  String get formattedTotal {
-    final symbol = _getCurrencySymbol(currency);
-    return '$symbol${totalAmount.toStringAsFixed(0)}';
-  }
+  String get formattedTotal => CurrencyUtils.format(totalAmount, currency);
 
   /// Get formatted price
-  String get formattedPrice {
-    final symbol = _getCurrencySymbol(currency);
-    return '$symbol${price.toStringAsFixed(0)}';
-  }
+  String get formattedPrice => CurrencyUtils.format(price, currency);
 
-  String _getCurrencySymbol(String currency) {
-    switch (currency.toUpperCase()) {
-      case 'INR':
-        return '\u{20B9}';
-      case 'USD':
-        return '\$';
-      case 'EUR':
-        return '\u{20AC}';
-      case 'GBP':
-        return '\u{00A3}';
-      default:
-        return currency;
+  // Backward compatibility getters
+  String get orderNumber => orderId;
+  List<Map<String, dynamic>> get items => [
+    {
+      'name': serviceName,
+      'quantity': quantity,
+      'price': price,
     }
-  }
+  ];
 
   /// Generate a new order ID
   static String generateOrderId() {
@@ -408,6 +398,9 @@ class BusinessOrder {
     return 'ORD-$year-${random.toString().padLeft(5, '0')}';
   }
 }
+
+/// Type alias for backward compatibility
+typedef BusinessOrderModel = BusinessOrder;
 
 /// Order filter options
 class OrderFilters {

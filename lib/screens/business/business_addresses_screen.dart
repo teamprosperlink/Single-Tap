@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/business_model.dart';
 import '../../services/business_service.dart';
+import '../../widgets/business/enhanced_empty_state.dart';
 
 /// Screen for managing business addresses
 class BusinessAddressesScreen extends StatefulWidget {
@@ -71,59 +72,13 @@ class _BusinessAddressesScreenState extends State<BusinessAddressesScreen> {
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.location_off_outlined,
-                size: 64,
-                color: isDarkMode ? Colors.white38 : Colors.grey[400],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No addresses saved',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add your business address to help customers find you',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.white54 : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddEditAddressSheet(null),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D67D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Add Address'),
-            ),
-          ],
-        ),
-      ),
+    return EnhancedEmptyState(
+      icon: Icons.location_off_outlined,
+      title: 'No Addresses Saved',
+      message: 'Add your business address to help customers find you',
+      actionLabel: 'Add Address',
+      onAction: () => _showAddEditAddressSheet(null),
+      color: const Color(0xFF00D67D),
     );
   }
 
@@ -340,6 +295,7 @@ class _BusinessAddressesScreenState extends State<BusinessAddressesScreen> {
       builder: (context) => _AddressFormSheet(
         existingAddress: existingAddress,
         onSave: (address) async {
+          final messenger = ScaffoldMessenger.of(context);
           setState(() => _isLoading = true);
 
           final updatedBusiness = widget.business.copyWith(address: address);
@@ -357,14 +313,14 @@ class _BusinessAddressesScreenState extends State<BusinessAddressesScreen> {
             });
 
             if (success) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Address saved successfully'),
                   backgroundColor: Colors.green,
                 ),
               );
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Failed to save address'),
                   backgroundColor: Colors.red,
@@ -395,6 +351,7 @@ class _BusinessAddressesScreenState extends State<BusinessAddressesScreen> {
           ),
           TextButton(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
               setState(() => _isLoading = true);
 
@@ -441,7 +398,7 @@ class _BusinessAddressesScreenState extends State<BusinessAddressesScreen> {
                   }
                 });
 
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(success ? 'Address deleted' : 'Failed to delete address'),
                     backgroundColor: success ? Colors.green : Colors.red,

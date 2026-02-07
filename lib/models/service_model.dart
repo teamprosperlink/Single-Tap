@@ -140,6 +140,15 @@ class ServiceModel {
     };
   }
 
+  /// Alias for title (used in some dashboard screens)
+  String get name => title;
+
+  /// Duration alias (used in appointment dashboards)
+  String? get duration => deliveryTime;
+
+  /// Booking count alias (used in appointment dashboards)
+  int get bookingCount => inquiries;
+
   /// Get formatted price string
   String get formattedPrice {
     if (price == null || pricingType == PricingType.negotiable) {

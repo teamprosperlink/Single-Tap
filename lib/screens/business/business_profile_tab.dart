@@ -153,7 +153,7 @@ class _BusinessProfileTabState extends State<BusinessProfileTab> {
                         ? Image.network(
                             widget.business.logo!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildLogoPlaceholder(),
+                            errorBuilder: (context, error, stackTrace) => _buildLogoPlaceholder(),
                           )
                         : _buildLogoPlaceholder(),
                   ),

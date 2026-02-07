@@ -6,6 +6,7 @@ import '../../models/business_model.dart';
 import '../../models/business_order_model.dart';
 import '../../services/business_service.dart';
 import '../../widgets/business/glassmorphic_card.dart';
+import '../../widgets/business/enhanced_empty_state.dart';
 
 /// Inquiries management screen for business
 /// Simplified from orders - customers send inquiries, business contacts them offline
@@ -26,6 +27,9 @@ class BusinessInquiriesScreen extends StatefulWidget {
 class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   final BusinessService _businessService = BusinessService();
   late String _selectedFilter;
+  String _searchQuery = '';
+  bool _showSearch = false;
+  final TextEditingController _searchController = TextEditingController();
 
   // Simplified inquiry filters
   static const List<String> _filters = ['All', 'New', 'Responded', 'Completed', 'Declined'];
@@ -34,6 +38,22 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   void initState() {
     super.initState();
     _selectedFilter = widget.initialFilter;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<BusinessOrder> _applySearch(List<BusinessOrder> inquiries) {
+    if (_searchQuery.isEmpty) return inquiries;
+    final query = _searchQuery.toLowerCase();
+    return inquiries.where((i) =>
+      i.customerName.toLowerCase().contains(query) ||
+      i.serviceName.toLowerCase().contains(query) ||
+      (i.customerNotes?.toLowerCase().contains(query) ?? false)
+    ).toList();
   }
 
   @override
@@ -52,22 +72,44 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Inquiries',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
+        title: _showSearch
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search inquiries...',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.white38 : Colors.grey[500],
+                  ),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              )
+            : Text(
+                'Inquiries',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
         actions: [
           IconButton(
             icon: Icon(
-              Icons.search,
+              _showSearch ? Icons.close : Icons.search,
               color: isDarkMode ? Colors.white : Colors.black87,
             ),
             onPressed: () {
-              // TODO: Implement search
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchQuery = '';
+                  _searchController.clear();
+                }
+              });
             },
           ),
         ],
@@ -86,7 +128,8 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
           }
 
           final allInquiries = snapshot.data ?? [];
-          final inquiries = _filterInquiries(allInquiries);
+          final filtered = _filterInquiries(allInquiries);
+          final inquiries = _applySearch(filtered);
 
           if (allInquiries.isEmpty) {
             return _buildEmptyState(isDarkMode);
@@ -220,58 +263,11 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: GlassmorphicCard(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF00D67D).withValues(alpha: 0.2),
-                      const Color(0xFF00D67D).withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF00D67D).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.inbox_outlined,
-                  size: 48,
-                  color: Color(0xFF00D67D),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'No Inquiries Yet',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'When customers are interested in your services,\ntheir inquiries will appear here',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.white54 : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return EnhancedEmptyState(
+      icon: Icons.inbox_outlined,
+      title: 'No Inquiries Yet',
+      message: 'When customers are interested in your services, their inquiries will appear here',
+      color: const Color(0xFF00D67D),
     );
   }
 
@@ -416,13 +412,14 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
           ),
           TextButton(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
               final success = await _businessService.updateOrderStatus(
                 inquiry.id,
                 OrderStatus.cancelled,
               );
               if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(content: Text('Inquiry declined')),
                 );
               }

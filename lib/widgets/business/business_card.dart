@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/business_model.dart';
+import '../../config/app_theme.dart';
+import '../../res/config/app_colors.dart';
 
 /// Business card widget for displaying business information
 class BusinessCard extends StatelessWidget {
@@ -36,11 +38,11 @@ class BusinessCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.cardColor(isDarkMode),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.08),
+              color: AppColors.blackAlpha(alpha: isDarkMode ? 0.3 : 0.08),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -61,13 +63,13 @@ class BusinessCard extends StatelessWidget {
                       CachedNetworkImage(
                         imageUrl: business.coverImage!,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                        placeholder: (_, _) => Container(
+                          color: isDarkMode ? AppColors.darkCardSecondary : AppColors.lightGrayTint,
                           child: const Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         ),
-                        errorWidget: (_, __, ___) => _buildPlaceholderCover(isDarkMode),
+                        errorWidget: (_, _, _) => _buildPlaceholderCover(isDarkMode),
                       )
                     else
                       _buildPlaceholderCover(isDarkMode),
@@ -84,8 +86,8 @@ class BusinessCard extends StatelessWidget {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.7),
+                              AppColors.transparent,
+                              AppColors.blackAlpha(alpha: 0.7),
                             ],
                           ),
                         ),
@@ -99,8 +101,8 @@ class BusinessCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.blackAlpha(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -113,8 +115,8 @@ class BusinessCard extends StatelessWidget {
                             Text(
                               business.businessType,
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
+                                color: AppColors.textPrimaryDark,
+                                fontSize: AppTheme.fontSmall,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -131,18 +133,18 @@ class BusinessCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00D67D),
+                            color: AppTheme.primaryGreen,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.verified, color: Colors.white, size: 12),
+                              Icon(Icons.verified, color: AppColors.textPrimaryDark, size: 12),
                               SizedBox(width: 4),
                               Text(
                                 'Verified',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textPrimaryDark,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -291,7 +293,7 @@ class BusinessCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: business.hours!.isCurrentlyOpen
-                                ? const Color(0xFF00D67D).withValues(alpha: 0.15)
+                                ? AppTheme.primaryGreen.withValues(alpha: 0.15)
                                 : Colors.red.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
@@ -299,7 +301,7 @@ class BusinessCard extends StatelessWidget {
                             business.hours!.isCurrentlyOpen ? 'Open' : 'Closed',
                             style: TextStyle(
                               color: business.hours!.isCurrentlyOpen
-                                  ? const Color(0xFF00D67D)
+                                  ? AppTheme.primaryGreen
                                   : Colors.red,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -350,7 +352,7 @@ class BusinessCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+          color: isDarkMode ? AppTheme.darkCard : AppColors.textPrimaryDark,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isDarkMode ? Colors.white10 : Colors.grey[200]!,
@@ -387,7 +389,7 @@ class BusinessCard extends StatelessWidget {
                           child: Icon(
                             Icons.verified,
                             size: 16,
-                            color: Color(0xFF00D67D),
+                            color: AppTheme.primaryGreen,
                           ),
                         ),
                     ],
@@ -445,12 +447,12 @@ class BusinessCard extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
+          placeholder: (_, _) => Container(
             width: size,
             height: size,
             color: Colors.grey[300],
           ),
-          errorWidget: (_, __, ___) => _buildLogoPlaceholder(isDarkMode, size),
+          errorWidget: (_, _, _) => _buildLogoPlaceholder(isDarkMode, size),
         ),
       );
     }
@@ -513,13 +515,13 @@ class EmptyBusinessWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF00D67D).withValues(alpha: 0.1),
+              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.store_outlined,
               size: 56,
-              color: Color(0xFF00D67D),
+              color: AppTheme.primaryGreen,
             ),
           ),
           const SizedBox(height: 24),
@@ -547,8 +549,8 @@ class EmptyBusinessWidget extends StatelessWidget {
             icon: const Icon(Icons.add_business),
             label: const Text('Set Up Business'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00D67D),
-              foregroundColor: Colors.white,
+              backgroundColor: AppTheme.primaryGreen,
+              foregroundColor: AppColors.textPrimaryDark,
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -588,7 +590,7 @@ class ListingCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+          color: isDarkMode ? AppTheme.darkCard : AppColors.textPrimaryDark,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -613,10 +615,10 @@ class ListingCard extends StatelessWidget {
                       CachedNetworkImage(
                         imageUrl: listing.images.first,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
+                        placeholder: (_, _) => Container(
                           color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
                         ),
-                        errorWidget: (_, __, ___) => Container(
+                        errorWidget: (_, _, _) => Container(
                           color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
                           child: const Icon(Icons.image_not_supported),
                         ),
@@ -648,7 +650,7 @@ class ListingCard extends StatelessWidget {
                         child: Text(
                           listing.type == 'product' ? 'Product' : 'Service',
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textPrimaryDark,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -664,7 +666,7 @@ class ListingCard extends StatelessWidget {
                           child: Text(
                             'UNAVAILABLE',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textPrimaryDark,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1,
                             ),
@@ -696,7 +698,7 @@ class ListingCard extends StatelessWidget {
                   Text(
                     listing.formattedPrice,
                     style: const TextStyle(
-                      color: Color(0xFF00D67D),
+                      color: AppTheme.primaryGreen,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),

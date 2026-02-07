@@ -202,7 +202,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          post.title ?? post.originalPrompt,
+                          post.title,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -214,7 +214,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                         const SizedBox(height: 4),
                         ...[
                         Text(
-                          post.description!,
+                          post.description,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 14,

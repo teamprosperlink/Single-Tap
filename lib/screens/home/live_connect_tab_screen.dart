@@ -16,7 +16,6 @@ import '../chat/enhanced_chat_screen.dart';
 import '../../models/user_profile.dart';
 import '../../models/extended_user_profile.dart';
 import '../../widgets/profile widgets/profile_detail_bottom_sheet.dart';
-import '../../widgets/profile widgets/edit_profile_bottom_sheet.dart';
 import '../../services/connection_service.dart';
 import '../../services/location services/location_service.dart';
 import '../chat/my_connections_screen.dart';
@@ -779,29 +778,6 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         return false;
       }).toList();
     }
-  }
-
-  void _showEditProfile() {
-    if (_userProfile == null) return;
-
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    // ignore: unused_local_variable
-    final myProfile = ExtendedUserProfile.fromMap(_userProfile!, userId);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => EditProfileBottomSheet(
-        currentProfile: _userProfile!,
-        onProfileUpdated: () {
-          // Reload user profile after saving
-          _loadUserProfile();
-        },
-      ),
-    );
   }
 
   // Helper method to calculate distance between two coordinates using Haversine formula

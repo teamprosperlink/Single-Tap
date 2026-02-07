@@ -43,7 +43,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
   int _callDuration = 0;
   int _callWaitTime =
       0; // Track how long waiting for first join (max 39 seconds)
-  DateTime? _callStartTime;
   bool _isMuted = false;
   bool _isSpeakerOn = true;
   bool _isEndingCall = false;
@@ -57,9 +56,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
   void initState() {
     super.initState();
     debugPrint('  GroupAudioCallScreen: initState - callId=${widget.callId}');
-
-    // Initialize call start time
-    _callStartTime = DateTime.now();
 
     // CRITICAL FIX: Deduplicate participants by userId before storing
     // This prevents duplicate participant cards in the UI
@@ -831,48 +827,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
     final minutes = seconds ~/ 60;
     final secs = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-  }
-
-  String _formatCallDateTime(DateTime? dateTime) {
-    if (dateTime == null) return '';
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final callDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
-
-    String dayName;
-    if (callDate == today) {
-      dayName = 'Today';
-    } else if (callDate == yesterday) {
-      dayName = 'Yesterday';
-    } else {
-      // Format as "Mon, Jan 15"
-      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      final months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      dayName =
-          '${days[dateTime.weekday - 1]}, ${months[dateTime.month - 1]} ${dateTime.day}';
-    }
-
-    // Format time as HH:MM
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    final time = '$hour:$minute';
-
-    return '$dayName • $time';
   }
 
   @override

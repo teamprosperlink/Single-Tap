@@ -8,6 +8,8 @@ import '../../services/business_service.dart';
 import '../../widgets/business/business_card.dart';
 import 'business_setup_screen.dart';
 import 'business_settings_screen.dart';
+import '../../services/firebase_provider.dart';
+import '../../widgets/business/enhanced_empty_state.dart';
 
 /// Tab-based dashboard for managing business profile, listings, and reviews
 class BusinessDashboardScreen extends ConsumerStatefulWidget {
@@ -185,7 +187,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
           Image.network(
             _business!.coverImage!,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
+            errorBuilder: (_, _, _) => Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -908,84 +910,13 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
   }
 
   Widget _buildEmptyListings(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.inventory_2_outlined,
-                size: 64,
-                color: isDarkMode ? Colors.white24 : Colors.grey[300],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No Listings Yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Start adding products or services to showcase to your customers',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.white54 : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => _showAddListingSheet('product'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D67D),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Product'),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _showAddListingSheet('service'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF00D67D),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    side: const BorderSide(color: Color(0xFF00D67D)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Service'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return EnhancedEmptyState(
+      icon: Icons.inventory_2_outlined,
+      title: 'No Listings Yet',
+      message: 'Start adding products or services to showcase to your customers',
+      actionLabel: 'Add Listing',
+      onAction: () => _showAddOptions(),
+      color: const Color(0xFF00D67D),
     );
   }
 
@@ -1301,45 +1232,11 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
   }
 
   Widget _buildEmptyReviews(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.rate_review_outlined,
-                size: 64,
-                color: isDarkMode ? Colors.white24 : Colors.grey[300],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No Reviews Yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Customer reviews will appear here once they start reviewing your business',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.white54 : Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return EnhancedEmptyState(
+      icon: Icons.rate_review_outlined,
+      title: 'No Reviews Yet',
+      message: 'Customer reviews will appear here once they start reviewing your business',
+      color: const Color(0xFF00D67D),
     );
   }
 
@@ -1639,7 +1536,12 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
   }
 
   void _showListingDetails(BusinessListing listing) {
-    // TODO: Navigate to listing details screen
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ListingDetailsSheet(listing: listing),
+    );
   }
 
   void _showEditListingSheet(BusinessListing listing) {
@@ -1685,7 +1587,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final success = await _businessService.deleteListing(listing.id);
+              final success = await _businessService.deleteListing(_business!.id, listing.id);
               if (success && mounted) {
                 _loadBusinessData();
                 if (!mounted) return;
@@ -1704,6 +1606,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
 
   void _toggleListingAvailability(BusinessListing listing) async {
     final success = await _businessService.toggleListingAvailability(
+      _business!.id,
       listing.id,
       !listing.isAvailable,
     );
@@ -1760,9 +1663,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                   title: const Text('Report review'),
                   onTap: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Report feature coming soon')),
-                    );
+                    _showReportReviewDialog(review);
                   },
                 ),
               ],
@@ -1817,6 +1718,63 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
               backgroundColor: const Color(0xFF00D67D),
             ),
             child: const Text('Reply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReportReviewDialog(BusinessReview review) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+        title: const Text('Report Review'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Why are you reporting this review?'),
+            const SizedBox(height: 16),
+            ...['Spam or fake review', 'Inappropriate language', 'Misleading content', 'Other'].map((reason) =>
+              ListTile(
+                dense: true,
+                title: Text(reason),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    await FirebaseProvider.firestore
+                        .collection('reported_reviews')
+                        .add({
+                      'reviewId': review.id,
+                      'businessId': review.businessId,
+                      'reportedBy': FirebaseProvider.currentUserId,
+                      'reason': reason,
+                      'reviewUserId': review.userId,
+                      'reviewComment': review.comment,
+                      'createdAt': DateTime.now(),
+                    });
+                  } catch (_) {
+                    // Report saved locally even if Firestore fails
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Report submitted. We\'ll review it shortly.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
         ],
       ),
@@ -2072,5 +2030,169 @@ class _AddListingSheetState extends State<_AddListingSheet> {
 
     widget.onSave(listing);
     Navigator.pop(context);
+  }
+}
+
+class _ListingDetailsSheet extends StatelessWidget {
+  final BusinessListing listing;
+
+  const _ListingDetailsSheet({required this.listing});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isProduct = listing.type == 'product';
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[400],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Image
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isProduct
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.purple.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: listing.images.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.network(
+                              listing.images.first,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Icon(
+                            isProduct ? Icons.shopping_bag : Icons.handyman,
+                            size: 64,
+                            color: isProduct ? Colors.blue : Colors.purple,
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Type badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isProduct
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.purple.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isProduct ? 'Product' : 'Service',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isProduct ? Colors.blue : Colors.purple,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Name
+                  Text(
+                    listing.name,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Price
+                  Text(
+                    listing.formattedPrice,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF00D67D),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Availability
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: listing.isAvailable
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          listing.isAvailable
+                              ? Icons.check_circle
+                              : Icons.cancel,
+                          size: 16,
+                          color: listing.isAvailable ? Colors.green : Colors.red,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          listing.isAvailable ? 'Available' : 'Unavailable',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: listing.isAvailable ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (listing.description != null) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      listing.description!,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

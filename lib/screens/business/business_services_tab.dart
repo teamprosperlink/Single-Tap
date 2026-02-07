@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/business_model.dart';
 import '../../models/business_post_model.dart';
+import '../../res/config/dynamic_business_ui_config.dart' as dynamic_config;
 import '../../services/business_service.dart';
+import '../../widgets/business/business_widgets.dart';
 
 /// Services/Products tab for managing business offerings
 class BusinessServicesTab extends StatefulWidget {
@@ -24,13 +26,32 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
   final BusinessService _businessService = BusinessService();
   late TabController _tabController;
   String _selectedFilter = 'All';
-
-  final List<String> _filters = ['All', 'Products', 'Services'];
+  late dynamic_config.CategoryTerminology _terminology;
+  late List<String> _filters;
+  bool _hasListings = false;
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // Get category-specific terminology
+    if (widget.business.category != null) {
+      _terminology = dynamic_config.CategoryTerminology.getForCategory(widget.business.category!);
+      _filters = ['All', _terminology.filter1Label, _terminology.filter2Label];
+    } else {
+      _terminology = const dynamic_config.CategoryTerminology(
+        screenTitle: 'Services & Products',
+        filter1Label: 'Products',
+        filter1Icon: 'shopping_bag',
+        filter2Label: 'Services',
+        filter2Icon: 'handyman',
+        emptyStateMessage: 'Start adding products or services to showcase to your customers',
+      );
+      _filters = ['All', 'Products', 'Services'];
+    }
   }
 
   @override
@@ -49,22 +70,40 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
         backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: Text(
-          'Services & Products',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
+        title: _isSearching
+            ? TextField(
+                autofocus: true,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search listings...',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.white54 : Colors.grey,
+                  ),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              )
+            : Text(
+                _terminology.screenTitle,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
         actions: [
           IconButton(
             icon: Icon(
-              Icons.search,
+              _isSearching ? Icons.close : Icons.search,
               color: isDarkMode ? Colors.white : Colors.black87,
             ),
             onPressed: () {
-              // TODO: Implement search
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) _searchQuery = '';
+              });
             },
           ),
         ],
@@ -84,6 +123,19 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
 
           final allListings = snapshot.data ?? [];
           final listings = _filterListings(allListings);
+          final hasAnyListings = allListings.isNotEmpty;
+          final hasFilteredResults = listings.isNotEmpty;
+
+          // Update state to control FAB visibility
+          // Show FAB only when there are listings AND current filter shows results
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final shouldShowFAB = hasAnyListings && hasFilteredResults;
+            if (_hasListings != shouldShowFAB) {
+              setState(() {
+                _hasListings = shouldShowFAB;
+              });
+            }
+          });
 
           if (allListings.isEmpty) {
             return _buildEmptyState(isDarkMode);
@@ -114,63 +166,62 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddSheet(),
-        backgroundColor: const Color(0xFF00D67D),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add New'),
-      ),
+      floatingActionButton: _hasListings
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddSheet(),
+              backgroundColor: const Color(0xFF00D67D),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Add New'),
+            )
+          : null,
     );
   }
 
   Widget _buildFilterChips(bool isDarkMode) {
     return Container(
       height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _filters.length,
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isSelected = _selectedFilter == filter;
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: BusinessFilterBar(
+        chips: _filters.map((filter) {
+          IconData? icon;
+          if (filter == _terminology.filter1Label) {
+            icon = _terminology.getFilter1Icon();
+          } else if (filter == _terminology.filter2Label) {
+            icon = _terminology.getFilter2Icon();
+          }
 
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(filter),
-              selected: isSelected,
-              onSelected: (selected) {
-                HapticFeedback.lightImpact();
-                setState(() => _selectedFilter = filter);
-              },
-              selectedColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
-              checkmarkColor: const Color(0xFF00D67D),
-              labelStyle: TextStyle(
-                color: isSelected
-                    ? const Color(0xFF00D67D)
-                    : (isDarkMode ? Colors.white70 : Colors.grey[700]),
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-              backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.grey[100],
-              side: BorderSide(
-                color: isSelected
-                    ? const Color(0xFF00D67D)
-                    : (isDarkMode ? Colors.white24 : Colors.grey[300]!),
-              ),
-            ),
+          return BusinessFilterChip(
+            label: filter,
+            isSelected: _selectedFilter == filter,
+            onTap: () => setState(() => _selectedFilter = filter),
+            icon: icon,
           );
-        },
+        }).toList(),
       ),
     );
   }
 
   List<BusinessListing> _filterListings(List<BusinessListing> listings) {
-    if (_selectedFilter == 'All') return listings;
-    if (_selectedFilter == 'Products') {
-      return listings.where((l) => l.type == 'product').toList();
+    var filtered = listings;
+
+    if (_selectedFilter != 'All') {
+      if (_selectedFilter == _terminology.filter1Label) {
+        filtered = filtered.where((l) => l.type == 'product').toList();
+      } else {
+        filtered = filtered.where((l) => l.type == 'service').toList();
+      }
     }
-    return listings.where((l) => l.type == 'service').toList();
+
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      filtered = filtered.where((l) =>
+        l.name.toLowerCase().contains(query) ||
+        (l.description?.toLowerCase().contains(query) ?? false)
+      ).toList();
+    }
+
+    return filtered;
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
@@ -203,7 +254,7 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
             ),
             const SizedBox(height: 8),
             Text(
-              'Start adding products or services to showcase to your customers',
+              _terminology.emptyStateMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -211,11 +262,51 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => _showAddSheet(type: 'product'),
+            _buildDynamicAddButtons(isDarkMode),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDynamicAddButtons(bool isDarkMode) {
+    // Get dynamic configuration based on business category
+    if (widget.business.category == null) {
+      return _buildDefaultAddButtons(isDarkMode);
+    }
+
+    final config = dynamic_config.DynamicUIConfig.getConfigForCategory(widget.business.category!);
+
+    // Find relevant "add" actions from quick actions
+    final addActions = config.quickActions.where((action) {
+      return action == dynamic_config.QuickAction.addProduct ||
+             action == dynamic_config.QuickAction.addService ||
+             action == dynamic_config.QuickAction.addMenuItem ||
+             action == dynamic_config.QuickAction.addRoom ||
+             action == dynamic_config.QuickAction.addProperty ||
+             action == dynamic_config.QuickAction.addVehicle ||
+             action == dynamic_config.QuickAction.addCourse ||
+             action == dynamic_config.QuickAction.addMembership ||
+             action == dynamic_config.QuickAction.addPackage ||
+             action == dynamic_config.QuickAction.addPortfolioItem;
+    }).take(2).toList(); // Show max 2 buttons
+
+    if (addActions.isEmpty) {
+      return _buildDefaultAddButtons(isDarkMode);
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: addActions.asMap().entries.map((entry) {
+        final index = entry.key;
+        final action = entry.value;
+        final isPrimary = index == 0;
+
+        return Padding(
+          padding: EdgeInsets.only(left: index > 0 ? 12 : 0),
+          child: isPrimary
+              ? ElevatedButton.icon(
+                  onPressed: () => _handleAddAction(action),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00D67D),
                     foregroundColor: Colors.white,
@@ -228,11 +319,10 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
                     ),
                   ),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add Product'),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _showAddSheet(type: 'service'),
+                  label: Text(action.label),
+                )
+              : OutlinedButton.icon(
+                  onPressed: () => _handleAddAction(action),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00D67D),
                     padding: const EdgeInsets.symmetric(
@@ -245,41 +335,157 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
                     ),
                   ),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add Service'),
+                  label: Text(action.label),
                 ),
-              ],
-            ),
-          ],
-        ),
-      ),
+        );
+      }).toList(),
     );
+  }
+
+  Widget _buildDefaultAddButtons(bool isDarkMode) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () => _showAddSheet(type: 'product'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00D67D),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Product'),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: () => _showAddSheet(type: 'service'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF00D67D),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
+            ),
+            side: const BorderSide(color: Color(0xFF00D67D)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Service'),
+        ),
+      ],
+    );
+  }
+
+  void _handleAddAction(dynamic_config.QuickAction action) {
+    String type;
+    switch (action) {
+      case dynamic_config.QuickAction.addMenuItem:
+        type = 'menu_item';
+        break;
+      case dynamic_config.QuickAction.addProduct:
+        type = 'product';
+        break;
+      case dynamic_config.QuickAction.addService:
+        type = 'service';
+        break;
+      case dynamic_config.QuickAction.addRoom:
+        type = 'room';
+        break;
+      case dynamic_config.QuickAction.addProperty:
+        type = 'property';
+        break;
+      case dynamic_config.QuickAction.addVehicle:
+        type = 'vehicle';
+        break;
+      case dynamic_config.QuickAction.addCourse:
+        type = 'course';
+        break;
+      case dynamic_config.QuickAction.addMembership:
+        type = 'membership';
+        break;
+      case dynamic_config.QuickAction.addPackage:
+        type = 'package';
+        break;
+      case dynamic_config.QuickAction.addPortfolioItem:
+        type = 'portfolio';
+        break;
+      default:
+        type = 'service';
+    }
+    _showAddSheet(type: type);
   }
 
   Widget _buildNoResultsState(bool isDarkMode) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search_off,
-            size: 64,
-            color: isDarkMode ? Colors.white24 : Colors.grey[300],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No $_selectedFilter found',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDarkMode ? Colors.white70 : Colors.grey[700],
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_circle_outline,
+                size: 64,
+                color: isDarkMode ? Colors.white24 : Colors.grey[300],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => setState(() => _selectedFilter = 'All'),
-            child: const Text('View All'),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'No $_selectedFilter Yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add your first ${_selectedFilter.toLowerCase()} to get started',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? Colors.white54 : Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _showAddSheet(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D67D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+              label: Text('Add ${_selectedFilter == 'All' ? 'New' : _selectedFilter}'),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => setState(() => _selectedFilter = 'All'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00D67D),
+              ),
+              child: const Text('View All'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -291,14 +497,16 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
       backgroundColor: Colors.transparent,
       builder: (context) => _AddServiceSheet(
         businessId: widget.business.id,
+        business: widget.business,
         initialType: type,
         onSave: (listing) async {
           final id = await _businessService.createListing(listing);
           if (id != null && mounted) {
             widget.onRefresh();
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${listing.type == 'product' ? 'Product' : 'Service'} added successfully')),
+            final typeLabel = listing.type == 'product' ? _terminology.filter1Label : _terminology.filter2Label;
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              SnackBar(content: Text('$typeLabel added successfully')),
             );
           }
         },
@@ -313,13 +521,14 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
       backgroundColor: Colors.transparent,
       builder: (context) => _AddServiceSheet(
         businessId: widget.business.id,
+        business: widget.business,
         existingListing: listing,
         onSave: (updatedListing) async {
           final success = await _businessService.updateListing(listing.id, updatedListing);
           if (success && mounted) {
             widget.onRefresh();
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(this.context).showSnackBar(
               const SnackBar(content: Text('Listing updated successfully')),
             );
           }
@@ -356,11 +565,11 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final success = await _businessService.deleteListing(listing.id);
+              final success = await _businessService.deleteListing(widget.business.id, listing.id);
               if (success && mounted) {
                 widget.onRefresh();
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(this.context).showSnackBar(
                   const SnackBar(content: Text('Listing deleted')),
                 );
               }
@@ -374,6 +583,7 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
 
   void _toggleAvailability(BusinessListing listing) async {
     final success = await _businessService.toggleListingAvailability(
+      widget.business.id,
       listing.id,
       !listing.isAvailable,
     );
@@ -448,7 +658,7 @@ class _ServiceCard extends StatelessWidget {
                           child: Image.network(
                             listing.images.first,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildPlaceholderIcon(isProduct),
+                            errorBuilder: (_, _, _) => _buildPlaceholderIcon(isProduct),
                           ),
                         )
                       : _buildPlaceholderIcon(isProduct),
@@ -518,43 +728,9 @@ class _ServiceCard extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: listing.isAvailable
-                                  ? Colors.green.withValues(alpha: 0.1)
-                                  : Colors.red.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  listing.isAvailable
-                                      ? Icons.check_circle
-                                      : Icons.cancel,
-                                  size: 14,
-                                  color: listing.isAvailable
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  listing.isAvailable ? 'Available' : 'Unavailable',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: listing.isAvailable
-                                        ? Colors.green
-                                        : Colors.red,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          listing.isAvailable
+                              ? StatusBadge.available(showIcon: true)
+                              : StatusBadge.inactive(showIcon: true),
                         ],
                       ),
                     ],
@@ -644,12 +820,14 @@ class _AddServiceSheet extends StatefulWidget {
   final String? initialType;
   final BusinessListing? existingListing;
   final Function(BusinessListing) onSave;
+  final BusinessModel business;
 
   const _AddServiceSheet({
     required this.businessId,
     this.initialType,
     this.existingListing,
     required this.onSave,
+    required this.business,
   });
 
   @override
@@ -665,10 +843,26 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
   String _selectedPricingType = PricingTypes.fixed;
   bool _isAvailable = true;
   bool _isSaving = false;
+  late dynamic_config.CategoryTerminology _terminology;
 
   @override
   void initState() {
     super.initState();
+
+    // Get category-specific terminology
+    if (widget.business.category != null) {
+      _terminology = dynamic_config.CategoryTerminology.getForCategory(widget.business.category!);
+    } else {
+      _terminology = const dynamic_config.CategoryTerminology(
+        screenTitle: 'Services & Products',
+        filter1Label: 'Products',
+        filter1Icon: 'shopping_bag',
+        filter2Label: 'Services',
+        filter2Icon: 'handyman',
+        emptyStateMessage: 'Start adding products or services to showcase to your customers',
+      );
+    }
+
     _selectedType = widget.existingListing?.type ?? widget.initialType ?? 'product';
 
     if (widget.existingListing != null) {
@@ -713,20 +907,38 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
           // Header
           Padding(
             padding: const EdgeInsets.all(20),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isEditing ? 'Edit Listing' : 'Add New Listing',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.black87,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isEditing ? 'Edit' : _terminology.screenTitle,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
+                const SizedBox(height: 4),
+                Text(
+                  isEditing
+                      ? 'Update ${_selectedType == 'product' ? _terminology.filter1Label.toLowerCase() : _terminology.filter2Label.toLowerCase()} details'
+                      : 'Choose type and fill in the details',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                  ),
                 ),
               ],
             ),
@@ -755,8 +967,8 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
                         Expanded(
                           child: _buildTypeOption(
                             type: 'product',
-                            icon: Icons.shopping_bag_outlined,
-                            label: 'Product',
+                            icon: _terminology.getFilter1Icon(),
+                            label: _terminology.filter1Label,
                             color: Colors.blue,
                             isDarkMode: isDarkMode,
                           ),
@@ -765,8 +977,8 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
                         Expanded(
                           child: _buildTypeOption(
                             type: 'service',
-                            icon: Icons.handyman_outlined,
-                            label: 'Service',
+                            icon: _terminology.getFilter2Icon(),
+                            label: _terminology.filter2Label,
                             color: Colors.purple,
                             isDarkMode: isDarkMode,
                           ),
@@ -780,7 +992,7 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
                       controller: _nameController,
                       decoration: InputDecoration(
                         labelText: 'Name',
-                        hintText: 'Enter ${_selectedType == 'product' ? 'product' : 'service'} name',
+                        hintText: 'Enter ${_selectedType == 'product' ? _terminology.filter1Label.toLowerCase() : _terminology.filter2Label.toLowerCase()} name',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -800,7 +1012,7 @@ class _AddServiceSheetState extends State<_AddServiceSheet> {
                       maxLines: 3,
                       decoration: InputDecoration(
                         labelText: 'Description',
-                        hintText: 'Describe your ${_selectedType == 'product' ? 'product' : 'service'}',
+                        hintText: 'Describe your ${_selectedType == 'product' ? _terminology.filter1Label.toLowerCase() : _terminology.filter2Label.toLowerCase()}',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

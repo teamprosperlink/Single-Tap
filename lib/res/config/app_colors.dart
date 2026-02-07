@@ -110,6 +110,17 @@ class AppColors {
   static const Color textSecondaryLight = Color(0xB3000000); // 70% black
   static const Color textTertiaryLight = Color(0x8A000000); // 54% black
 
+  // Text with opacity variants (dark mode - white with alpha)
+  static const Color textPrimaryDark70 = Color(0xB3FFFFFF); // 70% white
+  static const Color textPrimaryDark54 = Color(0x8AFFFFFF); // 54% white
+  static const Color textPrimaryDark38 = Color(0x61FFFFFF); // 38% white
+  static const Color textPrimaryDark24 = Color(0x3DFFFFFF); // 24% white
+  static const Color textPrimaryDark12 = Color(0x1FFFFFFF); // 12% white
+  static const Color textPrimaryDark10 = Color(0x1AFFFFFF); // 10% white
+
+  //    ACCENT COLORS
+  static const Color purpleAccent = Color(0xFF8B5CF6);
+
   //    VOICE ORB STATE COLORS
   static const Color voiceListening = Color(0xFF8B5CF6); // Purple
   static const Color voiceProcessing = Color(0xFF0EA5E9); // Sky blue

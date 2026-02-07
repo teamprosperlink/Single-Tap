@@ -376,26 +376,41 @@ class AuthService {
                 'isOnline': false,
                 'lastSeen': FieldValue.serverTimestamp(),
                 'activeDeviceToken': FieldValue.delete(),
-                'forceLogout': false, // CRITICAL: Clear logout flag so other devices can login
-                'forceLogoutTime': FieldValue.delete(), // CRITICAL: Clear timestamp to prevent stale signal
+                'forceLogout': false,
+                'forceLogoutTime': FieldValue.delete(),
+              }).timeout(const Duration(seconds: 3), onTimeout: () {
+                print('[AuthService] Firestore update timed out, continuing with logout');
               });
           print('[AuthService] Device session cleared successfully');
         } catch (e) {
           print('[AuthService] Warning: Could not update Firestore on logout: $e');
-          // Continue with logout even if Firestore update fails
         }
       }
 
       // Clear local device token
       await _clearLocalDeviceToken();
 
-      // Sign out from Firebase and Google
-      await Future.wait([
-        _auth.signOut(),
-        _googleSignIn.signOut().catchError((e) => null),
-      ]);
+      // CRITICAL: Sign out from Firebase Auth FIRST (triggers auth stream immediately)
+      print('[AuthService] Signing out from Firebase Auth...');
+      await _auth.signOut();
+      print('[AuthService] Firebase Auth sign out completed');
+
+      // Then sign out from Google separately (non-blocking, with timeout)
+      // This prevents _googleSignIn.signOut() from hanging and blocking the entire logout
+      try {
+        await _googleSignIn.signOut().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            print('[AuthService] Google sign out timed out, ignoring');
+            return null;
+          },
+        );
+      } catch (e) {
+        print('[AuthService] Google sign out error (non-fatal): $e');
+      }
     } catch (e) {
-      // Even if there's an error, try to force sign out from Firebase
+      print('[AuthService] Error during signOut: $e');
+      // Even if there's an error, force sign out from Firebase
       try {
         await _auth.signOut();
       } catch (_) {}

@@ -10,6 +10,8 @@ import '../screens/profile/upgrade_plan_screen.dart';
 import '../screens/profile/personalization_screen.dart';
 import '../screens/home/profile_with_history_screen.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart' show navigatorKey;
+import '../screens/login/onboarding_screen.dart';
 import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -1145,10 +1147,18 @@ class AppDrawerState extends State<AppDrawer> {
             icon: Icons.logout_rounded,
             label: 'Log out',
             isDestructive: true,
-            onTap: () async {
+            onTap: () {
               setState(() => _showProfileMenu = false);
               Navigator.pop(context);
-              await AuthService().signOut();
+              // Sign out and force navigate to login screen
+              FirebaseAuth.instance.signOut().then((_) {
+                navigatorKey.currentState?.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+                  (route) => false,
+                );
+              });
+              // Full cleanup in background
+              AuthService().signOut().catchError((_) {});
             },
           ),
 

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../res/config/app_colors.dart';
@@ -1078,39 +1077,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     );
   }
 
-  void _showFullScreenImage(String imageUrl) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            leading: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-          body: Center(
-            child: InteractiveViewer(
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.error_outline, color: Colors.white),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -1191,91 +1157,5 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     final urlPattern = RegExp(r'(https?:\/\/[^\s]+)', caseSensitive: false);
     final matches = urlPattern.allMatches(text);
     return matches.map((match) => match.group(0)!).toList();
-  }
-
-  String _getFileName(String url) {
-    try {
-      final uri = Uri.parse(url);
-      final pathSegments = uri.pathSegments;
-      if (pathSegments.isNotEmpty) {
-        var fileName = pathSegments.last;
-        // Remove query parameters
-        fileName = fileName.split('?').first;
-        return fileName;
-      }
-    } catch (e) {
-      // If parsing fails, return a default name
-    }
-    return 'File';
-  }
-
-  String _getFileExtension(String url) {
-    final fileName = _getFileName(url);
-    final parts = fileName.split('.');
-    if (parts.length > 1) {
-      return parts.last;
-    }
-    return '';
-  }
-
-  IconData _getFileIcon(String url) {
-    final extension = _getFileExtension(url).toLowerCase();
-    switch (extension) {
-      case 'pdf':
-        return Icons.picture_as_pdf_rounded;
-      case 'doc':
-      case 'docx':
-        return Icons.description_rounded;
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart_rounded;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow_rounded;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.folder_zip_rounded;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Icons.audio_file_rounded;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-        return Icons.video_file_rounded;
-      default:
-        return Icons.insert_drive_file_rounded;
-    }
-  }
-
-  Color _getFileColor(String extension) {
-    switch (extension.toLowerCase()) {
-      case 'pdf':
-        return Colors.red;
-      case 'doc':
-      case 'docx':
-        return Colors.blue;
-      case 'xls':
-      case 'xlsx':
-        return Colors.green;
-      case 'ppt':
-      case 'pptx':
-        return Colors.orange;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Colors.purple;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Colors.pink;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-        return Colors.deepPurple;
-      default:
-        return Colors.grey;
-    }
   }
 }

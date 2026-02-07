@@ -167,7 +167,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _faqs.length,
-                separatorBuilder: (_, __) => Divider(
+                separatorBuilder: (_, _) => Divider(
                   height: 1,
                   color: isDarkMode ? Colors.white12 : Colors.grey[200],
                 ),

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../models/business_model.dart';
 import '../../models/business_order_model.dart';
 import '../../services/business_service.dart';
+import '../../utils/chat_navigation_helper.dart';
+import '../../widgets/business/enhanced_empty_state.dart';
 
 /// Orders management screen for business
 class BusinessOrdersScreen extends StatefulWidget {
@@ -22,11 +24,31 @@ class BusinessOrdersScreen extends StatefulWidget {
 class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   final BusinessService _businessService = BusinessService();
   late String _selectedFilter;
+  String _searchQuery = '';
+  bool _showSearch = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _selectedFilter = widget.initialFilter;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<BusinessOrder> _applySearch(List<BusinessOrder> orders) {
+    if (_searchQuery.isEmpty) return orders;
+    final query = _searchQuery.toLowerCase();
+    return orders.where((o) =>
+      o.orderId.toLowerCase().contains(query) ||
+      o.customerName.toLowerCase().contains(query) ||
+      o.serviceName.toLowerCase().contains(query) ||
+      o.statusName.toLowerCase().contains(query)
+    ).toList();
   }
 
   @override
@@ -38,22 +60,44 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
       appBar: AppBar(
         backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
         elevation: 0,
-        title: Text(
-          'Orders',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
+        title: _showSearch
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search orders...',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.white38 : Colors.grey[500],
+                  ),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              )
+            : Text(
+                'Orders',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
         actions: [
           IconButton(
             icon: Icon(
-              Icons.search,
+              _showSearch ? Icons.close : Icons.search,
               color: isDarkMode ? Colors.white : Colors.black87,
             ),
             onPressed: () {
-              // TODO: Implement search
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchQuery = '';
+                  _searchController.clear();
+                }
+              });
             },
           ),
           IconButton(
@@ -79,7 +123,8 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
           }
 
           final allOrders = snapshot.data ?? [];
-          final orders = _filterOrders(allOrders);
+          final filtered = _filterOrders(allOrders);
+          final orders = _applySearch(filtered);
 
           if (allOrders.isEmpty) {
             return _buildEmptyState(isDarkMode);
@@ -176,45 +221,11 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.receipt_long_outlined,
-                size: 64,
-                color: isDarkMode ? Colors.white24 : Colors.grey[300],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No Orders Yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Orders will appear here when customers place them',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.white54 : Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return EnhancedEmptyState(
+      icon: Icons.receipt_long_outlined,
+      title: 'No Orders Yet',
+      message: 'Orders will appear here when customers place them',
+      color: const Color(0xFF00D67D),
     );
   }
 
@@ -248,7 +259,69 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   void _showFilterSheet() {
-    // TODO: Show advanced filter options
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Filter Orders',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...['All', 'Today', 'New', 'Pending', 'Accepted', 'Completed', 'Cancelled'].map((filter) {
+                final isSelected = _selectedFilter == filter;
+                return ListTile(
+                  leading: Icon(
+                    isSelected ? Icons.check_circle : Icons.circle_outlined,
+                    color: isSelected ? const Color(0xFF00D67D) : (isDarkMode ? Colors.white38 : Colors.grey),
+                  ),
+                  title: Text(
+                    filter,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected
+                          ? const Color(0xFF00D67D)
+                          : (isDarkMode ? Colors.white : Colors.black87),
+                    ),
+                  ),
+                  onTap: () {
+                    setState(() => _selectedFilter = filter);
+                    Navigator.pop(context);
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showOrderDetails(BusinessOrder order) {
@@ -301,9 +374,11 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   void _openChat(BusinessOrder order) {
-    // TODO: Navigate to chat with customer
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Chat feature coming soon')),
+    ChatNavigationHelper.openCustomerChat(
+      context,
+      customerId: order.customerId,
+      customerName: order.customerName,
+      customerPhoto: order.customerPhoto,
     );
   }
 }

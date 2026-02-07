@@ -1,6 +1,8 @@
+import '../../../services/firebase_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'dart:ui';
 
@@ -10,7 +12,7 @@ import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
-import '../../services/chat services/conversation_service.dart';
+import '../../services/chat_services/conversation_service.dart';
 import '../../widgets/chat_common.dart';
 import '../chat/enhanced_chat_screen.dart';
 
@@ -29,8 +31,10 @@ class BusinessMessagesTab extends StatefulWidget {
 
 class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
   final ConversationService _conversationService = ConversationService();
+  final FirebaseFirestore _firestore = FirebaseProvider.firestore;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  final Map<String, Map<String, dynamic>> _userCache = {};
 
   @override
   void dispose() {
@@ -103,8 +107,8 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
                   ? CachedNetworkImage(
                       imageUrl: widget.business.logo!,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => _buildLogoPlaceholder(),
-                      errorWidget: (_, __, ___) => _buildLogoPlaceholder(),
+                      placeholder: (_, _) => _buildLogoPlaceholder(),
+                      errorWidget: (_, _, _) => _buildLogoPlaceholder(),
                     )
                   : _buildLogoPlaceholder(),
             ),
@@ -217,7 +221,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
                 fontSize: 16,
               ),
               decoration: InputDecoration(
-                hintText: 'Search conversations',
+                hintText: 'Search by name or @username',
                 hintStyle: TextStyle(
                   color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 16,
@@ -246,6 +250,12 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
   }
 
   Widget _buildConversationsList() {
+    // If searching, show search results (conversations + users)
+    if (_searchQuery.isNotEmpty) {
+      return _buildSearchResults();
+    }
+
+    // Default: show existing conversations only
     return StreamBuilder<List<ConversationModel>>(
       stream: _conversationService.getBusinessConversations(widget.business.id),
       builder: (context, snapshot) {
@@ -273,33 +283,278 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
           );
         }
 
-        // Filter conversations by search query
-        var conversations = snapshot.data!;
-        if (_searchQuery.isNotEmpty) {
-          conversations = conversations.where((conv) {
-            final otherUserId =
-                conv.getOtherParticipantId(widget.business.userId);
-            final name = conv.participantNames[otherUserId] ?? '';
-            return name.toLowerCase().contains(_searchQuery);
-          }).toList();
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) {
+            return _buildConversationTile(snapshot.data![index]);
+          },
+        );
+      },
+    );
+  }
+
+  /// Build search results - shows existing conversations + users from search
+  Widget _buildSearchResults() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _searchUsersAndConversations(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF00D67D)),
+          );
         }
 
-        if (conversations.isEmpty) {
+        if (snapshot.hasError) {
+          return _buildEmptyState(
+            icon: Icons.error_outline,
+            title: 'Error searching',
+            subtitle: 'Please try again',
+          );
+        }
+
+        final results = snapshot.data ?? [];
+
+        if (results.isEmpty) {
           return _buildEmptyState(
             icon: Icons.search_off,
-            title: 'No results',
-            subtitle: 'Try a different search term',
+            title: 'No results found',
+            subtitle: 'Try a different name or @username',
           );
         }
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: conversations.length,
+          itemCount: results.length,
           itemBuilder: (context, index) {
-            return _buildConversationTile(conversations[index]);
+            final item = results[index];
+            if (item['type'] == 'conversation') {
+              return _buildConversationTile(item['data'] as ConversationModel);
+            } else {
+              return _buildUserSearchResult(
+                item['data'] as Map<String, dynamic>,
+                item['userId'] as String,
+              );
+            }
           },
         );
       },
+    );
+  }
+
+  /// Search for users and conversations matching the query
+  Future<List<Map<String, dynamic>>> _searchUsersAndConversations() async {
+    final results = <Map<String, dynamic>>[];
+    final seenUserIds = <String>{};
+
+    // Clean search query for username search
+    final searchQueryClean = _searchQuery.startsWith('@')
+        ? _searchQuery.substring(1)
+        : _searchQuery;
+
+    // First, search existing conversations
+    try {
+      final conversations = await _conversationService
+          .getBusinessConversations(widget.business.id)
+          .first;
+
+      for (var conv in conversations) {
+        final otherUserId = conv.getOtherParticipantId(widget.business.userId);
+        if (otherUserId.isEmpty) continue;
+
+        final name = (conv.participantNames[otherUserId] ?? '').toLowerCase();
+
+        // Get username from cache or fetch
+        String? username;
+        if (_userCache.containsKey(otherUserId)) {
+          username = _userCache[otherUserId]?['username'] as String?;
+        } else {
+          try {
+            final userDoc = await _firestore.collection('users').doc(otherUserId).get();
+            if (userDoc.exists) {
+              _userCache[otherUserId] = userDoc.data()!;
+              username = userDoc.data()?['username'] as String?;
+            }
+          } catch (_) {}
+        }
+
+        // Check if matches search
+        if (name.contains(_searchQuery) ||
+            (username != null && username.toLowerCase().contains(searchQueryClean))) {
+          seenUserIds.add(otherUserId);
+          results.add({
+            'type': 'conversation',
+            'data': conv,
+            'userId': otherUserId,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching conversations: $e');
+    }
+
+    // Then, search ALL users by name
+    try {
+      var nameQuery = await _firestore
+          .collection('users')
+          .where('nameLower', isGreaterThanOrEqualTo: _searchQuery)
+          .where('nameLower', isLessThan: '${_searchQuery}z')
+          .limit(20)
+          .get();
+
+      // If no results, try with capitalized name
+      if (nameQuery.docs.isEmpty) {
+        final capitalizedQuery = _searchQuery.isNotEmpty
+            ? _searchQuery[0].toUpperCase() + _searchQuery.substring(1)
+            : _searchQuery;
+        nameQuery = await _firestore
+            .collection('users')
+            .where('name', isGreaterThanOrEqualTo: capitalizedQuery)
+            .where('name', isLessThan: '${capitalizedQuery}z')
+            .limit(20)
+            .get();
+      }
+
+      for (var doc in nameQuery.docs) {
+        if (doc.id != widget.business.userId && !seenUserIds.contains(doc.id)) {
+          seenUserIds.add(doc.id);
+          final userData = doc.data();
+          _userCache[doc.id] = userData;
+          results.add({
+            'type': 'user',
+            'data': userData,
+            'userId': doc.id,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error searching by name: $e');
+    }
+
+    // Search ALL users by username
+    if (searchQueryClean.isNotEmpty) {
+      try {
+        final usernameQuery = await _firestore
+            .collection('users')
+            .where('username', isGreaterThanOrEqualTo: searchQueryClean)
+            .where('username', isLessThan: '${searchQueryClean}z')
+            .limit(20)
+            .get();
+
+        for (var doc in usernameQuery.docs) {
+          if (doc.id != widget.business.userId && !seenUserIds.contains(doc.id)) {
+            seenUserIds.add(doc.id);
+            final userData = doc.data();
+            _userCache[doc.id] = userData;
+            results.add({
+              'type': 'user',
+              'data': userData,
+              'userId': doc.id,
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('Error searching by username: $e');
+      }
+    }
+
+    return results;
+  }
+
+  /// Build a user search result tile (for users not yet chatted with)
+  Widget _buildUserSearchResult(Map<String, dynamic> userData, String userId) {
+    final name = userData['name'] ?? 'Unknown';
+    final username = userData['username'] as String?;
+    final photoUrl = userData['photoUrl'] as String?;
+    final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _openChatWithUser(userData, userId),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      _buildUserAvatar(
+                        photoUrl: fixedPhotoUrl,
+                        initial: initial,
+                        uniqueId: userId,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              formatDisplayName(name),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              username != null && username.isNotEmpty
+                                  ? '@$username'
+                                  : 'Tap to message',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: username != null && username.isNotEmpty
+                                    ? const Color(0xFF00D67D)
+                                    : Colors.white.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        color: Colors.white.withValues(alpha: 0.5),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Open chat with a user from search results
+  void _openChatWithUser(Map<String, dynamic> userData, String userId) {
+    HapticFeedback.lightImpact();
+    final userProfile = UserProfile.fromMap(userData, userId);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EnhancedChatScreen(
+          otherUser: userProfile,
+          isBusinessChat: true,
+          business: widget.business,
+        ),
+      ),
     );
   }
 
@@ -484,8 +739,8 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
         width: 48,
         height: 48,
         fit: BoxFit.cover,
-        placeholder: (_, __) => buildFallback(),
-        errorWidget: (_, __, ___) => buildFallback(),
+        placeholder: (_, _) => buildFallback(),
+        errorWidget: (_, _, _) => buildFallback(),
       ),
     );
   }

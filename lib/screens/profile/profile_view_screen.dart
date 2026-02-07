@@ -674,7 +674,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
 
   void _shareProfile() {
     final name = widget.userProfile.name;
-    final bio = widget.userProfile.bio ?? '';
+    final bio = widget.userProfile.bio;
     final location = widget.userProfile.location ?? '';
 
     String shareText = 'Check out $name on Supper!\n';

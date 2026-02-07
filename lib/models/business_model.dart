@@ -1,41 +1,93 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'business_category_config.dart';
 
 /// Business profile model for business accounts
+///
+/// ## Field Categories:
+///
+/// ### Core Fields (required for all businesses)
+/// - id, userId, businessName, businessType, category
+/// - contact, address, hours
+/// - isVerified, isActive, rating, reviewCount
+/// - createdAt, updatedAt
+///
+/// ### Display Fields (for profile presentation)
+/// - description, tagline, logo, coverImage, images
+/// - services, products, socialLinks
+///
+/// ### Category-Specific Fields (hospitality/real estate)
+/// - propertyType, totalRoomCount, checkInTime, checkOutTime, etc.
+/// - These are optional and only used by specific business categories
+///
+/// ### Analytics Fields (computed/cached)
+/// - itemCount, featuredItems, totalOrders, earnings, etc.
+/// - These are denormalized for fast dashboard display
+///
 class BusinessModel {
+  // ==================== CORE FIELDS ====================
   final String id;
   final String userId;
   final String businessName;
-  final String? legalName;
   final String businessType;
-  final String? industry;
+  final BusinessCategory? category;
+  final String? subType;
+  final BusinessContact contact;
+  final BusinessAddress? address;
+  final BusinessHours? hours;
+  final bool isVerified;
+  final bool isActive;
+  final double rating;
+  final int reviewCount;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  // ==================== DISPLAY FIELDS ====================
   final String? description;
   final String? tagline;
   final String? logo;
   final String? coverImage;
-  final BusinessContact contact;
-  final BusinessAddress? address;
-  final BusinessHours? hours;
   final List<String> images;
   final List<String> services;
   final List<String> products;
   final Map<String, String> socialLinks;
-  final bool isVerified;
-  final bool isActive;
+
+  // ==================== OPTIONAL FIELDS ====================
+  final String? legalName;
+  final String? industry;
+  final Map<String, dynamic>? categoryData;
   final bool isOnline;
-  final double rating;
-  final int reviewCount;
   final int followerCount;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  // Business ID (auto-generated)
   final String? businessId;
-
-  // Additional info
   final int? yearEstablished;
   final String? secondaryPhone;
+
+  // ==================== REGION-SPECIFIC (India) ====================
   final String? gstNumber;
+  final String? panNumber;
   final String? licenseNumber;
+
+  // ==================== HOSPITALITY-SPECIFIC ====================
+  final String? propertyType; // Hotel/Hostel/PG/Resort/Guesthouse
+  final int? totalRoomCount;
+  final String? ownerName;
+  final String? ownerPhone;
+  final String? ownerEmail;
+  final String? propertyDescription;
+  final String? nearbyLandmarks;
+  final String? checkInTime; // "14:00"
+  final String? checkOutTime; // "11:00"
+  final String? houseRules;
+  final String? cancellationPolicy;
+
+  // ==================== ANALYTICS CACHE ====================
+  final double? cachedADR;
+  final double? cachedRevPAR;
+  final double? cachedOccupancyRate;
+  final DateTime? lastAnalyticsUpdate;
+
+  // ==================== DASHBOARD STATS ====================
+  final int itemCount;
+  final List<Map<String, dynamic>> featuredItems; // Max 6 items
 
   // Order statistics
   final int totalOrders;
@@ -43,13 +95,18 @@ class BusinessModel {
   final int completedOrders;
   final int cancelledOrders;
   final int todayOrders;
+  final int activeBookings;
 
   // Earnings
   final double totalEarnings;
   final double monthlyEarnings;
   final double todayEarnings;
 
-  // Bank details
+  // Stats reset tracking
+  final DateTime? lastDailyReset;
+  final DateTime? lastMonthlyReset;
+
+  // ==================== PAYMENT ====================
   final BankAccount? bankAccount;
 
   BusinessModel({
@@ -60,6 +117,9 @@ class BusinessModel {
     required this.businessType,
     this.industry,
     this.description,
+    this.category,
+    this.subType,
+    this.categoryData,
     this.tagline,
     this.logo,
     this.coverImage,
@@ -81,14 +141,35 @@ class BusinessModel {
     this.secondaryPhone,
     this.gstNumber,
     this.licenseNumber,
+    this.panNumber,
+    this.propertyType,
+    this.totalRoomCount,
+    this.ownerName,
+    this.ownerPhone,
+    this.ownerEmail,
+    this.propertyDescription,
+    this.nearbyLandmarks,
+    this.checkInTime,
+    this.checkOutTime,
+    this.houseRules,
+    this.cancellationPolicy,
+    this.cachedADR,
+    this.cachedRevPAR,
+    this.cachedOccupancyRate,
+    this.lastAnalyticsUpdate,
+    this.itemCount = 0,
+    this.featuredItems = const [],
     this.totalOrders = 0,
     this.pendingOrders = 0,
     this.completedOrders = 0,
     this.cancelledOrders = 0,
     this.todayOrders = 0,
+    this.activeBookings = 0,
     this.totalEarnings = 0.0,
     this.monthlyEarnings = 0.0,
     this.todayEarnings = 0.0,
+    this.lastDailyReset,
+    this.lastMonthlyReset,
     this.bankAccount,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -109,6 +190,11 @@ class BusinessModel {
       businessType: map['businessType'] ?? 'Other',
       industry: map['industry'],
       description: map['description'],
+      category: BusinessCategoryExtension.fromString(map['category']),
+      subType: map['subType'],
+      categoryData: map['categoryData'] != null
+          ? Map<String, dynamic>.from(map['categoryData'])
+          : null,
       tagline: map['tagline'],
       logo: map['logo'],
       coverImage: map['coverImage'],
@@ -132,14 +218,44 @@ class BusinessModel {
       secondaryPhone: map['secondaryPhone'],
       gstNumber: map['gstNumber'],
       licenseNumber: map['licenseNumber'],
+      panNumber: map['panNumber'],
+      propertyType: map['propertyType'],
+      totalRoomCount: map['totalRoomCount'],
+      ownerName: map['ownerName'],
+      ownerPhone: map['ownerPhone'],
+      ownerEmail: map['ownerEmail'],
+      propertyDescription: map['propertyDescription'],
+      nearbyLandmarks: map['nearbyLandmarks'],
+      checkInTime: map['checkInTime'],
+      checkOutTime: map['checkOutTime'],
+      houseRules: map['houseRules'],
+      cancellationPolicy: map['cancellationPolicy'],
+      cachedADR: map['cachedADR']?.toDouble(),
+      cachedRevPAR: map['cachedRevPAR']?.toDouble(),
+      cachedOccupancyRate: map['cachedOccupancyRate']?.toDouble(),
+      lastAnalyticsUpdate: map['lastAnalyticsUpdate'] != null
+          ? (map['lastAnalyticsUpdate'] as Timestamp).toDate()
+          : null,
+      itemCount: map['itemCount'] ?? 0,
+      featuredItems: (map['featuredItems'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
       totalOrders: map['totalOrders'] ?? 0,
       pendingOrders: map['pendingOrders'] ?? 0,
       completedOrders: map['completedOrders'] ?? 0,
       cancelledOrders: map['cancelledOrders'] ?? 0,
       todayOrders: map['todayOrders'] ?? 0,
+      activeBookings: map['activeBookings'] ?? 0,
       totalEarnings: (map['totalEarnings'] ?? 0).toDouble(),
       monthlyEarnings: (map['monthlyEarnings'] ?? 0).toDouble(),
       todayEarnings: (map['todayEarnings'] ?? 0).toDouble(),
+      lastDailyReset: map['lastDailyReset'] != null
+          ? (map['lastDailyReset'] as Timestamp).toDate()
+          : null,
+      lastMonthlyReset: map['lastMonthlyReset'] != null
+          ? (map['lastMonthlyReset'] as Timestamp).toDate()
+          : null,
       bankAccount: map['bankAccount'] != null
           ? BankAccount.fromMap(map['bankAccount'])
           : null,
@@ -160,6 +276,9 @@ class BusinessModel {
       'businessType': businessType,
       'industry': industry,
       'description': description,
+      'category': category?.id,
+      'subType': subType,
+      'categoryData': categoryData,
       'tagline': tagline,
       'logo': logo,
       'coverImage': coverImage,
@@ -181,14 +300,35 @@ class BusinessModel {
       'secondaryPhone': secondaryPhone,
       'gstNumber': gstNumber,
       'licenseNumber': licenseNumber,
+      'panNumber': panNumber,
+      'propertyType': propertyType,
+      'totalRoomCount': totalRoomCount,
+      'ownerName': ownerName,
+      'ownerPhone': ownerPhone,
+      'ownerEmail': ownerEmail,
+      'propertyDescription': propertyDescription,
+      'nearbyLandmarks': nearbyLandmarks,
+      'checkInTime': checkInTime,
+      'checkOutTime': checkOutTime,
+      'houseRules': houseRules,
+      'cancellationPolicy': cancellationPolicy,
+      'cachedADR': cachedADR,
+      'cachedRevPAR': cachedRevPAR,
+      'cachedOccupancyRate': cachedOccupancyRate,
+      'lastAnalyticsUpdate': lastAnalyticsUpdate != null ? Timestamp.fromDate(lastAnalyticsUpdate!) : null,
+      'itemCount': itemCount,
+      'featuredItems': featuredItems,
       'totalOrders': totalOrders,
       'pendingOrders': pendingOrders,
       'completedOrders': completedOrders,
       'cancelledOrders': cancelledOrders,
       'todayOrders': todayOrders,
+      'activeBookings': activeBookings,
       'totalEarnings': totalEarnings,
       'monthlyEarnings': monthlyEarnings,
       'todayEarnings': todayEarnings,
+      'lastDailyReset': lastDailyReset != null ? Timestamp.fromDate(lastDailyReset!) : null,
+      'lastMonthlyReset': lastMonthlyReset != null ? Timestamp.fromDate(lastMonthlyReset!) : null,
       'bankAccount': bankAccount?.toMap(),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -203,6 +343,9 @@ class BusinessModel {
     String? businessType,
     String? industry,
     String? description,
+    BusinessCategory? category,
+    String? subType,
+    Map<String, dynamic>? categoryData,
     String? tagline,
     String? logo,
     String? coverImage,
@@ -224,14 +367,35 @@ class BusinessModel {
     String? secondaryPhone,
     String? gstNumber,
     String? licenseNumber,
+    String? panNumber,
+    String? propertyType,
+    int? totalRoomCount,
+    String? ownerName,
+    String? ownerPhone,
+    String? ownerEmail,
+    String? propertyDescription,
+    String? nearbyLandmarks,
+    String? checkInTime,
+    String? checkOutTime,
+    String? houseRules,
+    String? cancellationPolicy,
+    double? cachedADR,
+    double? cachedRevPAR,
+    double? cachedOccupancyRate,
+    DateTime? lastAnalyticsUpdate,
+    int? itemCount,
+    List<Map<String, dynamic>>? featuredItems,
     int? totalOrders,
     int? pendingOrders,
     int? completedOrders,
     int? cancelledOrders,
     int? todayOrders,
+    int? activeBookings,
     double? totalEarnings,
     double? monthlyEarnings,
     double? todayEarnings,
+    DateTime? lastDailyReset,
+    DateTime? lastMonthlyReset,
     BankAccount? bankAccount,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -244,6 +408,9 @@ class BusinessModel {
       businessType: businessType ?? this.businessType,
       industry: industry ?? this.industry,
       description: description ?? this.description,
+      category: category ?? this.category,
+      subType: subType ?? this.subType,
+      categoryData: categoryData ?? this.categoryData,
       tagline: tagline ?? this.tagline,
       logo: logo ?? this.logo,
       coverImage: coverImage ?? this.coverImage,
@@ -265,14 +432,35 @@ class BusinessModel {
       secondaryPhone: secondaryPhone ?? this.secondaryPhone,
       gstNumber: gstNumber ?? this.gstNumber,
       licenseNumber: licenseNumber ?? this.licenseNumber,
+      panNumber: panNumber ?? this.panNumber,
+      propertyType: propertyType ?? this.propertyType,
+      totalRoomCount: totalRoomCount ?? this.totalRoomCount,
+      ownerName: ownerName ?? this.ownerName,
+      ownerPhone: ownerPhone ?? this.ownerPhone,
+      ownerEmail: ownerEmail ?? this.ownerEmail,
+      propertyDescription: propertyDescription ?? this.propertyDescription,
+      nearbyLandmarks: nearbyLandmarks ?? this.nearbyLandmarks,
+      checkInTime: checkInTime ?? this.checkInTime,
+      checkOutTime: checkOutTime ?? this.checkOutTime,
+      houseRules: houseRules ?? this.houseRules,
+      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
+      cachedADR: cachedADR ?? this.cachedADR,
+      cachedRevPAR: cachedRevPAR ?? this.cachedRevPAR,
+      cachedOccupancyRate: cachedOccupancyRate ?? this.cachedOccupancyRate,
+      lastAnalyticsUpdate: lastAnalyticsUpdate ?? this.lastAnalyticsUpdate,
+      itemCount: itemCount ?? this.itemCount,
+      featuredItems: featuredItems ?? this.featuredItems,
       totalOrders: totalOrders ?? this.totalOrders,
       pendingOrders: pendingOrders ?? this.pendingOrders,
       completedOrders: completedOrders ?? this.completedOrders,
       cancelledOrders: cancelledOrders ?? this.cancelledOrders,
       todayOrders: todayOrders ?? this.todayOrders,
+      activeBookings: activeBookings ?? this.activeBookings,
       totalEarnings: totalEarnings ?? this.totalEarnings,
       monthlyEarnings: monthlyEarnings ?? this.monthlyEarnings,
       todayEarnings: todayEarnings ?? this.todayEarnings,
+      lastDailyReset: lastDailyReset ?? this.lastDailyReset,
+      lastMonthlyReset: lastMonthlyReset ?? this.lastMonthlyReset,
       bankAccount: bankAccount ?? this.bankAccount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -288,6 +476,35 @@ class BusinessModel {
       description != null &&
       description!.isNotEmpty &&
       contact.phone != null;
+
+  /// Check if daily stats need to be reset (fallback if Cloud Function hasn't run)
+  bool get needsDailyReset {
+    if (lastDailyReset == null) return true;
+    final now = DateTime.now();
+    final lastReset = lastDailyReset!;
+    // Check if last reset was before today (midnight)
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    return lastReset.isBefore(todayMidnight);
+  }
+
+  /// Check if monthly stats need to be reset (fallback if Cloud Function hasn't run)
+  bool get needsMonthlyReset {
+    if (lastMonthlyReset == null) return true;
+    final now = DateTime.now();
+    final lastReset = lastMonthlyReset!;
+    // Check if last reset was before this month's first day
+    final thisMonthFirst = DateTime(now.year, now.month, 1);
+    return lastReset.isBefore(thisMonthFirst);
+  }
+
+  /// Get effective today's orders (returns 0 if daily reset is needed)
+  int get effectiveTodayOrders => needsDailyReset ? 0 : todayOrders;
+
+  /// Get effective today's earnings (returns 0 if daily reset is needed)
+  double get effectiveTodayEarnings => needsDailyReset ? 0.0 : todayEarnings;
+
+  /// Get effective monthly earnings (returns 0 if monthly reset is needed)
+  double get effectiveMonthlyEarnings => needsMonthlyReset ? 0.0 : monthlyEarnings;
 }
 
 /// Business contact information
@@ -773,6 +990,7 @@ class BankAccount {
   final String bankName;
   final String accountNumber;
   final String ifscCode;
+  final String? branchName;
   final String? swiftCode;
   final String? upiId;
   final bool isVerified;
@@ -782,6 +1000,7 @@ class BankAccount {
     required this.bankName,
     required this.accountNumber,
     required this.ifscCode,
+    this.branchName,
     this.swiftCode,
     this.upiId,
     this.isVerified = false,
@@ -793,6 +1012,7 @@ class BankAccount {
       bankName: map['bankName'] ?? '',
       accountNumber: map['accountNumber'] ?? '',
       ifscCode: map['ifscCode'] ?? '',
+      branchName: map['branchName'],
       swiftCode: map['swiftCode'],
       upiId: map['upiId'],
       isVerified: map['isVerified'] ?? false,
@@ -805,6 +1025,7 @@ class BankAccount {
       'bankName': bankName,
       'accountNumber': accountNumber,
       'ifscCode': ifscCode,
+      'branchName': branchName,
       'swiftCode': swiftCode,
       'upiId': upiId,
       'isVerified': isVerified,
@@ -816,6 +1037,7 @@ class BankAccount {
     String? bankName,
     String? accountNumber,
     String? ifscCode,
+    String? branchName,
     String? swiftCode,
     String? upiId,
     bool? isVerified,
@@ -825,6 +1047,7 @@ class BankAccount {
       bankName: bankName ?? this.bankName,
       accountNumber: accountNumber ?? this.accountNumber,
       ifscCode: ifscCode ?? this.ifscCode,
+      branchName: branchName ?? this.branchName,
       swiftCode: swiftCode ?? this.swiftCode,
       upiId: upiId ?? this.upiId,
       isVerified: isVerified ?? this.isVerified,

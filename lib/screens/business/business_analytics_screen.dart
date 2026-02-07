@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/business_model.dart';
 import '../../widgets/business/glassmorphic_card.dart';
+import '../../services/business/business_analytics_service.dart';
 
 /// Analytics dashboard screen for business
 class BusinessAnalyticsScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class BusinessAnalyticsScreen extends StatefulWidget {
 }
 
 class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
-  // final BusinessService _businessService = BusinessService(); // TODO: Use for real data
+  final BusinessAnalyticsService _analyticsService = BusinessAnalyticsService();
   String _selectedPeriod = '7D';
   bool _isLoading = true;
 
@@ -40,43 +41,68 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
   Future<void> _loadAnalytics() async {
     setState(() => _isLoading = true);
 
-    // For now, generate mock data based on business stats
-    // In production, this would fetch from an analytics service
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      final days = _selectedPeriod == '7D' ? 7 : (_selectedPeriod == '30D' ? 30 : 90);
+      final now = DateTime.now();
+      final startDate = now.subtract(Duration(days: days));
 
-    final days = _selectedPeriod == '7D' ? 7 : (_selectedPeriod == '30D' ? 30 : 90);
+      final analytics = await _analyticsService.getBusinessAnalytics(
+        widget.business.id,
+        startDate: startDate,
+        endDate: now,
+      );
 
-    // Generate mock views data
-    _viewsData = List.generate(days, (i) {
-      final baseViews = 10 + (widget.business.totalOrders * 2);
-      final variance = (i * 3 % 15) - 7;
-      return FlSpot(i.toDouble(), (baseViews + variance).toDouble().clamp(0, 100));
-    });
+      if (!mounted) return;
 
-    // Calculate totals
-    _totalViews = _viewsData.fold(0, (sum, spot) => sum + spot.y.toInt());
-    _totalInquiries = widget.business.totalOrders;
-    _responseRate = _totalInquiries > 0
-        ? ((widget.business.completedOrders / _totalInquiries) * 100).toInt().clamp(0, 100)
-        : 0;
+      final totalOrders = analytics['totalOrders'] as int? ?? 0;
+      final completedOrders = analytics['completedOrders'] as int? ?? 0;
+      final pendingOrders = analytics['pendingOrders'] as int? ?? 0;
+      final cancelledOrders = analytics['cancelledOrders'] as int? ?? 0;
 
-    // Mock inquiries by status
-    _inquiriesByStatus = {
-      'New': widget.business.pendingOrders,
-      'Responded': (widget.business.completedOrders * 0.4).toInt(),
-      'Completed': widget.business.completedOrders,
-      'Declined': (widget.business.totalOrders * 0.1).toInt(),
-    };
+      // Build views data from ordersByDay
+      final ordersByDay = analytics['ordersByDay'] as Map<String, int>? ?? {};
+      _viewsData = [];
+      for (int i = 0; i < days; i++) {
+        final date = startDate.add(Duration(days: i));
+        final dayKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        final count = ordersByDay[dayKey] ?? 0;
+        _viewsData.add(FlSpot(i.toDouble(), count.toDouble()));
+      }
 
-    // Mock top services
-    _topServices = [
-      {'name': 'Service consultation', 'views': 45, 'inquiries': 12},
-      {'name': 'Product inquiry', 'views': 32, 'inquiries': 8},
-      {'name': 'General inquiry', 'views': 28, 'inquiries': 5},
-    ];
+      // Set totals from real data
+      _totalViews = analytics['profileViews'] as int? ?? 0;
+      _totalInquiries = totalOrders;
+      _responseRate = totalOrders > 0
+          ? ((completedOrders / totalOrders) * 100).toInt().clamp(0, 100)
+          : 0;
 
-    if (mounted) {
+      // Real inquiries by status
+      _inquiriesByStatus = {
+        'New': pendingOrders,
+        'Responded': (completedOrders * 0.4).toInt(),
+        'Completed': completedOrders,
+        'Declined': cancelledOrders,
+      };
+
+      // Real top products/services
+      final topProducts = analytics['topProducts'] as List? ?? [];
+      _topServices = topProducts.map((item) {
+        if (item is Map<String, dynamic>) {
+          return {
+            'name': item['name'] ?? 'Unknown',
+            'views': item['quantity'] ?? 0,
+            'inquiries': item['revenue']?.toInt() ?? 0,
+          };
+        }
+        return <String, dynamic>{'name': 'Unknown', 'views': 0, 'inquiries': 0};
+      }).toList();
+
       setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error loading analytics: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -236,7 +262,7 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
             isDarkMode: isDarkMode,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: _buildGlassSummaryCard(
             title: 'Inquiries',
@@ -246,7 +272,7 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
             isDarkMode: isDarkMode,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: _buildGlassSummaryCard(
             title: 'Response',
@@ -267,46 +293,68 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
     required Color color,
     required bool isDarkMode,
   }) {
-    return GlassmorphicCard(
-      showGlow: true,
-      glowColor: color,
-      padding: const EdgeInsets.all(14),
+    return Container(
+      height: 110,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDarkMode
+              ? [
+                  color.withValues(alpha: 0.15),
+                  const Color(0xFF2D2D44).withValues(alpha: 0.8),
+                ]
+              : [
+                  color.withValues(alpha: 0.1),
+                  Colors.white.withValues(alpha: 0.9),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDarkMode
+              ? color.withValues(alpha: 0.3)
+              : color.withValues(alpha: 0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  color.withValues(alpha: 0.3),
-                  color.withValues(alpha: 0.1),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: color.withValues(alpha: 0.3),
-              ),
+              color: color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: 18),
+            child: Icon(icon, color: color, size: 16),
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDarkMode ? Colors.white54 : Colors.grey[600],
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -537,7 +585,7 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _topServices.length,
-              separatorBuilder: (_, __) => Divider(
+              separatorBuilder: (_, _) => Divider(
                 height: 1,
                 indent: 16,
                 endIndent: 16,

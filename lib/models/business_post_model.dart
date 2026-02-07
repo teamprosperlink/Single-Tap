@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/currency_utils.dart';
 
 /// Types of business posts
 enum PostType {
@@ -287,15 +288,13 @@ class BusinessPost {
   /// Get formatted price string
   String get formattedPrice {
     if (price == null) return 'Contact for price';
-    final symbol = _getCurrencySymbol(currency ?? 'INR');
-    return '$symbol${price!.toStringAsFixed(0)}';
+    return CurrencyUtils.format(price!, currency ?? 'INR');
   }
 
   /// Get formatted original price (for showing discount)
   String get formattedOriginalPrice {
     if (originalPrice == null) return '';
-    final symbol = _getCurrencySymbol(currency ?? 'INR');
-    return '$symbol${originalPrice!.toStringAsFixed(0)}';
+    return CurrencyUtils.format(originalPrice!, currency ?? 'INR');
   }
 
   /// Check if there's a discount
@@ -304,22 +303,7 @@ class BusinessPost {
   /// Calculate discount percentage
   int get calculatedDiscountPercent {
     if (!hasDiscount) return discountPercent ?? 0;
-    return (((originalPrice! - price!) / originalPrice!) * 100).round();
-  }
-
-  String _getCurrencySymbol(String currency) {
-    switch (currency.toUpperCase()) {
-      case 'INR':
-        return '\u{20B9}';
-      case 'USD':
-        return '\$';
-      case 'EUR':
-        return '\u{20AC}';
-      case 'GBP':
-        return '\u{00A3}';
-      default:
-        return currency;
-    }
+    return CurrencyUtils.calculateDiscountPercent(price!, originalPrice) ?? 0;
   }
 
   /// Check if post has media

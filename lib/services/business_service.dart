@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import '../models/business_model.dart';
 import '../models/business_post_model.dart';
 import '../models/business_order_model.dart';
+import '../models/product_model.dart';
+import '../models/menu_model.dart';
+import '../models/room_model.dart';
 
 /// Service for managing business profiles, listings, and reviews
 class BusinessService {
@@ -200,7 +203,7 @@ class BusinessService {
   }
 
   /// Delete listing
-  Future<bool> deleteListing(String listingId) async {
+  Future<bool> deleteListing(String businessId, String listingId) async {
     try {
       await _firestore.collection('business_listings').doc(listingId).delete();
       return true;
@@ -244,6 +247,7 @@ class BusinessService {
 
   /// Toggle listing availability
   Future<bool> toggleListingAvailability(
+    String businessId,
     String listingId,
     bool isAvailable,
   ) async {
@@ -680,7 +684,7 @@ class BusinessService {
   }
 
   /// Delete post
-  Future<bool> deletePost(String postId) async {
+  Future<bool> deletePost(String businessId, String postId) async {
     try {
       await _firestore.collection('business_posts').doc(postId).delete();
       return true;
@@ -691,7 +695,7 @@ class BusinessService {
   }
 
   /// Toggle post active status
-  Future<bool> togglePostActive(String postId, bool isActive) async {
+  Future<bool> togglePostActive(String businessId, String postId, bool isActive) async {
     try {
       await _firestore.collection('business_posts').doc(postId).update({
         'isActive': isActive,
@@ -887,5 +891,415 @@ class BusinessService {
     final year = DateTime.now().year;
     final random = DateTime.now().millisecondsSinceEpoch % 100000;
     return 'BIZ-$year-${random.toString().padLeft(5, '0')}';
+  }
+
+  // ============ BUSINESS PROFILE UPDATE ============
+
+  /// Update business profile fields
+  Future<bool> updateBusinessProfile(dynamic businessOrData) async {
+    try {
+      Map<String, dynamic> data;
+      String businessId;
+      if (businessOrData is BusinessModel) {
+        businessId = businessOrData.id;
+        data = businessOrData.toMap();
+      } else if (businessOrData is Map<String, dynamic>) {
+        businessId = businessOrData['id'] as String;
+        data = businessOrData;
+      } else {
+        return false;
+      }
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _firestore.collection('businesses').doc(businessId).update(data);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating business profile: $e');
+      return false;
+    }
+  }
+
+  // ============ PRODUCT CATEGORY OPERATIONS ============
+
+  Stream<List<ProductCategoryModel>> watchProductCategories(String businessId) {
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('product_categories')
+        .orderBy('sortOrder')
+        .snapshots()
+        .map((s) => s.docs.map((d) => ProductCategoryModel.fromFirestore(d)).toList());
+  }
+
+  Future<List<ProductCategoryModel>> getProductCategories(String businessId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('product_categories')
+          .orderBy('sortOrder')
+          .get();
+      return snapshot.docs.map((d) => ProductCategoryModel.fromFirestore(d)).toList();
+    } catch (e) {
+      debugPrint('Error getting product categories: $e');
+      return [];
+    }
+  }
+
+  Future<String?> createProductCategory(dynamic data) async {
+    try {
+      final map = data is ProductCategoryModel ? data.toMap() : data as Map<String, dynamic>;
+      final businessId = map['businessId'] as String;
+      final docRef = await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('product_categories')
+          .add(map);
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error creating product category: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateProductCategory(String businessId, String categoryId, dynamic data) async {
+    try {
+      final map = data is ProductCategoryModel ? data.toMap() : data as Map<String, dynamic>;
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('product_categories')
+          .doc(categoryId)
+          .update(map);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating product category: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteProductCategory(String businessId, String categoryId) async {
+    try {
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('product_categories')
+          .doc(categoryId)
+          .delete();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting product category: $e');
+      return false;
+    }
+  }
+
+  // ============ PRODUCT OPERATIONS ============
+
+  Stream<List<ProductModel>> watchProducts(String businessId, {String? categoryId}) {
+    Query query = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('products')
+        .orderBy('sortOrder');
+    if (categoryId != null) {
+      query = query.where('categoryId', isEqualTo: categoryId);
+    }
+    return query.snapshots()
+        .map((s) => s.docs.map((d) => ProductModel.fromFirestore(d as DocumentSnapshot<Map<String, dynamic>>)).toList());
+  }
+
+  Future<String?> createProduct(ProductModel product) async {
+    try {
+      final docRef = await _firestore
+          .collection('businesses')
+          .doc(product.businessId)
+          .collection('products')
+          .add(product.toMap());
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error creating product: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateProduct(String businessId, String productId, dynamic data) async {
+    try {
+      final map = data is ProductModel ? data.toMap() : data as Map<String, dynamic>;
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('products')
+          .doc(productId)
+          .update(map);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating product: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteProduct(String businessId, String productId, [String? categoryId]) async {
+    try {
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('products')
+          .doc(productId)
+          .delete();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting product: $e');
+      return false;
+    }
+  }
+
+  // ============ MENU CATEGORY OPERATIONS ============
+
+  Stream<List<MenuCategoryModel>> watchMenuCategories(String businessId) {
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('menu_categories')
+        .orderBy('sortOrder')
+        .snapshots()
+        .map((s) => s.docs.map((d) => MenuCategoryModel.fromFirestore(d)).toList());
+  }
+
+  Future<List<MenuCategoryModel>> getMenuCategories(String businessId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_categories')
+          .orderBy('sortOrder')
+          .get();
+      return snapshot.docs.map((d) => MenuCategoryModel.fromFirestore(d)).toList();
+    } catch (e) {
+      debugPrint('Error getting menu categories: $e');
+      return [];
+    }
+  }
+
+  Future<String?> createMenuCategory(dynamic data) async {
+    try {
+      final map = data is MenuCategoryModel ? data.toMap() : data as Map<String, dynamic>;
+      final businessId = map['businessId'] as String;
+      final docRef = await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_categories')
+          .add(map);
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error creating menu category: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateMenuCategory(String businessId, String categoryId, dynamic data) async {
+    try {
+      final map = data is MenuCategoryModel ? data.toMap() : data as Map<String, dynamic>;
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_categories')
+          .doc(categoryId)
+          .update(map);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating menu category: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMenuCategory(String businessId, String categoryId) async {
+    try {
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_categories')
+          .doc(categoryId)
+          .delete();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting menu category: $e');
+      return false;
+    }
+  }
+
+  // ============ MENU ITEM OPERATIONS ============
+
+  Stream<List<MenuItemModel>> watchMenuItems(String businessId, {String? categoryId}) {
+    Query query = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('menu_items')
+        .orderBy('sortOrder');
+    if (categoryId != null) {
+      query = query.where('categoryId', isEqualTo: categoryId);
+    }
+    return query.snapshots()
+        .map((s) => s.docs.map((d) => MenuItemModel.fromFirestore(d as DocumentSnapshot<Map<String, dynamic>>)).toList());
+  }
+
+  Future<String?> createMenuItem(MenuItemModel menuItem) async {
+    try {
+      final docRef = await _firestore
+          .collection('businesses')
+          .doc(menuItem.businessId)
+          .collection('menu_items')
+          .add(menuItem.toMap());
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error creating menu item: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateMenuItem(String businessId, String itemId, dynamic data) async {
+    try {
+      final map = data is MenuItemModel ? data.toMap() : data as Map<String, dynamic>;
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_items')
+          .doc(itemId)
+          .update(map);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating menu item: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMenuItem(String businessId, String itemId) async {
+    try {
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('menu_items')
+          .doc(itemId)
+          .delete();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting menu item: $e');
+      return false;
+    }
+  }
+
+  /// Upload menu item image
+  Future<String?> uploadMenuItemImage(String businessId, String itemId, File imageFile) async {
+    return _uploadImage(imageFile, 'menu_items/$businessId/$itemId');
+  }
+
+  // ============ FOOD ORDER OPERATIONS ============
+
+  Stream<List<FoodOrderModel>> watchFoodOrders(String businessId) {
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('food_orders')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => FoodOrderModel.fromFirestore(d)).toList());
+  }
+
+  Future<bool> updateFoodOrderStatus(String businessId, String orderId, dynamic status) async {
+    try {
+      await _firestore.collection('food_orders').doc(orderId).update({
+        'status': status is Enum ? status.name : status.toString(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error updating food order status: $e');
+      return false;
+    }
+  }
+
+  // ============ ROOM OPERATIONS ============
+
+  Stream<List<RoomModel>> watchRooms(String businessId) {
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('rooms')
+        .orderBy('sortOrder')
+        .snapshots()
+        .map((s) => s.docs.map((d) => RoomModel.fromFirestore(d)).toList());
+  }
+
+  Future<String?> createRoom(RoomModel room) async {
+    try {
+      final docRef = await _firestore
+          .collection('businesses')
+          .doc(room.businessId)
+          .collection('rooms')
+          .add(room.toMap());
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error creating room: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateRoom(String businessId, String roomId, dynamic data) async {
+    try {
+      final map = data is RoomModel ? data.toMap() : data as Map<String, dynamic>;
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('rooms')
+          .doc(roomId)
+          .update(map);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating room: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteRoom(String businessId, String roomId) async {
+    try {
+      await _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('rooms')
+          .doc(roomId)
+          .delete();
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting room: $e');
+      return false;
+    }
+  }
+
+  /// Upload room image
+  Future<String?> uploadRoomImage(String businessId, String roomId, File imageFile) async {
+    return _uploadImage(imageFile, 'rooms/$businessId/$roomId');
+  }
+
+  // ============ ROOM BOOKING OPERATIONS ============
+
+  Stream<List<RoomBookingModel>> watchRoomBookings(String businessId) {
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('room_bookings')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => RoomBookingModel.fromFirestore(d)).toList());
+  }
+
+  Future<bool> updateRoomBookingStatus(String businessId, String bookingId, dynamic status) async {
+    try {
+      await _firestore.collection('room_bookings').doc(bookingId).update({
+        'status': status is Enum ? status.name : status.toString(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error updating room booking status: $e');
+      return false;
+    }
   }
 }

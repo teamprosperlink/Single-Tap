@@ -76,6 +76,12 @@ class PortfolioItemModel {
     };
   }
 
+  /// Status based on visibility (used in portfolio dashboards)
+  String get status => isVisible ? 'Active' : 'Hidden';
+
+  /// Budget placeholder (used in portfolio dashboards)
+  double? get budget => null;
+
   /// Get the primary/cover image
   String? get coverImage => images.isNotEmpty ? images.first : null;
 

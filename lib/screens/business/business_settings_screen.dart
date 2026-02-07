@@ -1,11 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../models/business_model.dart';
 import '../../models/user_profile.dart';
 import '../../services/business_service.dart';
 import '../../services/account_type_service.dart';
+import '../../services/firebase_provider.dart';
 import '../../res/config/app_colors.dart';
+import '../../widgets/business/coming_soon_widgets.dart';
 import 'business_setup_screen.dart';
 
 /// Settings screen for business profile management
@@ -133,6 +138,77 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                         color: const Color(0xFF00D67D),
                         isDarkMode: isDarkMode,
                         onChanged: _toggleBusinessActive,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Advanced Features Section
+                  _buildSectionHeader('Advanced Features', Icons.auto_awesome, isDarkMode),
+                  const SizedBox(height: 12),
+                  _buildSettingsCard(
+                    isDarkMode: isDarkMode,
+                    children: [
+                      // Staff Management - Coming Soon
+                      ComingSoonListTile(
+                        featureName: 'staffManagement',
+                        leadingIcon: Icons.people_outline,
+                      ),
+                      _buildDivider(isDarkMode),
+                      // Multi-Location - Coming Soon
+                      ComingSoonListTile(
+                        featureName: 'multiLocation',
+                        leadingIcon: Icons.location_on_outlined,
+                      ),
+                      _buildDivider(isDarkMode),
+                      // Advanced Analytics - Coming Soon
+                      ComingSoonListTile(
+                        featureName: 'advancedAnalytics',
+                        leadingIcon: Icons.analytics_outlined,
+                      ),
+                      _buildDivider(isDarkMode),
+                      // Loyalty Programs - Coming Soon
+                      ComingSoonListTile(
+                        featureName: 'loyaltyPrograms',
+                        leadingIcon: Icons.stars_outlined,
+                      ),
+                      _buildDivider(isDarkMode),
+                      // View All Coming Soon Features
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.upcoming, color: Colors.orange, size: 24),
+                        ),
+                        title: const Text(
+                          'View All Upcoming Features',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'See what we\'re building next',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                          ),
+                        ),
+                        trailing: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.orange,
+                        ),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          showComingSoonBottomSheet(context);
+                        },
                       ),
                     ],
                   ),
@@ -350,12 +426,55 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
   }
 
   void _updateCoverImage() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cover image update coming soon'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null || !mounted) return;
+
+      setState(() => _isLoading = true);
+
+      final file = File(image.path);
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('businesses')
+          .child(widget.business.id)
+          .child('cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final uploadTask = await storageRef.putFile(file);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+      await FirebaseProvider.firestore
+          .collection('businesses')
+          .doc(widget.business.id)
+          .update({'coverImage': downloadUrl});
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cover image updated successfully'),
+            backgroundColor: Color(0xFF00D67D),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update cover image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _editBusinessHours() async {
@@ -364,6 +483,8 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
   }
 
   void _toggleBusinessActive(bool isActive) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _isLoading = true);
 
     try {
@@ -393,7 +514,7 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
       );
 
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(isActive
                 ? 'Business is now visible to customers'
@@ -401,11 +522,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, true); // Return with refresh flag
+        navigator.pop(true); // Return with refresh flag
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
             backgroundColor: Colors.red,
@@ -497,15 +618,18 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
       ),
     );
 
-    if (confirm == true && mounted) {
+    if (!mounted) return;
+    if (confirm == true) {
       setState(() => _isLoading = true);
 
       final success = await _businessService.deleteBusiness(widget.business.id);
 
-      if (success && mounted) {
+      if (!mounted) return;
+      if (success) {
         // Switch back to personal account
         await _accountTypeService.upgradeAccountType(AccountType.personal);
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Business deleted successfully'),
