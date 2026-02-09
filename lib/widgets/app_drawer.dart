@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../screens/profile/downloads_screen.dart';
+import '../screens/profile/library_screen.dart';
 import '../screens/profile/settings_screen.dart';
 import '../screens/profile/help_center_screen.dart';
 import '../screens/profile/upgrade_plan_screen.dart';
@@ -23,12 +25,14 @@ class AppDrawer extends StatefulWidget {
   final Future<void> Function()? onNewChat;
   final Function(int)? onNavigate;
   final Function(String chatId)? onLoadChat;
+  final Function(String projectId)? onNewChatInProject;
 
   const AppDrawer({
     super.key,
     this.onNewChat,
     this.onNavigate,
     this.onLoadChat,
+    this.onNewChatInProject,
   });
 
   @override
@@ -87,8 +91,9 @@ class AppDrawerState extends State<AppDrawer> {
 
       for (var doc in chatsSnapshot.docs) {
         final data = doc.data();
-        // Skip archived chats
+        // Skip archived chats and project chats (shown in Library)
         if (data['isArchived'] == true) continue;
+        if (data['projectId'] != null) continue;
         chats.add({
           'id': doc.id,
           'name': data['title'] ?? 'Chat',
@@ -227,6 +232,10 @@ class AppDrawerState extends State<AppDrawer> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+                      );
                     },
                   ),
 
@@ -237,7 +246,15 @@ class AppDrawerState extends State<AppDrawer> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       Navigator.pop(context);
-                      widget.onNavigate?.call(0);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LibraryScreen(
+                            onLoadChat: widget.onLoadChat,
+                            onNewChatInProject: widget.onNewChatInProject,
+                          ),
+                        ),
+                      );
                     },
                   ),
 
@@ -367,12 +384,12 @@ class AppDrawerState extends State<AppDrawer> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.3),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 icon,
-                color: color,
+                color: Colors.white,
                 size: 20,
               ),
             ),
@@ -430,12 +447,12 @@ class AppDrawerState extends State<AppDrawer> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.3),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 icon,
-                color: color,
+                color: Colors.white,
                 size: 20,
               ),
             ),
@@ -644,6 +661,11 @@ class AppDrawerState extends State<AppDrawer> {
                           value: 'pin',
                         ),
                         _buildPopupMenuItem(
+                          icon: Icons.folder_outlined,
+                          label: 'Add to Project',
+                          value: 'add_to_project',
+                        ),
+                        _buildPopupMenuItem(
                           icon: Icons.archive_outlined,
                           label: 'Archive',
                           value: 'archive',
@@ -717,6 +739,10 @@ class AppDrawerState extends State<AppDrawer> {
       case 'pin':
         HapticFeedback.lightImpact();
         _togglePinChat(chatId);
+        break;
+      case 'add_to_project':
+        HapticFeedback.lightImpact();
+        _showAddToProjectSheet(chatId, chatName);
         break;
       case 'archive':
         HapticFeedback.lightImpact();
@@ -930,6 +956,137 @@ class AppDrawerState extends State<AppDrawer> {
         ],
       ),
     );
+  }
+
+  Future<void> _showAddToProjectSheet(String chatId, String chatName) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final snapshot = await _firestore
+          .collection('projects')
+          .where('userId', isEqualTo: user.uid)
+          .limit(50)
+          .get();
+
+      final projects = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': data['name'] ?? 'Untitled',
+          'color': data['color'] ?? 0xFF6C63FF,
+          'icon': data['icon'] ?? 'folder',
+          'chatIds': List<String>.from(data['chatIds'] ?? []),
+        };
+      }).toList();
+
+      if (!mounted) return;
+
+      if (projects.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No projects yet. Create one from Library first.'),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+
+      await showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E1E2E),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  'Add "$chatName" to project',
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              ...projects.map((project) {
+                final alreadyAdded = (project['chatIds'] as List<String>).contains(chatId);
+                final color = Color(project['color'] as int);
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.folder_outlined,
+                      color: color,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    project['name'] as String,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                  trailing: alreadyAdded
+                      ? Icon(Icons.check_circle, color: Colors.green.withValues(alpha: 0.7), size: 22)
+                      : Icon(Icons.add_circle_outline, color: Colors.white.withValues(alpha: 0.3), size: 22),
+                  onTap: alreadyAdded
+                      ? null
+                      : () async {
+                          Navigator.pop(ctx);
+                          try {
+                            final chatIds = List<String>.from(project['chatIds'] as List<String>);
+                            chatIds.add(chatId);
+                            await _firestore.collection('projects').doc(project['id'] as String).update({
+                              'chatIds': chatIds,
+                              'updatedAt': FieldValue.serverTimestamp(),
+                            });
+                            await _firestore.collection('chat_history').doc(chatId).update({
+                              'projectId': project['id'],
+                            });
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Added to "${project['name']}"'),
+                                  backgroundColor: Colors.green,
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.all(16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            debugPrint('Error adding chat to project: $e');
+                          }
+                        },
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error loading projects: $e');
+    }
   }
 
   Widget _buildShowMoreButton() {

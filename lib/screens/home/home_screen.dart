@@ -1,9 +1,13 @@
 ﻿import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../services/universal_intent_service.dart';
@@ -46,13 +50,15 @@ class HomeScreenState extends State<HomeScreen>
   String _currentUserName = '';
 
   late AnimationController _controller;
-  final bool _visible = true;
   Timer? _timer;
 
   final List<Map<String, dynamic>> _conversation = [];
 
   // Current chat ID for auto-save (ChatGPT style)
   String? _currentChatId;
+
+  // Current project context (for Library/Projects feature)
+  String? _currentProjectId;
 
   // Voice recording state
   bool _isRecording = false;
@@ -116,6 +122,13 @@ class HomeScreenState extends State<HomeScreen>
     _resetConversation();
   }
 
+  /// Start a new chat linked to a project
+  void startNewChatInProject(String projectId) {
+    _resetConversation();
+    _currentProjectId = projectId;
+    debugPrint('New chat started in project: $projectId');
+  }
+
   /// Load a conversation from chat history
   Future<void> loadConversation(String chatId) async {
     try {
@@ -169,6 +182,7 @@ class HomeScreenState extends State<HomeScreen>
       _matches.clear();
       _intentController.clear();
       _currentChatId = null; // Reset chat ID for new conversation
+      _currentProjectId = null; // Reset project context
 
       // Add welcome message
       _conversation.add({
@@ -375,16 +389,35 @@ class HomeScreenState extends State<HomeScreen>
 
       if (_currentChatId == null) {
         // Create new chat history document
-        final docRef = await FirebaseFirestore.instance.collection('chat_history').add({
+        final chatData = <String, dynamic>{
           'userId': userId,
           'title': title,
           'messages': messagesToSave,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
+        if (_currentProjectId != null) {
+          chatData['projectId'] = _currentProjectId;
+        }
+        final docRef = await FirebaseFirestore.instance.collection('chat_history').add(chatData);
         _currentChatId = docRef.id;
         debugPrint('New chat created: $_currentChatId');
-        // Note: Drawer will refresh when opened, no need to call refreshChatHistory here
+
+        // If linked to a project, add chatId to the project's chatIds
+        if (_currentProjectId != null) {
+          try {
+            await FirebaseFirestore.instance
+                .collection('projects')
+                .doc(_currentProjectId)
+                .update({
+              'chatIds': FieldValue.arrayUnion([_currentChatId]),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+            debugPrint('Chat added to project: $_currentProjectId');
+          } catch (e) {
+            debugPrint('Error adding chat to project: $e');
+          }
+        }
       } else {
         // Update existing chat history document
         await FirebaseFirestore.instance
@@ -1782,9 +1815,7 @@ class HomeScreenState extends State<HomeScreen>
                                     height: 10,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: _visible
-                                          ? Colors.red
-                                          : Colors.red.withValues(alpha: 0.3),
+                                      color: Colors.red,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -1799,19 +1830,12 @@ class HomeScreenState extends State<HomeScreen>
                                             milliseconds: 200,
                                           ),
                                           width: 3,
-                                          height: _visible
-                                              ? (6.0 +
-                                                    ((index % 3 == 0
-                                                        ? 18.0
-                                                        : (index % 2 == 0
-                                                              ? 12.0
-                                                              : 8.0))))
-                                              : (6.0 +
-                                                    ((index % 3 == 0
-                                                        ? 8.0
-                                                        : (index % 2 == 0
-                                                              ? 16.0
-                                                              : 10.0)))),
+                                          height: 6.0 +
+                                              (index % 3 == 0
+                                                  ? 18.0
+                                                  : (index % 2 == 0
+                                                        ? 12.0
+                                                        : 8.0)),
                                           margin: const EdgeInsets.symmetric(
                                             horizontal: 2,
                                           ),
@@ -2057,7 +2081,7 @@ class HomeScreenState extends State<HomeScreen>
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: isUser
             ? MainAxisAlignment.end
@@ -2093,8 +2117,8 @@ class HomeScreenState extends State<HomeScreen>
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                    horizontal: 14,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
                     // Gradient for chat bubbles
@@ -2191,13 +2215,13 @@ class HomeScreenState extends State<HomeScreen>
     String category,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Horizontal scrollable cards
           SizedBox(
-            height: 220,
+            height: 200,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: data.length,
@@ -2217,7 +2241,7 @@ class HomeScreenState extends State<HomeScreen>
     bool isDarkMode,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2266,38 +2290,60 @@ class HomeScreenState extends State<HomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              child: Image.network(
-                item['image'] as String,
-                height: 100,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
+            // Image with download button
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.network(
+                    item['image'] as String,
                     height: 100,
-                    color: Colors.grey[700],
-                    child: const Icon(
-                      Icons.newspaper,
-                      color: Colors.white54,
-                      size: 40,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 100,
+                        color: Colors.grey[700],
+                        child: const Icon(
+                          Icons.newspaper,
+                          color: Colors.white54,
+                          size: 40,
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 100,
+                        color: Colors.grey[800],
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _saveImageFromUrl(item['image'] as String);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
                     ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 100,
-                    color: Colors.grey[800],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
             // Details
             Padding(
@@ -2572,7 +2618,7 @@ class HomeScreenState extends State<HomeScreen>
     bool isDarkMode,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2669,7 +2715,26 @@ class HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-            // Play button
+            // Download button
+            Positioned(
+              top: 8,
+              left: 8,
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _saveImageFromUrl(item['thumbnail'] as String);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                ),
+              ),
+            ),
+            // Duration label
             Positioned(
               top: 8,
               right: 8,
@@ -2780,6 +2845,105 @@ class HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Future<void> _saveImageFromUrl(String imageUrl) async {
+    try {
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          final photosStatus = await Permission.photos.request();
+          if (!photosStatus.isGranted) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Storage permission required')),
+              );
+            }
+            return;
+          }
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Downloading...'),
+            backgroundColor: Colors.blue.withValues(alpha: 0.8),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+
+      final response = await Dio().get(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      // Detect extension from URL
+      final uri = Uri.parse(imageUrl);
+      final urlPath = uri.path.toLowerCase();
+      String ext = '.jpg';
+      for (final e in ['.png', '.webp', '.gif', '.jpeg', '.mp4', '.pdf']) {
+        if (urlPath.contains(e)) {
+          ext = e;
+          break;
+        }
+      }
+
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}$ext';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Saved to Downloads'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to save image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildItemCard(
     Map<String, dynamic> item,
     bool isDarkMode,
@@ -2878,38 +3042,60 @@ class HomeScreenState extends State<HomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              child: Image.network(
-                item['image'] as String,
-                height: 100,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
+            // Image with download button
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.network(
+                    item['image'] as String,
                     height: 100,
-                    color: Colors.grey[700],
-                    child: Icon(getIcon(), color: Colors.white54, size: 40),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 100,
-                    color: Colors.grey[800],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 100,
+                        color: Colors.grey[700],
+                        child: Icon(getIcon(), color: Colors.white54, size: 40),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 100,
+                        color: Colors.grey[800],
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _saveImageFromUrl(item['image'] as String);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
             // Details
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2924,7 +3110,7 @@ class HomeScreenState extends State<HomeScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   // Subtitle (restaurant/brand/location)
                   Text(
                     getSubtitle(),
@@ -2932,7 +3118,7 @@ class HomeScreenState extends State<HomeScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   // Price & Rating Row
                   Row(
                     children: [
@@ -2961,7 +3147,7 @@ class HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   // Bottom info (distance/condition/area)
                   Row(
                     children: [

@@ -1003,6 +1003,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           // Navigate to home screen
           setState(() => _currentIndex = 0);
         },
+        onNewChatInProject: (projectId) {
+          // Start a new chat linked to a project
+          HomeScreen.globalKey.currentState?.startNewChatInProject(projectId);
+          // Navigate to home screen
+          setState(() => _currentIndex = 0);
+        },
         onNavigate: (index) {
           setState(() {
             _currentIndex = index;

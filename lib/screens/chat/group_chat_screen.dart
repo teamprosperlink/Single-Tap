@@ -31,6 +31,7 @@ import '../call/group_audio_call_screen.dart';
 import '../../services/floating_call_service.dart';
 import 'group_info_screen.dart';
 import 'video_player_screen.dart';
+import 'photo_viewer_dialog.dart';
 
 class GroupChatScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -2536,6 +2537,46 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             _saveImage(message['imageUrl'] as String);
                           },
                         ),
+                      // Save Video option (if has video)
+                      if (message['videoUrl'] != null &&
+                          (message['videoUrl'] as String).isNotEmpty)
+                        _buildMessageOption(
+                          icon: Icons.download,
+                          label: 'Save Video',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveVideo(message['videoUrl'] as String);
+                          },
+                        ),
+                      // Save Audio option (if has audio)
+                      if ((message['voiceUrl'] != null &&
+                              (message['voiceUrl'] as String).isNotEmpty) ||
+                          (message['audioUrl'] != null &&
+                              (message['audioUrl'] as String).isNotEmpty))
+                        _buildMessageOption(
+                          icon: Icons.download,
+                          label: 'Save Audio',
+                          onTap: () {
+                            Navigator.pop(context);
+                            final url = (message['voiceUrl'] as String?) ??
+                                (message['audioUrl'] as String);
+                            _saveAudio(url);
+                          },
+                        ),
+                      // Save Document option (if has file/doc)
+                      if (message['fileUrl'] != null &&
+                          (message['fileUrl'] as String).isNotEmpty)
+                        _buildMessageOption(
+                          icon: Icons.download,
+                          label: 'Save Document',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveFile(
+                              message['fileUrl'] as String,
+                              message['fileName'] as String?,
+                            );
+                          },
+                        ),
                       if (isMe &&
                           message['text'] != null &&
                           (message['text'] as String).isNotEmpty)
@@ -2677,6 +2718,207 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       debugPrint('Failed to save image: $e');
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to save image: $e');
+      }
+    }
+  }
+
+  Future<void> _saveVideo(String videoUrl) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save video',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving video...');
+      }
+
+      final response = await Dio().get(
+        videoUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Video saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save video: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save video: $e');
+      }
+    }
+  }
+
+  Future<void> _saveAudio(String audioUrl) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save audio',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving audio...');
+      }
+
+      final response = await Dio().get(
+        audioUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Audio saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save audio: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save audio: $e');
+      }
+    }
+  }
+
+  Future<void> _saveFile(String fileUrl, String? originalFileName) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save file',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving document...');
+      }
+
+      final response = await Dio().get(
+        fileUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      String fileName;
+      if (originalFileName != null && originalFileName.isNotEmpty) {
+        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
+      } else {
+        final uri = Uri.parse(fileUrl);
+        final urlPath = uri.path.toLowerCase();
+        String ext = '.pdf';
+        for (final e in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']) {
+          if (urlPath.contains(e)) {
+            ext = e;
+            break;
+          }
+        }
+        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}$ext';
+      }
+
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Document saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save file: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save document: $e');
       }
     }
   }
@@ -5497,126 +5739,162 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                     ),
                                   // Image
                                   if (imageUrl != null)
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: isOptimistic
-                                              ? Colors.orange.withValues(
-                                                  alpha: 0.5,
-                                                )
-                                              : isMe
-                                              ? AppColors.iosBlue
-                                              : Colors.black.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                          width: 2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (!isMe)
-                                              Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 6,
-                                                    ),
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                                child: Text(
-                                                  senderName,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ConstrainedBox(
-                                              constraints: const BoxConstraints(
-                                                maxHeight: 180,
-                                                maxWidth: 220,
-                                              ),
-                                              child: Stack(
-                                                alignment: Alignment.center,
-                                                children: [
-                                                  // Show local file or network image
-                                                  messageData['isLocalFile'] ==
-                                                          true
-                                                      ? Image.file(
-                                                          File(imageUrl),
-                                                          width: 200,
-                                                          fit: BoxFit.cover,
-                                                        )
-                                                      : CachedNetworkImage(
-                                                          imageUrl: imageUrl,
-                                                          width: 200,
-                                                          fit: BoxFit.cover,
-                                                          placeholder: (context, url) => Container(
-                                                            width: 200,
-                                                            height: 180,
-                                                            color: isDarkMode
-                                                                ? Colors
-                                                                      .grey[800]
-                                                                : Colors
-                                                                      .grey[300],
-                                                            child: const Center(
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                    strokeWidth:
-                                                                        2,
-                                                                  ),
-                                                            ),
-                                                          ),
-                                                          errorWidget:
-                                                              (
-                                                                context,
-                                                                url,
-                                                                error,
-                                                              ) => const Icon(
-                                                                Icons
-                                                                    .error_outline,
-                                                                color:
-                                                                    Colors.red,
-                                                              ),
+                                    GestureDetector(
+                                      onTap: isOptimistic
+                                          ? null
+                                          : () {
+                                              if (messageData['isLocalFile'] == true) {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => Scaffold(
+                                                      backgroundColor: Colors.black,
+                                                      appBar: AppBar(
+                                                        backgroundColor: Colors.transparent,
+                                                        elevation: 0,
+                                                        leading: IconButton(
+                                                          icon: const Icon(Icons.close, color: Colors.white),
+                                                          onPressed: () => Navigator.pop(context),
                                                         ),
-                                                  // Show uploading overlay for optimistic messages
-                                                  if (isOptimistic)
-                                                    Container(
-                                                      width: 200,
-                                                      height: 180,
-                                                      color: Colors.black
-                                                          .withValues(
-                                                            alpha: 0.3,
-                                                          ),
-                                                      child: const Center(
-                                                        child: SizedBox(
-                                                          width: 32,
-                                                          height: 32,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 3,
-                                                            valueColor:
-                                                                AlwaysStoppedAnimation<
-                                                                  Color
-                                                                >(
-                                                                  Colors.orange,
-                                                                ),
+                                                      ),
+                                                      body: Center(
+                                                        child: InteractiveViewer(
+                                                          minScale: 0.5,
+                                                          maxScale: 4.0,
+                                                          child: Image.file(
+                                                            File(imageUrl),
+                                                            fit: BoxFit.contain,
                                                           ),
                                                         ),
                                                       ),
                                                     ),
-                                                ],
+                                                  ),
+                                                );
+                                              } else {
+                                                PhotoViewerDialog.show(context, imageUrl);
+                                              }
+                                            },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: isOptimistic
+                                                ? Colors.orange.withValues(
+                                                    alpha: 0.5,
+                                                  )
+                                                : isMe
+                                                ? AppColors.iosBlue
+                                                : Colors.black.withValues(
+                                                    alpha: 0.6,
+                                                  ),
+                                            width: 2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (!isMe)
+                                                Container(
+                                                  width: double.infinity,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 6,
+                                                      ),
+                                                  color: Colors.black.withValues(
+                                                    alpha: 0.6,
+                                                  ),
+                                                  child: Text(
+                                                    senderName,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ConstrainedBox(
+                                                constraints: const BoxConstraints(
+                                                  maxHeight: 180,
+                                                  maxWidth: 220,
+                                                ),
+                                                child: Stack(
+                                                  alignment: Alignment.center,
+                                                  children: [
+                                                    // Show local file or network image
+                                                    messageData['isLocalFile'] ==
+                                                            true
+                                                        ? Image.file(
+                                                            File(imageUrl),
+                                                            width: 200,
+                                                            fit: BoxFit.cover,
+                                                          )
+                                                        : CachedNetworkImage(
+                                                            imageUrl: imageUrl,
+                                                            width: 200,
+                                                            fit: BoxFit.cover,
+                                                            placeholder: (context, url) => Container(
+                                                              width: 200,
+                                                              height: 180,
+                                                              color: isDarkMode
+                                                                  ? Colors
+                                                                        .grey[800]
+                                                                  : Colors
+                                                                        .grey[300],
+                                                              child: const Center(
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                      strokeWidth:
+                                                                          2,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                            errorWidget:
+                                                                (
+                                                                  context,
+                                                                  url,
+                                                                  error,
+                                                                ) => const Icon(
+                                                                  Icons
+                                                                      .error_outline,
+                                                                  color:
+                                                                      Colors.red,
+                                                                ),
+                                                          ),
+                                                    // Show uploading overlay for optimistic messages
+                                                    if (isOptimistic)
+                                                      Container(
+                                                        width: 200,
+                                                        height: 180,
+                                                        color: Colors.black
+                                                            .withValues(
+                                                              alpha: 0.3,
+                                                            ),
+                                                        child: const Center(
+                                                          child: SizedBox(
+                                                            width: 32,
+                                                            height: 32,
+                                                            child: CircularProgressIndicator(
+                                                              strokeWidth: 3,
+                                                              valueColor:
+                                                                  AlwaysStoppedAnimation<
+                                                                    Color
+                                                                  >(
+                                                                    Colors.orange,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),

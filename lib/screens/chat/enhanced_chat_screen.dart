@@ -40,6 +40,7 @@ import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat_common.dart';
 import '../home/main_navigation_screen.dart';
 import 'media_gallery_screen.dart';
+import 'photo_viewer_dialog.dart';
 
 class EnhancedChatScreen extends ConsumerStatefulWidget {
   final UserProfile otherUser;
@@ -3286,7 +3287,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     HapticFeedback.mediumImpact();
 
     final hasText = message.text != null && message.text!.isNotEmpty;
-    final hasImage = message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final hasImage = message.type == MessageType.image && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final hasVideo = message.type == MessageType.video && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final hasAudio = message.type == MessageType.audio && message.audioUrl != null && message.audioUrl!.isNotEmpty;
+    final hasFile = message.type == MessageType.file && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
 
     showDialog(
       context: context,
@@ -3376,6 +3380,39 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           onTap: () {
                             Navigator.pop(context);
                             _saveImage(message.mediaUrl!);
+                          },
+                        ),
+
+                      // Save Video option (only if has video)
+                      if (hasVideo)
+                        _buildPopupOption(
+                          icon: Icons.download,
+                          label: 'Save Video',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveVideo(message.mediaUrl!);
+                          },
+                        ),
+
+                      // Save Audio option (only if has audio)
+                      if (hasAudio)
+                        _buildPopupOption(
+                          icon: Icons.download,
+                          label: 'Save Audio',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveAudio(message.audioUrl!);
+                          },
+                        ),
+
+                      // Save Document option (only if has file)
+                      if (hasFile)
+                        _buildPopupOption(
+                          icon: Icons.download,
+                          label: 'Save Document',
+                          onTap: () {
+                            Navigator.pop(context);
+                            _saveFile(message.mediaUrl!, message.fileName);
                           },
                         ),
 
@@ -3591,6 +3628,209 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       debugPrint('Failed to save image: $e');
       if (mounted) {
         SnackBarHelper.showError(context, 'Failed to save image: $e');
+      }
+    }
+  }
+
+  Future<void> _saveVideo(String videoUrl) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save video',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving video...');
+      }
+
+      final response = await Dio().get(
+        videoUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Video saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save video: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save video: $e');
+      }
+    }
+  }
+
+  Future<void> _saveAudio(String audioUrl) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save audio',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving audio...');
+      }
+
+      final response = await Dio().get(
+        audioUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Audio saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save audio: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save audio: $e');
+      }
+    }
+  }
+
+  Future<void> _saveFile(String fileUrl, String? originalFileName) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        final photosStatus = await Permission.photos.request();
+        if (!photosStatus.isGranted) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'Storage permission required to save file',
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        SnackBarHelper.showInfo(context, 'Saving document...');
+      }
+
+      final response = await Dio().get(
+        fileUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Pictures/Plink');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      // Use original file name or generate one with correct extension
+      String fileName;
+      if (originalFileName != null && originalFileName.isNotEmpty) {
+        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
+      } else {
+        // Try to detect extension from URL
+        final uri = Uri.parse(fileUrl);
+        final urlPath = uri.path.toLowerCase();
+        String ext = '.pdf';
+        for (final e in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']) {
+          if (urlPath.contains(e)) {
+            ext = e;
+            break;
+          }
+        }
+        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}$ext';
+      }
+
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.data);
+
+      if (Platform.isAndroid) {
+        await Process.run('am', [
+          'broadcast',
+          '-a',
+          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+          '-d',
+          'file://$filePath',
+        ]);
+      }
+
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Document saved to Pictures/Plink');
+      }
+    } catch (e) {
+      debugPrint('Failed to save file: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to save document: $e');
       }
     }
   }
@@ -5594,73 +5834,89 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return const SizedBox.shrink();
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isOptimistic
-              ? Colors.orange.withValues(alpha: 0.5)
-              : isMe
-              ? const Color(0xFF007AFF)
-              : Colors.black.withValues(alpha: 0.6),
-          width: 2,
+    return GestureDetector(
+      onTap: isOptimistic
+          ? null
+          : () {
+              if (isLocalFile) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => _LocalImageViewer(filePath: imageSource),
+                  ),
+                );
+              } else {
+                PhotoViewerDialog.show(context, imageSource);
+              }
+            },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isOptimistic
+                ? Colors.orange.withValues(alpha: 0.5)
+                : isMe
+                ? const Color(0xFF007AFF)
+                : Colors.black.withValues(alpha: 0.6),
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
         ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
-          child: Stack(
-            children: [
-              // Show local file or network image
-              isLocalFile
-                  ? Image.file(File(imageSource), width: 200, fit: BoxFit.cover)
-                  : CachedNetworkImage(
-                      imageUrl: imageSource,
-                      width: 200,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
+            child: Stack(
+              children: [
+                // Show local file or network image
+                isLocalFile
+                    ? Image.file(File(imageSource), width: 200, fit: BoxFit.cover)
+                    : CachedNetworkImage(
+                        imageUrl: imageSource,
                         width: 200,
-                        height: 180,
-                        color: Colors.grey[300],
-                        child: const Center(child: CircularProgressIndicator()),
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          width: 200,
+                          height: 180,
+                          color: Colors.grey[300],
+                          child: const Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          width: 200,
+                          height: 180,
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.error),
+                        ),
                       ),
-                      errorWidget: (context, url, error) => Container(
-                        width: 200,
-                        height: 180,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.error),
-                      ),
-                    ),
-              // Upload overlay for optimistic messages
-              if (isOptimistic)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withOpacity(0.4),
-                    child: const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.orange,
+                // Upload overlay for optimistic messages
+                if (isOptimistic)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withOpacity(0.4),
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.orange,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Uploading...',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                            SizedBox(height: 8),
+                            Text(
+                              'Uploading...',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -10779,6 +11035,43 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                 ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full screen local image viewer
+class _LocalImageViewer extends StatelessWidget {
+  final String filePath;
+
+  const _LocalImageViewer({required this.filePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.file(
+            File(filePath),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white24,
+              size: 64,
+            ),
           ),
         ),
       ),
