@@ -229,11 +229,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: Colors.white,
                     width: 1,
                   ),
                 ),
@@ -267,26 +267,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       body: Stack(
         children: [
-          // Background
-          Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.grey.shade900, Colors.black],
-                  ),
-                ),
+          // Gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromRGBO(64, 64, 64, 1),
+                  Color.fromRGBO(0, 0, 0, 1),
+                ],
               ),
-            ),
-          ),
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(color: Colors.black.withValues(alpha: 0.65)),
             ),
           ),
 
@@ -302,7 +293,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createProject,
-        backgroundColor: const Color(0xFF6C63FF),
+        backgroundColor: const Color(0xFF016CFF),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Project',
@@ -437,12 +428,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.15),
+            color: Colors.white.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -626,7 +624,7 @@ class _CreateProjectDialog extends StatefulWidget {
 
 class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   final _nameController = TextEditingController();
-  final int _selectedColor = 0xFF6C63FF;
+  final int _selectedColor = 0xFF016CFF;
   String _selectedIcon = 'folder';
 
   final List<Map<String, dynamic>> _iconOptions = [
@@ -654,7 +652,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2A2A2A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text(
         'New Project',
@@ -680,6 +678,10 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF016CFF), width: 1.5),
                   ),
                   prefixIcon: Icon(Icons.edit, color: Colors.white.withValues(alpha: 0.4), size: 20),
                 ),
@@ -750,7 +752,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               'icon': _selectedIcon,
             });
           },
-          child: const Text('Create', style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w600)),
+          child: const Text('Create', style: TextStyle(color: Color(0xFF016CFF), fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -960,11 +962,11 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: Colors.white,
                     width: 1,
                   ),
                 ),
@@ -997,26 +999,17 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
       ),
       body: Stack(
         children: [
-          // Background
-          Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.grey.shade900, Colors.black],
-                  ),
-                ),
+          // Gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromRGBO(64, 64, 64, 1),
+                  Color.fromRGBO(0, 0, 0, 1),
+                ],
               ),
-            ),
-          ),
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(color: Colors.black.withValues(alpha: 0.65)),
             ),
           ),
 
@@ -1044,7 +1037,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
       // Floating New Chat button
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _startNewChat(),
-        backgroundColor: color,
+        backgroundColor: const Color(0xFF016CFF),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Chat',
@@ -1211,9 +1204,16 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.25),
+                Colors.white.withValues(alpha: 0.15),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [

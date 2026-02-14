@@ -17,21 +17,21 @@ import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
-import 'my_posts_screen.dart';
-import 'create_post_screen.dart';
+import 'near_by_posts _screen.dart';
+
 import 'edit_post_screen.dart';
 import '../../widgets/app_background.dart';
 
-class FeedScreen extends StatefulWidget {
+class NearByScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
-  const FeedScreen({super.key, this.onBack});
+  const NearByScreen({super.key, this.onBack});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  State<NearByScreen> createState() => _NearByScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen>
+class _NearByScreenState extends State<NearByScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -76,9 +76,7 @@ class _FeedScreenState extends State<FeedScreen>
 
   final List<Map<String, dynamic>> _categories = [
     {'name': 'All', 'icon': Icons.grid_view_rounded},
-    {'name': 'News', 'icon': Icons.newspaper_rounded},
-    {'name': 'Entertainment', 'icon': Icons.movie_rounded},
-    {'name': 'Technology', 'icon': Icons.computer_rounded},
+    {'name': 'Social', 'icon': Icons.computer_rounded},
     {'name': 'Jobs', 'icon': Icons.work_rounded},
     {'name': 'Products', 'icon': Icons.shopping_bag_rounded},
   ];
@@ -721,7 +719,7 @@ class _FeedScreenState extends State<FeedScreen>
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.tab,
               indicatorColor: Colors.white,
-              indicatorWeight: 2,
+              indicatorWeight: 1,
               dividerColor: Colors.transparent,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
@@ -733,9 +731,7 @@ class _FeedScreenState extends State<FeedScreen>
                 fontSize: 13,
                 fontWeight: FontWeight.normal,
               ),
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              isScrollable: false,
               tabs: _categories.map((category) {
                 return Tab(text: category['name'] as String);
               }).toList(),
@@ -818,30 +814,21 @@ class _FeedScreenState extends State<FeedScreen>
               ],
             ),
 
-            // Floating Action Button - Create Post
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: _showCreatePostDialog,
-                backgroundColor: AppColors.iosBlue,
-                shape: const CircleBorder(),
-                child: const Icon(Icons.add, color: Colors.white, size: 28),
-              ),
-            ),
+            // // Floating Action Button - Create Post
+            // Positioned(
+            //   bottom: 20,
+            //   right: 20,
+            //   child: FloatingActionButton(
+            //     onPressed: _showCreatePostDialog,
+            //     backgroundColor: AppColors.iosBlue,
+            //     shape: const CircleBorder(),
+            //     child: const Icon(Icons.add, color: Colors.white, size: 28),
+            //   ),
+            // ),
           ],
         ),
       ),
     );
-  }
-
-  void _showCreatePostDialog() async {
-    HapticFeedback.mediumImpact();
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-    );
-    // Feed auto-refreshes via real-time subscription
   }
 
   Widget _buildGlassSearchBar() {

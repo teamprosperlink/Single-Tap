@@ -21,7 +21,8 @@ class BusinessInquiriesScreen extends StatefulWidget {
   });
 
   @override
-  State<BusinessInquiriesScreen> createState() => _BusinessInquiriesScreenState();
+  State<BusinessInquiriesScreen> createState() =>
+      _BusinessInquiriesScreenState();
 }
 
 class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
@@ -32,7 +33,13 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   // Simplified inquiry filters
-  static const List<String> _filters = ['All', 'New', 'Responded', 'Completed', 'Declined'];
+  static const List<String> _filters = [
+    'All',
+    'New',
+    'Responded',
+    'Completed',
+    'Declined',
+  ];
 
   @override
   void initState() {
@@ -49,11 +56,14 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   List<BusinessOrder> _applySearch(List<BusinessOrder> inquiries) {
     if (_searchQuery.isEmpty) return inquiries;
     final query = _searchQuery.toLowerCase();
-    return inquiries.where((i) =>
-      i.customerName.toLowerCase().contains(query) ||
-      i.serviceName.toLowerCase().contains(query) ||
-      (i.customerNotes?.toLowerCase().contains(query) ?? false)
-    ).toList();
+    return inquiries
+        .where(
+          (i) =>
+              i.customerName.toLowerCase().contains(query) ||
+              i.serviceName.toLowerCase().contains(query) ||
+              (i.customerNotes?.toLowerCase().contains(query) ?? false),
+        )
+        .toList();
   }
 
   @override
@@ -190,16 +200,23 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF00D67D).withValues(alpha: 0.2)
-                          : (isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.7)),
+                          : (isDarkMode
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.white.withValues(alpha: 0.7)),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
                             ? const Color(0xFF00D67D)
-                            : (isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.3)),
+                            : (isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.15)
+                                  : Colors.grey.withValues(alpha: 0.3)),
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
@@ -219,8 +236,12 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
                           style: TextStyle(
                             color: isSelected
                                 ? const Color(0xFF00D67D)
-                                : (isDarkMode ? Colors.white70 : Colors.grey[700]),
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                : (isDarkMode
+                                      ? Colors.white70
+                                      : Colors.grey[700]),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                             fontSize: 13,
                           ),
                         ),
@@ -239,35 +260,45 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
   List<BusinessOrder> _filterInquiries(List<BusinessOrder> inquiries) {
     switch (_selectedFilter) {
       case 'New':
-        return inquiries.where((i) =>
-          i.status == OrderStatus.newOrder ||
-          i.status == OrderStatus.pending
-        ).toList();
+        return inquiries
+            .where(
+              (i) =>
+                  i.status == OrderStatus.newOrder ||
+                  i.status == OrderStatus.pending,
+            )
+            .toList();
       case 'Responded':
-        return inquiries.where((i) =>
-          i.status == OrderStatus.accepted ||
-          i.status == OrderStatus.inProgress
-        ).toList();
+        return inquiries
+            .where(
+              (i) =>
+                  i.status == OrderStatus.accepted ||
+                  i.status == OrderStatus.inProgress,
+            )
+            .toList();
       case 'Completed':
-        return inquiries.where((i) =>
-          i.status == OrderStatus.completed ||
-          i.status == OrderStatus.reviewed
-        ).toList();
+        return inquiries
+            .where(
+              (i) =>
+                  i.status == OrderStatus.completed ||
+                  i.status == OrderStatus.reviewed,
+            )
+            .toList();
       case 'Declined':
-        return inquiries.where((i) =>
-          i.status == OrderStatus.cancelled
-        ).toList();
+        return inquiries
+            .where((i) => i.status == OrderStatus.cancelled)
+            .toList();
       default:
         return inquiries;
     }
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
-    return EnhancedEmptyState(
+    return const EnhancedEmptyState(
       icon: Icons.inbox_outlined,
       title: 'No Inquiries Yet',
-      message: 'When customers are interested in your services, their inquiries will appear here',
-      color: const Color(0xFF00D67D),
+      message:
+          'When customers are interested in your services, their inquiries will appear here',
+      color: Color(0xFF00D67D),
     );
   }
 
@@ -355,7 +386,8 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
 
     // Remove any non-digit characters except + for international format
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    final message = 'Hi ${inquiry.customerName}, regarding your inquiry about ${inquiry.serviceName}...';
+    final message =
+        'Hi ${inquiry.customerName}, regarding your inquiry about ${inquiry.serviceName}...';
     final encodedMessage = Uri.encodeComponent(message);
     final uri = Uri.parse('https://wa.me/$cleanPhone?text=$encodedMessage');
 
@@ -402,9 +434,7 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
         title: const Text('Decline Inquiry?'),
-        content: const Text(
-          'Are you sure you want to decline this inquiry?',
-        ),
+        content: const Text('Are you sure you want to decline this inquiry?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -472,17 +502,21 @@ class _InquiryCard extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    boxShadow: _isNew ? [
-                      BoxShadow(
-                        color: Colors.orange.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ] : null,
+                    boxShadow: _isNew
+                        ? [
+                            BoxShadow(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
                   ),
                   child: CircleAvatar(
                     radius: 22,
-                    backgroundColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
+                    backgroundColor: const Color(
+                      0xFF00D67D,
+                    ).withValues(alpha: 0.2),
                     backgroundImage: inquiry.customerPhoto != null
                         ? NetworkImage(inquiry.customerPhoto!)
                         : null,
@@ -529,7 +563,8 @@ class _InquiryCard extends StatelessWidget {
             ),
 
             // Customer message
-            if (inquiry.customerNotes != null && inquiry.customerNotes!.isNotEmpty) ...[
+            if (inquiry.customerNotes != null &&
+                inquiry.customerNotes!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -594,7 +629,9 @@ class _InquiryCard extends StatelessWidget {
             const SizedBox(height: 12),
             Divider(
               height: 1,
-              color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.2),
+              color: isDarkMode
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.grey.withValues(alpha: 0.2),
             ),
             const SizedBox(height: 12),
             Row(
@@ -826,250 +863,269 @@ class _InquiryDetailsSheet extends StatelessWidget {
             ),
           ),
           child: Column(
-        children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.white24 : Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.white24 : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Customer section
-                  Row(
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
-                        backgroundImage: inquiry.customerPhoto != null
-                            ? NetworkImage(inquiry.customerPhoto!)
-                            : null,
-                        child: inquiry.customerPhoto == null
-                            ? Text(
-                                inquiry.customerName.isNotEmpty
-                                    ? inquiry.customerName[0].toUpperCase()
-                                    : 'C',
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF00D67D),
+                      // Customer section
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundColor: const Color(
+                              0xFF00D67D,
+                            ).withValues(alpha: 0.2),
+                            backgroundImage: inquiry.customerPhoto != null
+                                ? NetworkImage(inquiry.customerPhoto!)
+                                : null,
+                            child: inquiry.customerPhoto == null
+                                ? Text(
+                                    inquiry.customerName.isNotEmpty
+                                        ? inquiry.customerName[0].toUpperCase()
+                                        : 'C',
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF00D67D),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  inquiry.customerName,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
                                 ),
-                              )
-                            : null,
+                                if (inquiry.customerPhone != null)
+                                  Text(
+                                    inquiry.customerPhone!,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: isDarkMode
+                                          ? Colors.white54
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          _buildStatusChip(isDarkMode),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
+                      const SizedBox(height: 24),
+
+                      // Contact buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLargeContactButton(
+                              icon: Icons.phone,
+                              label: 'Call',
+                              color: Colors.green,
+                              onTap: onCall,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildLargeContactButton(
+                              icon: Icons.chat,
+                              label: 'WhatsApp',
+                              color: const Color(0xFF25D366),
+                              onTap: onWhatsApp,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Service interested in
+                      _buildInfoSection(
+                        title: 'Interested In',
+                        isDarkMode: isDarkMode,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              inquiry.customerName,
+                              inquiry.serviceName,
                               style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: isDarkMode ? Colors.white : Colors.black87,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
                               ),
                             ),
-                            if (inquiry.customerPhone != null)
+                            if (inquiry.serviceDescription != null) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                inquiry.customerPhone!,
+                                inquiry.serviceDescription!,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                                  color: isDarkMode
+                                      ? Colors.white54
+                                      : Colors.grey[600],
                                 ),
                               ),
+                            ],
                           ],
                         ),
                       ),
-                      _buildStatusChip(isDarkMode),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
-                  // Contact buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildLargeContactButton(
-                          icon: Icons.phone,
-                          label: 'Call',
-                          color: Colors.green,
-                          onTap: onCall,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildLargeContactButton(
-                          icon: Icons.chat,
-                          label: 'WhatsApp',
-                          color: const Color(0xFF25D366),
-                          onTap: onWhatsApp,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Service interested in
-                  _buildInfoSection(
-                    title: 'Interested In',
-                    isDarkMode: isDarkMode,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          inquiry.serviceName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        if (inquiry.serviceDescription != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            inquiry.serviceDescription!,
+                      // Customer message
+                      if (inquiry.customerNotes != null &&
+                          inquiry.customerNotes!.isNotEmpty) ...[
+                        _buildInfoSection(
+                          title: 'Customer Message',
+                          isDarkMode: isDarkMode,
+                          child: Text(
+                            inquiry.customerNotes!,
                             style: TextStyle(
                               fontSize: 14,
-                              color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                              color: isDarkMode
+                                  ? Colors.white70
+                                  : Colors.grey[700],
                             ),
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 16),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
 
-                  // Customer message
-                  if (inquiry.customerNotes != null && inquiry.customerNotes!.isNotEmpty) ...[
-                    _buildInfoSection(
-                      title: 'Customer Message',
-                      isDarkMode: isDarkMode,
-                      child: Text(
-                        inquiry.customerNotes!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                          color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Inquiry time
-                  _buildInfoSection(
-                    title: 'Received',
-                    isDarkMode: isDarkMode,
-                    child: Text(
-                      _formatDateTime(inquiry.createdAt),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Bottom action bar
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF2D2D44) : Colors.grey[100],
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  if (_isNew) ...[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: onDecline,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Decline'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: onResponded,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D67D),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Mark as Responded'),
-                      ),
-                    ),
-                  ] else if (_isResponded) ...[
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: onComplete,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D67D),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Mark as Completed'),
-                      ),
-                    ),
-                  ] else ...[
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      // Inquiry time
+                      _buildInfoSection(
+                        title: 'Received',
+                        isDarkMode: isDarkMode,
                         child: Text(
-                          _getInquiryStatus(),
+                          _formatDateTime(inquiry.createdAt),
                           style: TextStyle(
-                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            color: isDarkMode
+                                ? Colors.white70
+                                : Colors.grey[700],
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Bottom action bar
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? const Color(0xFF2D2D44)
+                      : Colors.grey[100],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
                     ),
                   ],
-                ],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      if (_isNew) ...[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: onDecline,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Decline'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: onResponded,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D67D),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Mark as Responded'),
+                          ),
+                        ),
+                      ] else if (_isResponded) ...[
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: onComplete,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00D67D),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Mark as Completed'),
+                          ),
+                        ),
+                      ] else ...[
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _getInquiryStatus(),
+                              style: TextStyle(
+                                color: isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -1155,10 +1211,7 @@ class _InquiryDetailsSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  color,
-                  color.withValues(alpha: 0.8),
-                ],
+                colors: [color, color.withValues(alpha: 0.8)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1230,9 +1283,23 @@ class _InquiryDetailsSheet extends StatelessWidget {
   }
 
   String _formatDateTime(DateTime date) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour = date.hour > 12
+        ? date.hour - 12
+        : (date.hour == 0 ? 12 : date.hour);
     final period = date.hour >= 12 ? 'PM' : 'AM';
     final minute = date.minute.toString().padLeft(2, '0');
 

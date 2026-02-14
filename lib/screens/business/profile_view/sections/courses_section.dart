@@ -105,13 +105,15 @@ class CoursesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(isDarkMode, displayCourses.length),
-        ...displayCourses.map((course) => CourseCard(
-              course: course,
-              config: config,
-              isDarkMode: isDarkMode,
-              onTap: onCourseTap,
-              onEnroll: onEnroll,
-            )),
+        ...displayCourses.map(
+          (course) => CourseCard(
+            course: course,
+            config: config,
+            isDarkMode: isDarkMode,
+            onTap: onCourseTap,
+            onEnroll: onEnroll,
+          ),
+        ),
       ],
     );
   }
@@ -183,11 +185,7 @@ class CoursesSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          Icon(
-            Icons.school,
-            size: 20,
-            color: config.primaryColor,
-          ),
+          Icon(Icons.school, size: 20, color: config.primaryColor),
           const SizedBox(width: 8),
           Text(
             'Courses',
@@ -223,10 +221,7 @@ class CoursesSection extends StatelessWidget {
       child: Center(
         child: Column(
           children: [
-            Text(
-              config.emptyStateIcon,
-              style: const TextStyle(fontSize: 48),
-            ),
+            Text(config.emptyStateIcon, style: const TextStyle(fontSize: 48)),
             const SizedBox(height: 12),
             Text(
               config.emptyStateMessage,
@@ -283,8 +278,9 @@ class CourseCard extends StatelessWidget {
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
                   child: _buildCourseImage(),
                 ),
                 // Popular badge
@@ -359,11 +355,7 @@ class CourseCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _getModeIcon(),
-                            size: 12,
-                            color: Colors.white,
-                          ),
+                          Icon(_getModeIcon(), size: 12, color: Colors.white),
                           const SizedBox(width: 4),
                           Text(
                             course.mode!,
@@ -448,8 +440,9 @@ class CourseCard extends StatelessWidget {
                           course.duration!,
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode ? Colors.white70 : Colors.grey[700],
+                            color: isDarkMode
+                                ? Colors.white70
+                                : Colors.grey[700],
                           ),
                         ),
                       ],
@@ -482,11 +475,7 @@ class CourseCard extends StatelessWidget {
                         ),
                       if (course.rating != null) ...[
                         const SizedBox(width: 12),
-                        Icon(
-                          Icons.star,
-                          size: 14,
-                          color: Colors.amber,
-                        ),
+                        const Icon(Icons.star, size: 14, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(
                           course.rating!.toStringAsFixed(1),
@@ -509,8 +498,9 @@ class CourseCard extends StatelessWidget {
                           '${course.enrolledCount} enrolled',
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode ? Colors.white54 : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.white54
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
@@ -530,15 +520,18 @@ class CourseCard extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.white10 : Colors.grey[200],
+                            color: isDarkMode
+                                ? Colors.white10
+                                : Colors.grey[200],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             tag,
                             style: TextStyle(
                               fontSize: 11,
-                              color:
-                                  isDarkMode ? Colors.white54 : Colors.grey[600],
+                              color: isDarkMode
+                                  ? Colors.white54
+                                  : Colors.grey[600],
                             ),
                           ),
                         );
@@ -569,8 +562,9 @@ class CourseCard extends StatelessWidget {
                               '₹${_formatPrice(course.originalPrice!)}',
                               style: TextStyle(
                                 fontSize: 13,
-                                color:
-                                    isDarkMode ? Colors.white38 : Colors.grey,
+                                color: isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey,
                                 decoration: TextDecoration.lineThrough,
                               ),
                             ),

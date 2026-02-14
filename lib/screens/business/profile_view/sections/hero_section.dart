@@ -37,7 +37,11 @@ class HeroSection extends StatelessWidget {
             color: AppColors.blackAlpha(alpha: 0.3),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.arrow_back, color: AppColors.textPrimaryDark, size: 20),
+          child: const Icon(
+            Icons.arrow_back,
+            color: AppColors.textPrimaryDark,
+            size: 20,
+          ),
         ),
         onPressed: onBack ?? () => Navigator.of(context).pop(),
       ),
@@ -49,7 +53,11 @@ class HeroSection extends StatelessWidget {
               color: AppColors.blackAlpha(alpha: 0.3),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.share, color: AppColors.textPrimaryDark, size: 20),
+            child: const Icon(
+              Icons.share,
+              color: AppColors.textPrimaryDark,
+              size: 20,
+            ),
           ),
           onPressed: () => _shareProfile(context),
         ),
@@ -60,7 +68,11 @@ class HeroSection extends StatelessWidget {
               color: AppColors.blackAlpha(alpha: 0.3),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.more_vert, color: AppColors.textPrimaryDark, size: 20),
+            child: const Icon(
+              Icons.more_vert,
+              color: AppColors.textPrimaryDark,
+              size: 20,
+            ),
           ),
           onPressed: () => _showMoreOptions(context),
         ),
@@ -131,10 +143,7 @@ class HeroSection extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            config.primaryColor,
-            config.accentColor,
-          ],
+          colors: [config.primaryColor, config.accentColor],
         ),
       ),
       child: Center(
@@ -225,7 +234,7 @@ class HeroSection extends StatelessWidget {
                         color: AppColors.success,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
@@ -233,7 +242,7 @@ class HeroSection extends StatelessWidget {
                             size: 12,
                             color: AppColors.textPrimaryDark,
                           ),
-                          const SizedBox(width: 2),
+                          SizedBox(width: 2),
                           Text(
                             'Verified',
                             style: TextStyle(
@@ -307,9 +316,13 @@ class HeroSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         if (index < business.rating.floor()) {
-          return Icon(Icons.star, size: 16, color: AppColors.iosYellow);
+          return const Icon(Icons.star, size: 16, color: AppColors.iosYellow);
         } else if (index < business.rating) {
-          return Icon(Icons.star_half, size: 16, color: AppColors.iosYellow);
+          return const Icon(
+            Icons.star_half,
+            size: 16,
+            color: AppColors.iosYellow,
+          );
         } else {
           return Icon(
             Icons.star_border,
@@ -350,11 +363,14 @@ class HeroSection extends StatelessWidget {
 
     // Rating
     if (business.reviewCount > 0) {
-      buffer.writeln('⭐ ${business.formattedRating} (${business.reviewCount} reviews)');
+      buffer.writeln(
+        '⭐ ${business.formattedRating} (${business.reviewCount} reviews)',
+      );
     }
 
     // Address
-    if (business.address != null && business.address!.formattedAddress.isNotEmpty) {
+    if (business.address != null &&
+        business.address!.formattedAddress.isNotEmpty) {
       buffer.writeln('📍 ${business.address!.formattedAddress}');
     }
 
@@ -453,15 +469,22 @@ class HeroSection extends StatelessWidget {
           children: [
             const Text('Why are you reporting this business?'),
             const SizedBox(height: 16),
-            ...['Spam or misleading', 'Inappropriate content', 'Fraud or scam', 'Other'].map((reason) =>
-              ListTile(
+            ...[
+              'Spam or misleading',
+              'Inappropriate content',
+              'Fraud or scam',
+              'Other',
+            ].map(
+              (reason) => ListTile(
                 dense: true,
                 title: Text(reason),
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Report submitted. We\'ll review it shortly.'),
+                      content: Text(
+                        'Report submitted. We\'ll review it shortly.',
+                      ),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -487,7 +510,9 @@ class HeroSection extends StatelessWidget {
       builder: (context) => AlertDialog(
         backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
         title: const Text('Block Business'),
-        content: Text('You will no longer see ${business.businessName} in your feed. You can unblock from settings.'),
+        content: Text(
+          'You will no longer see ${business.businessName} in your feed. You can unblock from settings.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

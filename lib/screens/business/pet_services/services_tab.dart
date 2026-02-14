@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/business_model.dart';
 
-
 /// Pet service categories (industry-standard for Indian pet care market)
 class PetServiceCategories {
   static const List<String> all = [
@@ -197,8 +196,9 @@ class _PetServicesTabState extends State<PetServicesTab> {
               }
 
               final docs = snapshot.data?.docs ?? [];
-              final services =
-                  docs.map((d) => PetServiceModel.fromFirestore(d)).toList();
+              final services = docs
+                  .map((d) => PetServiceModel.fromFirestore(d))
+                  .toList();
 
               final filtered = _selectedCategory == 'All'
                   ? services
@@ -253,8 +253,8 @@ class _PetServicesTabState extends State<PetServicesTab> {
                 color: isSelected
                     ? Colors.white
                     : isDark
-                        ? Colors.white70
-                        : Colors.black87,
+                    ? Colors.white70
+                    : Colors.black87,
                 fontSize: 13,
               ),
               onSelected: (selected) {
@@ -384,10 +384,10 @@ class _PetServicesTabState extends State<PetServicesTab> {
                 children: [
                   Text(
                     '\u{20B9}${service.price.toStringAsFixed(0)}',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFFA855F7),
+                      color: Color(0xFFA855F7),
                     ),
                   ),
                   if (service.priceUnit != null)
@@ -624,8 +624,7 @@ class _PetServicesTabState extends State<PetServicesTab> {
                             item,
                             style: TextStyle(
                               fontSize: 14,
-                              color:
-                                  isDark ? Colors.white70 : Colors.grey[700],
+                              color: isDark ? Colors.white70 : Colors.grey[700],
                             ),
                           ),
                         ),
@@ -684,8 +683,7 @@ class _PetServicesTabState extends State<PetServicesTab> {
                         Navigator.pop(context);
                         await _deleteService(service);
                       },
-                      icon:
-                          const Icon(Icons.delete_outline, size: 18),
+                      icon: const Icon(Icons.delete_outline, size: 18),
                       label: const Text('Delete'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
@@ -965,8 +963,9 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
                         Expanded(
                           flex: 2,
                           child: TextFormField(
-                            initialValue:
-                                _price > 0 ? _price.toStringAsFixed(0) : '',
+                            initialValue: _price > 0
+                                ? _price.toStringAsFixed(0)
+                                : '',
                             decoration: InputDecoration(
                               labelText: 'Price (\u{20B9}) *',
                               prefixIcon: const Icon(Icons.currency_rupee),
@@ -978,10 +977,9 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            validator: (v) =>
-                                (v == null || v.trim().isEmpty)
-                                    ? 'Required'
-                                    : null,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Required'
+                                : null,
                             onSaved: (v) =>
                                 _price = double.tryParse(v ?? '0') ?? 0,
                           ),
@@ -1008,8 +1006,7 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (v) =>
-                                setState(() => _priceUnit = v!),
+                            onChanged: (v) => setState(() => _priceUnit = v!),
                           ),
                         ),
                       ],
@@ -1034,8 +1031,8 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
                                 m < 60
                                     ? '$m min'
                                     : m < 1440
-                                        ? '${m ~/ 60} hr${m >= 120 ? "s" : ""}'
-                                        : '24 hrs (Full Day)',
+                                    ? '${m ~/ 60} hr${m >= 120 ? "s" : ""}'
+                                    : '24 hrs (Full Day)',
                               ),
                             ),
                           )
@@ -1097,8 +1094,11 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle,
-                                  color: Colors.red, size: 22),
+                              icon: const Icon(
+                                Icons.remove_circle,
+                                color: Colors.red,
+                                size: 22,
+                              ),
                               onPressed: () {
                                 setState(() => _includes.removeAt(entry.key));
                               },
@@ -1169,8 +1169,9 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
     setState(() => _saving = true);
 
     try {
-      final filteredIncludes =
-          _includes.where((i) => i.trim().isNotEmpty).toList();
+      final filteredIncludes = _includes
+          .where((i) => i.trim().isNotEmpty)
+          .toList();
 
       final data = {
         'name': _name,
@@ -1202,9 +1203,9 @@ class _PetServiceFormSheetState extends State<_PetServiceFormSheet> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

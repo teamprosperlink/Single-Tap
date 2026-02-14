@@ -18,11 +18,7 @@ class HospitalityDashboardScreen extends StatefulWidget {
   final BusinessModel? business;
   final VoidCallback? onRefresh;
 
-  const HospitalityDashboardScreen({
-    super.key,
-    this.business,
-    this.onRefresh,
-  });
+  const HospitalityDashboardScreen({super.key, this.business, this.onRefresh});
 
   @override
   State<HospitalityDashboardScreen> createState() =>
@@ -76,13 +72,20 @@ class _HospitalityDashboardScreenState
     // Get this week's revenue
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    final weekStartMidnight = DateTime(weekStart.year, weekStart.month, weekStart.day);
+    final weekStartMidnight = DateTime(
+      weekStart.year,
+      weekStart.month,
+      weekStart.day,
+    );
 
     final bookingsSnapshot = await _firestore
         .collection('businesses')
         .doc(widget.business!.id)
         .collection('bookings')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStartMidnight))
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(weekStartMidnight),
+        )
         .get();
 
     double thisWeekRevenue = 0.0;
@@ -101,7 +104,10 @@ class _HospitalityDashboardScreenState
         .collection('businesses')
         .doc(widget.business!.id)
         .collection('bookings')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(lastWeekStart))
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(lastWeekStart),
+        )
         .where('createdAt', isLessThan: Timestamp.fromDate(lastWeekEnd))
         .get();
 
@@ -161,7 +167,10 @@ class _HospitalityDashboardScreenState
         .collection('businesses')
         .doc(widget.business!.id)
         .collection('bookings')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart),
+        )
         .get();
 
     int actionNeeded = 0;
@@ -232,7 +241,7 @@ class _HospitalityDashboardScreenState
                     ),
                   ),
                   if (widget.business?.isVerified == true)
-                    Text(
+                    const Text(
                       'Verified Business',
                       style: TextStyle(
                         color: AppTheme.infoBlue,
@@ -505,10 +514,12 @@ class _HospitalityDashboardScreenState
             isDarkMode: isDarkMode,
           )
         else
-          ..._recentBookings.map((booking) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildBookingCard(booking, isDarkMode),
-              )),
+          ..._recentBookings.map(
+            (booking) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildBookingCard(booking, isDarkMode),
+            ),
+          ),
       ],
     );
   }
@@ -558,11 +569,7 @@ class _HospitalityDashboardScreenState
               color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.person_rounded,
-              color: statusColor,
-              size: 24,
-            ),
+            child: Icon(Icons.person_rounded, color: statusColor, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -588,10 +595,7 @@ class _HospitalityDashboardScreenState
               ],
             ),
           ),
-          AppComponents.statusBadge(
-            text: statusText,
-            color: statusColor,
-          ),
+          AppComponents.statusBadge(text: statusText, color: statusColor),
         ],
       ),
     );

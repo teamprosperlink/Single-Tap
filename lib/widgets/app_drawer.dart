@@ -16,11 +16,14 @@ import '../services/notification_service.dart' show navigatorKey;
 import '../screens/login/onboarding_screen.dart';
 import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
+import '../screens/home/product/my_orders_screen.dart';
+import '../screens/home/main_navigation_screen.dart';
 
 /// ChatGPT-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
   /// Global key to access AppDrawer state for refresh
-  static final GlobalKey<AppDrawerState> globalKey = GlobalKey<AppDrawerState>();
+  static final GlobalKey<AppDrawerState> globalKey =
+      GlobalKey<AppDrawerState>();
 
   final Future<void> Function()? onNewChat;
   final Function(int)? onNavigate;
@@ -147,209 +150,256 @@ class AppDrawerState extends State<AppDrawer> {
         width: size.width * 0.65,
         backgroundColor: Colors.transparent,
         child: ClipRRect(
-        child: Stack(
-          children: [
-            // Background image
-            Positioned.fill(
-              child: Image.asset(
-                'assets/logo/home_background.webp',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration: BoxDecoration(
+          child: Stack(
+            children: [
+              // Background image
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/logo/home_background.webp',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.grey.shade900, Colors.black],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // Blur overlay
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.grey.shade900, Colors.black],
+                        colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
                       ),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
-            ),
 
-            // Blur overlay
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              // Floating particles
+              const Positioned.fill(child: FloatingParticles(particleCount: 8)),
+
+              // Border overlay
+              Positioned.fill(
                 child: Container(
-                  color: Colors.black.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-
-            // Floating particles
-            const Positioned.fill(
-              child: FloatingParticles(particleCount: 8),
-            ),
-
-            // Border overlay
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: Colors.white24, width: 0.5),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: Color(0xFF016CFF), width: 1.5),
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // Main content
-            SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                children: [
-                  // Header with profile and close button
-                  _buildHeader(user),
+              // Main content
+              SafeArea(
+                top: false,
+                bottom: false,
+                child: Column(
+                  children: [
+                    // Header with profile and close button
+                    _buildHeader(user),
 
-                  const Divider(color: Colors.white12, height: 1),
+                    const Divider(color: Colors.white12, height: 1),
 
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
-                  // Feature Cards - Single Column
-                  _buildFeatureCard(
-                    icon: Icons.edit_outlined,
-                    label: 'New Chat',
-                    color: Colors.blue,
-                    onTap: () async {
-                      HapticFeedback.mediumImpact();
-                      // Save conversation first
-                      await widget.onNewChat?.call();
-                      // Refresh chat history
-                      await _loadRecentChats();
-                      // Then close drawer
-                      if (context.mounted) {
+                    // Feature Cards - Single Column
+                    _buildFeatureCard(
+                      icon: Icons.edit_outlined,
+                      label: 'New Chat',
+                      color: Colors.blue,
+                      onTap: () async {
+                        HapticFeedback.mediumImpact();
+                        // Save conversation first
+                        await widget.onNewChat?.call();
+                        // Refresh chat history
+                        await _loadRecentChats();
+                        // Then close drawer
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                    ),
+
+                    _buildFeatureCard(
+                      icon: Icons.image_outlined,
+                      label: 'Downloads',
+                      color: Colors.purple,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
                         Navigator.pop(context);
-                      }
-                    },
-                  ),
-
-                  _buildFeatureCard(
-                    icon: Icons.image_outlined,
-                    label: 'Downloads',
-                    color: Colors.purple,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DownloadsScreen()),
-                      );
-                    },
-                  ),
-
-                  _buildFeatureCard(
-                    icon: Icons.folder_outlined,
-                    label: 'Library',
-                    color: Colors.orange,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LibraryScreen(
-                            onLoadChat: widget.onLoadChat,
-                            onNewChatInProject: widget.onNewChatInProject,
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DownloadsScreen(),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
 
-                  // Chat History expandable card
-                  _buildExpandableFeatureCard(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Chat History',
-                    color: Colors.green,
-                    isExpanded: _showChatHistory,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      setState(() => _showChatHistory = !_showChatHistory);
-                    },
-                  ),
-
-                  // Chat list (shown when expanded)
-                  if (_showChatHistory)
-                    Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.only(left: 12, right: 12, top: 2, bottom: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 1,
+                    _buildFeatureCard(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'My Orders',
+                      color: Colors.teal,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyOrdersScreen(),
                           ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: _recentChats.isEmpty
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Text(
-                                      'No chats yet',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.5),
-                                        fontSize: 14,
+                        ).then((_) {
+                          MainNavigationScreen.scaffoldKey.currentState
+                              ?.openEndDrawer();
+                        });
+                      },
+                    ),
+
+                    _buildFeatureCard(
+                      icon: Icons.folder_outlined,
+                      label: 'Library',
+                      color: Colors.orange,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => LibraryScreen(
+                              onLoadChat: widget.onLoadChat,
+                              onNewChatInProject: widget.onNewChatInProject,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Chat History expandable card
+                    _buildExpandableFeatureCard(
+                      icon: Icons.chat_bubble_outline,
+                      label: 'Chat History',
+                      color: Colors.green,
+                      isExpanded: _showChatHistory,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        setState(() => _showChatHistory = !_showChatHistory);
+                      },
+                    ),
+
+                    // Chat list (shown when expanded)
+                    if (_showChatHistory)
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.only(
+                            left: 12,
+                            right: 12,
+                            top: 2,
+                            bottom: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withValues(alpha: 0.25),
+                                Colors.white.withValues(alpha: 0.15),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: _recentChats.isEmpty
+                                ? Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: Text(
+                                        'No chats yet',
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.5,
+                                          ),
+                                          fontSize: 14,
+                                        ),
                                       ),
                                     ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.only(
+                                      top: 4,
+                                      bottom: 8,
+                                    ),
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(
+                                          parent: BouncingScrollPhysics(),
+                                        ),
+                                    shrinkWrap: false,
+                                    itemCount: _showAllChats
+                                        ? _recentChats.length
+                                        : (_recentChats.length > 10
+                                              ? 11
+                                              : _recentChats.length),
+                                    itemBuilder: (context, index) {
+                                      if (!_showAllChats &&
+                                          index == 10 &&
+                                          _recentChats.length > 10) {
+                                        return _buildShowMoreButton();
+                                      }
+                                      return _buildChatItem(
+                                        _recentChats[index],
+                                      );
+                                    },
                                   ),
-                                )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                                  physics: const AlwaysScrollableScrollPhysics(
-                                    parent: BouncingScrollPhysics(),
-                                  ),
-                                  shrinkWrap: false,
-                                  itemCount: _showAllChats
-                                      ? _recentChats.length
-                                      : (_recentChats.length > 10 ? 11 : _recentChats.length),
-                                  itemBuilder: (context, index) {
-                                    if (!_showAllChats && index == 10 && _recentChats.length > 10) {
-                                      return _buildShowMoreButton();
-                                    }
-                                    return _buildChatItem(_recentChats[index]);
-                                  },
-                                ),
+                          ),
                         ),
-                      ),
-                    )
-                  else
-                    const Spacer(),
+                      )
+                    else
+                      const Spacer(),
 
-                  // Bottom profile button
-                  _buildProfileButton(user),
-                ],
-              ),
-            ),
-
-            // Overlay to close popup when tapping outside
-            if (_showProfileMenu)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() => _showProfileMenu = false);
-                  },
-                  child: Container(
-                    color: Colors.transparent,
-                  ),
+                    // Bottom profile button
+                    _buildProfileButton(user),
+                  ],
                 ),
               ),
 
-            // Profile menu popup
-            if (_showProfileMenu)
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 80,
-                child: _buildProfileMenuCard(user),
-              ),
-          ],
+              // Overlay to close popup when tapping outside
+              if (_showProfileMenu)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _showProfileMenu = false);
+                    },
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+
+              // Profile menu popup
+              if (_showProfileMenu)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 80,
+                  child: _buildProfileMenuCard(user),
+                ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -372,10 +422,17 @@ class AppDrawerState extends State<AppDrawer> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.5),
+            color: Colors.white.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -385,13 +442,9 @@ class AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 20,
-              ),
+              child: Icon(icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 14),
             Text(
@@ -433,12 +486,19 @@ class AppDrawerState extends State<AppDrawer> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isExpanded
                 ? color.withValues(alpha: 0.5)
-                : Colors.white.withValues(alpha: 0.5),
+                : Colors.white.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -448,13 +508,9 @@ class AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 20,
-              ),
+              child: Icon(icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 14),
             Text(
@@ -495,7 +551,6 @@ class AppDrawerState extends State<AppDrawer> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white24, width: 2),
-           
             ),
             child: ClipOval(
               child: _userProfile?['photoUrl'] != null
@@ -553,7 +608,7 @@ class AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
                 Icons.close_rounded,
@@ -587,9 +642,16 @@ class AppDrawerState extends State<AppDrawer> {
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4, right: 2),
+            padding: const EdgeInsets.only(
+              left: 12,
+              top: 4,
+              bottom: 4,
+              right: 2,
+            ),
             decoration: BoxDecoration(
-              color: hasUnread ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+              color: hasUnread
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
@@ -609,7 +671,9 @@ class AppDrawerState extends State<AppDrawer> {
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.85),
                       fontSize: 14,
-                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: hasUnread
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -641,7 +705,8 @@ class AppDrawerState extends State<AppDrawer> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    onSelected: (value) => _handleChatMenuAction(value, chatId, chatName),
+                    onSelected: (value) =>
+                        _handleChatMenuAction(value, chatId, chatName),
                     itemBuilder: (context) {
                       final isPinned = chat['isPinned'] == true;
                       return [
@@ -656,14 +721,11 @@ class AppDrawerState extends State<AppDrawer> {
                           value: 'rename',
                         ),
                         _buildPopupMenuItem(
-                          icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                          icon: isPinned
+                              ? Icons.push_pin
+                              : Icons.push_pin_outlined,
                           label: isPinned ? 'Unpin chat' : 'Pin chat',
                           value: 'pin',
-                        ),
-                        _buildPopupMenuItem(
-                          icon: Icons.folder_outlined,
-                          label: 'Add to Project',
-                          value: 'add_to_project',
                         ),
                         _buildPopupMenuItem(
                           icon: Icons.archive_outlined,
@@ -724,7 +786,11 @@ class AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  void _handleChatMenuAction(String action, String? chatId, String chatName) async {
+  void _handleChatMenuAction(
+    String action,
+    String? chatId,
+    String chatName,
+  ) async {
     if (chatId == null) return;
 
     switch (action) {
@@ -739,10 +805,6 @@ class AppDrawerState extends State<AppDrawer> {
       case 'pin':
         HapticFeedback.lightImpact();
         _togglePinChat(chatId);
-        break;
-      case 'add_to_project':
-        HapticFeedback.lightImpact();
-        _showAddToProjectSheet(chatId, chatName);
         break;
       case 'archive':
         HapticFeedback.lightImpact();
@@ -801,7 +863,9 @@ class AppDrawerState extends State<AppDrawer> {
     try {
       // Find the chat in current list to check pin status
       final chatIndex = _recentChats.indexWhere((c) => c['id'] == chatId);
-      final isPinned = chatIndex >= 0 ? (_recentChats[chatIndex]['isPinned'] ?? false) : false;
+      final isPinned = chatIndex >= 0
+          ? (_recentChats[chatIndex]['isPinned'] ?? false)
+          : false;
 
       await _firestore.collection('chat_history').doc(chatId).update({
         'isPinned': !isPinned,
@@ -817,7 +881,9 @@ class AppDrawerState extends State<AppDrawer> {
             duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -842,7 +908,9 @@ class AppDrawerState extends State<AppDrawer> {
             duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             action: SnackBarAction(
               label: 'Undo',
               textColor: Colors.white,
@@ -908,10 +976,7 @@ class AppDrawerState extends State<AppDrawer> {
               }
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
-            child: const Text(
-              'Save',
-              style: TextStyle(color: Colors.blue),
-            ),
+            child: const Text('Save', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -948,145 +1013,11 @@ class AppDrawerState extends State<AppDrawer> {
               await _loadRecentChats();
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _showAddToProjectSheet(String chatId, String chatName) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final snapshot = await _firestore
-          .collection('projects')
-          .where('userId', isEqualTo: user.uid)
-          .limit(50)
-          .get();
-
-      final projects = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'name': data['name'] ?? 'Untitled',
-          'color': data['color'] ?? 0xFF6C63FF,
-          'icon': data['icon'] ?? 'folder',
-          'chatIds': List<String>.from(data['chatIds'] ?? []),
-        };
-      }).toList();
-
-      if (!mounted) return;
-
-      if (projects.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('No projects yet. Create one from Library first.'),
-            backgroundColor: Colors.orange.shade700,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        return;
-      }
-
-      await showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E1E2E),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(
-                  'Add "$chatName" to project',
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const Divider(color: Colors.white12, height: 1),
-              ...projects.map((project) {
-                final alreadyAdded = (project['chatIds'] as List<String>).contains(chatId);
-                final color = Color(project['color'] as int);
-                return ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.folder_outlined,
-                      color: color,
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    project['name'] as String,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                  ),
-                  trailing: alreadyAdded
-                      ? Icon(Icons.check_circle, color: Colors.green.withValues(alpha: 0.7), size: 22)
-                      : Icon(Icons.add_circle_outline, color: Colors.white.withValues(alpha: 0.3), size: 22),
-                  onTap: alreadyAdded
-                      ? null
-                      : () async {
-                          Navigator.pop(ctx);
-                          try {
-                            final chatIds = List<String>.from(project['chatIds'] as List<String>);
-                            chatIds.add(chatId);
-                            await _firestore.collection('projects').doc(project['id'] as String).update({
-                              'chatIds': chatIds,
-                              'updatedAt': FieldValue.serverTimestamp(),
-                            });
-                            await _firestore.collection('chat_history').doc(chatId).update({
-                              'projectId': project['id'],
-                            });
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Added to "${project['name']}"'),
-                                  backgroundColor: Colors.green,
-                                  behavior: SnackBarBehavior.floating,
-                                  margin: const EdgeInsets.all(16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            debugPrint('Error adding chat to project: $e');
-                          }
-                        },
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error loading projects: $e');
-    }
   }
 
   Widget _buildShowMoreButton() {
@@ -1138,7 +1069,9 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ProfileWithHistoryScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const ProfileWithHistoryScreen(),
+                ),
               );
             },
             child: Container(
@@ -1213,9 +1146,19 @@ class AppDrawerState extends State<AppDrawer> {
   Widget _buildProfileMenuCard(User? user) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.5),
@@ -1239,7 +1182,9 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ProfileWithHistoryScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const ProfileWithHistoryScreen(),
+                ),
               );
             },
           ),
@@ -1267,7 +1212,9 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PersonalizationScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const PersonalizationScreen(),
+                ),
               );
             },
           ),

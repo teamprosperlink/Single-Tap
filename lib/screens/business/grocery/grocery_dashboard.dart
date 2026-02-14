@@ -11,10 +11,7 @@ import '../retail/product_category_screen.dart';
 class GroceryDashboard extends StatefulWidget {
   final String businessId;
 
-  const GroceryDashboard({
-    super.key,
-    required this.businessId,
-  });
+  const GroceryDashboard({super.key, required this.businessId});
 
   @override
   State<GroceryDashboard> createState() => _GroceryDashboardState();
@@ -84,9 +81,12 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
           .collection('businesses')
           .doc(widget.businessId)
           .collection('orders')
-          .where('createdAt', isGreaterThan: Timestamp.fromDate(
-            DateTime(now.year, now.month, now.day),
-          ))
+          .where(
+            'createdAt',
+            isGreaterThan: Timestamp.fromDate(
+              DateTime(now.year, now.month, now.day),
+            ),
+          )
           .get();
 
       final todayOrders = ordersSnapshot.docs.length;
@@ -152,9 +152,9 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
             const SizedBox(height: 8),
             Text(
               'Real-time inventory and sales overview',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
 
@@ -221,13 +221,12 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.today, color: const Color(0xFF10B981)),
+                      const Icon(Icons.today, color: Color(0xFF10B981)),
                       const SizedBox(width: 8),
                       Text(
                         'Today\'s Performance',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -257,9 +256,9 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
             // Quick Actions
             Text(
               'Quick Actions',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -313,7 +312,9 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: onTap != null ? Border.all(color: color.withValues(alpha: 0.3)) : null,
+          border: onTap != null
+              ? Border.all(color: color.withValues(alpha: 0.3))
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -363,10 +364,7 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
               ),
             ],
           ],
@@ -393,13 +391,7 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -415,10 +407,7 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
       label: Text(label),
       onPressed: onTap,
       backgroundColor: color.withValues(alpha: 0.1),
-      labelStyle: TextStyle(
-        color: color,
-        fontWeight: FontWeight.w600,
-      ),
+      labelStyle: TextStyle(color: color, fontWeight: FontWeight.w600),
       side: BorderSide(color: color.withValues(alpha: 0.3)),
     );
   }
@@ -464,7 +453,10 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                   final minStock = data['minStock'] as num? ?? 5;
                   return Card(
                     child: ListTile(
-                      leading: const Icon(Icons.warning_amber, color: Colors.orange),
+                      leading: const Icon(
+                        Icons.warning_amber,
+                        color: Colors.orange,
+                      ),
                       title: Text(name),
                       subtitle: Text('Stock: $stock / Min: $minStock'),
                       trailing: Icon(
@@ -500,7 +492,10 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                 .collection('businesses')
                 .doc(widget.businessId)
                 .collection('products')
-                .where('expiryDate', isLessThanOrEqualTo: Timestamp.fromDate(weekFromNow))
+                .where(
+                  'expiryDate',
+                  isLessThanOrEqualTo: Timestamp.fromDate(weekFromNow),
+                )
                 .orderBy('expiryDate')
                 .snapshots(),
             builder: (context, snapshot) {
@@ -517,8 +512,10 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
                   final name = data['name'] as String? ?? 'Unnamed';
-                  final expiryDate = (data['expiryDate'] as Timestamp?)?.toDate();
-                  final isExpired = expiryDate != null && expiryDate.isBefore(DateTime.now());
+                  final expiryDate = (data['expiryDate'] as Timestamp?)
+                      ?.toDate();
+                  final isExpired =
+                      expiryDate != null && expiryDate.isBefore(DateTime.now());
                   return Card(
                     child: ListTile(
                       leading: Icon(
@@ -532,7 +529,14 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                             : 'No expiry date',
                       ),
                       trailing: isExpired
-                          ? const Chip(label: Text('Expired'), backgroundColor: Colors.red, labelStyle: TextStyle(color: Colors.white, fontSize: 11))
+                          ? const Chip(
+                              label: Text('Expired'),
+                              backgroundColor: Colors.red,
+                              labelStyle: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
+                            )
                           : null,
                     ),
                   );
@@ -595,12 +599,17 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                   final total = data['total'] as num? ?? 0;
                   final status = data['status'] as String? ?? 'pending';
                   final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-                  final customerName = data['customerName'] as String? ?? 'Customer';
+                  final customerName =
+                      data['customerName'] as String? ?? 'Customer';
                   return Card(
                     child: ListTile(
                       leading: Icon(
-                        status == 'completed' ? Icons.check_circle : Icons.receipt_long,
-                        color: status == 'completed' ? Colors.green : const Color(0xFF3B82F6),
+                        status == 'completed'
+                            ? Icons.check_circle
+                            : Icons.receipt_long,
+                        color: status == 'completed'
+                            ? Colors.green
+                            : const Color(0xFF3B82F6),
                       ),
                       title: Text(customerName),
                       subtitle: Text(
@@ -610,7 +619,10 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
                       ),
                       trailing: Text(
                         '\$${total.toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   );
@@ -628,9 +640,7 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProductCategoryScreen(
-          businessId: widget.businessId,
-        ),
+        builder: (_) => ProductCategoryScreen(businessId: widget.businessId),
       ),
     );
   }
@@ -638,7 +648,9 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
   void _printPriceTags(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Price tag printing will be available in a future update.'),
+        content: Text(
+          'Price tag printing will be available in a future update.',
+        ),
         backgroundColor: Color(0xFFF59E0B),
       ),
     );

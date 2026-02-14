@@ -10,7 +10,6 @@ import '../../services/location services/location_service.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 import 'package:share_plus/share_plus.dart';
 import '../profile/settings_screen.dart';
 import '../profile/profile_edit_screen.dart';
@@ -395,11 +394,11 @@ class _ProfileWithHistoryScreenState
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: Colors.white,
                     width: 1,
                   ),
                 ),
@@ -434,28 +433,18 @@ class _ProfileWithHistoryScreenState
       ),
       body: Stack(
         children: [
-          // Background Image (same as Feed screen)
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
+          // Gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromRGBO(64, 64, 64, 1),
+                  Color.fromRGBO(0, 0, 0, 1),
+                ],
+              ),
             ),
-          ),
-
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: 0.6)),
           ),
 
           _isLoading
@@ -491,10 +480,17 @@ class _ProfileWithHistoryScreenState
                             width: double.infinity,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                             child: ClipRRect(
@@ -659,10 +655,17 @@ class _ProfileWithHistoryScreenState
                             width: double.infinity,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                             child: ListTile(
@@ -715,10 +718,17 @@ class _ProfileWithHistoryScreenState
                             width: double.infinity,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                             child: ListTile(
@@ -768,10 +778,17 @@ class _ProfileWithHistoryScreenState
                               width: double.infinity,
                               margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.05),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.25),
+                                    Colors.white.withValues(alpha: 0.15),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.1),
+                                  color: Colors.white.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Builder(
@@ -855,10 +872,17 @@ class _ProfileWithHistoryScreenState
                             width: double.infinity,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                             child: ListTile(
@@ -911,10 +935,17 @@ class _ProfileWithHistoryScreenState
                             width: double.infinity,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                             child: ListTile(

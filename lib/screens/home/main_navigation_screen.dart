@@ -11,7 +11,7 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 // Screens used in navigation
 import 'home_screen.dart';
 import 'live_connect_tab_screen.dart';
-import 'feed_screen.dart';
+import 'near_by_screen.dart';
 import 'conversations_screen.dart';
 
 // Professional & Business screens
@@ -35,7 +35,8 @@ class MainNavigationScreen extends StatefulWidget {
   final String? loginAccountType; // Account type from login screen
 
   // Static GlobalKey for Scaffold to open drawer from external screens
-  static final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+  static final GlobalKey<ScaffoldState> scaffoldKey =
+      GlobalKey<ScaffoldState>();
 
   const MainNavigationScreen({
     super.key,
@@ -61,7 +62,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final LocationService _location = LocationService();
-
 
   static const String _screenIndexKey = 'last_screen_index';
 
@@ -111,16 +111,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   // Convert main index to tab index (0-3)
   int _convertToTabIndex(int mainIndex) {
     switch (mainIndex) {
-      case 4:
-        return 0; // Nearby (Feed)
       case 0:
-        return 1; // Home
+        return 0; // Home
       case 1:
-        return 2; // Chat
+        return 1; // Chat
+      case 4:
+        return 2; // Nearby
       case 2:
         return 3; // Networking
       default:
-        return 1;
+        return 0;
     }
   }
 
@@ -128,11 +128,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   int _convertFromTabIndex(int tabIndex) {
     switch (tabIndex) {
       case 0:
-        return 4; // Nearby (Feed)
-      case 1:
         return 0; // Home
-      case 2:
+      case 1:
         return 1; // Chat
+      case 2:
+        return 4; // Nearby
       case 3:
         return 2; // Networking
       default:
@@ -855,27 +855,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
   Widget _buildScreen() {
     switch (_currentIndex) {
-      case 0:
-        return HomeScreen(key: HomeScreen.globalKey);
-      case 1:
-        return const ConversationsScreen(); // Chat/Messages screen
-      case 2:
-        return const LiveConnectTabScreen(
-          activateNetworkingFilter: true,
-        ); // Networking with professional filters
-      case 4:
-        return FeedScreen(
-          // Nearby - Feed Screen
-          onBack: () {
-            setState(() => _currentIndex = 0);
-          },
-        );
       case 5:
         return const ProfessionalDashboardScreen();
       case 6:
         return const BusinessMainScreen();
       default:
-        return HomeScreen(key: HomeScreen.globalKey);
+        return const SizedBox.shrink();
     }
   }
 
@@ -919,12 +904,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildNavItem(
-                      icon: Icons.explore,
-                      label: 'Nearby',
-                      index: 4,
-                      isActive: _currentIndex == 4,
-                    ),
-                    _buildNavItem(
                       icon: Icons.home,
                       label: 'Home',
                       index: 0,
@@ -935,6 +914,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       label: 'Chat',
                       index: 1,
                       isActive: _currentIndex == 1,
+                    ),
+                    _buildNavItem(
+                      icon: Icons.explore,
+                      label: 'Nearby',
+                      index: 4,
+                      isActive: _currentIndex == 4,
                     ),
                     _buildNavItem(
                       icon: Icons.business_center,
@@ -971,7 +956,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       return Scaffold(
         extendBody: true,
         backgroundColor: Colors.transparent,
-        body: FeedScreen(
+        body: NearByScreen(
           onBack: () {
             setState(() {
               _currentIndex = 0;
@@ -1026,7 +1011,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           padding: EdgeInsets.only(left: 16),
           child: Center(
             child: Text(
-              'Single Tap',
+              'SingleTap',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -1098,7 +1083,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             left: 0,
             top: 0,
             height: size.height - 100,
-            width: 100,
+            width: 20,
             child: _SwipeDetector(
               onSwipeRight: () {
                 HapticFeedback.mediumImpact();
@@ -1176,7 +1161,7 @@ class _SwipeDetectorState extends State<_SwipeDetector> {
   @override
   Widget build(BuildContext context) {
     return Listener(
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       onPointerDown: (event) {
         _startX = event.position.dx;
         _hasTriggered = false;

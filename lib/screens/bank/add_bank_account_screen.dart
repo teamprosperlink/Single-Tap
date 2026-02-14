@@ -6,11 +6,7 @@ class AddBankAccountScreen extends StatefulWidget {
   final BankAccountModel? existingAccount;
   final Function(BankAccountModel)? onSave;
 
-  const AddBankAccountScreen({
-    super.key,
-    this.existingAccount,
-    this.onSave,
-  });
+  const AddBankAccountScreen({super.key, this.existingAccount, this.onSave});
 
   @override
   State<AddBankAccountScreen> createState() => _AddBankAccountScreenState();
@@ -121,7 +117,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
           content: const Text('Account numbers do not match'),
           backgroundColor: Colors.red[400],
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -194,7 +192,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF5F5F7),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0F)
+          : const Color(0xFFF5F5F7),
       body: CustomScrollView(
         slivers: [
           // Custom App Bar
@@ -206,7 +206,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
+                  color: isDark
+                      ? Colors.white.withAlpha(20)
+                      : Colors.black.withAlpha(10),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -218,7 +220,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              widget.existingAccount != null ? 'Edit Bank Account' : 'Add Bank Account',
+              widget.existingAccount != null
+                  ? 'Edit Bank Account'
+                  : 'Add Bank Account',
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black,
                 fontWeight: FontWeight.w600,
@@ -301,7 +305,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
                           color: isDark ? Colors.white54 : Colors.black45,
                         ),
                         onPressed: () {
-                          setState(() => _showAccountNumber = !_showAccountNumber);
+                          setState(
+                            () => _showAccountNumber = !_showAccountNumber,
+                          );
                         },
                       ),
                       validator: (value) {
@@ -372,7 +378,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
                             },
                             inputFormatters: [
                               LengthLimitingTextInputFormatter(11),
-                              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[A-Za-z0-9]'),
+                              ),
                             ],
                             onChanged: (_) => setState(() {}),
                           ),
@@ -388,7 +396,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
                             textCapitalization: TextCapitalization.characters,
                             inputFormatters: [
                               LengthLimitingTextInputFormatter(11),
-                              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[A-Za-z0-9]'),
+                              ),
                             ],
                           ),
                         ),
@@ -596,20 +606,23 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
               onTap: () => setState(() => _selectedAccountType = type),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? const Color(0xFF0A84FF)
                       : isDark
-                          ? Colors.white.withAlpha(15)
-                          : Colors.black.withAlpha(8),
+                      ? Colors.white.withAlpha(15)
+                      : Colors.black.withAlpha(8),
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(
                     color: isSelected
                         ? const Color(0xFF0A84FF)
                         : isDark
-                            ? Colors.white.withAlpha(30)
-                            : Colors.black.withAlpha(15),
+                        ? Colors.white.withAlpha(30)
+                        : Colors.black.withAlpha(15),
                     width: 1.5,
                   ),
                 ),
@@ -619,8 +632,8 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
                     color: isSelected
                         ? Colors.white
                         : isDark
-                            ? Colors.white70
-                            : Colors.black54,
+                        ? Colors.white70
+                        : Colors.black54,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                     fontSize: 14,
                   ),
@@ -682,33 +695,30 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
             ),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: isDark
-                ? Colors.white.withAlpha(10)
-                : Colors.white,
+            fillColor: isDark ? Colors.white.withAlpha(10) : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: isDark ? Colors.white.withAlpha(30) : Colors.black.withAlpha(10),
+                color: isDark
+                    ? Colors.white.withAlpha(30)
+                    : Colors.black.withAlpha(10),
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(8),
+                color: isDark
+                    ? Colors.white.withAlpha(20)
+                    : Colors.black.withAlpha(8),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFF0A84FF),
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: Color(0xFF0A84FF), width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFFF3B30),
-              ),
+              borderSide: const BorderSide(color: Color(0xFFFF3B30)),
             ),
             labelStyle: TextStyle(
               color: isDark ? Colors.white54 : Colors.black45,
@@ -733,7 +743,9 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
         color: isDark ? Colors.white.withAlpha(10) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(8),
+          color: isDark
+              ? Colors.white.withAlpha(20)
+              : Colors.black.withAlpha(8),
         ),
       ),
       child: Row(
@@ -744,8 +756,8 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
               color: _isPrimary
                   ? const Color(0xFF34C759).withAlpha(30)
                   : isDark
-                      ? Colors.white.withAlpha(15)
-                      : const Color(0xFF0A84FF).withAlpha(20),
+                  ? Colors.white.withAlpha(15)
+                  : const Color(0xFF0A84FF).withAlpha(20),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -753,8 +765,8 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
               color: _isPrimary
                   ? const Color(0xFF34C759)
                   : isDark
-                      ? Colors.white60
-                      : const Color(0xFF0A84FF),
+                  ? Colors.white60
+                  : const Color(0xFF0A84FF),
             ),
           ),
           const SizedBox(width: 16),
@@ -792,7 +804,8 @@ class _AddBankAccountScreenState extends State<AddBankAccountScreen>
   }
 
   Widget _buildSaveButton(bool isDark) {
-    final isValid = _accountHolderController.text.isNotEmpty &&
+    final isValid =
+        _accountHolderController.text.isNotEmpty &&
         _bankNameController.text.isNotEmpty &&
         _accountNumberController.text.isNotEmpty &&
         _confirmAccountController.text.isNotEmpty &&
@@ -910,13 +923,10 @@ class _SuccessDialogState extends State<_SuccessDialog>
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFF34C759),
-                      const Color(0xFF30D158),
-                    ],
+                    colors: [Color(0xFF34C759), Color(0xFF30D158)],
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -973,10 +983,7 @@ class _SuccessDialogState extends State<_SuccessDialog>
                 ),
                 child: const Text(
                   'Done',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -1013,17 +1020,11 @@ class _CheckPainter extends CustomPainter {
 
     if (progress <= 0.5) {
       final t = progress * 2;
-      path.lineTo(
-        startX + (midX - startX) * t,
-        startY + (midY - startY) * t,
-      );
+      path.lineTo(startX + (midX - startX) * t, startY + (midY - startY) * t);
     } else {
       path.lineTo(midX, midY);
       final t = (progress - 0.5) * 2;
-      path.lineTo(
-        midX + (endX - midX) * t,
-        midY + (endY - midY) * t,
-      );
+      path.lineTo(midX + (endX - midX) * t, midY + (endY - midY) * t);
     }
 
     canvas.drawPath(path, paint);

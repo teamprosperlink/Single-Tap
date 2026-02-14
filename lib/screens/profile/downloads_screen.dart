@@ -27,10 +27,36 @@ class _DownloadsScreenState extends State<DownloadsScreen>
   bool _isSelectMode = false;
   final Set<String> _selectedPaths = {};
 
-  static const _imageExtensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif'};
+  static const _imageExtensions = {
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+    '.gif',
+    '.heic',
+    '.heif',
+  };
   static const _videoExtensions = {'.mp4', '.mov', '.avi', '.mkv'};
-  static const _audioExtensions = {'.m4a', '.aac', '.mp3', '.wav', '.ogg', '.wma', '.flac'};
-  static const _docExtensions = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv'};
+  static const _audioExtensions = {
+    '.m4a',
+    '.aac',
+    '.mp3',
+    '.wav',
+    '.ogg',
+    '.wma',
+    '.flac',
+  };
+  static const _docExtensions = {
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx',
+    '.ppt',
+    '.pptx',
+    '.txt',
+    '.csv',
+  };
 
   @override
   void initState() {
@@ -57,15 +83,16 @@ class _DownloadsScreenState extends State<DownloadsScreen>
       }
 
       final dirs = await _getDownloadsDirectories();
-      final allFiles = <FileSystemEntity>[];
-      final demoDirPath = await _getDemoDirPath();
+      final allFiles = <File>[];
 
       for (final dir in dirs) {
         if (!dir.existsSync()) continue;
         try {
-          final files = dir.listSync(recursive: true).where((entity) {
-            if (entity is! File) return false;
-            final ext = entity.path.split('.').last.toLowerCase();
+          final files = dir.listSync(recursive: false).whereType<File>().where((file) {
+            final fileName = file.path.split(Platform.pathSeparator).last;
+            // Only show files downloaded from chat (plink_ prefix)
+            if (!fileName.startsWith('plink_')) return false;
+            final ext = fileName.split('.').last.toLowerCase();
             return _imageExtensions.contains('.$ext') ||
                 _videoExtensions.contains('.$ext') ||
                 _audioExtensions.contains('.$ext') ||
@@ -74,25 +101,6 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           allFiles.addAll(files);
         } catch (e) {
           debugPrint('Error scanning ${dir.path}: $e');
-        }
-      }
-
-      // Separate real files from demo files
-      final realFiles = allFiles.where((f) => !f.path.contains(demoDirPath)).toList();
-
-      if (realFiles.isNotEmpty) {
-        // Real data exists — auto-delete demo folder and use only real files
-        await _deleteDemoDirectory();
-        allFiles
-          ..clear()
-          ..addAll(realFiles);
-      } else {
-        // No real data — show demo files
-        final demoFiles = await _createDemoFiles();
-        for (final df in demoFiles) {
-          if (!allFiles.any((f) => f.path == df.path)) {
-            allFiles.add(df);
-          }
         }
       }
 
@@ -112,8 +120,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
       final audios = <File>[];
       final docs = <File>[];
 
-      for (final entity in allFiles) {
-        final file = entity as File;
+      for (final file in allFiles) {
         if (_isDoc(file.path)) {
           docs.add(file);
         } else if (_isAudio(file.path)) {
@@ -144,117 +151,6 @@ class _DownloadsScreenState extends State<DownloadsScreen>
     }
   }
 
-  /// Creates demo files for layout testing - REMOVE IN PRODUCTION
-  Future<List<File>> _createDemoFiles() async {
-    final demoFiles = <File>[];
-    try {
-      final tempDir = await getApplicationDocumentsDirectory();
-      final demoDir = Directory('${tempDir.path}/plink_demo');
-      if (!demoDir.existsSync()) {
-        demoDir.createSync(recursive: true);
-      }
-
-      final jpegBytes = [
-        0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00,
-        0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB,
-        0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07,
-        0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B,
-        0x0B, 0x0C, 0x19, 0x12, 0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E,
-        0x1D, 0x1A, 0x1C, 0x1C, 0x20, 0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C,
-        0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29, 0x2C, 0x30, 0x31, 0x34, 0x34,
-        0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32, 0x3C, 0x2E, 0x33, 0x34,
-        0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01,
-        0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x1F, 0x00, 0x00, 0x01, 0x05,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-        0x09, 0x0A, 0x0B, 0xFF, 0xC4, 0x00, 0xB5, 0x10, 0x00, 0x02, 0x01,
-        0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00,
-        0x01, 0x7D, 0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21,
-        0x31, 0x41, 0x06, 0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32,
-        0x81, 0x91, 0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1,
-        0xF0, 0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18,
-        0x19, 0x1A, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x34, 0x35, 0x36,
-        0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
-        0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64,
-        0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77,
-        0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A,
-        0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3,
-        0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5,
-        0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
-        0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9,
-        0xDA, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA,
-        0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFF,
-        0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0x7B, 0x94,
-        0x11, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xD9,
-      ];
-      final dummyBytes = [0x00, 0x00, 0x00, 0x20];
-
-      for (int i = 1; i <= 6; i++) {
-        final file = File('${demoDir.path}/plink_photo_$i.jpg');
-        if (!file.existsSync()) await file.writeAsBytes(jpegBytes);
-        demoFiles.add(file);
-      }
-
-      for (int i = 1; i <= 6; i++) {
-        final file = File('${demoDir.path}/plink_video_$i.mp4');
-        if (!file.existsSync()) await file.writeAsBytes(dummyBytes);
-        demoFiles.add(file);
-      }
-
-      final audioNames = [
-        'voice_message_01.m4a',
-        'voice_note_02.m4a',
-        'audio_clip_03.mp3',
-        'recording_04.aac',
-        'voice_msg_05.m4a',
-        'audio_note_06.wav',
-      ];
-      for (final name in audioNames) {
-        final file = File('${demoDir.path}/$name');
-        if (!file.existsSync()) await file.writeAsBytes(dummyBytes);
-        demoFiles.add(file);
-      }
-
-      final docNames = [
-        'project_report.pdf',
-        'meeting_notes.pdf',
-        'invoice_2024.pdf',
-        'resume_final.doc',
-        'budget_sheet.xlsx',
-        'presentation.pptx',
-      ];
-      for (final name in docNames) {
-        final file = File('${demoDir.path}/$name');
-        if (!file.existsSync()) await file.writeAsBytes(dummyBytes);
-        demoFiles.add(file);
-      }
-
-      // Only add files that still exist
-      demoFiles.removeWhere((f) => !f.existsSync());
-    } catch (e) {
-      debugPrint('Error creating demo files: $e');
-    }
-    return demoFiles;
-  }
-
-  Future<String> _getDemoDirPath() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    return '${appDir.path}/plink_demo';
-  }
-
-  Future<void> _deleteDemoDirectory() async {
-    try {
-      final path = await _getDemoDirPath();
-      final demoDir = Directory(path);
-      if (demoDir.existsSync()) {
-        await demoDir.delete(recursive: true);
-        debugPrint('Demo directory deleted — real data found');
-      }
-    } catch (e) {
-      debugPrint('Error deleting demo directory: $e');
-    }
-  }
-
   Future<List<Directory>> _getDownloadsDirectories() async {
     final dirs = <Directory>[];
 
@@ -262,17 +158,13 @@ class _DownloadsScreenState extends State<DownloadsScreen>
       dirs.add(Directory('/storage/emulated/0/Pictures/Plink'));
     }
 
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      if (Platform.isIOS) {
+    if (Platform.isIOS) {
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
         dirs.add(appDir);
+      } catch (e) {
+        debugPrint('Error getting app directory: $e');
       }
-      final mediaDir = Directory('${appDir.path}/media');
-      dirs.add(mediaDir);
-      final demoDir = Directory('${appDir.path}/plink_demo');
-      dirs.add(demoDir);
-    } catch (e) {
-      debugPrint('Error getting app directory: $e');
     }
 
     return dirs;
@@ -368,7 +260,10 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -408,7 +303,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             backgroundColor: failed == 0 ? Colors.green : Colors.orange,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -420,9 +317,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
   void _openImage(File file) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => _FullScreenImageViewer(file: file),
-      ),
+      MaterialPageRoute(builder: (_) => _FullScreenImageViewer(file: file)),
     );
   }
 
@@ -430,10 +325,8 @@ class _DownloadsScreenState extends State<DownloadsScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(
-          videoUrl: file.path,
-          isLocalFile: true,
-        ),
+        builder: (_) =>
+            VideoPlayerScreen(videoUrl: file.path, isLocalFile: true),
       ),
     );
   }
@@ -483,7 +376,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         title: Row(
           children: [
             Icon(
-              ext == 'PDF' ? Icons.picture_as_pdf_rounded : Icons.description_rounded,
+              ext == 'PDF'
+                  ? Icons.picture_as_pdf_rounded
+                  : Icons.description_rounded,
               color: ext == 'PDF' ? Colors.redAccent : Colors.white70,
             ),
             const SizedBox(width: 8),
@@ -533,11 +428,11 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: Colors.white,
                     width: 1,
                   ),
                 ),
@@ -552,12 +447,16 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             onPressed: _exitSelectMode,
                           )
                         : IconButton(
-                            icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                            icon: const Icon(
+                              Icons.arrow_back_ios,
+                              color: Colors.white,
+                            ),
                             onPressed: () {
                               HapticFeedback.lightImpact();
                               Navigator.pop(context);
                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                                MainNavigationScreen.scaffoldKey.currentState
+                                    ?.openEndDrawer();
                               });
                             },
                           ),
@@ -628,31 +527,16 @@ class _DownloadsScreenState extends State<DownloadsScreen>
       ),
       body: Stack(
         children: [
-          // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Blur overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
+          // Gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromRGBO(64, 64, 64, 1),
+                  Color.fromRGBO(0, 0, 0, 1),
+                ],
               ),
             ),
           ),
@@ -679,9 +563,14 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                       // Bottom bar for multi-select delete
                       if (_isSelectMode && _selectedPaths.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1a1a2e).withValues(alpha: 0.95),
+                            color: const Color(
+                              0xFF1a1a2e,
+                            ).withValues(alpha: 0.95),
                             border: Border(
                               top: BorderSide(
                                 color: Colors.white.withValues(alpha: 0.1),
@@ -702,15 +591,23 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                                 const Spacer(),
                                 ElevatedButton.icon(
                                   onPressed: _deleteSelectedFiles,
-                                  icon: const Icon(Icons.delete_outline, size: 18),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
                                   label: const Text('Delete'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red.withValues(alpha: 0.8),
+                                    backgroundColor: Colors.red.withValues(
+                                      alpha: 0.8,
+                                    ),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 10,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -748,7 +645,12 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         itemCount: files.length,
         itemBuilder: (context, index) {
           final file = files[index];
-          return _buildGridItem(file, type == 'video', type == 'audio', type == 'doc');
+          return _buildGridItem(
+            file,
+            type == 'video',
+            type == 'audio',
+            type == 'doc',
+          );
         },
       ),
     );
@@ -868,10 +770,10 @@ class _DownloadsScreenState extends State<DownloadsScreen>
               isDoc
                   ? _buildDocTile(file)
                   : isAudio
-                      ? _buildAudioTile(file)
-                      : isVideo
-                          ? _buildVideoTile()
-                          : _buildImageTile(file),
+                  ? _buildAudioTile(file)
+                  : isVideo
+                  ? _buildVideoTile()
+                  : _buildImageTile(file),
               // Selection overlay
               if (_isSelectMode)
                 Positioned(
@@ -960,7 +862,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: (isPdf ? Colors.redAccent : Colors.blueAccent).withValues(alpha: 0.15),
+              color: (isPdf ? Colors.redAccent : Colors.blueAccent).withValues(
+                alpha: 0.15,
+              ),
               shape: BoxShape.circle,
             ),
             child: Icon(

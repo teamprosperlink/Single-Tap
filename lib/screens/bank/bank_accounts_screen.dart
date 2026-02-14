@@ -40,10 +40,12 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
 
   void _addBankAccount(BankAccountModel account) {
     setState(() {
-      _bankAccounts.add(account.copyWith(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: 'current_user_id',
-      ));
+      _bankAccounts.add(
+        account.copyWith(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          userId: 'current_user_id',
+        ),
+      );
     });
   }
 
@@ -55,7 +57,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
           setState(() {
             _bankAccounts.removeAt(index);
             if (_selectedCardIndex >= _bankAccounts.length) {
-              _selectedCardIndex = _bankAccounts.isEmpty ? 0 : _bankAccounts.length - 1;
+              _selectedCardIndex = _bankAccounts.isEmpty
+                  ? 0
+                  : _bankAccounts.length - 1;
             }
           });
           Navigator.pop(context);
@@ -85,7 +89,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF5F5F7),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0F)
+          : const Color(0xFFF5F5F7),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
         elevation: 0,
@@ -93,7 +99,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
+              color: isDark
+                  ? Colors.white.withAlpha(20)
+                  : Colors.black.withAlpha(10),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -117,7 +125,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
+                color: isDark
+                    ? Colors.white.withAlpha(20)
+                    : Colors.black.withAlpha(10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -138,7 +148,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
             child: Container(
               height: 48,
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withAlpha(10) : Colors.black.withAlpha(8),
+                color: isDark
+                    ? Colors.white.withAlpha(10)
+                    : Colors.black.withAlpha(8),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TabBar(
@@ -175,10 +187,7 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _buildBankAccountsTab(isDark),
-                _buildUpiTab(isDark),
-              ],
+              children: [_buildBankAccountsTab(isDark), _buildUpiTab(isDark)],
             ),
           ),
         ],
@@ -199,12 +208,16 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
           child: PageView.builder(
             itemCount: _bankAccounts.length,
             controller: PageController(viewportFraction: 0.9),
-            onPageChanged: (index) => setState(() => _selectedCardIndex = index),
+            onPageChanged: (index) =>
+                setState(() => _selectedCardIndex = index),
             itemBuilder: (context, index) {
               final account = _bankAccounts[index];
               final gradient = _cardGradients[index % _cardGradients.length];
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 20,
+                ),
                 child: _buildBankCard(account, gradient, index, isDark),
               );
             },
@@ -225,8 +238,8 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                 color: _selectedCardIndex == index
                     ? const Color(0xFF0A84FF)
                     : isDark
-                        ? Colors.white.withAlpha(30)
-                        : Colors.black.withAlpha(20),
+                    ? Colors.white.withAlpha(30)
+                    : Colors.black.withAlpha(20),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -245,7 +258,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                 color: isDark ? Colors.white.withAlpha(8) : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8),
+                  color: isDark
+                      ? Colors.white.withAlpha(15)
+                      : Colors.black.withAlpha(8),
                 ),
               ),
               child: Column(
@@ -272,13 +287,18 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => AddBankAccountScreen(
-                                    existingAccount: _bankAccounts[_selectedCardIndex],
+                                    existingAccount:
+                                        _bankAccounts[_selectedCardIndex],
                                     onSave: (account) {
                                       setState(() {
-                                        _bankAccounts[_selectedCardIndex] = account.copyWith(
-                                          id: _bankAccounts[_selectedCardIndex].id,
-                                          userId: _bankAccounts[_selectedCardIndex].userId,
-                                        );
+                                        _bankAccounts[_selectedCardIndex] =
+                                            account.copyWith(
+                                              id: _bankAccounts[_selectedCardIndex]
+                                                  .id,
+                                              userId:
+                                                  _bankAccounts[_selectedCardIndex]
+                                                      .userId,
+                                            );
                                       });
                                     },
                                   ),
@@ -309,21 +329,26 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                           ),
                           _buildDetailRow(
                             'Account Type',
-                            AccountType.fromValue(_bankAccounts[_selectedCardIndex].accountType).displayName,
+                            AccountType.fromValue(
+                              _bankAccounts[_selectedCardIndex].accountType,
+                            ).displayName,
                             isDark,
                           ),
                           _buildDetailRow(
                             'Account Number',
-                            _bankAccounts[_selectedCardIndex].maskedAccountNumber,
+                            _bankAccounts[_selectedCardIndex]
+                                .maskedAccountNumber,
                             isDark,
                           ),
-                          if (_bankAccounts[_selectedCardIndex].ifscCode != null)
+                          if (_bankAccounts[_selectedCardIndex].ifscCode !=
+                              null)
                             _buildDetailRow(
                               'IFSC Code',
                               _bankAccounts[_selectedCardIndex].ifscCode!,
                               isDark,
                             ),
-                          if (_bankAccounts[_selectedCardIndex].branchName != null)
+                          if (_bankAccounts[_selectedCardIndex].branchName !=
+                              null)
                             _buildDetailRow(
                               'Branch',
                               _bankAccounts[_selectedCardIndex].branchName!,
@@ -367,9 +392,8 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AddBankAccountScreen(
-                      onSave: _addBankAccount,
-                    ),
+                    builder: (_) =>
+                        AddBankAccountScreen(onSave: _addBankAccount),
                   ),
                 );
               },
@@ -450,17 +474,20 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
               top: 16,
               right: 16,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withAlpha(40),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded, size: 14, color: Colors.white),
-                    const SizedBox(width: 4),
-                    const Text(
+                    Icon(Icons.star_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
                       'Primary',
                       style: TextStyle(
                         color: Colors.white,
@@ -510,7 +537,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            AccountType.fromValue(account.accountType).displayName,
+                            AccountType.fromValue(
+                              account.accountType,
+                            ).displayName,
                             style: TextStyle(
                               color: Colors.white.withAlpha(180),
                               fontSize: 12,
@@ -565,7 +594,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: (color ?? (isDark ? Colors.white : Colors.black)).withAlpha(15),
+          color: (color ?? (isDark ? Colors.white : Colors.black)).withAlpha(
+            15,
+          ),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(
@@ -649,9 +680,8 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AddBankAccountScreen(
-                      onSave: _addBankAccount,
-                    ),
+                    builder: (_) =>
+                        AddBankAccountScreen(onSave: _addBankAccount),
                   ),
                 );
               },
@@ -663,7 +693,10 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
                 elevation: 0,
               ),
             ),
@@ -674,7 +707,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
   }
 
   Widget _buildUpiTab(bool isDark) {
-    final upiAccounts = _bankAccounts.where((a) => a.upiId != null && a.upiId!.isNotEmpty).toList();
+    final upiAccounts = _bankAccounts
+        .where((a) => a.upiId != null && a.upiId!.isNotEmpty)
+        .toList();
 
     if (upiAccounts.isEmpty) {
       return Center(
@@ -734,7 +769,9 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
             color: isDark ? Colors.white.withAlpha(8) : Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8),
+              color: isDark
+                  ? Colors.white.withAlpha(15)
+                  : Colors.black.withAlpha(8),
             ),
           ),
           child: Row(
@@ -776,7 +813,10 @@ class _BankAccountsScreenState extends State<BankAccountsScreen>
               ),
               if (account.isPrimary)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF34C759).withAlpha(30),
                     borderRadius: BorderRadius.circular(8),

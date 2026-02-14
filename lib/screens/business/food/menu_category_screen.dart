@@ -7,10 +7,7 @@ import '../../../services/business_service.dart';
 class MenuCategoryScreen extends StatefulWidget {
   final String businessId;
 
-  const MenuCategoryScreen({
-    super.key,
-    required this.businessId,
-  });
+  const MenuCategoryScreen({super.key, required this.businessId});
 
   @override
   State<MenuCategoryScreen> createState() => _MenuCategoryScreenState();
@@ -45,10 +42,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
         actions: [
           IconButton(
             onPressed: () => _showAddCategoryDialog(context, isDarkMode),
-            icon: const Icon(
-              Icons.add,
-              color: Color(0xFF00D67D),
-            ),
+            icon: const Icon(Icons.add, color: Color(0xFF00D67D)),
           ),
         ],
       ),
@@ -70,18 +64,16 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
           return ReorderableListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: categories.length,
-            onReorder: (oldIndex, newIndex) => _reorderCategories(
-              categories,
-              oldIndex,
-              newIndex,
-            ),
+            onReorder: (oldIndex, newIndex) =>
+                _reorderCategories(categories, oldIndex, newIndex),
             itemBuilder: (context, index) {
               final category = categories[index];
               return _CategoryCard(
                 key: ValueKey(category.id),
                 category: category,
                 isDarkMode: isDarkMode,
-                onEdit: () => _showEditCategoryDialog(context, isDarkMode, category),
+                onEdit: () =>
+                    _showEditCategoryDialog(context, isDarkMode, category),
                 onDelete: () => _deleteCategory(category),
               );
             },
@@ -94,10 +86,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           'Add Category',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -182,11 +171,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.add,
-                      size: 14,
-                      color: const Color(0xFF00D67D),
-                    ),
+                    const Icon(Icons.add, size: 14, color: Color(0xFF00D67D)),
                     const SizedBox(width: 4),
                     Text(
                       name,
@@ -205,7 +190,10 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
     );
   }
 
-  Future<void> _showAddCategoryDialog(BuildContext context, bool isDarkMode) async {
+  Future<void> _showAddCategoryDialog(
+    BuildContext context,
+    bool isDarkMode,
+  ) async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
     String? selectedCategory;
@@ -227,9 +215,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
           backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
           title: Text(
             'Add Category',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-            ),
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -238,9 +224,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: const Color(0xFF00D67D),
-                  ),
+                  border: Border.all(color: const Color(0xFF00D67D)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButtonHideUnderline(
@@ -253,7 +237,9 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
                       ),
                     ),
                     isExpanded: true,
-                    dropdownColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+                    dropdownColor: isDarkMode
+                        ? const Color(0xFF2D2D44)
+                        : Colors.white,
                     icon: Icon(
                       Icons.keyboard_arrow_down,
                       color: isDarkMode ? Colors.white54 : Colors.grey[600],
@@ -368,7 +354,9 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
     MenuCategoryModel category,
   ) async {
     final nameController = TextEditingController(text: category.name);
-    final descController = TextEditingController(text: category.description ?? '');
+    final descController = TextEditingController(
+      text: category.description ?? '',
+    );
 
     await showDialog(
       context: context,
@@ -376,9 +364,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
         backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
         title: Text(
           'Edit Category',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -458,7 +444,9 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
 
   Future<void> _addCategory(String name, String description) async {
     try {
-      final categories = await _businessService.getMenuCategories(widget.businessId);
+      final categories = await _businessService.getMenuCategories(
+        widget.businessId,
+      );
       final category = MenuCategoryModel(
         id: '',
         businessId: widget.businessId,
@@ -536,7 +524,10 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
 
     if (confirmed == true) {
       try {
-        await _businessService.deleteMenuCategory(widget.businessId, category.id);
+        await _businessService.deleteMenuCategory(
+          widget.businessId,
+          category.id,
+        );
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -602,20 +593,14 @@ class _CategoryCard extends StatelessWidget {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFF00D67D).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(
-            Icons.restaurant_menu,
-            color: Color(0xFF00D67D),
-          ),
+          child: const Icon(Icons.restaurant_menu, color: Color(0xFF00D67D)),
         ),
         title: Text(
           category.name,
@@ -644,10 +629,7 @@ class _CategoryCard extends StatelessWidget {
               onPressed: onEdit,
             ),
             IconButton(
-              icon: const Icon(
-                Icons.delete_outline,
-                color: Colors.red,
-              ),
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
               onPressed: onDelete,
             ),
             Icon(

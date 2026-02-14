@@ -220,7 +220,12 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
                   ),
                   onPressed: () {
                     HapticFeedback.lightImpact();
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const BusinessNotificationsScreen()));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BusinessNotificationsScreen(),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -288,10 +293,7 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppComponents.sectionHeader(
-          title: 'Overview',
-          isDarkMode: isDarkMode,
-        ),
+        AppComponents.sectionHeader(title: 'Overview', isDarkMode: isDarkMode),
         const SizedBox(height: AppTheme.spacing12),
         GridView.count(
           shrinkWrap: true,
@@ -319,7 +321,9 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
               icon: Icons.request_quote,
               label: 'Pending Quotes',
               value: _pendingQuotes.toString(),
-              color: _pendingQuotes > 0 ? AppTheme.statusWarning : AppTheme.statusSuccess,
+              color: _pendingQuotes > 0
+                  ? AppTheme.statusWarning
+                  : AppTheme.statusSuccess,
               isDarkMode: isDarkMode,
             ),
             AppComponents.statsCard(
@@ -359,7 +363,12 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
               isDarkMode: isDarkMode,
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(context, MaterialPageRoute(builder: (_) => GalleryScreen(business: widget.business)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GalleryScreen(business: widget.business),
+                  ),
+                );
               },
             ),
             AppComponents.actionButton(
@@ -369,7 +378,13 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
               isDarkMode: isDarkMode,
               onTap: () {
                 HapticFeedback.lightImpact();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quote management will be available in a future update')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Quote management will be available in a future update',
+                    ),
+                  ),
+                );
               },
             ),
             AppComponents.actionButton(
@@ -379,7 +394,12 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
               isDarkMode: isDarkMode,
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(context, MaterialPageRoute(builder: (_) => GalleryScreen(business: widget.business)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GalleryScreen(business: widget.business),
+                  ),
+                );
               },
             ),
             AppComponents.actionButton(
@@ -389,7 +409,13 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
               isDarkMode: isDarkMode,
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(context, MaterialPageRoute(builder: (_) => BusinessAnalyticsScreen(business: widget.business)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        BusinessAnalyticsScreen(business: widget.business),
+                  ),
+                );
               },
             ),
           ],
@@ -450,7 +476,13 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
           TextButton(
             onPressed: () {
               HapticFeedback.lightImpact();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quote management will be available in a future update')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Quote management will be available in a future update',
+                  ),
+                ),
+              );
             },
             child: const Text(
               'View',
@@ -487,7 +519,12 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
             TextButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(context, MaterialPageRoute(builder: (_) => GalleryScreen(business: widget.business)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GalleryScreen(business: widget.business),
+                  ),
+                );
               },
               child: const Text(
                 'View All',
@@ -572,7 +609,11 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
                     errorWidget: (context, url, error) => Container(
                       height: 120,
                       color: Colors.grey[300],
-                      child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                      child: const Icon(
+                        Icons.image,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
                     ),
                   )
                 : Container(
@@ -598,7 +639,10 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -679,7 +723,13 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
             TextButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quote management will be available in a future update')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Quote management will be available in a future update',
+                    ),
+                  ),
+                );
               },
               child: const Text(
                 'View All',
@@ -773,7 +823,10 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -827,10 +880,10 @@ class _PortfolioDashboardState extends State<PortfolioDashboard> {
                 const SizedBox(width: 4),
                 Text(
                   '\$${quote['estimatedBudget']}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF10B981),
+                    color: Color(0xFF10B981),
                   ),
                 ),
               ],

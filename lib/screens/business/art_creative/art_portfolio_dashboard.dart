@@ -9,10 +9,7 @@ import 'package:supper/widgets/business/coming_soon_widgets.dart';
 class ArtPortfolioDashboard extends StatefulWidget {
   final String businessId;
 
-  const ArtPortfolioDashboard({
-    super.key,
-    required this.businessId,
-  });
+  const ArtPortfolioDashboard({super.key, required this.businessId});
 
   @override
   State<ArtPortfolioDashboard> createState() => _ArtPortfolioDashboardState();
@@ -58,7 +55,9 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
           .where((doc) => (doc.data()['status'] as String? ?? '') == 'pending')
           .length;
       int inProgressCommissions = commissionsSnapshot.docs
-          .where((doc) => (doc.data()['status'] as String? ?? '') == 'in_progress')
+          .where(
+            (doc) => (doc.data()['status'] as String? ?? '') == 'in_progress',
+          )
           .length;
 
       double totalRevenue = 0;
@@ -122,9 +121,9 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
             const SizedBox(height: 8),
             Text(
               'Showcase your work and manage commissions',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.iosGray,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.iosGray),
             ),
             const SizedBox(height: 24),
 
@@ -159,7 +158,8 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
                 ),
                 _buildStatCard(
                   title: 'Total Revenue',
-                  value: '\$${(_stats['totalRevenue'] as num).toStringAsFixed(0)}',
+                  value:
+                      '\$${(_stats['totalRevenue'] as num).toStringAsFixed(0)}',
                   icon: Icons.attach_money,
                   color: AppColors.success,
                   subtitle: 'From sales',
@@ -171,9 +171,9 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
 
             Text(
               'Quick Actions',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -196,7 +196,8 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
                   label: 'Schedule Exhibition',
                   icon: Icons.event,
                   color: AppColors.iosBlue,
-                  onTap: () => showComingSoonDialog(context, 'scheduleExhibition'),
+                  onTap: () =>
+                      showComingSoonDialog(context, 'scheduleExhibition'),
                 ),
                 _buildQuickActionChip(
                   label: 'Update Portfolio',
@@ -256,7 +257,7 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
           const SizedBox(height: 4),
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               color: AppColors.iosGray,
               fontWeight: FontWeight.w500,
@@ -266,7 +267,7 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 10,
                 color: AppColors.iosGrayLight,
               ),
@@ -288,10 +289,7 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
       label: Text(label),
       onPressed: onTap,
       backgroundColor: color.withValues(alpha: 0.1),
-      labelStyle: TextStyle(
-        color: color,
-        fontWeight: FontWeight.w600,
-      ),
+      labelStyle: TextStyle(color: color, fontWeight: FontWeight.w600),
       side: BorderSide(color: color.withValues(alpha: 0.3)),
     );
   }

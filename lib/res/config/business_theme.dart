@@ -167,10 +167,7 @@ class BusinessTheme {
   /// Get gradient for buttons/cards
   static LinearGradient getGradient(Color color) {
     return LinearGradient(
-      colors: [
-        color,
-        Color.lerp(color, Colors.black, 0.1)!,
-      ],
+      colors: [color, Color.lerp(color, Colors.black, 0.1)!],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -191,7 +188,7 @@ class BusinessTheme {
         seedColor: primaryColor,
         brightness: Brightness.light,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         foregroundColor: grey900,
         elevation: 0,

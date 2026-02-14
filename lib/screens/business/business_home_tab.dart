@@ -131,10 +131,16 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newStatus ? 'You are now online' : 'You are now offline'),
-            backgroundColor: newStatus ? const Color(0xFF00D67D) : Colors.grey[700],
+            content: Text(
+              newStatus ? 'You are now online' : 'You are now offline',
+            ),
+            backgroundColor: newStatus
+                ? const Color(0xFF00D67D)
+                : Colors.grey[700],
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -306,8 +312,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00D67D),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00D67D),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -408,7 +414,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                       shape: BoxShape.circle,
                     ),
                     child: Text(
-                      _getPendingItemsCount() > 9 ? '9+' : '${_getPendingItemsCount()}',
+                      _getPendingItemsCount() > 9
+                          ? '9+'
+                          : '${_getPendingItemsCount()}',
                       style: const TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.bold,
@@ -443,11 +451,12 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     final address = widget.business.address;
     if (address == null) return 'Location not set';
     final parts = <String>[];
-    if (address.city != null && address.city!.isNotEmpty) parts.add(address.city!);
-    if (address.state != null && address.state!.isNotEmpty) parts.add(address.state!);
+    if (address.city != null && address.city!.isNotEmpty)
+      parts.add(address.city!);
+    if (address.state != null && address.state!.isNotEmpty)
+      parts.add(address.state!);
     return parts.isNotEmpty ? parts.join(', ') : 'Location not set';
   }
-
 
   Widget _buildCoverHeader() {
     return DashboardCoverHeader(
@@ -708,7 +717,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
 
   Widget _buildTrendIndicator(double trend) {
     final isPositive = trend >= 0;
-    final trendColor = isPositive ? const Color(0xFF00D67D) : const Color(0xFFEF5350);
+    final trendColor = isPositive
+        ? const Color(0xFF00D67D)
+        : const Color(0xFFEF5350);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -795,14 +806,26 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 22,
                       getTitlesWidget: (value, meta) {
-                        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                        const days = [
+                          'Mon',
+                          'Tue',
+                          'Wed',
+                          'Thu',
+                          'Fri',
+                          'Sat',
+                          'Sun',
+                        ];
                         if (value.toInt() >= 0 && value.toInt() < days.length) {
                           return Text(
                             days[value.toInt()],
@@ -839,7 +862,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                 maxY: _getMaxRevenue() * 1.2,
                 lineBarsData: [
                   LineChartBarData(
-                    spots: _dashboardData.revenueHistory.asMap().entries.map((e) {
+                    spots: _dashboardData.revenueHistory.asMap().entries.map((
+                      e,
+                    ) {
                       return FlSpot(e.key.toDouble(), e.value);
                     }).toList(),
                     isCurved: true,
@@ -882,7 +907,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
 
   double _getMaxRevenue() {
     if (_dashboardData.revenueHistory.isEmpty) return 100;
-    final maxValue = _dashboardData.revenueHistory.reduce((a, b) => a > b ? a : b);
+    final maxValue = _dashboardData.revenueHistory.reduce(
+      (a, b) => a > b ? a : b,
+    );
     return maxValue > 0 ? maxValue : 100;
   }
 
@@ -935,30 +962,32 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
             ],
           ),
           const SizedBox(height: 16),
-          ...insights.map((insight) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  insight['icon'] as IconData,
-                  size: 16,
-                  color: const Color(0xFF7E57C2).withValues(alpha: 0.8),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    insight['text'] as String,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white.withValues(alpha: 0.8),
-                      height: 1.4,
+          ...insights.map(
+            (insight) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    insight['icon'] as IconData,
+                    size: 16,
+                    color: const Color(0xFF7E57C2).withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      insight['text'] as String,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        height: 1.4,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          )),
+          ),
         ],
       ),
     );
@@ -972,7 +1001,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.preparingOrders > 5) {
           insights.add({
             'icon': Icons.warning_amber_rounded,
-            'text': '${_dashboardData.preparingOrders} orders in preparation - Consider adding kitchen staff',
+            'text':
+                '${_dashboardData.preparingOrders} orders in preparation - Consider adding kitchen staff',
           });
         }
         if (_dashboardData.deliveryOrders > 0) {
@@ -981,10 +1011,12 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
             'text': '${_dashboardData.deliveryOrders} orders out for delivery',
           });
         }
-        if (_dashboardData.revenueTrend != null && _dashboardData.revenueTrend! > 20) {
+        if (_dashboardData.revenueTrend != null &&
+            _dashboardData.revenueTrend! > 20) {
           insights.add({
             'icon': Icons.trending_up,
-            'text': 'Revenue up ${_dashboardData.revenueTrend!.toStringAsFixed(0)}% from yesterday! Great job!',
+            'text':
+                'Revenue up ${_dashboardData.revenueTrend!.toStringAsFixed(0)}% from yesterday! Great job!',
           });
         }
         break;
@@ -993,13 +1025,16 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.lowStockItems > 0) {
           insights.add({
             'icon': Icons.inventory_2_outlined,
-            'text': '${_dashboardData.lowStockItems} items are running low on stock',
+            'text':
+                '${_dashboardData.lowStockItems} items are running low on stock',
           });
         }
-        if (_dashboardData.ordersTrend != null && _dashboardData.ordersTrend! < -10) {
+        if (_dashboardData.ordersTrend != null &&
+            _dashboardData.ordersTrend! < -10) {
           insights.add({
             'icon': Icons.trending_down,
-            'text': 'Orders decreased ${_dashboardData.ordersTrend!.abs().toStringAsFixed(0)}% - Consider running promotions',
+            'text':
+                'Orders decreased ${_dashboardData.ordersTrend!.abs().toStringAsFixed(0)}% - Consider running promotions',
           });
         }
         if (_dashboardData.totalItems > 100) {
@@ -1034,13 +1069,15 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.todayAppointments > 5) {
           insights.add({
             'icon': Icons.fitness_center,
-            'text': '${_dashboardData.todayAppointments} classes scheduled today',
+            'text':
+                '${_dashboardData.todayAppointments} classes scheduled today',
           });
         }
         if (_dashboardData.todayCheckIns > 20) {
           insights.add({
             'icon': Icons.people,
-            'text': 'High member activity: ${_dashboardData.todayCheckIns} check-ins today',
+            'text':
+                'High member activity: ${_dashboardData.todayCheckIns} check-ins today',
           });
         }
         break;
@@ -1064,7 +1101,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.todayAppointments > 0) {
           insights.add({
             'icon': Icons.videocam,
-            'text': '${_dashboardData.todayAppointments} meetings scheduled today',
+            'text':
+                '${_dashboardData.todayAppointments} meetings scheduled today',
           });
         }
         if (_dashboardData.pendingOrders > 5) {
@@ -1079,13 +1117,15 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.todayAppointments > 10) {
           insights.add({
             'icon': Icons.calendar_today,
-            'text': 'Busy day ahead: ${_dashboardData.todayAppointments} appointments',
+            'text':
+                'Busy day ahead: ${_dashboardData.todayAppointments} appointments',
           });
         }
         if (_dashboardData.newInquiries > 5) {
           insights.add({
             'icon': Icons.notifications_active,
-            'text': '${_dashboardData.newInquiries} new inquiries need response',
+            'text':
+                '${_dashboardData.newInquiries} new inquiries need response',
           });
         }
         break;
@@ -1115,7 +1155,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         if (_dashboardData.pendingOrders > 0) {
           insights.add({
             'icon': Icons.pending_actions,
-            'text': '${_dashboardData.pendingOrders} bookings pending confirmation',
+            'text':
+                '${_dashboardData.pendingOrders} bookings pending confirmation',
           });
         }
         break;
@@ -1141,7 +1182,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
       if (_dashboardData.todayRevenue > 0) {
         insights.add({
           'icon': Icons.insights,
-          'text': 'Today\'s revenue: ₹${_formatAmount(_dashboardData.todayRevenue)}',
+          'text':
+              'Today\'s revenue: ₹${_formatAmount(_dashboardData.todayRevenue)}',
         });
       }
     }
@@ -1152,7 +1194,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
   Widget _buildRevenueCard() {
     final weekRevenue = _dashboardData.weekRevenue;
     final monthRevenue = _dashboardData.monthRevenue;
-    final revenueTitle = BusinessDashboardConfig.getRevenueTitle(_categoryGroup);
+    final revenueTitle = BusinessDashboardConfig.getRevenueTitle(
+      _categoryGroup,
+    );
 
     return GestureDetector(
       onTap: () {
@@ -1190,7 +1234,10 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00D67D).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -1283,7 +1330,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
   }
 
   Widget _buildActivitySection() {
-    final activityTitle = BusinessDashboardConfig.getActivityTitle(_categoryGroup);
+    final activityTitle = BusinessDashboardConfig.getActivityTitle(
+      _categoryGroup,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1325,7 +1374,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               .limit(3)
               .snapshots(),
           builder: (context, snapshot) {
-            final activities = snapshot.hasData && snapshot.data!.docs.isNotEmpty
+            final activities =
+                snapshot.hasData && snapshot.data!.docs.isNotEmpty
                 ? snapshot.data!.docs
                 : null;
 
@@ -1333,9 +1383,7 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.1),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: activities == null
                   ? _buildEmptyActivity()
@@ -1349,7 +1397,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
                         color: Colors.white.withValues(alpha: 0.1),
                       ),
                       itemBuilder: (context, index) {
-                        final activity = activities[index].data() as Map<String, dynamic>;
+                        final activity =
+                            activities[index].data() as Map<String, dynamic>;
                         return _buildActivityItem(
                           icon: _getActivityIcon(activity['type'] ?? ''),
                           color: _getActivityColor(activity['type'] ?? ''),
@@ -1467,10 +1516,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => OrdersTab(
-          business: widget.business,
-          onRefresh: widget.onRefresh,
-        ),
+        builder: (_) =>
+            OrdersTab(business: widget.business, onRefresh: widget.onRefresh),
       ),
     );
   }
@@ -1479,10 +1526,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => MenuTab(
-          business: widget.business,
-          onRefresh: widget.onRefresh,
-        ),
+        builder: (_) =>
+            MenuTab(business: widget.business, onRefresh: widget.onRefresh),
       ),
     );
   }
@@ -1491,10 +1536,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProductsTab(
-          business: widget.business,
-          onRefresh: widget.onRefresh,
-        ),
+        builder: (_) =>
+            ProductsTab(business: widget.business, onRefresh: widget.onRefresh),
       ),
     );
   }
@@ -1503,10 +1546,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => RoomsTab(
-          business: widget.business,
-          onRefresh: widget.onRefresh,
-        ),
+        builder: (_) =>
+            RoomsTab(business: widget.business, onRefresh: widget.onRefresh),
       ),
     );
   }
@@ -1558,7 +1599,6 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     }
   }
 
-
   IconData _getActivityIcon(String type) {
     switch (type) {
       case 'order':
@@ -1606,7 +1646,6 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     return amount.toStringAsFixed(0);
   }
 
-
   int _getPendingItemsCount() {
     switch (_categoryGroup) {
       case CategoryGroup.food:
@@ -1643,10 +1682,7 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         final weekday = today.weekday;
         final weekStart = todayStart.subtract(Duration(days: weekday - 1));
         final weekEnd = weekStart.add(const Duration(days: 7));
-        return {
-          'start': weekStart,
-          'end': weekEnd,
-        };
+        return {'start': weekStart, 'end': weekEnd};
 
       case DateRange.month:
         // Get start of month
@@ -1654,10 +1690,7 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         final nextMonth = today.month == 12
             ? DateTime(today.year + 1, 1, 1)
             : DateTime(today.year, today.month + 1, 1);
-        return {
-          'start': monthStart,
-          'end': nextMonth,
-        };
+        return {'start': monthStart, 'end': nextMonth};
 
       case DateRange.custom:
         // For now, default to today
@@ -1745,13 +1778,14 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
       }
     }
 
-    return {
-      'totalItems': totalItems,
-      'lowStockItems': lowStockItems,
-    };
+    return {'totalItems': totalItems, 'lowStockItems': lowStockItems};
   }
 
-  Future<Map<String, int>> _loadHospitalityData(String businessId, DateTime todayStart, DateTime todayEnd) async {
+  Future<Map<String, int>> _loadHospitalityData(
+    String businessId,
+    DateTime todayStart,
+    DateTime todayEnd,
+  ) async {
     // Get date range based on filter
     final dateRange = _getDateRangeForFilter();
     final rangeStart = dateRange['start']!;
@@ -1764,7 +1798,9 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         .get();
 
     int totalRooms = roomsSnapshot.docs.length;
-    int occupiedRooms = roomsSnapshot.docs.where((doc) => doc.data()['status'] == 'occupied').length;
+    int occupiedRooms = roomsSnapshot.docs
+        .where((doc) => doc.data()['status'] == 'occupied')
+        .length;
     int availableRooms = totalRooms - occupiedRooms;
 
     // Use filtered date range for check-ins/check-outs
@@ -1772,7 +1808,10 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         .collection('businesses')
         .doc(businessId)
         .collection('bookings')
-        .where('checkInDate', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+        .where(
+          'checkInDate',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart),
+        )
         .where('checkInDate', isLessThan: Timestamp.fromDate(rangeEnd))
         .count()
         .get();
@@ -1781,7 +1820,10 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         .collection('businesses')
         .doc(businessId)
         .collection('bookings')
-        .where('checkOutDate', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+        .where(
+          'checkOutDate',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart),
+        )
         .where('checkOutDate', isLessThan: Timestamp.fromDate(rangeEnd))
         .count()
         .get();
@@ -1794,7 +1836,11 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     };
   }
 
-  Future<Map<String, int>> _loadServicesData(String businessId, DateTime todayStart, DateTime todayEnd) async {
+  Future<Map<String, int>> _loadServicesData(
+    String businessId,
+    DateTime todayStart,
+    DateTime todayEnd,
+  ) async {
     // Get date range based on filter
     final dateRange = _getDateRangeForFilter();
     final rangeStart = dateRange['start']!;
@@ -1823,7 +1869,11 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     };
   }
 
-  Future<Map<String, int>> _loadFitnessData(String businessId, DateTime todayStart, DateTime todayEnd) async {
+  Future<Map<String, int>> _loadFitnessData(
+    String businessId,
+    DateTime todayStart,
+    DateTime todayEnd,
+  ) async {
     // Get date range based on filter
     final dateRange = _getDateRangeForFilter();
     final rangeStart = dateRange['start']!;
@@ -1842,18 +1892,26 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         .collection('businesses')
         .doc(businessId)
         .collection('member_checkins')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+        .where(
+          'timestamp',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart),
+        )
         .where('timestamp', isLessThan: Timestamp.fromDate(rangeEnd))
         .count()
         .get();
 
     return {
-      'todayAppointments': classesQuery.count ?? 0,  // Using 'appointments' field for classes
+      'todayAppointments':
+          classesQuery.count ?? 0, // Using 'appointments' field for classes
       'todayCheckIns': checkInsQuery.count ?? 0,
     };
   }
 
-  Future<Map<String, int>> _loadEducationData(String businessId, DateTime todayStart, DateTime todayEnd) async {
+  Future<Map<String, int>> _loadEducationData(
+    String businessId,
+    DateTime todayStart,
+    DateTime todayEnd,
+  ) async {
     // Get date range based on filter
     final dateRange = _getDateRangeForFilter();
     final rangeStart = dateRange['start']!;
@@ -1892,7 +1950,11 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     };
   }
 
-  Future<Map<String, int>> _loadProfessionalData(String businessId, DateTime todayStart, DateTime todayEnd) async {
+  Future<Map<String, int>> _loadProfessionalData(
+    String businessId,
+    DateTime todayStart,
+    DateTime todayEnd,
+  ) async {
     // Get date range based on filter
     final dateRange = _getDateRangeForFilter();
     final rangeStart = dateRange['start']!;
@@ -1916,7 +1978,8 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
         .get();
 
     return {
-      'todayAppointments': meetingsQuery.count ?? 0,  // Using 'appointments' for meetings
+      'todayAppointments':
+          meetingsQuery.count ?? 0, // Using 'appointments' for meetings
       'newInquiries': inquiriesQuery.count ?? 0,
     };
   }
@@ -1941,13 +2004,18 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               .collection('businesses')
               .doc(businessId)
               .collection('orders')
-              .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart))
+              .where(
+                'createdAt',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart),
+              )
               .where('createdAt', isLessThan: Timestamp.fromDate(yesterdayEnd))
               .get();
 
           yesterdayOrders = ordersSnapshot.docs.length;
-          yesterdayRevenue = ordersSnapshot.docs.fold(0.0, (total, doc) =>
-            total + ((doc.data()['total'] ?? 0) as num).toDouble()
+          yesterdayRevenue = ordersSnapshot.docs.fold(
+            0.0,
+            (total, doc) =>
+                total + ((doc.data()['total'] ?? 0) as num).toDouble(),
           );
           break;
 
@@ -1956,7 +2024,10 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               .collection('businesses')
               .doc(businessId)
               .collection('bookings')
-              .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart))
+              .where(
+                'createdAt',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart),
+              )
               .where('createdAt', isLessThan: Timestamp.fromDate(yesterdayEnd))
               .get();
 
@@ -1974,7 +2045,10 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
               .collection('businesses')
               .doc(businessId)
               .collection('appointments')
-              .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart))
+              .where(
+                'date',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(yesterdayStart),
+              )
               .where('date', isLessThan: Timestamp.fromDate(yesterdayEnd))
               .get();
 
@@ -1988,19 +2062,27 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
       double appointmentsTrend = 0;
 
       if (yesterdayOrders > 0) {
-        ordersTrend = ((_dashboardData.todayOrders - yesterdayOrders) / yesterdayOrders) * 100;
+        ordersTrend =
+            ((_dashboardData.todayOrders - yesterdayOrders) / yesterdayOrders) *
+            100;
       } else if (_dashboardData.todayOrders > 0) {
         ordersTrend = 100; // All new orders
       }
 
       if (yesterdayRevenue > 0) {
-        revenueTrend = ((_dashboardData.todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
+        revenueTrend =
+            ((_dashboardData.todayRevenue - yesterdayRevenue) /
+                yesterdayRevenue) *
+            100;
       } else if (_dashboardData.todayRevenue > 0) {
         revenueTrend = 100;
       }
 
       if (yesterdayAppointments > 0) {
-        appointmentsTrend = ((_dashboardData.todayAppointments - yesterdayAppointments) / yesterdayAppointments) * 100;
+        appointmentsTrend =
+            ((_dashboardData.todayAppointments - yesterdayAppointments) /
+                yesterdayAppointments) *
+            100;
       } else if (_dashboardData.todayAppointments > 0) {
         appointmentsTrend = 100;
       }
@@ -2017,14 +2099,20 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
   }
 
   /// Load historical data for charts (last 7 days)
-  Future<Map<String, List<double>>> _loadHistoricalData(String businessId) async {
+  Future<Map<String, List<double>>> _loadHistoricalData(
+    String businessId,
+  ) async {
     try {
       final today = DateTime.now();
       final revenueHistory = <double>[];
       final ordersHistory = <double>[];
 
       for (int i = 6; i >= 0; i--) {
-        final dayStart = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
+        final dayStart = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        ).subtract(Duration(days: i));
         final dayEnd = dayStart.add(const Duration(days: 1));
 
         // Get day's orders and revenue
@@ -2032,22 +2120,24 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
             .collection('businesses')
             .doc(businessId)
             .collection('orders')
-            .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+            .where(
+              'createdAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart),
+            )
             .where('createdAt', isLessThan: Timestamp.fromDate(dayEnd))
             .get();
 
         ordersHistory.add(ordersSnapshot.docs.length.toDouble());
 
-        final dayRevenue = ordersSnapshot.docs.fold(0.0, (total, doc) =>
-          total + ((doc.data()['total'] ?? 0) as num).toDouble()
+        final dayRevenue = ordersSnapshot.docs.fold(
+          0.0,
+          (total, doc) =>
+              total + ((doc.data()['total'] ?? 0) as num).toDouble(),
         );
         revenueHistory.add(dayRevenue);
       }
 
-      return {
-        'revenueHistory': revenueHistory,
-        'ordersHistory': ordersHistory,
-      };
+      return {'revenueHistory': revenueHistory, 'ordersHistory': ordersHistory};
     } catch (e) {
       debugPrint('Error loading historical data: $e');
       return {

@@ -25,10 +25,7 @@ import 'templates/generic_template.dart';
 class BusinessProfileScreen extends StatefulWidget {
   final String businessId;
 
-  const BusinessProfileScreen({
-    super.key,
-    required this.businessId,
-  });
+  const BusinessProfileScreen({super.key, required this.businessId});
 
   @override
   State<BusinessProfileScreen> createState() => _BusinessProfileScreenState();
@@ -160,7 +157,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00D67D),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -205,7 +205,7 @@ class _LoadingShimmer extends StatelessWidget {
                   child: Container(
                     width: 40,
                     height: 40,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: Colors.black26,
                       shape: BoxShape.circle,
                     ),
@@ -323,9 +323,10 @@ class _ShimmerBoxState extends State<_ShimmerBox>
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
-    _animation = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: -2,
+      end: 2,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -353,11 +354,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
                       Colors.white.withValues(alpha: 0.1),
                       Colors.white.withValues(alpha: 0.05),
                     ]
-                  : [
-                      Colors.grey[300]!,
-                      Colors.grey[100]!,
-                      Colors.grey[300]!,
-                    ],
+                  : [Colors.grey[300]!, Colors.grey[100]!, Colors.grey[300]!],
             ),
           ),
         );

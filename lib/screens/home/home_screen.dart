@@ -1,28 +1,25 @@
 ﻿import 'dart:async';
-import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:video_player/video_player.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 import '../../services/universal_intent_service.dart';
 import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../services/realtime_matching_service.dart';
 import '../../services/profile services/photo_cache_service.dart';
-import '../../widgets/app_background.dart';
-import 'product_detail_screen.dart';
+import 'product/product_detail_screen.dart';
+import 'product/see_all_products_screen.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
   /// Global key to access HomeScreenState from outside
-  static final GlobalKey<HomeScreenState> globalKey = GlobalKey<HomeScreenState>();
+  static final GlobalKey<HomeScreenState> globalKey =
+      GlobalKey<HomeScreenState>();
 
   const HomeScreen({super.key});
 
@@ -68,6 +65,15 @@ class HomeScreenState extends State<HomeScreen>
   // Speech to text
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechEnabled = false;
+
+  // Text to speech (listen to messages)
+  final FlutterTts _tts = FlutterTts();
+  String? _currentlyPlayingKey;
+  bool _isTtsSpeaking = false;
+
+  // ChatGPT-style action states
+  final Set<String> _likedMessages = {};
+  final Set<String> _dislikedMessages = {};
   String _currentSpeechText = '';
 
   @override
@@ -77,6 +83,7 @@ class HomeScreenState extends State<HomeScreen>
     _loadUserProfile();
     _realtimeService.initialize();
     _initSpeech();
+    _initTts();
 
     _controller = AnimationController(vsync: this);
 
@@ -102,6 +109,47 @@ class HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _initTts() {
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.45);
+    _tts.setVolume(1.0);
+    _tts.setPitch(1.0);
+
+    _tts.setStartHandler(() {
+      if (mounted) setState(() => _isTtsSpeaking = true);
+    });
+    _tts.setCompletionHandler(() {
+      if (mounted) {
+        setState(() {
+          _isTtsSpeaking = false;
+          _currentlyPlayingKey = null;
+        });
+      }
+    });
+    _tts.setCancelHandler(() {
+      if (mounted) {
+        setState(() {
+          _isTtsSpeaking = false;
+          _currentlyPlayingKey = null;
+        });
+      }
+    });
+  }
+
+  Future<void> _toggleTts(String key, String text) async {
+    if (_currentlyPlayingKey == key && _isTtsSpeaking) {
+      await _tts.stop();
+      setState(() {
+        _isTtsSpeaking = false;
+        _currentlyPlayingKey = null;
+      });
+    } else {
+      if (_isTtsSpeaking) await _tts.stop();
+      setState(() => _currentlyPlayingKey = key);
+      await _tts.speak(text);
+    }
+  }
+
   @override
   void dispose() {
     _searchFocusNode.removeListener(_onFocusChange);
@@ -113,6 +161,7 @@ class HomeScreenState extends State<HomeScreen>
     _recordingTimer?.cancel();
     _chatScrollController.dispose();
     _speech.stop();
+    _tts.stop();
     super.dispose();
   }
 
@@ -150,6 +199,7 @@ class HomeScreenState extends State<HomeScreen>
         _matches.clear();
         _intentController.clear();
         _currentChatId = chatId;
+        _currentProjectId = null; // Clear project context when loading a chat
 
         // Restore messages
         for (var msg in messages) {
@@ -165,7 +215,9 @@ class HomeScreenState extends State<HomeScreen>
         }
       });
 
-      debugPrint('Loaded conversation: $chatId with ${messages.length} messages');
+      debugPrint(
+        'Loaded conversation: $chatId with ${messages.length} messages',
+      );
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -186,7 +238,8 @@ class HomeScreenState extends State<HomeScreen>
 
       // Add welcome message
       _conversation.add({
-        'text': 'Hi! I\'m your Supper assistant. What would you like to find today?',
+        'text':
+            'Hi! I\'m your Supper assistant. What would you like to find today?',
         'isUser': false,
         'timestamp': DateTime.now(),
       });
@@ -379,7 +432,9 @@ class HomeScreenState extends State<HomeScreen>
       }).toList();
 
       // Get title from first user message
-      final userMessages = _conversation.where((msg) => msg['isUser'] == true).toList();
+      final userMessages = _conversation
+          .where((msg) => msg['isUser'] == true)
+          .toList();
       final firstUserMessage = userMessages.isNotEmpty
           ? userMessages.first['text'] as String? ?? 'Chat'
           : userMessage;
@@ -399,7 +454,9 @@ class HomeScreenState extends State<HomeScreen>
         if (_currentProjectId != null) {
           chatData['projectId'] = _currentProjectId;
         }
-        final docRef = await FirebaseFirestore.instance.collection('chat_history').add(chatData);
+        final docRef = await FirebaseFirestore.instance
+            .collection('chat_history')
+            .add(chatData);
         _currentChatId = docRef.id;
         debugPrint('New chat created: $_currentChatId');
 
@@ -410,10 +467,13 @@ class HomeScreenState extends State<HomeScreen>
                 .collection('projects')
                 .doc(_currentProjectId)
                 .update({
-              'chatIds': FieldValue.arrayUnion([_currentChatId]),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
+                  'chatIds': FieldValue.arrayUnion([_currentChatId]),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
             debugPrint('Chat added to project: $_currentProjectId');
+            // Clear project context after linking so future new chats
+            // don't get auto-tagged to this project
+            _currentProjectId = null;
           } catch (e) {
             debugPrint('Error adding chat to project: $e');
           }
@@ -424,9 +484,9 @@ class HomeScreenState extends State<HomeScreen>
             .collection('chat_history')
             .doc(_currentChatId)
             .update({
-          'messages': messagesToSave,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+              'messages': messagesToSave,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
         debugPrint('Chat updated: $_currentChatId');
       }
     } catch (e) {
@@ -840,6 +900,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400',
         'condition': 'New',
+        'distance': '1.5 km',
       },
       {
         'name': 'MacBook Air M2',
@@ -849,6 +910,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400',
         'condition': 'New',
+        'distance': '2.3 km',
       },
       {
         'name': 'Samsung Smart TV 55"',
@@ -858,6 +920,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400',
         'condition': 'New',
+        'distance': '0.8 km',
       },
       {
         'name': 'Sony WH-1000XM5',
@@ -867,6 +930,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=400',
         'condition': 'New',
+        'distance': '3.1 km',
       },
       {
         'name': 'LG Refrigerator 260L',
@@ -876,6 +940,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=400',
         'condition': 'New',
+        'distance': '1.9 km',
       },
       {
         'name': 'Dyson Air Purifier',
@@ -885,6 +950,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
         'condition': 'New',
+        'distance': '4.2 km',
       },
       {
         'name': 'Canon EOS R6',
@@ -894,6 +960,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
         'condition': 'New',
+        'distance': '2.7 km',
       },
       {
         'name': 'iPad Pro 12.9"',
@@ -903,6 +970,7 @@ class HomeScreenState extends State<HomeScreen>
         'image':
             'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400',
         'condition': 'New',
+        'distance': '1.1 km',
       },
     ];
 
@@ -920,6 +988,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
         'type': 'Apartment',
         'area': '1450 sq.ft',
+        'distance': '3.2 km',
       },
       {
         'name': '2 BHK Furnished Flat',
@@ -930,6 +999,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400',
         'type': 'Flat',
         'area': '1100 sq.ft',
+        'distance': '5.6 km',
       },
       {
         'name': 'Premium Villa',
@@ -940,6 +1010,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=400',
         'type': 'Villa',
         'area': '3200 sq.ft',
+        'distance': '8.4 km',
       },
       {
         'name': '1 BHK Studio Apartment',
@@ -950,6 +1021,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400',
         'type': 'Studio',
         'area': '550 sq.ft',
+        'distance': '1.8 km',
       },
       {
         'name': 'Duplex Penthouse',
@@ -960,6 +1032,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400',
         'type': 'Penthouse',
         'area': '4500 sq.ft',
+        'distance': '12.1 km',
       },
       {
         'name': 'PG for Girls',
@@ -970,6 +1043,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400',
         'type': 'PG',
         'area': 'Single Room',
+        'distance': '2.4 km',
       },
       {
         'name': '4 BHK Independent House',
@@ -980,6 +1054,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1605146769289-440113cc3d00?w=400',
         'type': 'House',
         'area': '2800 sq.ft',
+        'distance': '6.7 km',
       },
       {
         'name': 'Beachfront Apartment',
@@ -990,6 +1065,7 @@ class HomeScreenState extends State<HomeScreen>
             'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
         'type': 'Apartment',
         'area': '2100 sq.ft',
+        'distance': '4.5 km',
       },
     ];
 
@@ -1662,7 +1738,7 @@ class HomeScreenState extends State<HomeScreen>
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color.fromARGB(255, 243, 236, 236),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -1686,9 +1762,17 @@ class HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-      body: AppBackground(
-        showParticles: true,
-        overlayOpacity: 0.6,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.fromRGBO(64, 64, 64, 1),
+              Color.fromRGBO(0, 0, 0, 1),
+            ],
+          ),
+        ),
         child: Column(
           children: [
             Expanded(
@@ -1777,12 +1861,12 @@ class HomeScreenState extends State<HomeScreen>
 
           // Input container with glassmorphism
           ClipRRect(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(16),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(16),
                   color: Colors.white.withValues(alpha: 0.15),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.3),
@@ -1830,7 +1914,8 @@ class HomeScreenState extends State<HomeScreen>
                                             milliseconds: 200,
                                           ),
                                           width: 3,
-                                          height: 6.0 +
+                                          height:
+                                              6.0 +
                                               (index % 3 == 0
                                                   ? 18.0
                                                   : (index % 2 == 0
@@ -2013,18 +2098,19 @@ class HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildChatState(bool isDarkMode) {
+    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight - 32;
     return Column(
       children: [
-        const SizedBox(height: 110),
+        SizedBox(height: topPadding),
         Expanded(
           child: ListView.builder(
             controller: _chatScrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             reverse: false,
             itemCount: _conversation.length,
             itemBuilder: (context, index) {
               final message = _conversation[index];
-              return _buildMessageBubble(message, isDarkMode);
+              return _buildMessageBubble(message, isDarkMode, index);
             },
           ),
         ),
@@ -2032,179 +2118,423 @@ class HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message, bool isDarkMode) {
+  Widget _buildMessageBubble(
+    Map<String, dynamic> message,
+    bool isDarkMode,
+    int index,
+  ) {
     final isUser = message['isUser'] as bool;
     final text = message['text'] as String;
     final type = message['type'] as String?;
 
-    // If it's a food results message, show food cards
-    if (type == 'food_results') {
+    // Result card types - wrap with action row below
+    if (type != null && type.endsWith('_results')) {
       final rawData = message['data'];
       if (rawData == null) return const SizedBox.shrink();
       final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildResultsWidget(data, isDarkMode, 'food');
-    }
-    // If it's an electric results message, show electric cards
-    if (type == 'electric_results') {
-      final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildResultsWidget(data, isDarkMode, 'electric');
-    }
-    // If it's a house results message, show house cards
-    if (type == 'house_results') {
-      final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildResultsWidget(data, isDarkMode, 'house');
-    }
-    // If it's a place results message, show place cards
-    if (type == 'place_results') {
-      final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildResultsWidget(data, isDarkMode, 'place');
-    }
-    // If it's a news results message, show news cards
-    if (type == 'news_results') {
-      final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildNewsResultsWidget(data, isDarkMode);
-    }
-    // If it's a reels results message, show reels cards
-    if (type == 'reels_results') {
-      final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-      return _buildReelsResultsWidget(data, isDarkMode);
+
+      // Skip news and reels results
+      if (type == 'news_results' || type == 'reels_results') {
+        return const SizedBox.shrink();
+      }
+
+      final category = type.replaceAll('_results', '');
+      return _buildResultsWidget(data, isDarkMode, category, index);
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      margin: EdgeInsets.only(
+        top: isUser ? 12 : 1,
+        bottom: isUser ? 8 : 1,
+      ),
+      child: Column(
+        crossAxisAlignment: isUser
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
-          if (!isUser)
-            Container(
-              width: 32,
-              height: 32,
-              margin: const EdgeInsets.only(right: 8, top: 4),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: AssetImage('assets/logo/Clogo.jpeg'),
-                  fit: BoxFit.cover,
+          Row(
+            mainAxisAlignment: isUser
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isUser)
+                Container(
+                  width: 32,
+                  height: 32,
+                  margin: const EdgeInsets.only(right: 8, top: 4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: AssetImage('assets/logo/Clogo.jpeg'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          Flexible(
-            child: ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: isUser
-                    ? const Radius.circular(20)
-                    : const Radius.circular(4),
-                bottomRight: isUser
-                    ? const Radius.circular(4)
-                    : const Radius.circular(20),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    // Gradient for chat bubbles
-                    gradient: isUser
-                        ? LinearGradient(
-                            colors: [
-                              Colors.blue.withValues(alpha: 0.6),
-                              Colors.purple.withValues(alpha: 0.4),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : LinearGradient(
-                            colors: [
-                              Colors.white.withValues(alpha: 0.25),
-                              Colors.white.withValues(alpha: 0.15),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    border: Border.all(
-                      color: isUser
-                          ? Colors.blue.withValues(alpha: 0.4)
-                          : Colors.white.withValues(alpha: 0.3),
-                      width: 1.5,
-                    ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(20),
-                      topRight: const Radius.circular(20),
-                      bottomLeft: isUser
-                          ? const Radius.circular(20)
-                          : const Radius.circular(4),
-                      bottomRight: isUser
-                          ? const Radius.circular(4)
-                          : const Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isUser
-                            ? Colors.blue.withValues(alpha: 0.3)
-                            : Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    text,
-                    style: TextStyle(
+              Flexible(
+                child: Builder(
+                  builder: (context) {
+                    final maxBubbleWidth =
+                        MediaQuery.of(context).size.width * 0.65;
+                    const bubblePadding = 28.0; // 14 * 2 horizontal padding
+
+                    final textStyle = TextStyle(
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
                       height: 1.4,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          blurRadius: 4,
+                    );
+
+                    // Measure actual text width for tight bubble
+                    double bubbleWidth = maxBubbleWidth;
+                    if (text.isNotEmpty) {
+                      final textPainter = TextPainter(
+                        text: TextSpan(text: text, style: textStyle),
+                        textDirection: TextDirection.ltr,
+                      )..layout(maxWidth: maxBubbleWidth - bubblePadding);
+
+                      // Find the actual longest line width
+                      final lineMetrics = textPainter.computeLineMetrics();
+                      double longestLineWidth = textPainter.width;
+                      for (final line in lineMetrics) {
+                        if (line.width > longestLineWidth) {
+                          longestLineWidth = line.width;
+                        }
+                      }
+                      if (lineMetrics.isNotEmpty) {
+                        longestLineWidth = 0;
+                        for (final line in lineMetrics) {
+                          if (line.width > longestLineWidth) {
+                            longestLineWidth = line.width;
+                          }
+                        }
+                      }
+
+                      bubbleWidth = (longestLineWidth + bubblePadding + 3)
+                          .clamp(60.0, maxBubbleWidth);
+                    }
+
+                    return Column(
+                      crossAxisAlignment: isUser
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: bubbleWidth,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(20),
+                              topRight: const Radius.circular(20),
+                              bottomLeft: isUser
+                                  ? const Radius.circular(20)
+                                  : const Radius.circular(4),
+                              bottomRight: isUser
+                                  ? const Radius.circular(4)
+                                  : const Radius.circular(20),
+                            ),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: isUser
+                                      ? LinearGradient(
+                                          colors: [
+                                            Colors.blue.withValues(alpha: 0.6),
+                                            Colors.purple.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : LinearGradient(
+                                          colors: [
+                                            Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
+                                            Colors.white.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                  border: Border.all(
+                                    color: isUser
+                                        ? Colors.blue.withValues(alpha: 0.4)
+                                        : Colors.white.withValues(alpha: 0.3),
+                                    width: 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(20),
+                                    topRight: const Radius.circular(20),
+                                    bottomLeft: isUser
+                                        ? const Radius.circular(20)
+                                        : const Radius.circular(4),
+                                    bottomRight: isUser
+                                        ? const Radius.circular(4)
+                                        : const Radius.circular(20),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isUser
+                                          ? Colors.blue.withValues(alpha: 0.3)
+                                          : Colors.black.withValues(alpha: 0.2),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: isUser
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      text,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: isUser
+                                            ? FontWeight.w500
+                                            : FontWeight.w400,
+                                        height: 1.4,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isUser) ...[
+                                      const SizedBox(height: 4),
+                                      GestureDetector(
+                                        onTap: () => _toggleTts(
+                                          'user_$index',
+                                          text,
+                                        ),
+                                        child: Icon(
+                                          _currentlyPlayingKey ==
+                                                      'user_$index' &&
+                                                  _isTtsSpeaking
+                                              ? Icons.stop_circle_rounded
+                                              : Icons.volume_up_rounded,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
-            ),
+
+              if (isUser)
+                Container(
+                  width: 32,
+                  height: 32,
+                  margin: const EdgeInsets.only(left: 8, top: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: _auth.currentUser?.photoURL != null
+                        ? DecorationImage(
+                            image: NetworkImage(_auth.currentUser!.photoURL!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    color: _auth.currentUser?.photoURL == null
+                        ? Colors.grey
+                        : null,
+                  ),
+                  child: _auth.currentUser?.photoURL == null
+                      ? const Icon(Icons.person, color: Colors.white, size: 16)
+                      : null,
+                ),
+            ],
           ),
 
-          if (isUser)
-            Container(
-              width: 32,
-              height: 32,
-              margin: const EdgeInsets.only(left: 8, top: 4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                image: _auth.currentUser?.photoURL != null
-                    ? DecorationImage(
-                        image: NetworkImage(_auth.currentUser!.photoURL!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-                color: _auth.currentUser?.photoURL == null ? Colors.grey : null,
-              ),
-              child: _auth.currentUser?.photoURL == null
-                  ? const Icon(Icons.person, color: Colors.white, size: 16)
-                  : null,
+          // ChatGPT-style action icons row (assistant messages only, skip welcome)
+          // Hide if next message is a product result card
+          if (!isUser && index > 0 && !_hasResultCardAfter(index))
+            _buildActionRow(
+              'msg_$index',
+              text,
+              ttsIndex: index,
+              showCopy: false,
+              showRegenerate: false,
             ),
         ],
+      ),
+    );
+  }
+
+  bool _hasResultCardAfter(int index) {
+    if (index + 1 >= _conversation.length) return false;
+    final nextType = _conversation[index + 1]['type'] as String?;
+    if (nextType == null) return false;
+    // News and reels results are skipped (SizedBox.shrink), so don't hide action row
+    if (nextType == 'news_results' || nextType == 'reels_results') return false;
+    return nextType.endsWith('_results');
+  }
+
+  /// Regenerate the assistant response at the given index
+  void _regenerateResponse(int index) {
+    // Find the user message before this assistant message
+    String? userMessage;
+    for (int i = index - 1; i >= 0; i--) {
+      if (_conversation[i]['isUser'] == true) {
+        userMessage = _conversation[i]['text'] as String;
+        break;
+      }
+    }
+    if (userMessage == null) return;
+
+    setState(() {
+      // Remove old assistant response (and any result cards after it)
+      while (_conversation.length > index) {
+        _conversation.removeAt(index);
+      }
+      _isProcessing = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      final newResponse = _generateAIResponse(userMessage!);
+      setState(() {
+        _conversation.add({
+          'text': newResponse,
+          'isUser': false,
+          'timestamp': DateTime.now(),
+        });
+        _isProcessing = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    });
+  }
+
+  /// Reusable action row for assistant messages
+  Widget _buildActionRow(
+    String key,
+    String textForTts, {
+    int? ttsIndex,
+    double leftPadding = 40,
+    bool showCopy = true,
+    bool showRegenerate = true,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(left: leftPadding, top: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Copy
+          if (showCopy) ...[
+            _buildActionIcon(
+              icon: Icons.content_copy_rounded,
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: textForTts));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Copied to clipboard'),
+                    duration: Duration(seconds: 1),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 6),
+          ],
+          // Thumbs up
+          _buildActionIcon(
+            icon: _likedMessages.contains(key)
+                ? Icons.thumb_up
+                : Icons.thumb_up_outlined,
+            color: _likedMessages.contains(key) ? Colors.greenAccent : null,
+            onTap: () {
+              setState(() {
+                if (_likedMessages.contains(key)) {
+                  _likedMessages.remove(key);
+                } else {
+                  _likedMessages.add(key);
+                  _dislikedMessages.remove(key);
+                }
+              });
+            },
+          ),
+          const SizedBox(width: 6),
+          // Thumbs down
+          _buildActionIcon(
+            icon: _dislikedMessages.contains(key)
+                ? Icons.thumb_down
+                : Icons.thumb_down_outlined,
+            color: _dislikedMessages.contains(key) ? Colors.redAccent : null,
+            onTap: () {
+              setState(() {
+                if (_dislikedMessages.contains(key)) {
+                  _dislikedMessages.remove(key);
+                } else {
+                  _dislikedMessages.add(key);
+                  _likedMessages.remove(key);
+                }
+              });
+            },
+          ),
+          const SizedBox(width: 6),
+          // TTS / Volume
+          _buildActionIcon(
+            icon: _currentlyPlayingKey == key && _isTtsSpeaking
+                ? Icons.stop_circle_rounded
+                : Icons.volume_up_rounded,
+            color: _currentlyPlayingKey == key && _isTtsSpeaking
+                ? Colors.orangeAccent
+                : null,
+            onTap: () => _toggleTts(key, textForTts),
+          ),
+          // Regenerate
+          if (showRegenerate && ttsIndex != null) ...[
+            const SizedBox(width: 6),
+            _buildActionIcon(
+              icon: Icons.refresh_rounded,
+              onTap: () => _regenerateResponse(ttsIndex),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionIcon({
+    required IconData icon,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          icon,
+          color: color ?? Colors.white.withValues(alpha: 0.5),
+          size: 16,
+        ),
       ),
     );
   }
@@ -2213,735 +2543,72 @@ class HomeScreenState extends State<HomeScreen>
     List<Map<String, dynamic>> data,
     bool isDarkMode,
     String category,
+    int msgIndex,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.only(top: 10, bottom: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Horizontal scrollable cards
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: data.length,
-              itemBuilder: (context, index) {
-                final item = data[index];
-                return _buildItemCard(item, isDarkMode, category);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNewsResultsWidget(
-    List<Map<String, dynamic>> data,
-    bool isDarkMode,
-  ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Horizontal scrollable news cards
-          SizedBox(
-            height: 220,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: data.length,
-              itemBuilder: (context, index) {
-                final item = data[index];
-                return _buildNewsCard(item, isDarkMode);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNewsCard(Map<String, dynamic> item, bool isDarkMode) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        // Show news detail bottom sheet
-        _showNewsDetail(item);
-      },
-      child: Container(
-        width: 180,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: Colors.grey[900]?.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image with download button
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    item['image'] as String,
-                    height: 100,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 100,
-                        color: Colors.grey[700],
-                        child: const Icon(
-                          Icons.newspaper,
-                          color: Colors.white54,
-                          size: 40,
-                        ),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 100,
-                        color: Colors.grey[800],
-                        child: const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _saveImageFromUrl(item['image'] as String);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            // Details
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Category badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(
-                        item['category'] as String,
-                      ).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item['category'] as String,
-                      style: TextStyle(
-                        color: _getCategoryColor(item['category'] as String),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  // Title
-                  Text(
-                    item['title'] as String,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  // Source & Time
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        color: Colors.grey[500],
-                        size: 11,
-                      ),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          item['time'] as String,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 10,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category) {
-      case 'Sports':
-        return Colors.orange;
-      case 'Business':
-        return Colors.green;
-      case 'Technology':
-        return Colors.blue;
-      case 'Science':
-        return Colors.purple;
-      case 'Entertainment':
-        return Colors.pink;
-      case 'Politics':
-        return Colors.red;
-      case 'Weather':
-        return Colors.cyan;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  void _showNewsDetail(Map<String, dynamic> item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[600],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              child: Image.network(
-                item['image'] as String,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[700],
-                    child: const Icon(
-                      Icons.newspaper,
-                      color: Colors.white54,
-                      size: 60,
-                    ),
-                  );
-                },
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Category & Time
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getCategoryColor(
-                              item['category'] as String,
-                            ).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            item['category'] as String,
-                            style: TextStyle(
-                              color: _getCategoryColor(
-                                item['category'] as String,
-                              ),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.access_time,
-                          color: Colors.grey[500],
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          item['time'] as String,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Title
-                    Text(
-                      item['title'] as String,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Source
-                    Row(
-                      children: [
-                        const Icon(Icons.source, color: Colors.blue, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          item['source'] as String,
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    // Description
-                    Text(
-                      item['description'] as String,
-                      style: TextStyle(
-                        color: Colors.grey[300],
-                        fontSize: 16,
-                        height: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Read More Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Opening full article...'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _getCategoryColor(
-                            item['category'] as String,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Read Full Article',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReelsResultsWidget(
-    List<Map<String, dynamic>> data,
-    bool isDarkMode,
-  ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Horizontal scrollable reels cards
-          SizedBox(
-            height: 260,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: data.length,
-              itemBuilder: (context, index) {
-                final item = data[index];
-                return _buildReelCard(item, isDarkMode);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReelCard(Map<String, dynamic> item, bool isDarkMode) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        _showReelPlayer(item);
-      },
-      child: Container(
-        width: 150,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: Colors.grey[900]?.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Thumbnail
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                item['thumbnail'] as String,
-                height: 260,
-                width: 150,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 260,
-                    width: 150,
-                    color: Colors.grey[800],
-                    child: const Icon(
-                      Icons.play_circle_fill,
-                      color: Colors.white54,
-                      size: 50,
-                    ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 260,
-                    width: 150,
-                    color: Colors.grey[800],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Gradient overlay
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.8),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Download button
-            Positioned(
-              top: 8,
-              left: 8,
+          if (data.length > 2)
+            Align(
+              alignment: Alignment.centerRight,
               child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  _saveImageFromUrl(item['thumbnail'] as String);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
-                ),
-              ),
-            ),
-            // Duration label
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  item['duration'] as String,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showSeeAllProducts(data, category),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    "See All",
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ),
-            // Center play icon
-            Positioned.fill(
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-            ),
-            // Bottom info
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                child: Column(
+          if (data.length > 2) const SizedBox(height: 4),
+          SizedBox(
+            height: 230,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: data.length,
+              itemBuilder: (context, index) {
+                final item = data[index];
+                final productName = item['name'] as String? ?? '';
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title
-                    Text(
-                      item['title'] as String,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    // Creator
-                    Text(
-                      item['creator'] as String,
-                      style: TextStyle(color: Colors.grey[400], fontSize: 10),
-                    ),
-                    const SizedBox(height: 4),
-                    // Views & Likes
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.visibility,
-                          color: Colors.grey[500],
-                          size: 11,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          item['views'] as String,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 10,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.favorite, color: Colors.red[400], size: 11),
-                        const SizedBox(width: 3),
-                        Text(
-                          item['likes'] as String,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
+                    _buildItemCard(item, isDarkMode, category),
+                    _buildActionRow(
+                      'product_${msgIndex}_$index',
+                      productName,
+                      leftPadding: 0,
+                      showCopy: false,
+                      showRegenerate: false,
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  void _showReelPlayer(Map<String, dynamic> item) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => _ReelPlayerScreen(reel: item)),
+  void _showSeeAllProducts(List<Map<String, dynamic>> data, String category) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) => SeeAllProductsScreen(
+          products: data,
+          category: category,
+        ),
+      ),
     );
-  }
-
-  Future<void> _saveImageFromUrl(String imageUrl) async {
-    try {
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) {
-          final photosStatus = await Permission.photos.request();
-          if (!photosStatus.isGranted) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Storage permission required')),
-              );
-            }
-            return;
-          }
-        }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Downloading...'),
-            backgroundColor: Colors.blue.withValues(alpha: 0.8),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
-
-      final response = await Dio().get(
-        imageUrl,
-        options: Options(responseType: ResponseType.bytes),
-      );
-
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Pictures/Plink');
-      } else {
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
-
-      // Detect extension from URL
-      final uri = Uri.parse(imageUrl);
-      final urlPath = uri.path.toLowerCase();
-      String ext = '.jpg';
-      for (final e in ['.png', '.webp', '.gif', '.jpeg', '.mp4', '.pdf']) {
-        if (urlPath.contains(e)) {
-          ext = e;
-          break;
-        }
-      }
-
-      final fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}$ext';
-      final filePath = '${directory.path}/$fileName';
-      final file = File(filePath);
-      await file.writeAsBytes(response.data);
-
-      if (Platform.isAndroid) {
-        await Process.run('am', [
-          'broadcast',
-          '-a',
-          'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
-          '-d',
-          'file://$filePath',
-        ]);
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Saved to Downloads'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Failed to save image: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildItemCard(
@@ -2983,34 +2650,12 @@ class HomeScreenState extends State<HomeScreen>
 
     // Get bottom info based on category
     String getBottomInfo() {
-      switch (category) {
-        case 'food':
-          return item['distance'] as String? ?? '';
-        case 'electric':
-          return item['condition'] as String? ?? '';
-        case 'house':
-          return item['area'] as String? ?? '';
-        case 'place':
-          return item['distance'] as String? ?? '';
-        default:
-          return '';
-      }
+      return item['distance'] as String? ?? item['location'] as String? ?? '';
     }
 
     // Get bottom icon based on category
     IconData getBottomIcon() {
-      switch (category) {
-        case 'food':
-          return Icons.location_on;
-        case 'electric':
-          return Icons.verified;
-        case 'house':
-          return Icons.square_foot;
-        case 'place':
-          return Icons.directions;
-        default:
-          return Icons.info;
-      }
+      return Icons.location_on;
     }
 
     return GestureDetector(
@@ -3029,15 +2674,19 @@ class HomeScreenState extends State<HomeScreen>
         width: 160,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: Colors.grey[850],
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3050,7 +2699,7 @@ class HomeScreenState extends State<HomeScreen>
                     top: Radius.circular(16),
                   ),
                   child: Image.network(
-                    item['image'] as String,
+                    item['image'] as String? ?? '',
                     height: 100,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -3073,24 +2722,6 @@ class HomeScreenState extends State<HomeScreen>
                     },
                   ),
                 ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _saveImageFromUrl(item['image'] as String);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
-                    ),
-                  ),
-                ),
               ],
             ),
             // Details
@@ -3101,7 +2732,7 @@ class HomeScreenState extends State<HomeScreen>
                 children: [
                   // Name
                   Text(
-                    item['name'] as String,
+                    item['name'] as String? ?? '',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -3125,7 +2756,7 @@ class HomeScreenState extends State<HomeScreen>
                       // Price
                       Expanded(
                         child: Text(
-                          item['price'] as String,
+                          item['price'] as String? ?? '',
                           style: TextStyle(
                             color: Colors.green[400],
                             fontSize: 13,
@@ -3624,7 +3255,7 @@ class Drawer3DTransition extends StatelessWidget {
   }
 }
 
-// ChatGPT-style Side Drawer
+// SingleTap-style Side Drawer
 class _ChatHistorySideDrawer extends StatefulWidget {
   final VoidCallback onNewChat;
   final VoidCallback onSearchChats;
@@ -4208,615 +3839,6 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// Fullscreen Reel Player Screen
-class _ReelPlayerScreen extends StatefulWidget {
-  final Map<String, dynamic> reel;
-
-  const _ReelPlayerScreen({required this.reel});
-
-  @override
-  State<_ReelPlayerScreen> createState() => _ReelPlayerScreenState();
-}
-
-class _ReelPlayerScreenState extends State<_ReelPlayerScreen> {
-  bool _isLiked = false;
-  bool _isFollowing = false;
-  bool _isPaused = false;
-  bool _isLoading = true;
-  VideoPlayerController? _videoController;
-  double _progress = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeVideo();
-  }
-
-  Future<void> _initializeVideo() async {
-    final videoUrl = widget.reel['videoUrl'] as String?;
-    if (videoUrl != null && videoUrl.isNotEmpty) {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-
-      try {
-        await _videoController!.initialize();
-        _videoController!.setLooping(true);
-        _videoController!.play();
-
-        // Listen to video position for progress bar
-        _videoController!.addListener(_updateProgress);
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _updateProgress() {
-    if (_videoController != null && _videoController!.value.isInitialized) {
-      final duration = _videoController!.value.duration.inMilliseconds;
-      final position = _videoController!.value.position.inMilliseconds;
-      if (duration > 0 && mounted) {
-        setState(() {
-          _progress = position / duration;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _videoController?.removeListener(_updateProgress);
-    _videoController?.dispose();
-    super.dispose();
-  }
-
-  void _togglePlayPause() {
-    if (_videoController != null && _videoController!.value.isInitialized) {
-      setState(() {
-        if (_videoController!.value.isPlaying) {
-          _videoController!.pause();
-          _isPaused = true;
-        } else {
-          _videoController!.play();
-          _isPaused = false;
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _togglePlayPause,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Video Player or Thumbnail
-            if (_videoController != null &&
-                _videoController!.value.isInitialized)
-              Center(
-                child: AspectRatio(
-                  aspectRatio: _videoController!.value.aspectRatio,
-                  child: VideoPlayer(_videoController!),
-                ),
-              )
-            else
-              Image.network(
-                widget.reel['thumbnail'] as String,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey[900],
-                    child: const Center(
-                      child: Icon(
-                        Icons.play_circle_fill,
-                        color: Colors.white54,
-                        size: 80,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-            // Loading indicator
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 3,
-                ),
-              ),
-
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.3),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7),
-                  ],
-                ),
-              ),
-            ),
-
-            // Pause indicator
-            if (_isPaused && !_isLoading)
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: 60,
-                  ),
-                ),
-              ),
-
-            // Top bar
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              left: 16,
-              right: 16,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.visibility,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          widget.reel['views'] as String,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Right side actions
-            Positioned(
-              right: 16,
-              bottom: 120,
-              child: Column(
-                children: [
-                  // Like button
-                  _buildActionButton(
-                    icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-                    label: widget.reel['likes'] as String,
-                    color: _isLiked ? Colors.red : Colors.white,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      setState(() {
-                        _isLiked = !_isLiked;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  // Comment button
-                  _buildActionButton(
-                    icon: Icons.comment,
-                    label: '1.2K',
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _showComments();
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  // Share button
-                  _buildActionButton(
-                    icon: Icons.share,
-                    label: 'Share',
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Share functionality coming soon!'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  // More button
-                  _buildActionButton(
-                    icon: Icons.more_horiz,
-                    label: 'More',
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // Bottom info
-            Positioned(
-              left: 16,
-              right: 80,
-              bottom: 30,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Creator info
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage(
-                              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-                            ),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.reel['creator'] as String,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              widget.reel['category'] as String,
-                              style: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() {
-                            _isFollowing = !_isFollowing;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _isFollowing ? Colors.grey[700] : Colors.red,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            _isFollowing ? 'Following' : 'Follow',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Title
-                  Text(
-                    widget.reel['title'] as String,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  // Music/Audio info
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.music_note,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Original Audio - ${widget.reel['creator']}',
-                          style: TextStyle(
-                            color: Colors.grey[300],
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Progress bar at bottom
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                height: 3,
-                color: Colors.grey[800],
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: _progress.clamp(0.0, 1.0),
-                  child: Container(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    Color color = Colors.white,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showComments() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[600],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Text(
-                    'Comments',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '1.2K',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(color: Colors.grey, height: 1),
-            // Comments list
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: 10,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.grey[700],
-                          child: Text(
-                            'U${index + 1}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '@user_${index + 1}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                index % 2 == 0
-                                    ? 'This is amazing! 🔥🔥'
-                                    : 'Great content, keep it up! 👏',
-                                style: TextStyle(
-                                  color: Colors.grey[300],
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${index + 1}h ago',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          children: [
-                            Icon(
-                              Icons.favorite_border,
-                              color: Colors.grey[500],
-                              size: 18,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${(index + 1) * 12}',
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Comment input
-            Container(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 12,
-                bottom: MediaQuery.of(context).padding.bottom + 12,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.grey[850],
-                border: Border(top: BorderSide(color: Colors.grey[800]!)),
-              ),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.grey,
-                    child: Icon(Icons.person, color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Add a comment...',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

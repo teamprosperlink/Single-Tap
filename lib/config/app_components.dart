@@ -32,11 +32,24 @@ class AppComponents {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 if (subtitle != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
+                    child: Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -67,7 +80,13 @@ class AppComponents {
         if (actionLabel != null && onAction != null)
           TextButton(
             onPressed: onAction,
-            child: Text(actionLabel, style: TextStyle(color: AppTheme.primaryGreen, fontSize: AppTheme.fontSmall)),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(
+                color: AppTheme.primaryGreen,
+                fontSize: AppTheme.fontSmall,
+              ),
+            ),
           ),
       ],
     );
@@ -94,8 +113,21 @@ class AppComponents {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary(isDarkMode))),
-          Text(label, style: TextStyle(fontSize: 12, color: AppTheme.secondaryText(isDarkMode))),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary(isDarkMode),
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.secondaryText(isDarkMode),
+            ),
+          ),
         ],
       ),
     );
@@ -126,7 +158,14 @@ class AppComponents {
               Icon(icon, color: color, size: 20),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(label, style: TextStyle(color: AppTheme.textPrimary(isDarkMode), fontWeight: FontWeight.w500, fontSize: 13)),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary(isDarkMode),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
               ),
             ],
           ),
@@ -160,13 +199,28 @@ class AppComponents {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textPrimary(isDarkMode))),
-                Text(message, style: TextStyle(fontSize: 12, color: AppTheme.secondaryText(isDarkMode))),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary(isDarkMode),
+                  ),
+                ),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.secondaryText(isDarkMode),
+                  ),
+                ),
               ],
             ),
           ),
           if (actionLabel != null && onAction != null)
-            TextButton(onPressed: onAction, child: Text(actionLabel, style: TextStyle(color: color))),
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionLabel, style: TextStyle(color: color)),
+            ),
         ],
       ),
     );
@@ -189,17 +243,21 @@ class AppComponents {
   }
 
   /// Small status badge.
-  static Widget statusBadge({
-    required String text,
-    required Color color,
-  }) {
+  static Widget statusBadge({required String text, required Color color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
@@ -231,16 +289,40 @@ class AppComponents {
         children: [
           if (icon != null) Icon(icon, color: Colors.white, size: 24),
           if (icon != null) const SizedBox(height: 8),
-          Text(displayAmount, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(
+            displayAmount,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.8))),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
+          ),
           if (change != null) ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(isPositive ? Icons.trending_up : Icons.trending_down, color: Colors.white, size: 16),
+                Icon(
+                  isPositive ? Icons.trending_up : Icons.trending_down,
+                  color: Colors.white,
+                  size: 16,
+                ),
                 const SizedBox(width: 4),
-                Text(change, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text(
+                  change,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
           ],
@@ -267,7 +349,10 @@ class AppComponents {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: AppTheme.secondaryText(isDarkMode)),
+              style: TextStyle(
+                fontSize: 14,
+                color: AppTheme.secondaryText(isDarkMode),
+              ),
             ),
           ],
         ),

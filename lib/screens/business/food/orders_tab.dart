@@ -10,11 +10,7 @@ class OrdersTab extends StatefulWidget {
   final BusinessModel business;
   final VoidCallback? onRefresh;
 
-  const OrdersTab({
-    super.key,
-    required this.business,
-    this.onRefresh,
-  });
+  const OrdersTab({super.key, required this.business, this.onRefresh});
 
   @override
   State<OrdersTab> createState() => _OrdersTabState();
@@ -214,7 +210,9 @@ class _OrdersTabState extends State<OrdersTab> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              noOrdersAtAll ? Icons.receipt_long_outlined : Icons.search_off_rounded,
+              noOrdersAtAll
+                  ? Icons.receipt_long_outlined
+                  : Icons.search_off_rounded,
               size: 64,
               color: isDarkMode ? Colors.white24 : Colors.grey[300],
             ),
@@ -247,7 +245,10 @@ class _OrdersTabState extends State<OrdersTab> {
     );
   }
 
-  Future<void> _updateOrderStatus(FoodOrderModel order, FoodOrderStatus status) async {
+  Future<void> _updateOrderStatus(
+    FoodOrderModel order,
+    FoodOrderStatus status,
+  ) async {
     try {
       await _businessService.updateFoodOrderStatus(
         widget.business.id,
@@ -389,14 +390,18 @@ class _OrderCard extends StatelessWidget {
                           Icon(
                             Icons.access_time,
                             size: 14,
-                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.white54
+                                : Colors.grey[600],
                           ),
                           const SizedBox(width: 4),
                           Text(
                             '${timeFormat.format(order.createdAt)} • ${dateFormat.format(order.createdAt)}',
                             style: TextStyle(
                               fontSize: 13,
-                              color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                              color: isDarkMode
+                                  ? Colors.white54
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -412,7 +417,10 @@ class _OrderCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _getOrderTypeColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -453,7 +461,9 @@ class _OrderCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 20,
-                    backgroundColor: const Color(0xFF00D67D).withValues(alpha: 0.1),
+                    backgroundColor: const Color(
+                      0xFF00D67D,
+                    ).withValues(alpha: 0.1),
                     child: Text(
                       order.customerName[0].toUpperCase(),
                       style: const TextStyle(
@@ -478,17 +488,16 @@ class _OrderCard extends StatelessWidget {
                           order.customerPhone,
                           style: TextStyle(
                             fontSize: 13,
-                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.white54
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: Icon(
-                      Icons.phone,
-                      color: const Color(0xFF00D67D),
-                    ),
+                    icon: const Icon(Icons.phone, color: Color(0xFF00D67D)),
                     onPressed: () {
                       // TODO: Call customer
                     },
@@ -507,47 +516,49 @@ class _OrderCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...order.items.map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00D67D).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${item.quantity}x',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF00D67D),
+            ...order.items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00D67D).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${item.quantity}x',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00D67D),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      item.name,
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black87,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(
-                    '\u20B9${item.total.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                    Text(
+                      '\u20B9${item.total.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            )),
+            ),
             if (order.notes != null && order.notes!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(

@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../models/post_model.dart';
-import '../home/product_detail_screen.dart';
+import '../home/product/product_detail_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class SavedPostsScreen extends StatefulWidget {
@@ -61,7 +61,9 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                   itemBuilder: (context, index) {
                     final savedPost = savedPosts[index];
                     final postId = savedPost.id;
-                    final savedAt = (savedPost.data() as Map<String, dynamic>)['savedAt'] as Timestamp?;
+                    final savedAt =
+                        (savedPost.data() as Map<String, dynamic>)['savedAt']
+                            as Timestamp?;
 
                     return FutureBuilder<DocumentSnapshot>(
                       future: _firestore.collection('posts').doc(postId).get(),
@@ -76,7 +78,9 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                           return const SizedBox.shrink();
                         }
 
-                        final post = PostModel.fromFirestore(postSnapshot.data!);
+                        final post = PostModel.fromFirestore(
+                          postSnapshot.data!,
+                        );
 
                         return _buildSavedPostCard(post, savedAt);
                       },
@@ -179,7 +183,9 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                               placeholder: (context, url) => Container(
                                 color: Colors.white.withValues(alpha: 0.1),
                                 child: const Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
                               errorWidget: (context, url, error) => Icon(
@@ -213,17 +219,17 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                         ),
                         const SizedBox(height: 4),
                         ...[
-                        Text(
-                          post.description,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 14,
+                          Text(
+                            post.description,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                      ],
+                          const SizedBox(height: 4),
+                        ],
                         Row(
                           children: [
                             if (post.price != null && post.price! > 0) ...[
@@ -278,7 +284,9 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
     final intent = post.intentAnalysis;
 
     final domain = intent['domain']?.toString().toLowerCase() ?? '';
-    if (domain.contains('marketplace') || domain.contains('buy') || domain.contains('sell')) {
+    if (domain.contains('marketplace') ||
+        domain.contains('buy') ||
+        domain.contains('sell')) {
       return Icons.shopping_bag_outlined;
     } else if (domain.contains('job') || domain.contains('work')) {
       return Icons.work_outline;
@@ -378,9 +386,7 @@ class SavedPostsService {
         .doc(userId)
         .collection('saved_posts')
         .doc(postId)
-        .set({
-      'savedAt': FieldValue.serverTimestamp(),
-    });
+        .set({'savedAt': FieldValue.serverTimestamp()});
   }
 
   /// Unsave a post

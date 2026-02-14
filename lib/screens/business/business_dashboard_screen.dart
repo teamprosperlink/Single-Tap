@@ -20,7 +20,8 @@ class BusinessDashboardScreen extends ConsumerStatefulWidget {
       _BusinessDashboardScreenState();
 }
 
-class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScreen>
+class _BusinessDashboardScreenState
+    extends ConsumerState<BusinessDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final BusinessService _businessService = BusinessService();
@@ -116,23 +117,19 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
               expandedHeight: 280,
               floating: false,
               pinned: true,
-              backgroundColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+              backgroundColor: isDarkMode
+                  ? const Color(0xFF1A1A2E)
+                  : Colors.white,
               flexibleSpace: FlexibleSpaceBar(
                 background: _buildBusinessHeader(isDarkMode),
               ),
               leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                ),
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    color: Colors.white,
-                  ),
+                  icon: const Icon(Icons.edit_outlined, color: Colors.white),
                   onPressed: () => _editBusiness(),
                 ),
                 IconButton(
@@ -150,8 +147,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                   child: TabBar(
                     controller: _tabController,
                     labelColor: const Color(0xFF00D67D),
-                    unselectedLabelColor:
-                        isDarkMode ? Colors.white54 : Colors.grey[600],
+                    unselectedLabelColor: isDarkMode
+                        ? Colors.white54
+                        : Colors.grey[600],
                     indicatorColor: const Color(0xFF00D67D),
                     indicatorWeight: 3,
                     tabs: const [
@@ -220,10 +218,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black.withValues(alpha: 0.7),
-              ],
+              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
             ),
           ),
         ),
@@ -256,10 +251,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: _business!.logo != null
-                            ? Image.network(
-                                _business!.logo!,
-                                fit: BoxFit.cover,
-                              )
+                            ? Image.network(_business!.logo!, fit: BoxFit.cover)
                             : Center(
                                 child: Text(
                                   _business!.businessName.isNotEmpty
@@ -342,7 +334,8 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: _business!.hours?.isCurrentlyOpen ?? false
+                                  color:
+                                      _business!.hours?.isCurrentlyOpen ?? false
                                       ? Colors.green.withValues(alpha: 0.2)
                                       : Colors.red.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(12),
@@ -354,7 +347,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: _business!.hours?.isCurrentlyOpen ?? false
+                                    color:
+                                        _business!.hours?.isCurrentlyOpen ??
+                                            false
                                         ? Colors.green
                                         : Colors.red,
                                   ),
@@ -578,9 +573,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: color.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -589,10 +582,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -721,11 +711,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: const Color(0xFF00D67D),
-          ),
+          Icon(icon, size: 20, color: const Color(0xFF00D67D)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -772,11 +758,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                 color: const Color(0xFF00D67D).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: const Color(0xFF00D67D),
-              ),
+              child: Icon(icon, size: 20, color: const Color(0xFF00D67D)),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -801,8 +783,24 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
 
   Widget _buildHoursCard(bool isDarkMode) {
     final hoursData = _business!.hours!;
-    final days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    final dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -913,7 +911,8 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
     return EnhancedEmptyState(
       icon: Icons.inventory_2_outlined,
       title: 'No Listings Yet',
-      message: 'Start adding products or services to showcase to your customers',
+      message:
+          'Start adding products or services to showcase to your customers',
       actionLabel: 'Add Listing',
       onAction: () => _showAddOptions(),
       color: const Color(0xFF00D67D),
@@ -1024,7 +1023,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
               children: List.generate(5, (index) {
                 final stars = 5 - index;
                 final count = ratingCounts[stars] ?? 0;
-                final percentage = reviews.isEmpty ? 0.0 : count / reviews.length;
+                final percentage = reviews.isEmpty
+                    ? 0.0
+                    : count / reviews.length;
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
@@ -1062,7 +1063,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                           '$count',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.white54
+                                : Colors.grey[600],
                           ),
                         ),
                       ),
@@ -1144,7 +1147,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                           _formatDate(review.createdAt),
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDarkMode ? Colors.white38 : Colors.grey[500],
+                            color: isDarkMode
+                                ? Colors.white38
+                                : Colors.grey[500],
                           ),
                         ),
                       ],
@@ -1232,11 +1237,12 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
   }
 
   Widget _buildEmptyReviews(bool isDarkMode) {
-    return EnhancedEmptyState(
+    return const EnhancedEmptyState(
       icon: Icons.rate_review_outlined,
       title: 'No Reviews Yet',
-      message: 'Customer reviews will appear here once they start reviewing your business',
-      color: const Color(0xFF00D67D),
+      message:
+          'Customer reviews will appear here once they start reviewing your business',
+      color: Color(0xFF00D67D),
     );
   }
 
@@ -1269,7 +1275,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                 color: isDarkMode
                     ? const Color(0xFF2D2D44).withValues(alpha: 0.95)
                     : Colors.white.withValues(alpha: 0.95),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
               child: SafeArea(
                 child: Column(
@@ -1345,9 +1353,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: color.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -1383,11 +1389,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                 ],
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: color,
-            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: color),
           ],
         ),
       ),
@@ -1527,7 +1529,11 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
             if (!mounted) return;
             // ignore: use_build_context_synchronously
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${type == 'product' ? 'Product' : 'Service'} added successfully')),
+              SnackBar(
+                content: Text(
+                  '${type == 'product' ? 'Product' : 'Service'} added successfully',
+                ),
+              ),
             );
           }
         },
@@ -1554,7 +1560,10 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
         businessId: _business!.id,
         existingListing: listing,
         onSave: (updatedListing) async {
-          final success = await _businessService.updateListing(listing.id, updatedListing);
+          final success = await _businessService.updateListing(
+            listing.id,
+            updatedListing,
+          );
           if (success && mounted) {
             _loadBusinessData();
             if (!mounted) return;
@@ -1587,7 +1596,10 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final success = await _businessService.deleteListing(_business!.id, listing.id);
+              final success = await _businessService.deleteListing(
+                _business!.id,
+                listing.id,
+              );
               if (success && mounted) {
                 _loadBusinessData();
                 if (!mounted) return;
@@ -1616,7 +1628,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              listing.isAvailable ? 'Listing marked as unavailable' : 'Listing marked as available',
+              listing.isAvailable
+                  ? 'Listing marked as unavailable'
+                  : 'Listing marked as available',
             ),
           ),
         );
@@ -1659,7 +1673,10 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                     },
                   ),
                 ListTile(
-                  leading: const Icon(Icons.flag_outlined, color: Colors.orange),
+                  leading: const Icon(
+                    Icons.flag_outlined,
+                    color: Colors.orange,
+                  ),
                   title: const Text('Report review'),
                   onTap: () {
                     Navigator.pop(context);
@@ -1688,9 +1705,7 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
           maxLines: 3,
           decoration: InputDecoration(
             hintText: 'Write your reply...',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         actions: [
@@ -1709,9 +1724,9 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
               if (success && mounted) {
                 if (!mounted) return;
                 // ignore: use_build_context_synchronously
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Reply posted')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Reply posted')));
               }
             },
             style: ElevatedButton.styleFrom(
@@ -1737,8 +1752,13 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
           children: [
             const Text('Why are you reporting this review?'),
             const SizedBox(height: 16),
-            ...['Spam or fake review', 'Inappropriate language', 'Misleading content', 'Other'].map((reason) =>
-              ListTile(
+            ...[
+              'Spam or fake review',
+              'Inappropriate language',
+              'Misleading content',
+              'Other',
+            ].map(
+              (reason) => ListTile(
                 dense: true,
                 title: Text(reason),
                 onTap: () async {
@@ -1747,21 +1767,23 @@ class _BusinessDashboardScreenState extends ConsumerState<BusinessDashboardScree
                     await FirebaseProvider.firestore
                         .collection('reported_reviews')
                         .add({
-                      'reviewId': review.id,
-                      'businessId': review.businessId,
-                      'reportedBy': FirebaseProvider.currentUserId,
-                      'reason': reason,
-                      'reviewUserId': review.userId,
-                      'reviewComment': review.comment,
-                      'createdAt': DateTime.now(),
-                    });
+                          'reviewId': review.id,
+                          'businessId': review.businessId,
+                          'reportedBy': FirebaseProvider.currentUserId,
+                          'reason': reason,
+                          'reviewUserId': review.userId,
+                          'reviewComment': review.comment,
+                          'createdAt': DateTime.now(),
+                        });
                   } catch (_) {
                     // Report saved locally even if Firestore fails
                   }
                   if (mounted) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       const SnackBar(
-                        content: Text('Report submitted. We\'ll review it shortly.'),
+                        content: Text(
+                          'Report submitted. We\'ll review it shortly.',
+                        ),
                         backgroundColor: Colors.orange,
                       ),
                     );
@@ -1908,7 +1930,8 @@ class _AddListingSheetState extends State<_AddListingSheet> {
                       maxLines: 3,
                       decoration: InputDecoration(
                         labelText: 'Description',
-                        hintText: 'Describe your ${isProduct ? 'product' : 'service'}',
+                        hintText:
+                            'Describe your ${isProduct ? 'product' : 'service'}',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1919,7 +1942,9 @@ class _AddListingSheetState extends State<_AddListingSheet> {
                     // Price
                     TextFormField(
                       controller: _priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Price',
                         hintText: '0.00',
@@ -1948,8 +1973,11 @@ class _AddListingSheetState extends State<_AddListingSheet> {
                         ),
                       ),
                       value: _isAvailable,
-                      onChanged: (value) => setState(() => _isAvailable = value),
-                      activeTrackColor: const Color(0xFF00D67D).withValues(alpha: 0.5),
+                      onChanged: (value) =>
+                          setState(() => _isAvailable = value),
+                      activeTrackColor: const Color(
+                        0xFF00D67D,
+                      ).withValues(alpha: 0.5),
                       activeThumbColor: const Color(0xFF00D67D),
                     ),
                     const SizedBox(height: 40),
@@ -1992,7 +2020,9 @@ class _AddListingSheetState extends State<_AddListingSheet> {
                           ),
                         )
                       : Text(
-                          isEditing ? 'Save Changes' : 'Add ${isProduct ? 'Product' : 'Service'}',
+                          isEditing
+                              ? 'Save Changes'
+                              : 'Add ${isProduct ? 'Product' : 'Service'}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -2094,7 +2124,10 @@ class _ListingDetailsSheet extends StatelessWidget {
 
                   // Type badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: isProduct
                           ? Colors.blue.withValues(alpha: 0.1)
@@ -2153,14 +2186,18 @@ class _ListingDetailsSheet extends StatelessWidget {
                               ? Icons.check_circle
                               : Icons.cancel,
                           size: 16,
-                          color: listing.isAvailable ? Colors.green : Colors.red,
+                          color: listing.isAvailable
+                              ? Colors.green
+                              : Colors.red,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           listing.isAvailable ? 'Available' : 'Unavailable',
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
-                            color: listing.isAvailable ? Colors.green : Colors.red,
+                            color: listing.isAvailable
+                                ? Colors.green
+                                : Colors.red,
                           ),
                         ),
                       ],

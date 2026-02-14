@@ -18,7 +18,6 @@ import '../../models/extended_user_profile.dart';
 import '../../widgets/profile widgets/profile_detail_bottom_sheet.dart';
 import '../../services/connection_service.dart';
 import '../../services/location services/location_service.dart';
-import '../chat/my_connections_screen.dart';
 
 class LiveConnectTabScreen extends ConsumerStatefulWidget {
   final bool activateNearMeFilter; // Flag to activate "Near Me" filter on init
@@ -207,14 +206,7 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   ];
 
   // Tab categories for TabBar
-  final List<String> _tabCategories = [
-    'All',
-    'Near Me',
-    'Dating',
-    'Friendship',
-    'Business',
-    'Sports',
-  ];
+  final List<String> _tabCategories = ['Discover Connect', 'Smart Connect'];
 
   @override
   void initState() {
@@ -230,17 +222,17 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         HapticFeedback.lightImpact();
         final selectedCategory = _tabCategories[_tabController.index];
         setState(() {
-          if (selectedCategory == 'All') {
+          if (selectedCategory == 'Discover Connect') {
             _filterByInterests = false;
             _selectedInterests.clear();
             _locationFilter = 'Worldwide';
-          } else if (selectedCategory == 'Near Me') {
+          } else if (selectedCategory == 'Smart Connect') {
             _filterByInterests = false;
             _selectedInterests.clear();
-            _locationFilter = 'Near me';
+            _locationFilter = 'Smart Connect';
           } else {
             _filterByInterests = true;
-            _locationFilter = 'Worldwide';
+            _locationFilter = 'Smart Connect';
             _selectedInterests.removeWhere(
               (item) =>
                   ['Dating', 'Friendship', 'Business', 'Sports'].contains(item),
@@ -2269,84 +2261,84 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             ),
           ),
         ),
-        actions: [
-          // Live Connect Icon with Background Container
-          StreamBuilder<int>(
-            stream: _connectionService.getPendingRequestsCountStream(),
-            builder: (context, snapshot) {
-              final count = snapshot.data ?? 0;
+        // actions: [
+        //   // Live Connect Icon with Background Container
+        //   StreamBuilder<int>(
+        //     stream: _connectionService.getPendingRequestsCountStream(),
+        //     builder: (context, snapshot) {
+        //       final count = snapshot.data ?? 0;
 
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const MyConnectionsScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.people_outline,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      tooltip: 'Connection Requests',
-                    ),
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade600,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 20,
-                          minHeight: 20,
-                        ),
-                        child: Center(
-                          child: Text(
-                            count > 9 ? '9+' : '$count',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          // Profile Avatar Button (removed - matches Messages screen)
-          const SizedBox(width: 8),
-        ],
+        //       return Stack(
+        //         clipBehavior: Clip.none,
+        //         children: [
+        //           Container(
+        //             margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+        //             decoration: BoxDecoration(
+        //               color: Colors.white.withValues(alpha: 0.15),
+        //               shape: BoxShape.circle,
+        //               border: Border.all(
+        //                 color: Colors.white.withValues(alpha: 0.3),
+        //                 width: 1,
+        //               ),
+        //             ),
+        //             child: IconButton(
+        //               onPressed: () {
+        //                 Navigator.push(
+        //                   context,
+        //                   MaterialPageRoute(
+        //                     builder: (context) => const MyConnectionsScreen(),
+        //                   ),
+        //                 );
+        //               },
+        //               icon: const Icon(
+        //                 Icons.people_outline,
+        //                 color: Colors.white,
+        //                 size: 22,
+        //               ),
+        //               tooltip: 'Connection Requests',
+        //             ),
+        //           ),
+        //           if (count > 0)
+        //             Positioned(
+        //               right: 4,
+        //               top: 4,
+        //               child: Container(
+        //                 padding: const EdgeInsets.all(4),
+        //                 decoration: BoxDecoration(
+        //                   color: Colors.red.shade600,
+        //                   shape: BoxShape.circle,
+        //                   border: Border.all(color: Colors.white, width: 2),
+        //                 ),
+        //                 constraints: const BoxConstraints(
+        //                   minWidth: 20,
+        //                   minHeight: 20,
+        //                 ),
+        //                 child: Center(
+        //                   child: Text(
+        //                     count > 9 ? '9+' : '$count',
+        //                     style: const TextStyle(
+        //                       color: Colors.white,
+        //                       fontSize: 10,
+        //                       fontWeight: FontWeight.bold,
+        //                     ),
+        //                   ),
+        //                 ),
+        //               ),
+        //             ),
+        //         ],
+        //       );
+        //     },
+        //   ),
+        //   // Profile Avatar Button (removed - matches Messages screen)
+        //   const SizedBox(width: 8),
+        // ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withOpacity(0.2),
                   width: 1,
                 ),
               ),
@@ -2355,23 +2347,31 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.tab,
               indicatorColor: Colors.white,
-              indicatorWeight: 2,
+              indicatorWeight: 1,
               dividerColor: Colors.transparent,
               labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-              labelStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.normal,
-              ),
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              unselectedLabelColor: Colors.white.withOpacity(0.6),
+
+              isScrollable: false,
+              tabAlignment: TabAlignment.fill,
+
               tabs: _tabCategories.map((category) {
-                return Tab(text: category);
+                final isFirst = category == _tabCategories.first;
+
+                return Tab(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: isFirst ? 18 : 0,
+                      right: isFirst ? 0 : 18,
+                    ),
+                    child: Align(
+                      alignment: isFirst
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
+                      child: Text(category),
+                    ),
+                  ),
+                );
               }).toList(),
             ),
           ),
@@ -2821,33 +2821,33 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         await _loadNearbyPeople(forceRefreshLocation: true);
       },
       color: Theme.of(context).primaryColor,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+
         itemCount: _filteredPeople.length + (_hasMoreUsers ? 1 : 0),
         itemBuilder: (context, index) {
           // Show "Load More" button at the end if there are more users
           if (index == _filteredPeople.length) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: _isLoadingMore
-                    ? const CircularProgressIndicator()
-                    : OutlinedButton.icon(
-                        onPressed: () => _loadNearbyPeople(loadMore: true),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Load More Users'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
-                          ),
-                          side: BorderSide(
-                            color: Theme.of(context).primaryColor,
-                          ),
-                          foregroundColor: Theme.of(context).primaryColor,
+            return Center(
+              child: _isLoadingMore
+                  ? const CircularProgressIndicator()
+                  : OutlinedButton.icon(
+                      onPressed: () => _loadNearbyPeople(loadMore: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Load More Users'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
                         ),
+                        side: BorderSide(color: Theme.of(context).primaryColor),
+                        foregroundColor: Theme.of(context).primaryColor,
                       ),
-              ),
+                    ),
             );
           }
 
@@ -2894,7 +2894,7 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               distanceText = '${distance.toStringAsFixed(1)}km';
             }
           }
-
+          // Netwoking list item with enhanced design and real-time online status
           return GestureDetector(
             onTap: () => _showProfileDetail(profileWithDistance),
             child: Container(
@@ -2908,11 +2908,8 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Row(
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                child: Column(
                   children: [
                     // Profile Image with gradient background
                     Stack(
@@ -2970,51 +2967,21 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
                             // Show photo with fallback to initial on error
                             return Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: gradientColors[0].withValues(
-                                      alpha: 0.3,
-                                    ),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: CachedNetworkImage(
-                                  imageUrl: fixedPhotoUrl,
-                                  width: 64,
-                                  height: 64,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: gradientColors,
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        userInitial,
-                                        style: const TextStyle(
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) {
-                                    // Mark as rate-limited if 429 error
-                                    if (error.toString().contains('429')) {
-                                      PhotoUrlHelper.markAsRateLimited(url);
-                                    }
-                                    return Container(
+                              margin: EdgeInsets
+                                  .zero, //   remove outer space if any
+                              width: double.infinity,
+                              height: 90,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(14),
+                                  topRight: Radius.circular(14),
+                                ),
+                                child: SizedBox.expand(
+                                  //   important add this
+                                  child: CachedNetworkImage(
+                                    imageUrl: fixedPhotoUrl,
+                                    fit: BoxFit.cover, //   full cover
+                                    placeholder: (context, url) => Container(
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: gradientColors,
@@ -3032,8 +2999,32 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           ),
                                         ),
                                       ),
-                                    );
-                                  },
+                                    ),
+                                    errorWidget: (context, url, error) {
+                                      if (error.toString().contains('429')) {
+                                        PhotoUrlHelper.markAsRateLimited(url);
+                                      }
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: gradientColors,
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            userInitial,
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             );
@@ -3096,165 +3087,93 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     const SizedBox(width: 16),
                     // User Info
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  userName,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDarkMode
-                                        ? Colors.white
-                                        : Colors.black,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (extendedProfile.verified) ...[
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.verified,
-                                  size: 18,
-                                  color: gradientColors[0],
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          // City, Distance, and Gender - always show this row
-                          Row(
-                            children: [
-                              if (extendedProfile.city != null &&
-                                  extendedProfile.city!.isNotEmpty) ...[
-                                Icon(
-                                  Icons.location_on,
-                                  size: 14,
-                                  color: isDarkMode
-                                      ? Colors.grey[500]
-                                      : Colors.grey[600],
-                                ),
-                                const SizedBox(width: 4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
                                 Flexible(
                                   child: Text(
-                                    extendedProfile.city!,
+                                    userName,
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                       color: isDarkMode
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600],
+                                          ? Colors.white
+                                          : Colors.black,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ],
-                              if (distanceText != null) ...[
-                                if (extendedProfile.city != null &&
-                                    extendedProfile.city!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    child: Text(
-                                      '•',
-                                      style: TextStyle(
-                                        color: isDarkMode
-                                            ? Colors.grey[600]
-                                            : Colors.grey[400],
-                                      ),
-                                    ),
+                                if (extendedProfile.verified) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.verified,
+                                    size: 14,
+                                    color: gradientColors[0],
                                   ),
-                                Icon(
-                                  Icons.navigation,
-                                  size: 13,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  distanceText,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                              ],
-                              // Gender on same line
-                              if (extendedProfile.gender != null &&
-                                  extendedProfile.gender!.isNotEmpty) ...[
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  child: Text(
-                                    '•',
-                                    style: TextStyle(
-                                      color: isDarkMode
-                                          ? Colors.grey[600]
-                                          : Colors.grey[400],
-                                    ),
-                                  ),
-                                ),
-                                Icon(
-                                  extendedProfile.gender == 'Male'
-                                      ? Icons.male
-                                      : extendedProfile.gender == 'Female'
-                                      ? Icons.female
-                                      : Icons.person_outline,
-                                  size: 13,
-                                  color: isDarkMode
-                                      ? Colors.grey[500]
-                                      : Colors.grey[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  extendedProfile.gender!,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          // Common Interests Count
-                          if (commonInterests.isNotEmpty &&
-                              _filterByInterests) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.favorite,
-                                  size: 13,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${commonInterests.length} common interest${commonInterests.length > 1 ? 's' : ''}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
+                                ],
                               ],
                             ),
+                            const SizedBox(height: 6),
+                            // City, Distance, and Gender - always show this row
+                            Row(
+                              children: [
+                                if (extendedProfile.city != null &&
+                                    extendedProfile.city!.isNotEmpty) ...[
+                                  Icon(
+                                    Icons.location_on,
+                                    size: 14,
+                                    color: isDarkMode
+                                        ? Colors.grey[500]
+                                        : Colors.grey[600],
+                                  ),
+                                  // const SizedBox(width: 4),
+                                ],
+                                if (distanceText != null) ...[
+                                  if (extendedProfile.city != null &&
+                                      extendedProfile.city!.isNotEmpty)
+                                    const SizedBox(width: 4),
+                                  Text(
+                                    distanceText,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            // Common Interests Count
+                            if (commonInterests.isNotEmpty &&
+                                _filterByInterests) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.favorite,
+                                    size: 13,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${commonInterests.length} common interest${commonInterests.length > 1 ? 's' : ''}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    // Arrow icon
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 18,
-                      color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
                     ),
                   ],
                 ),

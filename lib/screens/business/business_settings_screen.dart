@@ -17,17 +17,15 @@ import 'business_setup_screen.dart';
 class BusinessSettingsScreen extends ConsumerStatefulWidget {
   final BusinessModel business;
 
-  const BusinessSettingsScreen({
-    super.key,
-    required this.business,
-  });
+  const BusinessSettingsScreen({super.key, required this.business});
 
   @override
   ConsumerState<BusinessSettingsScreen> createState() =>
       _BusinessSettingsScreenState();
 }
 
-class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen> {
+class _BusinessSettingsScreenState
+    extends ConsumerState<BusinessSettingsScreen> {
   final BusinessService _businessService = BusinessService();
   final AccountTypeService _accountTypeService = AccountTypeService();
   bool _isLoading = false;
@@ -67,7 +65,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Business Profile Section
-                  _buildSectionHeader('Business Profile', Icons.business, isDarkMode),
+                  _buildSectionHeader(
+                    'Business Profile',
+                    Icons.business,
+                    isDarkMode,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
@@ -104,7 +106,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                   const SizedBox(height: 24),
 
                   // Business Hours Section
-                  _buildSectionHeader('Business Hours', Icons.access_time, isDarkMode),
+                  _buildSectionHeader(
+                    'Business Hours',
+                    Icons.access_time,
+                    isDarkMode,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
@@ -112,7 +118,8 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                       _buildSettingsTile(
                         icon: Icons.schedule_outlined,
                         title: 'Operating Hours',
-                        subtitle: widget.business.hours?.isCurrentlyOpen ?? false
+                        subtitle:
+                            widget.business.hours?.isCurrentlyOpen ?? false
                             ? 'Currently Open'
                             : 'Currently Closed',
                         color: Colors.orange,
@@ -125,7 +132,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                   const SizedBox(height: 24),
 
                   // Visibility Section
-                  _buildSectionHeader('Visibility', Icons.visibility, isDarkMode),
+                  _buildSectionHeader(
+                    'Visibility',
+                    Icons.visibility,
+                    isDarkMode,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
@@ -145,38 +156,45 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                   const SizedBox(height: 24),
 
                   // Advanced Features Section
-                  _buildSectionHeader('Advanced Features', Icons.auto_awesome, isDarkMode),
+                  _buildSectionHeader(
+                    'Advanced Features',
+                    Icons.auto_awesome,
+                    isDarkMode,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
                     children: [
                       // Staff Management - Coming Soon
-                      ComingSoonListTile(
+                      const ComingSoonListTile(
                         featureName: 'staffManagement',
                         leadingIcon: Icons.people_outline,
                       ),
                       _buildDivider(isDarkMode),
                       // Multi-Location - Coming Soon
-                      ComingSoonListTile(
+                      const ComingSoonListTile(
                         featureName: 'multiLocation',
                         leadingIcon: Icons.location_on_outlined,
                       ),
                       _buildDivider(isDarkMode),
                       // Advanced Analytics - Coming Soon
-                      ComingSoonListTile(
+                      const ComingSoonListTile(
                         featureName: 'advancedAnalytics',
                         leadingIcon: Icons.analytics_outlined,
                       ),
                       _buildDivider(isDarkMode),
                       // Loyalty Programs - Coming Soon
-                      ComingSoonListTile(
+                      const ComingSoonListTile(
                         featureName: 'loyaltyPrograms',
                         leadingIcon: Icons.stars_outlined,
                       ),
                       _buildDivider(isDarkMode),
                       // View All Coming Soon Features
                       ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         leading: Container(
                           width: 44,
                           height: 44,
@@ -184,7 +202,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                             color: Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.upcoming, color: Colors.orange, size: 24),
+                          child: const Icon(
+                            Icons.upcoming,
+                            color: Colors.orange,
+                            size: 24,
+                          ),
                         ),
                         title: const Text(
                           'View All Upcoming Features',
@@ -197,7 +219,9 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                           'See what we\'re building next',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.white54
+                                : Colors.grey[600],
                           ),
                         ),
                         trailing: const Icon(
@@ -216,7 +240,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                   const SizedBox(height: 24),
 
                   // Account Section
-                  _buildSectionHeader('Account', Icons.account_circle, isDarkMode),
+                  _buildSectionHeader(
+                    'Account',
+                    Icons.account_circle,
+                    isDarkMode,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
@@ -235,7 +263,12 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
                   const SizedBox(height: 24),
 
                   // Danger Zone
-                  _buildSectionHeader('Danger Zone', Icons.warning_amber, isDarkMode, isDestructive: true),
+                  _buildSectionHeader(
+                    'Danger Zone',
+                    Icons.warning_amber,
+                    isDarkMode,
+                    isDestructive: true,
+                  ),
                   const SizedBox(height: 12),
                   _buildSettingsCard(
                     isDarkMode: isDarkMode,
@@ -260,13 +293,20 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, bool isDarkMode, {bool isDestructive = false}) {
+  Widget _buildSectionHeader(
+    String title,
+    IconData icon,
+    bool isDarkMode, {
+    bool isDestructive = false,
+  }) {
     return Row(
       children: [
         Icon(
           icon,
           size: 20,
-          color: isDestructive ? Colors.red : (isDarkMode ? Colors.white70 : Colors.grey[700]),
+          color: isDestructive
+              ? Colors.red
+              : (isDarkMode ? Colors.white70 : Colors.grey[700]),
         ),
         const SizedBox(width: 8),
         Text(
@@ -274,7 +314,9 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: isDestructive ? Colors.red : (isDarkMode ? Colors.white : Colors.black87),
+            color: isDestructive
+                ? Colors.red
+                : (isDarkMode ? Colors.white : Colors.black87),
           ),
         ),
       ],
@@ -329,7 +371,9 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: isDestructive ? Colors.red : (isDarkMode ? Colors.white : Colors.black87),
+          color: isDestructive
+              ? Colors.red
+              : (isDarkMode ? Colors.white : Colors.black87),
         ),
       ),
       subtitle: Text(
@@ -409,9 +453,7 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => BusinessSetupScreen(
-          existingBusiness: widget.business,
-        ),
+        builder: (_) => BusinessSetupScreen(existingBusiness: widget.business),
       ),
     );
 
@@ -516,9 +558,11 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
       if (success && mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(isActive
-                ? 'Business is now visible to customers'
-                : 'Business is now hidden from customers'),
+            content: Text(
+              isActive
+                  ? 'Business is now visible to customers'
+                  : 'Business is now hidden from customers',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -527,10 +571,7 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -568,7 +609,9 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
     if (confirm == true && mounted) {
       setState(() => _isLoading = true);
 
-      final success = await _accountTypeService.upgradeAccountType(AccountType.personal);
+      final success = await _accountTypeService.upgradeAccountType(
+        AccountType.personal,
+      );
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -609,9 +652,7 @@ class _BusinessSettingsScreenState extends ConsumerState<BusinessSettingsScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Delete'),
           ),
         ],

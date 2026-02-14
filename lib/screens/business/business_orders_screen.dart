@@ -43,12 +43,15 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   List<BusinessOrder> _applySearch(List<BusinessOrder> orders) {
     if (_searchQuery.isEmpty) return orders;
     final query = _searchQuery.toLowerCase();
-    return orders.where((o) =>
-      o.orderId.toLowerCase().contains(query) ||
-      o.customerName.toLowerCase().contains(query) ||
-      o.serviceName.toLowerCase().contains(query) ||
-      o.statusName.toLowerCase().contains(query)
-    ).toList();
+    return orders
+        .where(
+          (o) =>
+              o.orderId.toLowerCase().contains(query) ||
+              o.customerName.toLowerCase().contains(query) ||
+              o.serviceName.toLowerCase().contains(query) ||
+              o.statusName.toLowerCase().contains(query),
+        )
+        .toList();
   }
 
   @override
@@ -148,9 +151,11 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
                   order: order,
                   isDarkMode: isDarkMode,
                   onTap: () => _showOrderDetails(order),
-                  onAccept: () => _updateOrderStatus(order, OrderStatus.accepted),
+                  onAccept: () =>
+                      _updateOrderStatus(order, OrderStatus.accepted),
                   onReject: () => _confirmReject(order),
-                  onComplete: () => _updateOrderStatus(order, OrderStatus.completed),
+                  onComplete: () =>
+                      _updateOrderStatus(order, OrderStatus.completed),
                   onChat: () => _openChat(order),
                 );
               },
@@ -162,7 +167,14 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   Widget _buildFilterChips(bool isDarkMode) {
-    final filters = ['All', 'New', 'Pending', 'Accepted', 'Completed', 'Cancelled'];
+    final filters = [
+      'All',
+      'New',
+      'Pending',
+      'Accepted',
+      'Completed',
+      'Cancelled',
+    ];
 
     return Container(
       height: 50,
@@ -191,7 +203,9 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
                     : (isDarkMode ? Colors.white70 : Colors.grey[700]),
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
-              backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.grey[100],
+              backgroundColor: isDarkMode
+                  ? const Color(0xFF2D2D44)
+                  : Colors.grey[100],
               side: BorderSide(
                 color: isSelected
                     ? const Color(0xFF00D67D)
@@ -208,10 +222,14 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
     if (_selectedFilter == 'All') return orders;
     if (_selectedFilter == 'Today') {
       final today = DateTime.now();
-      return orders.where((o) =>
-          o.createdAt.year == today.year &&
-          o.createdAt.month == today.month &&
-          o.createdAt.day == today.day).toList();
+      return orders
+          .where(
+            (o) =>
+                o.createdAt.year == today.year &&
+                o.createdAt.month == today.month &&
+                o.createdAt.day == today.day,
+          )
+          .toList();
     }
 
     final status = OrderFilters.getStatusFromFilter(_selectedFilter);
@@ -221,11 +239,11 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   Widget _buildEmptyState(bool isDarkMode) {
-    return EnhancedEmptyState(
+    return const EnhancedEmptyState(
       icon: Icons.receipt_long_outlined,
       title: 'No Orders Yet',
       message: 'Orders will appear here when customers place them',
-      color: const Color(0xFF00D67D),
+      color: Color(0xFF00D67D),
     );
   }
 
@@ -294,17 +312,29 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              ...['All', 'Today', 'New', 'Pending', 'Accepted', 'Completed', 'Cancelled'].map((filter) {
+              ...[
+                'All',
+                'Today',
+                'New',
+                'Pending',
+                'Accepted',
+                'Completed',
+                'Cancelled',
+              ].map((filter) {
                 final isSelected = _selectedFilter == filter;
                 return ListTile(
                   leading: Icon(
                     isSelected ? Icons.check_circle : Icons.circle_outlined,
-                    color: isSelected ? const Color(0xFF00D67D) : (isDarkMode ? Colors.white38 : Colors.grey),
+                    color: isSelected
+                        ? const Color(0xFF00D67D)
+                        : (isDarkMode ? Colors.white38 : Colors.grey),
                   ),
                   title: Text(
                     filter,
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       color: isSelected
                           ? const Color(0xFF00D67D)
                           : (isDarkMode ? Colors.white : Colors.black87),
@@ -337,11 +367,14 @@ class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
   }
 
   void _updateOrderStatus(BusinessOrder order, OrderStatus newStatus) async {
-    final success = await _businessService.updateOrderStatus(order.id, newStatus);
+    final success = await _businessService.updateOrderStatus(
+      order.id,
+      newStatus,
+    );
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order ${newStatus.name}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Order ${newStatus.name}')));
     }
   }
 
@@ -436,7 +469,10 @@ class _OrderCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: _getStatusColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -444,7 +480,10 @@ class _OrderCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(order.statusIcon, style: const TextStyle(fontSize: 12)),
+                      Text(
+                        order.statusIcon,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         order.statusName,
@@ -466,7 +505,9 @@ class _OrderCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
+                  backgroundColor: const Color(
+                    0xFF00D67D,
+                  ).withValues(alpha: 0.2),
                   backgroundImage: order.customerPhoto != null
                       ? NetworkImage(order.customerPhoto!)
                       : null,
@@ -677,10 +718,7 @@ class _OrderDetailsSheet extends StatelessWidget {
   final BusinessOrder order;
   final Function(OrderStatus) onUpdateStatus;
 
-  const _OrderDetailsSheet({
-    required this.order,
-    required this.onUpdateStatus,
-  });
+  const _OrderDetailsSheet({required this.order, required this.onUpdateStatus});
 
   @override
   Widget build(BuildContext context) {
@@ -722,7 +760,10 @@ class _OrderDetailsSheet extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: _getStatusColor().withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
@@ -747,7 +788,9 @@ class _OrderDetailsSheet extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
+                          backgroundColor: const Color(
+                            0xFF00D67D,
+                          ).withValues(alpha: 0.2),
                           backgroundImage: order.customerPhoto != null
                               ? NetworkImage(order.customerPhoto!)
                               : null,
@@ -774,7 +817,9 @@ class _OrderDetailsSheet extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                  color: isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
                                 ),
                               ),
                               if (order.customerPhone != null)
@@ -782,7 +827,9 @@ class _OrderDetailsSheet extends StatelessWidget {
                                   order.customerPhone!,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                                    color: isDarkMode
+                                        ? Colors.white54
+                                        : Colors.grey[600],
                                   ),
                                 ),
                             ],
@@ -814,7 +861,9 @@ class _OrderDetailsSheet extends StatelessWidget {
                             order.serviceDescription!,
                             style: TextStyle(
                               fontSize: 14,
-                              color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                              color: isDarkMode
+                                  ? Colors.white54
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -826,14 +875,18 @@ class _OrderDetailsSheet extends StatelessWidget {
                               'Quantity: ${order.quantity}',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.grey[700],
                               ),
                             ),
                             Text(
                               order.formattedPrice,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.grey[700],
                               ),
                             ),
                           ],

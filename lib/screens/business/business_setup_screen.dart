@@ -27,7 +27,8 @@ class BusinessSetupScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<BusinessSetupScreen> createState() => _BusinessSetupScreenState();
+  ConsumerState<BusinessSetupScreen> createState() =>
+      _BusinessSetupScreenState();
 }
 
 class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
@@ -134,9 +135,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   bool get _isEditing => widget.existingBusiness != null;
 
   // Colors - Using blue accent instead of green
-  static const _primaryColor = Color(0xFF1E3A5F);  // Deep blue
-  static const _accentColor = Color(0xFF2563EB);   // Bright blue
-  static const _lightAccent = Color(0xFF3B82F6);   // Light blue
+  static const _primaryColor = Color(0xFF1E3A5F); // Deep blue
+  static const _accentColor = Color(0xFF2563EB); // Bright blue
+  static const _lightAccent = Color(0xFF3B82F6); // Light blue
 
   @override
   void initState() {
@@ -162,7 +163,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       // We need to extract the country code and clean the phone number
 
       // First, extract the first valid country code
-      final countryCodeMatch = RegExp(r'^\+\d{1,4}').firstMatch(phoneStr.trim());
+      final countryCodeMatch = RegExp(
+        r'^\+\d{1,4}',
+      ).firstMatch(phoneStr.trim());
       if (countryCodeMatch != null) {
         final countryCode = countryCodeMatch.group(0)!; // e.g., "+91"
 
@@ -412,7 +415,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 content: const Text('Location permission denied'),
                 backgroundColor: Colors.red[400],
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             );
           }
@@ -428,7 +433,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               content: const Text('Please enable location in settings'),
               backgroundColor: Colors.red[400],
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -469,7 +476,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             content: const Text('Location updated successfully!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -479,10 +488,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not get location: ${e.toString().split(':').last.trim()}'),
+            content: Text(
+              'Could not get location: ${e.toString().split(':').last.trim()}',
+            ),
             backgroundColor: Colors.red[400],
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -501,8 +514,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       }
 
       try {
-        final result = await InternetAddress.lookup('google.com')
-            .timeout(const Duration(seconds: 5));
+        final result = await InternetAddress.lookup(
+          'google.com',
+        ).timeout(const Duration(seconds: 5));
         if (result.isEmpty || result[0].rawAddress.isEmpty) {
           throw const SocketException('No internet');
         }
@@ -518,7 +532,8 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
       String? logoUrl;
       if (_logoFile != null) {
-        logoUrl = await _businessService.uploadLogo(_logoFile!)
+        logoUrl = await _businessService
+            .uploadLogo(_logoFile!)
             .timeout(
               const Duration(seconds: 30),
               onTimeout: () => throw TimeoutException('Logo upload timed out'),
@@ -532,7 +547,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       if (_phoneController.text.trim().isNotEmpty) {
         final phoneNumber = _phoneController.text.trim();
         // Remove any existing country codes from the phone number before adding the selected one
-        final phoneWithoutCode = phoneNumber.replaceAll(RegExp(r'^\+\d{1,4}\s*'), '');
+        final phoneWithoutCode = phoneNumber.replaceAll(
+          RegExp(r'^\+\d{1,4}\s*'),
+          '',
+        );
         cleanedPhone = '$_selectedCountryCode $phoneWithoutCode';
       }
 
@@ -595,15 +613,15 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
       bool success;
       if (_isEditing) {
-        success = await _businessService.updateBusiness(
-          widget.existingBusiness!.id,
-          business,
-        ).timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('Update timed out.'),
-        );
+        success = await _businessService
+            .updateBusiness(widget.existingBusiness!.id, business)
+            .timeout(
+              const Duration(seconds: 15),
+              onTimeout: () => throw TimeoutException('Update timed out.'),
+            );
       } else {
-        final businessId = await _businessService.createBusiness(business)
+        final businessId = await _businessService
+            .createBusiness(business)
             .timeout(
               const Duration(seconds: 15),
               onTimeout: () => throw TimeoutException('Creation timed out.'),
@@ -617,9 +635,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(_isEditing
-                  ? 'Business updated successfully'
-                  : 'Business created successfully'),
+              content: Text(
+                _isEditing
+                    ? 'Business updated successfully'
+                    : 'Business created successfully',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -633,9 +653,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           _navigateToMainScreen();
         }
       } else {
-        _showError(_isEditing
-            ? 'Failed to update business. Please try again.'
-            : 'Failed to create business. Please try again.');
+        _showError(
+          _isEditing
+              ? 'Failed to update business. Please try again.'
+              : 'Failed to create business. Please try again.',
+        );
       }
     } on TimeoutException catch (e) {
       debugPrint('Timeout saving business: $e');
@@ -649,7 +671,6 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
 
   void _navigateToMainScreen() {
     if (!mounted) return;
@@ -723,7 +744,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             children: [
               // Back button
               IconButton(
-                onPressed: _currentStep > 0 ? _previousStep : () => Navigator.pop(context),
+                onPressed: _currentStep > 0
+                    ? _previousStep
+                    : () => Navigator.pop(context),
                 icon: const Icon(Icons.arrow_back, color: Colors.black87),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -742,7 +765,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               // Progress percentage
               Text(
                 '${(progress * 100).toInt()}%',
-                style: TextStyle(
+                style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -770,7 +793,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   Widget _buildStep1BusinessType() {
     final filteredCategories = BusinessCategoryConfig.all.where((config) {
       if (_categorySearchQuery.isEmpty) return true;
-      return config.displayName.toLowerCase().contains(_categorySearchQuery.toLowerCase());
+      return config.displayName.toLowerCase().contains(
+        _categorySearchQuery.toLowerCase(),
+      );
     }).toList();
 
     return SingleChildScrollView(
@@ -790,10 +815,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             'Select the category that best describes your business',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 24),
 
@@ -824,7 +846,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: _accentColor, width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -885,7 +910,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                         style: TextStyle(
                           color: isSelected ? _accentColor : Colors.grey[800],
                           fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -924,10 +951,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             'Choose your specific category',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 32),
 
@@ -964,7 +988,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                       style: TextStyle(
                         color: isSelected ? Colors.white : Colors.grey[700],
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -996,10 +1022,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             "We'll use this information to set up your official profile.",
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 32),
 
@@ -1111,10 +1134,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'PNG, JPG up to 5MB',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
                     ),
                   ],
                 ],
@@ -1123,10 +1143,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           ),
           Text(
             'A good logo helps customers recognize your business.',
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
           ),
           const SizedBox(height: 100),
         ],
@@ -1153,10 +1170,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             'This address will be visible to your customers.',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 24),
 
@@ -1188,7 +1202,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _accentColor,
+                              ),
                             ),
                           ),
                         )
@@ -1207,7 +1223,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: _accentColor, width: 2),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
               ),
               if (_searchResults.isNotEmpty)
@@ -1225,10 +1244,16 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     itemBuilder: (context, index) {
                       final location = _searchResults[index];
                       return ListTile(
-                        leading: const Icon(Icons.location_on, color: _accentColor),
+                        leading: const Icon(
+                          Icons.location_on,
+                          color: _accentColor,
+                        ),
                         title: Text(
                           location['display'] ?? location['formatted'] ?? '',
-                          style: const TextStyle(fontSize: 14, color: Colors.black87),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
                         ),
                         onTap: () => _selectLocation(location),
                       );
@@ -1242,10 +1267,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           // Use current location button
           GestureDetector(
             onTap: _useCurrentLocation,
-            child: Row(
+            child: const Row(
               children: [
                 Icon(Icons.my_location, color: _lightAccent, size: 18),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   'Use current location',
                   style: TextStyle(
@@ -1282,7 +1307,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                             child: CircularProgressIndicator(
                               value: loadingProgress.expectedTotalBytes != null
                                   ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
+                                        loadingProgress.expectedTotalBytes!
                                   : null,
                               color: _accentColor,
                               strokeWidth: 2,
@@ -1326,14 +1351,21 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                         left: 8,
                         right: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.95),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.location_on, color: _accentColor, size: 16),
+                              const Icon(
+                                Icons.location_on,
+                                color: _accentColor,
+                                size: 16,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -1403,8 +1435,16 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               Expanded(
                 child: _buildDropdownField(
                   label: 'Country',
-                  value: _countryController.text.isEmpty ? null : _countryController.text,
-                  items: ['India', 'United States', 'United Kingdom', 'Canada', 'Australia'],
+                  value: _countryController.text.isEmpty
+                      ? null
+                      : _countryController.text,
+                  items: [
+                    'India',
+                    'United States',
+                    'United Kingdom',
+                    'Canada',
+                    'Australia',
+                  ],
                   onChanged: (value) {
                     setState(() {
                       _countryController.text = value ?? '';
@@ -1439,10 +1479,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             'Add your business contact info so clients can easily get in touch with you.',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 32),
 
@@ -1490,10 +1527,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 ),
                 child: Text(
                   'Optional',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 11),
                 ),
               ),
             ],
@@ -1569,10 +1603,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               const Spacer(),
               Text(
                 'Final Review',
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
               ),
             ],
           ),
@@ -1589,10 +1620,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           const SizedBox(height: 8),
           Text(
             'Please verify your information below.',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
           ),
           const SizedBox(height: 32),
 
@@ -1644,8 +1672,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             title: 'Type & Category',
             onEdit: () => _goToStep(0),
             children: [
-              if (config != null)
-                _buildReviewRow('Type', config.displayName),
+              if (config != null) _buildReviewRow('Type', config.displayName),
               if (_selectedSubType != null)
                 _buildReviewRow('Category', _selectedSubType!),
             ],
@@ -1660,8 +1687,12 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             children: [
               if (_streetController.text.isNotEmpty)
                 _buildReviewRow('Address', _streetController.text),
-              if (_cityController.text.isNotEmpty || _stateController.text.isNotEmpty)
-                _buildReviewRow('City', '${_cityController.text}, ${_stateController.text}'),
+              if (_cityController.text.isNotEmpty ||
+                  _stateController.text.isNotEmpty)
+                _buildReviewRow(
+                  'City',
+                  '${_cityController.text}, ${_stateController.text}',
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1673,7 +1704,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             onEdit: () => _goToStep(4),
             children: [
               if (_phoneController.text.isNotEmpty)
-                _buildReviewRow('Phone', '$_selectedCountryCode ${_phoneController.text}'),
+                _buildReviewRow(
+                  'Phone',
+                  '$_selectedCountryCode ${_phoneController.text}',
+                ),
               if (_emailController.text.isNotEmpty)
                 _buildReviewRow('Email', _emailController.text),
               if (_websiteController.text.isNotEmpty)
@@ -1763,7 +1797,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               const Spacer(),
               GestureDetector(
                 onTap: onEdit,
-                child: Text(
+                child: const Text(
                   'Edit',
                   style: TextStyle(
                     color: _lightAccent,
@@ -1791,19 +1825,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             width: 100,
             child: Text(
               label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ),
           Expanded(
             child: Text(
               value.isEmpty ? '-' : value,
-              style: const TextStyle(
-                color: Colors.black87,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.black87, fontSize: 14),
             ),
           ),
         ],
@@ -1823,19 +1851,12 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               color: Colors.grey[300],
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.map_outlined,
-              size: 40,
-              color: Colors.grey[500],
-            ),
+            child: Icon(Icons.map_outlined, size: 40, color: Colors.grey[500]),
           ),
           const SizedBox(height: 12),
           Text(
             'Search for an address to see the map',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 13,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
           ),
         ],
       ),
@@ -1898,7 +1919,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: _accentColor, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
         if (helperText != null) ...[
@@ -1952,7 +1976,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               items: items.map((item) {
                 return DropdownMenuItem(
                   value: item,
-                  child: Text(item, style: const TextStyle(color: Colors.black87)),
+                  child: Text(
+                    item,
+                    style: const TextStyle(color: Colors.black87),
+                  ),
                 );
               }).toList(),
               onChanged: onChanged,
@@ -1977,10 +2004,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const Text(
-              ' *',
-              style: TextStyle(color: Colors.red, fontSize: 14),
-            ),
+            const Text(' *', style: TextStyle(color: Colors.red, fontSize: 14)),
           ],
         ),
         const SizedBox(height: 8),
@@ -1990,7 +2014,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             GestureDetector(
               onTap: _showCountryPicker,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -2032,7 +2059,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 decoration: InputDecoration(
                   hintText: '000 000 0000',
                   hintStyle: TextStyle(color: Colors.grey[400]),
-                  prefixIcon: Icon(Icons.phone_outlined, color: Colors.grey[500], size: 20),
+                  prefixIcon: Icon(
+                    Icons.phone_outlined,
+                    color: Colors.grey[500],
+                    size: 20,
+                  ),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -2047,7 +2078,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: _accentColor, width: 2),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
               ),
             ),
@@ -2068,7 +2102,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           builder: (context, setModalState) {
             final filteredCountries = _countryCodes.where((country) {
               if (searchQuery.isEmpty) return true;
-              return country['country']!.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              return country['country']!.toLowerCase().contains(
+                    searchQuery.toLowerCase(),
+                  ) ||
                   country['code']!.contains(searchQuery);
             }).toList();
 
@@ -2111,7 +2147,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                           searchQuery = value;
                         });
                       },
-                      style: const TextStyle(color: Colors.black87, fontSize: 15),
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 15,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Search country...',
                         hintStyle: TextStyle(color: Colors.grey[400]),
@@ -2122,7 +2161,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -2133,7 +2175,8 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                       itemCount: filteredCountries.length,
                       itemBuilder: (context, index) {
                         final country = filteredCountries[index];
-                        final isSelected = country['code'] == _selectedCountryCode &&
+                        final isSelected =
+                            country['code'] == _selectedCountryCode &&
                             country['flag'] == _selectedCountryFlag;
                         return ListTile(
                           leading: Text(
@@ -2144,18 +2187,26 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                             country['country']!,
                             style: TextStyle(
                               color: Colors.grey[800],
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
                           trailing: Text(
                             country['code']!,
                             style: TextStyle(
-                              color: isSelected ? _accentColor : Colors.grey[600],
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              color: isSelected
+                                  ? _accentColor
+                                  : Colors.grey[600],
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
                           selected: isSelected,
-                          selectedTileColor: _accentColor.withValues(alpha: 0.1),
+                          selectedTileColor: _accentColor.withValues(
+                            alpha: 0.1,
+                          ),
                           onTap: () {
                             setState(() {
                               _selectedCountryCode = country['code']!;
@@ -2202,7 +2253,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _accentColor, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -2218,10 +2272,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey[400]),
-        prefixIcon: SizedBox(
-          width: 48,
-          child: Center(child: customIcon),
-        ),
+        prefixIcon: SizedBox(width: 48, child: Center(child: customIcon)),
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
@@ -2236,7 +2287,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _accentColor, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -2304,10 +2358,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 ),
                 child: const Text(
                   'Back',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -2345,7 +2396,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: canContinue ? Colors.white : Colors.grey[500],
+                            color: canContinue
+                                ? Colors.white
+                                : Colors.grey[500],
                           ),
                         ),
                         if (_currentStep < _totalSteps - 1) ...[
@@ -2353,14 +2406,18 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                           Icon(
                             Icons.arrow_forward,
                             size: 18,
-                            color: canContinue ? Colors.white : Colors.grey[500],
+                            color: canContinue
+                                ? Colors.white
+                                : Colors.grey[500],
                           ),
                         ] else ...[
                           const SizedBox(width: 8),
                           Icon(
                             Icons.check,
                             size: 18,
-                            color: canContinue ? Colors.white : Colors.grey[500],
+                            color: canContinue
+                                ? Colors.white
+                                : Colors.grey[500],
                           ),
                         ],
                       ],
