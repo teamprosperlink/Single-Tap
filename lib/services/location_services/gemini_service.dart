@@ -100,7 +100,7 @@ class GeminiService {
 
       // Create vision model for image analysis
       final visionModel = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: ApiConfig.geminiFlashModel,
         apiKey: ApiConfig.geminiApiKey,
       );
 

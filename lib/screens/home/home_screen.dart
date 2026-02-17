@@ -14,6 +14,8 @@ import '../../services/realtime_matching_service.dart';
 import '../../services/profile services/photo_cache_service.dart';
 import 'product/product_detail_screen.dart';
 import 'product/see_all_products_screen.dart';
+import 'voice_assistant_screen.dart';
+import '../../widgets/voice_orb.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -82,7 +84,6 @@ class HomeScreenState extends State<HomeScreen>
     _loadUserIntents();
     _loadUserProfile();
     _realtimeService.initialize();
-    _initSpeech();
     _initTts();
 
     _controller = AnimationController(vsync: this);
@@ -1428,22 +1429,36 @@ class HomeScreenState extends State<HomeScreen>
   ];
 
   // Initialize speech recognition
+  bool _isFinishingRecording = false;
+
   Future<void> _initSpeech() async {
     try {
       _speechEnabled = await _speech.initialize(
         onStatus: (status) {
           debugPrint('Speech status: $status');
           if (status == 'done' || status == 'notListening') {
-            if (mounted && _isRecording) {
+            if (mounted && _isRecording && !_isFinishingRecording) {
               _finishRecording();
             }
           }
         },
         onError: (error) {
           debugPrint('Speech error: $error');
-          if (mounted && _isRecording) {
-            // Fall back to mock data on error
-            _useMockVoiceResult();
+          if (mounted && _isRecording && !_isFinishingRecording) {
+            final errorMsg = error.errorMsg;
+            if (errorMsg == 'error_no_match' || errorMsg == 'error_speech_timeout') {
+              // No speech detected — return to idle, don't use mock
+              _isFinishingRecording = true;
+              _recordingTimer?.cancel();
+              setState(() {
+                _isRecording = false;
+                _isVoiceProcessing = false;
+                _currentSpeechText = '';
+              });
+              _isFinishingRecording = false;
+            } else {
+              _finishRecording();
+            }
           }
         },
       );
@@ -1461,6 +1476,10 @@ class HomeScreenState extends State<HomeScreen>
       _isRecording = true;
       _currentSpeechText = '';
     });
+
+    if (!_speechEnabled) {
+      await _initSpeech();
+    }
 
     if (_speechEnabled) {
       try {
@@ -1540,7 +1559,8 @@ class HomeScreenState extends State<HomeScreen>
   }
 
   void _finishRecording() {
-    if (!_isRecording) return;
+    if (!_isRecording || _isFinishingRecording) return;
+    _isFinishingRecording = true;
 
     _recordingTimer?.cancel();
     _recordingTimer = null;
@@ -1552,9 +1572,13 @@ class HomeScreenState extends State<HomeScreen>
       _isVoiceProcessing = spokenText.isNotEmpty;
     });
 
-    // If no speech detected, use mock data
+    _isFinishingRecording = false;
+
+    // If no speech detected, just return to idle
     if (spokenText.isEmpty) {
-      _useMockVoiceResult();
+      setState(() {
+        _isVoiceProcessing = false;
+      });
       return;
     }
 
@@ -1805,6 +1829,62 @@ class HomeScreenState extends State<HomeScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // AI Voice Assistant banner
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const VoiceAssistantScreen(),
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const VoiceOrb(state: VoiceOrbState.idle, size: 28),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('AI Voice Assistant',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13)),
+                        Text('Tap to search with your voice',
+                            style: TextStyle(
+                                color: Colors.white70, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right,
+                      color: Colors.white.withValues(alpha: 0.7), size: 18),
+                ],
+              ),
+            ),
+          ),
+
           if (_suggestions.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -1897,7 +1977,7 @@ class HomeScreenState extends State<HomeScreen>
                                     duration: const Duration(milliseconds: 300),
                                     width: 10,
                                     height: 10,
-                                    decoration: BoxDecoration(
+                                    decoration: const BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: Colors.red,
                                     ),

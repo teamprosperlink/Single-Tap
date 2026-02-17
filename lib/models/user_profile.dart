@@ -149,61 +149,212 @@ class ProfessionalProfile {
   }
 }
 
-/// Business profile data for business accounts
+/// Business hours for a single day
+class DayHours {
+  final String? open;
+  final String? close;
+  final bool isClosed;
+
+  DayHours({this.open, this.close, this.isClosed = false});
+
+  factory DayHours.fromMap(Map<String, dynamic> map) {
+    return DayHours(
+      open: map['open'],
+      close: map['close'],
+      isClosed: map['isClosed'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'open': open, 'close': close, 'isClosed': isClosed};
+  }
+
+  String get formatted {
+    if (isClosed) return 'Closed';
+    if (open == null || close == null) return 'Not set';
+    return '$open - $close';
+  }
+}
+
+/// Weekly business hours with open/closed calculation
+class BusinessHours {
+  final Map<String, DayHours> schedule;
+  final String? timezone;
+
+  BusinessHours({required this.schedule, this.timezone});
+
+  factory BusinessHours.fromMap(Map<String, dynamic> map) {
+    final scheduleMap = <String, DayHours>{};
+    final scheduleData = map['schedule'] as Map<String, dynamic>? ?? {};
+    scheduleData.forEach((key, value) {
+      if (value is Map<String, dynamic>) {
+        scheduleMap[key] = DayHours.fromMap(value);
+      }
+    });
+    return BusinessHours(schedule: scheduleMap, timezone: map['timezone']);
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'schedule': schedule.map((key, value) => MapEntry(key, value.toMap())),
+      'timezone': timezone,
+    };
+  }
+
+  bool get isCurrentlyOpen {
+    final now = DateTime.now();
+    final dayName = _getDayName(now.weekday);
+    final dayHours = schedule[dayName];
+    if (dayHours == null || dayHours.isClosed) return false;
+    final currentMinutes = now.hour * 60 + now.minute;
+    final openMinutes = _parseTime(dayHours.open);
+    final closeMinutes = _parseTime(dayHours.close);
+    if (openMinutes == null || closeMinutes == null) return false;
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+  }
+
+  String get todayHours {
+    final now = DateTime.now();
+    final dayName = _getDayName(now.weekday);
+    final dayHours = schedule[dayName];
+    if (dayHours == null) return 'Not set';
+    return dayHours.formatted;
+  }
+
+  String _getDayName(int weekday) {
+    const days = [
+      'monday', 'tuesday', 'wednesday', 'thursday',
+      'friday', 'saturday', 'sunday',
+    ];
+    return days[weekday - 1];
+  }
+
+  int? _parseTime(String? time) {
+    if (time == null) return null;
+    final parts = time.split(':');
+    if (parts.length != 2) return null;
+    final hours = int.tryParse(parts[0]);
+    final minutes = int.tryParse(parts[1]);
+    if (hours == null || minutes == null) return null;
+    return hours * 60 + minutes;
+  }
+
+  static BusinessHours defaultHours() {
+    return BusinessHours(
+      schedule: {
+        'monday': DayHours(open: '09:00', close: '18:00'),
+        'tuesday': DayHours(open: '09:00', close: '18:00'),
+        'wednesday': DayHours(open: '09:00', close: '18:00'),
+        'thursday': DayHours(open: '09:00', close: '18:00'),
+        'friday': DayHours(open: '09:00', close: '18:00'),
+        'saturday': DayHours(open: '10:00', close: '16:00'),
+        'sunday': DayHours(isClosed: true),
+      },
+    );
+  }
+}
+
+/// Simplified business profile (WhatsApp Business style)
 class BusinessProfile {
-  final String? companyName;
-  final String? registrationNumber;
-  final String? taxId;
-  final String? industry;
-  final String? companySize;
-  final String? website;
-  final int? foundedYear;
+  final String? businessName;
   final String? description;
-  final List<String> teamMembers;
-  final List<String> adminUsers;
+  final String? softLabel;
+  final String? contactPhone;
+  final String? contactEmail;
+  final String? website;
+  final String? address;
+  final BusinessHours? hours;
+  final int profileViews;
+  final int catalogViews;
+  final int enquiryCount;
+  final DateTime? businessEnabledAt;
 
   BusinessProfile({
-    this.companyName,
-    this.registrationNumber,
-    this.taxId,
-    this.industry,
-    this.companySize,
-    this.website,
-    this.foundedYear,
+    this.businessName,
     this.description,
-    this.teamMembers = const [],
-    this.adminUsers = const [],
+    this.softLabel,
+    this.contactPhone,
+    this.contactEmail,
+    this.website,
+    this.address,
+    this.hours,
+    this.profileViews = 0,
+    this.catalogViews = 0,
+    this.enquiryCount = 0,
+    this.businessEnabledAt,
   });
+
+  bool get isCurrentlyOpen => hours?.isCurrentlyOpen ?? false;
 
   factory BusinessProfile.fromMap(Map<String, dynamic>? map) {
     if (map == null) return BusinessProfile();
     return BusinessProfile(
-      companyName: map['companyName'],
-      registrationNumber: map['registrationNumber'],
-      taxId: map['taxId'],
-      industry: map['industry'],
-      companySize: map['companySize'],
-      website: map['website'],
-      foundedYear: map['foundedYear'],
+      businessName: map['businessName'] ?? map['companyName'],
       description: map['description'],
-      teamMembers: List<String>.from(map['teamMembers'] ?? []),
-      adminUsers: List<String>.from(map['adminUsers'] ?? []),
+      softLabel: map['softLabel'] ?? map['industry'],
+      contactPhone: map['contactPhone'],
+      contactEmail: map['contactEmail'],
+      website: map['website'],
+      address: map['address'],
+      hours: map['hours'] != null
+          ? BusinessHours.fromMap(map['hours'])
+          : null,
+      profileViews: map['profileViews'] ?? 0,
+      catalogViews: map['catalogViews'] ?? 0,
+      enquiryCount: map['enquiryCount'] ?? 0,
+      businessEnabledAt: map['businessEnabledAt'] != null
+          ? (map['businessEnabledAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'companyName': companyName,
-      'registrationNumber': registrationNumber,
-      'taxId': taxId,
-      'industry': industry,
-      'companySize': companySize,
-      'website': website,
-      'foundedYear': foundedYear,
+      'businessName': businessName,
       'description': description,
-      'teamMembers': teamMembers,
-      'adminUsers': adminUsers,
+      'softLabel': softLabel,
+      'contactPhone': contactPhone,
+      'contactEmail': contactEmail,
+      'website': website,
+      'address': address,
+      'hours': hours?.toMap(),
+      'profileViews': profileViews,
+      'catalogViews': catalogViews,
+      'enquiryCount': enquiryCount,
+      'businessEnabledAt': businessEnabledAt != null
+          ? Timestamp.fromDate(businessEnabledAt!)
+          : null,
     };
+  }
+
+  BusinessProfile copyWith({
+    String? businessName,
+    String? description,
+    String? softLabel,
+    String? contactPhone,
+    String? contactEmail,
+    String? website,
+    String? address,
+    BusinessHours? hours,
+    int? profileViews,
+    int? catalogViews,
+    int? enquiryCount,
+    DateTime? businessEnabledAt,
+  }) {
+    return BusinessProfile(
+      businessName: businessName ?? this.businessName,
+      description: description ?? this.description,
+      softLabel: softLabel ?? this.softLabel,
+      contactPhone: contactPhone ?? this.contactPhone,
+      contactEmail: contactEmail ?? this.contactEmail,
+      website: website ?? this.website,
+      address: address ?? this.address,
+      hours: hours ?? this.hours,
+      profileViews: profileViews ?? this.profileViews,
+      catalogViews: catalogViews ?? this.catalogViews,
+      enquiryCount: enquiryCount ?? this.enquiryCount,
+      businessEnabledAt: businessEnabledAt ?? this.businessEnabledAt,
+    );
   }
 }
 

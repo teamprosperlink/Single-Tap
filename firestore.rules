@@ -87,6 +87,15 @@ service cloud.firestore {
       match /clearedChats/{conversationId} {
         allow read, write: if isOwner(userId);
       }
+
+      // Catalog subcollection (business product/service listings)
+      match /catalog/{itemId} {
+        allow read: if isAuthenticated();
+        allow create: if isOwner(userId) &&
+          request.resource.data.userId == request.auth.uid;
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ============================================================

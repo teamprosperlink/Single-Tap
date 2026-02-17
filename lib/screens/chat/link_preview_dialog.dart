@@ -154,7 +154,7 @@ class LinkPreviewDialog extends StatelessWidget {
                   Expanded(
                     child: Text(
                       url,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: AppColors.iosBlue,
                         fontSize: 13,
                       ),

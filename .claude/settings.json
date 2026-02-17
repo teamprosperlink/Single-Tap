@@ -1,0 +1,39 @@
+{
+  "ignorePatterns": [
+    "docs/**",
+    "build/**",
+    "*.lock",
+    ".dart_tool/**",
+    "android/.gradle/**",
+    "ios/Pods/**",
+    "*.g.dart",
+    "*.freezed.dart"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "Bash(flutter test *)",
+      "Bash(flutter pub get)",
+      "Bash(flutter run *)",
+      "Bash(dart format *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Task(bug-finder)",
+      "Task(code-reviewer)",
+      "Task(architect)",
+      "Task(supper-flutter-expert)",
+      "Task(Explore)",
+      "Task(Plan)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)"
+    ]
+  }
+}

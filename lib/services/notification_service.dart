@@ -233,7 +233,7 @@ class NotificationService {
                   groupName: groupName ?? 'Unknown Group',
                   userId: currentUserId,
                   userName: _auth.currentUser?.displayName ?? 'Unknown',
-                  participants: [], // Empty - screen will fetch from Firestore
+                  participants: const [], // Empty - screen will fetch from Firestore
                 );
               },
               transitionDuration: Duration.zero, // Instant transition
@@ -1058,11 +1058,14 @@ class NotificationService {
       // Fetch all participants for the incoming call screen
       debugPrint('    Fetching participants for group call...');
       final participantsData = <Map<String, dynamic>>[];
-      final participants =
+      final rawParticipants =
           (await _firestore.collection('group_calls').doc(callId).get())
-                  .data()?['participants']
-              as List? ??
-          [];
+                  .data()?['participants'];
+      final participants = rawParticipants is List
+          ? rawParticipants
+          : rawParticipants is Map
+              ? rawParticipants.keys.toList()
+              : <dynamic>[];
 
       for (final participantId in participants) {
         try {
@@ -1236,6 +1239,13 @@ class NotificationService {
       return;
     }
 
+    // Cancel existing listener to prevent duplicates
+    if (_groupCallListener != null) {
+      debugPrint('    Group call listener already active, cancelling old one');
+      _groupCallListener?.cancel();
+      _groupCallListener = null;
+    }
+
     debugPrint('========================================');
     debugPrint('    Starting group call listener for user: $currentUserId');
     debugPrint('========================================');
@@ -1268,7 +1278,12 @@ class NotificationService {
                 final callerName = callData['callerName'] as String?;
                 final groupId = callData['groupId'] as String?;
                 final groupName = callData['groupName'] as String?;
-                final participants = callData['participants'] as List?;
+                final rawParts = callData['participants'];
+                final participants = rawParts is List
+                    ? rawParts
+                    : rawParts is Map
+                        ? rawParts.keys.toList()
+                        : null;
                 final status = callData['status'] as String?;
 
                 debugPrint(
@@ -1368,7 +1383,12 @@ class NotificationService {
       );
       for (var doc in allCalls.docs) {
         final status = doc['status'];
-        final participants = doc['participants'] as List?;
+        final rawParts = doc['participants'];
+        final participants = rawParts is List
+            ? rawParts
+            : rawParts is Map
+                ? rawParts.keys.toList()
+                : null;
         debugPrint(
           '    - Doc ${doc.id}: status=$status, participants=$participants',
         );

@@ -101,7 +101,7 @@ class AccountTypeService {
     }
   }
 
-  /// Update business profile
+  /// Update business profile fields
   Future<bool> updateBusinessProfile(BusinessProfile profile) async {
     final user = _auth.currentUser;
     if (user == null) return false;
@@ -113,6 +113,59 @@ class AccountTypeService {
       return true;
     } catch (e) {
       debugPrint('Error updating business profile: $e');
+      return false;
+    }
+  }
+
+  /// Enable business mode with profile data
+  Future<bool> enableBusinessMode(BusinessProfile profile) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'accountType': AccountType.business.name,
+        'accountStatus': 'active',
+        'businessProfile': profile.toMap(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error enabling business mode: $e');
+      return false;
+    }
+  }
+
+  /// Disable business mode (keeps data for re-enable)
+  Future<bool> disableBusinessMode() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'accountType': AccountType.personal.name,
+        'accountStatus': 'active',
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error disabling business mode: $e');
+      return false;
+    }
+  }
+
+  /// Update specific business profile fields
+  Future<bool> updateBusinessFields(Map<String, dynamic> updates) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      final prefixed = <String, dynamic>{};
+      for (final entry in updates.entries) {
+        prefixed['businessProfile.${entry.key}'] = entry.value;
+      }
+      await _firestore.collection('users').doc(user.uid).update(prefixed);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating business fields: $e');
       return false;
     }
   }

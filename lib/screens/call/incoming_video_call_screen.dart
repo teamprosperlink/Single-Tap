@@ -501,11 +501,11 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
         children: [
           // Dark gradient background
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [const Color(0xFF1C1C1E), const Color(0xFF000000)],
+                colors: [Color(0xFF1C1C1E), Color(0xFF000000)],
               ),
             ),
           ),

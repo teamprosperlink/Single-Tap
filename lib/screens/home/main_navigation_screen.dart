@@ -16,7 +16,7 @@ import 'conversations_screen.dart';
 
 // Professional & Business screens
 import '../professional/professional_dashboard_screen.dart';
-import '../business/business_main_screen.dart';
+import '../business/simple/business_hub_screen.dart';
 
 // Call screens - Now using CallKit instead of IncomingCallScreen widget
 // Video call disabled
@@ -70,8 +70,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Initialize TabController with 4 tabs
-    _tabController = TabController(length: 4, vsync: this);
+    // Initialize TabController with 5 tabs
+    _tabController = TabController(length: 5, vsync: this);
 
     // Set initial index based on login account type or initialIndex
     if (widget.initialIndex != null) {
@@ -81,7 +81,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     } else if (widget.loginAccountType != null) {
       // Set initial screen based on account type from login
       if (widget.loginAccountType == 'Business Account') {
-        _currentIndex = 6; // Business dashboard
+        _currentIndex = 3; // Business hub tab
+        _tabController.index = _convertToTabIndex(3);
       } else {
         _currentIndex = 0; // Home screen for Personal
         _tabController.index = _convertToTabIndex(0);
@@ -104,11 +105,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       }
     });
 
-    // Initialize listeners with error handling
-    _safeInit();
+    // Defer heavy listener initialization to after first frame renders
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _safeInit();
+    });
   }
 
-  // Convert main index to tab index (0-3)
+  // Convert main index to tab index (0-4)
   int _convertToTabIndex(int mainIndex) {
     switch (mainIndex) {
       case 0:
@@ -117,14 +120,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         return 1; // Chat
       case 4:
         return 2; // Nearby
+      case 3:
+        return 3; // Business
       case 2:
-        return 3; // Networking
+        return 4; // Networking
       default:
         return 0;
     }
   }
 
-  // Convert tab index (0-3) to main index
+  // Convert tab index (0-4) to main index
   int _convertFromTabIndex(int tabIndex) {
     switch (tabIndex) {
       case 0:
@@ -134,6 +139,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       case 2:
         return 4; // Nearby
       case 3:
+        return 3; // Business
+      case 4:
         return 2; // Networking
       default:
         return 0;
@@ -155,21 +162,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // Start listening for group audio calls (Firestore real-time listener)
     try {
-      final notificationService = NotificationService();
-      debugPrint('========================================');
-      debugPrint('  INITIALIZING GROUP CALL LISTENER');
-      debugPrint('========================================');
-      notificationService.startListeningForGroupCalls();
-      debugPrint('    Group call listener initialized in MainNavigationScreen');
-
-      // Run diagnostic test to verify document access
-      debugPrint('  Running diagnostic test...');
-      notificationService.testGroupCallDocumentAccess().then((_) {
-        debugPrint('  Diagnostic test completed');
-      });
+      NotificationService().startListeningForGroupCalls();
     } catch (e) {
-      debugPrint('   ERROR starting group call listener: $e');
-      debugPrint('   Stack trace: ${StackTrace.current}');
+      debugPrint('Error starting group call listener: $e');
     }
 
     // Run these async operations without blocking
@@ -256,6 +251,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     _tabController.dispose();
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
+    NotificationService().stopListeningForGroupCalls();
     super.dispose();
   }
 
@@ -838,7 +834,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             try {
               int total = 0;
               for (var doc in snap.docs) {
-                total += ((doc["unreadCount"]?[user.uid] ?? 0) as num).toInt();
+                final data = doc.data();
+                if (data.containsKey('unreadCount')) {
+                  total += ((data['unreadCount']?[user.uid] ?? 0) as num).toInt();
+                }
               }
               // Unread count updated
               setState(() {});
@@ -857,8 +856,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     switch (_currentIndex) {
       case 5:
         return const ProfessionalDashboardScreen();
-      case 6:
-        return const BusinessMainScreen();
       default:
         return const SizedBox.shrink();
     }
@@ -869,7 +866,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     final size = MediaQuery.of(context).size;
 
     // For Business and Professional screens, show without TabBar
-    if (_currentIndex == 6 || _currentIndex == 5) {
+    if (_currentIndex == 5) {
       return Scaffold(body: _buildScreen());
     }
 
@@ -922,6 +919,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       isActive: _currentIndex == 4,
                     ),
                     _buildNavItem(
+                      icon: Icons.storefront,
+                      label: 'Business',
+                      index: 3,
+                      isActive: _currentIndex == 3,
+                    ),
+                    _buildNavItem(
                       icon: Icons.business_center,
                       label: 'Networking',
                       index: 2,
@@ -949,6 +952,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         extendBody: true,
         backgroundColor: Colors.transparent,
         body: const LiveConnectTabScreen(activateNetworkingFilter: true),
+        bottomNavigationBar: buildBottomNavBar(),
+      );
+    }
+    if (_currentIndex == 3) {
+      return Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+        body: const BusinessHubScreen(),
         bottomNavigationBar: buildBottomNavBar(),
       );
     }

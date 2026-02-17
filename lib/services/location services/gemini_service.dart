@@ -100,7 +100,7 @@ class GeminiService {
 
       // Create vision model for image analysis
       final visionModel = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: ApiConfig.geminiFlashModel,
         apiKey: ApiConfig.geminiApiKey,
       );
 
@@ -189,6 +189,81 @@ class GeminiService {
         }, fallback: () => query) ??
         query;
   }
-}
+  /// Sends a message to Gemini with function calling support.
+  /// Handles the call/respond loop up to [maxRounds] times.
+  /// Falls back to plain text generation if function calling fails.
+  Future<String?> sendWithFunctionCalling({
+    required String userMessage,
+    required List<Content> history,
+    required List<Tool> tools,
+    required Future<Map<String, dynamic>> Function(
+            String functionName, Map<String, dynamic> args)
+        functionHandler,
+    int maxRounds = 3,
+  }) async {
+    // Try function calling first
+    try {
+      final model = GenerativeModel(
+        model: ApiConfig.geminiFlashModel,
+        apiKey: ApiConfig.geminiApiKey,
+        tools: tools,
+        toolConfig: ToolConfig(
+          functionCallingConfig: FunctionCallingConfig(
+            mode: FunctionCallingMode.auto,
+          ),
+        ),
+        systemInstruction: Content.system(
+          'You are a smart, friendly voice assistant inside the SingleTap app. '
+          'You can answer ANY question — general knowledge, current affairs, science, math, history, tech, coding, weather, sports, entertainment, or anything else. '
+          'IMPORTANT RULES:\n'
+          '1. For general questions (e.g. "who is PM of India", "what is AI", "tell me a joke", "I want pizza recommendations"), answer DIRECTLY from your knowledge. DO NOT call any function.\n'
+          '2. ONLY call functions when the user EXPLICITLY asks about SingleTap app data like "search posts", "show my posts", "find matches", "check my profile".\n'
+          '3. If the user says something casual like "I want pizza", just respond conversationally. Do NOT search for pizza posts.\n'
+          '4. Respond in the same language the user speaks.\n'
+          '5. Keep responses concise (2-3 sentences) since they will be spoken aloud.\n'
+          '6. Be helpful, accurate, and natural.',
+        ),
+      );
+      final chat = model.startChat(history: history);
 
-// No more hardcoded categories in Gemini service!
+      var response = await chat.sendMessage(Content.text(userMessage));
+
+      for (int round = 0; round < maxRounds; round++) {
+        final calls = response.functionCalls.toList();
+        if (calls.isEmpty) break;
+
+        debugPrint('Gemini function call: ${calls.map((c) => c.name).join(', ')}');
+
+        final responses = <FunctionResponse>[];
+        for (final call in calls) {
+          final result = await functionHandler(call.name, call.args);
+          responses.add(FunctionResponse(call.name, result));
+        }
+
+        response = await chat.sendMessage(
+          Content.functionResponses(responses),
+        );
+      }
+
+      return response.text;
+    } catch (e, stackTrace) {
+      debugPrint('sendWithFunctionCalling error: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+
+    // Fallback: plain text generation without function calling
+    try {
+      debugPrint('Falling back to plain generateContent');
+      final systemPrompt =
+          'You are a smart, friendly voice assistant inside the SingleTap app. '
+          'Answer any question the user asks — general knowledge, current affairs, or anything else. '
+          'Keep responses concise and conversational (2-3 sentences). '
+          'The user said: "$userMessage"';
+      final response = await _model.generateContent([Content.text(systemPrompt)]);
+      return response.text;
+    } catch (e) {
+      debugPrint('Fallback generateContent also failed: $e');
+      return null;
+    }
+  }
+}

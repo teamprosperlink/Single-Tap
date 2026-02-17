@@ -120,8 +120,8 @@ class ExtendedUserProfile {
       businessName = map['professionalProfile']['businessName'];
       category = map['professionalProfile']['category'];
     } else if (map['businessProfile'] != null) {
-      businessName = map['businessProfile']['companyName'];
-      category = map['businessProfile']['industry'];
+      businessName = map['businessProfile']['businessName'] ?? map['businessProfile']['companyName'];
+      category = map['businessProfile']['softLabel'] ?? map['businessProfile']['industry'];
     }
 
     // Extract verification status

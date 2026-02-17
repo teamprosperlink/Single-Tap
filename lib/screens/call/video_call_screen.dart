@@ -707,9 +707,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                 color: Colors.green.withValues(alpha: 0.7),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text(
+                              child: const Text(
                                 'REMOTE VIDEO ON',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
@@ -759,9 +759,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                 ),
                                 child: Column(
                                   children: [
-                                    Text(
+                                    const Text(
                                       'DEBUG: Remote Video Not Ready',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,

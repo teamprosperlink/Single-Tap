@@ -10,7 +10,11 @@ import 'dart:io';
 import '../../res/config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_manager.dart';
+import '../../services/account_type_service.dart';
 import '../../services/location services/location_service.dart';
+import '../business/simple/business_setup_flow.dart';
+import '../business/simple/business_info_edit.dart';
+import '../../models/user_profile.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -39,6 +43,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   bool _isLoading = false;
   bool _isUpdating = false;
   bool _isUpdatingLocation = false;
+
+  // Business account state
+  bool _isBusinessAccount = false;
+  BusinessProfile? _businessProfile;
 
   // Additional profile fields
   String? _selectedGender;
@@ -164,6 +172,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           _selectedOccupation = _occupationOptions.firstWhere(
             (opt) => opt.toLowerCase() == occupation.toLowerCase(),
             orElse: () => 'Other',
+          );
+        }
+
+        // Load business account state
+        _isBusinessAccount = AccountType.fromString(profileData['accountType']) == AccountType.business;
+        if (profileData['businessProfile'] != null) {
+          _businessProfile = BusinessProfile.fromMap(
+            Map<String, dynamic>.from(profileData['businessProfile']),
           );
         }
 
@@ -1203,6 +1219,140 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                 : Colors.white.withValues(alpha: 0.4),
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Business Account Section
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.storefront_outlined,
+                                  color: Colors.white.withValues(alpha: 0.7), size: 20),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Business Account',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Switch(
+                                value: _isBusinessAccount,
+                                onChanged: (value) async {
+                                  if (value) {
+                                    // Open business setup flow
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const BusinessSetupFlow(),
+                                      ),
+                                    );
+                                    if (result == true && mounted) {
+                                      await _loadUserProfile();
+                                    }
+                                  } else {
+                                    // Confirm disable
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        backgroundColor: const Color(0xFF1a1a2e),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        title: const Text('Disable Business Account?',
+                                            style: TextStyle(color: Colors.white)),
+                                        content: const Text(
+                                          'Your catalog and business info will be hidden but not deleted. You can re-enable anytime.',
+                                          style: TextStyle(color: Colors.white70),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, true),
+                                            child: const Text('Disable',
+                                                style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      await AccountTypeService().disableBusinessMode();
+                                      if (mounted) await _loadUserProfile();
+                                    }
+                                  }
+                                },
+                                activeThumbColor: const Color(0xFF22C55E),
+                              ),
+                            ],
+                          ),
+                          if (_isBusinessAccount && _businessProfile != null) ...[
+                            const SizedBox(height: 12),
+                            GestureDetector(
+                              onTap: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BusinessInfoEdit(
+                                      businessProfile: _businessProfile!,
+                                    ),
+                                  ),
+                                );
+                                if (result == true && mounted) {
+                                  await _loadUserProfile();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      _businessProfile?.businessName ?? 'My Business',
+                                      style: const TextStyle(
+                                        color: Color(0xFF22C55E),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    const Text(
+                                      'Edit',
+                                      style: TextStyle(
+                                        color: Color(0xFF22C55E),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.chevron_right,
+                                        color: Color(0xFF22C55E), size: 18),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),

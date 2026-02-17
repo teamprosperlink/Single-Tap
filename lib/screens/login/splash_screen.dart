@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:supper/main.dart';
 import 'dart:async';
@@ -15,6 +14,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _showHeavyLayers = false;
 
   @override
   void initState() {
@@ -25,6 +25,11 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
+
+    // Defer heavy layers (background image, patterns) until after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _showHeavyLayers = true);
+    });
 
     // Navigate after splash time
     _initializeAndNavigate();
@@ -57,7 +62,7 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: AppColors.splashDark3,
       body: Stack(
         children: [
-          // Gradient Background - always visible immediately
+          // Gradient Background - always visible immediately (lightweight)
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -66,20 +71,24 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // Image Background
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.splashGradient,
-                  ),
-                );
-              },
+          // Image Background - deferred to avoid blocking first frame
+          if (_showHeavyLayers)
+            Positioned.fill(
+              child: Image.asset(
+                AppAssets.homeBackgroundImage,
+                fit: BoxFit.cover,
+                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded || frame != null) {
+                    return child;
+                  }
+                  // Show nothing while decoding (gradient visible underneath)
+                  return const SizedBox.shrink();
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox.shrink();
+                },
+              ),
             ),
-          ),
 
           // Dark overlay
           Positioned.fill(
@@ -88,66 +97,63 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // Background circular elements with glassmorphism
-          CustomPaint(
-            size: screenSize,
-            painter: _BackgroundPatternPainter(color: Colors.white),
-          ),
+          // Background circular elements - deferred
+          if (_showHeavyLayers)
+            CustomPaint(
+              size: screenSize,
+              painter: _BackgroundPatternPainter(color: Colors.white),
+            ),
 
-          // Centered Logo with glassmorphism - truly centered
+          // Centered Logo - uses simple container instead of expensive BackdropFilter
           Positioned.fill(
             child: Center(
               child: AnimatedBuilder(
                 animation: _animationController,
                 builder: (context, child) {
                   final value = _animationController.value;
-                  final scale = 1.0 + (value * 0.1);
-                  final rotationY = value * 0.5;
+                  final scale = 1.0 + (value * 0.05);
 
-                  return Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.identity()
-                      ..setEntry(0, 0, scale)
-                      ..setEntry(1, 1, scale)
-                      ..setEntry(2, 2, scale)
-                      ..rotateY(rotationY),
+                  return Transform.scale(
+                    scale: scale,
                     child: child,
                   );
                 },
-                child: ClipOval(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: screenSize.height * 0.28,
-                      height: screenSize.height * 0.28,
-                      constraints: const BoxConstraints(
-                        maxWidth: 280,
-                        maxHeight: 280,
-                        minWidth: 180,
-                        minHeight: 180,
+                child: Container(
+                  width: screenSize.height * 0.28,
+                  height: screenSize.height * 0.28,
+                  constraints: const BoxConstraints(
+                    maxWidth: 280,
+                    maxHeight: 280,
+                    minWidth: 180,
+                    minHeight: 180,
+                  ),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.glassBackgroundDark(alpha: 0.15),
+                    border: Border.all(
+                      color: AppColors.glassBorder(alpha: 0.3),
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.whiteAlpha(alpha: 0.3),
+                        blurRadius: 40,
+                        spreadRadius: 5,
+                        offset: const Offset(0, 10),
                       ),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        border: Border.all(
-                          color: AppColors.glassBorder(alpha: 0.3),
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.whiteAlpha(alpha: 0.3),
-                            blurRadius: 40,
-                            spreadRadius: 5,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          AppAssets.logoPath,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      AppAssets.logoPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.apps_rounded,
+                          size: 80,
+                          color: Colors.white70,
+                        );
+                      },
                     ),
                   ),
                 ),

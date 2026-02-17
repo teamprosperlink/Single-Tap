@@ -176,16 +176,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         // Filter for images and exclude deleted messages
         final allDocs = snapshot.data!.docs;
 
-        print('  TOTAL MESSAGES: ${allDocs.length}');
+        debugPrint('  TOTAL MESSAGES: ${allDocs.length}');
 
         // Check first few messages to see their structure
         for (var i = 0; i < (allDocs.length > 3 ? 3 : allDocs.length); i++) {
           final data = allDocs[i].data() as Map<String, dynamic>;
-          print('  MESSAGE $i FIELDS: ${data.keys.toList()}');
-          print('   - imageUrl: ${data['imageUrl']}');
-          print('   - videoUrl: ${data['videoUrl']}');
+          debugPrint('  MESSAGE $i FIELDS: ${data.keys.toList()}');
+          debugPrint('   - imageUrl: ${data['imageUrl']}');
+          debugPrint('   - videoUrl: ${data['videoUrl']}');
           final text = data['text']?.toString() ?? '';
-          print(
+          debugPrint(
             '   - text: ${text.length > 30 ? text.substring(0, 30) : text}',
           );
         }
@@ -217,7 +217,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('  PHOTOS FOUND: ${photos.length}');
+        debugPrint('  PHOTOS FOUND: ${photos.length}');
 
         if (photos.isEmpty) {
           return _buildEmptyState(
@@ -429,7 +429,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('  VIDEOS FOUND: ${videos.length}');
+        debugPrint('  VIDEOS FOUND: ${videos.length}');
 
         if (videos.isEmpty) {
           return _buildEmptyState(
@@ -940,7 +940,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                     children: [
                       Text(
                         urls.isNotEmpty ? urls.first : message.text!,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppColors.iosBlue,
                           fontSize: 14,
                           decoration: TextDecoration.underline,
@@ -969,16 +969,18 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                     // Show confirmation dialog
                     final confirm = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: const Text('Delete Link'),
                         content: const Text('Delete this link?'),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context, false),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
                             child: const Text('Cancel'),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pop(context, true),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.red,
                             ),
@@ -988,28 +990,26 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                       ),
                     );
 
-                    if (confirm == true && _currentUserId != null) {
-                      // Mark message as deleted for current user
-                      await _firestore
-                          .collection('conversations')
-                          .doc(widget.conversationId)
-                          .collection('messages')
-                          .doc(message.id)
-                          .set({
-                            'deletedFor': FieldValue.arrayUnion([
-                              _currentUserId,
-                            ]),
-                          }, SetOptions(merge: true));
+                    if (confirm != true || _currentUserId == null) return;
+                    // Mark message as deleted for current user
+                    await _firestore
+                        .collection('conversations')
+                        .doc(widget.conversationId)
+                        .collection('messages')
+                        .doc(message.id)
+                        .set({
+                          'deletedFor': FieldValue.arrayUnion([
+                            _currentUserId,
+                          ]),
+                        }, SetOptions(merge: true));
 
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Link deleted'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    }
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Link deleted'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
                   },
                 ),
               ],

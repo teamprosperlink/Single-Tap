@@ -13,6 +13,9 @@ import '../../res/config/app_colors.dart';
 import 'package:share_plus/share_plus.dart';
 import '../profile/settings_screen.dart';
 import '../profile/profile_edit_screen.dart';
+import '../business/simple/catalog_management_screen.dart';
+import '../business/simple/business_info_edit.dart';
+import '../../models/user_profile.dart';
 import 'main_navigation_screen.dart';
 
 class ProfileWithHistoryScreen extends ConsumerStatefulWidget {
@@ -545,7 +548,7 @@ class _ProfileWithHistoryScreenState
                                       // Location - Centered
                                       GestureDetector(
                                         onTap: () async {
-                                          if (!mounted) return;
+                                          if (!context.mounted) return;
                                           ScaffoldMessenger.of(
                                             context,
                                           ).showSnackBar(
@@ -561,16 +564,16 @@ class _ProfileWithHistoryScreenState
                                                     .updateUserLocation(
                                                       silent: false,
                                                     );
-                                            if (!mounted) return;
+                                            if (!context.mounted) return;
                                             if (success) {
                                               await Future.delayed(
                                                 const Duration(
                                                   milliseconds: 500,
                                                 ),
                                               );
-                                              if (!mounted) return;
+                                              if (!context.mounted) return;
                                               _loadUserData();
-                                              if (!mounted) return;
+                                              if (!context.mounted) return;
                                               ScaffoldMessenger.of(
                                                 context,
                                               ).showSnackBar(
@@ -582,7 +585,7 @@ class _ProfileWithHistoryScreenState
                                                 ),
                                               );
                                             } else {
-                                              if (!mounted) return;
+                                              if (!context.mounted) return;
                                               ScaffoldMessenger.of(
                                                 context,
                                               ).showSnackBar(
@@ -598,7 +601,7 @@ class _ProfileWithHistoryScreenState
                                             debugPrint(
                                               'Error during manual location update: $e',
                                             );
-                                            if (!mounted) return;
+                                            if (!context.mounted) return;
                                             ScaffoldMessenger.of(
                                               context,
                                             ).showSnackBar(
@@ -771,6 +774,138 @@ class _ProfileWithHistoryScreenState
                               },
                             ),
                           ),
+
+                          // Business Cards (only for business accounts)
+                          if (AccountType.fromString(_userProfile?['accountType']) == AccountType.business) ...[
+                            // My Catalog Card
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.25),
+                                    Colors.white.withValues(alpha: 0.15),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.storefront_outlined,
+                                    color: Color(0xFF22C55E),
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  'My Catalog',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Manage products & services',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                trailing: Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  size: 20,
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const CatalogManagementScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            // Edit Business Info Card
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.25),
+                                    Colors.white.withValues(alpha: 0.15),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFB300).withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.business_outlined,
+                                    color: Color(0xFFFFB300),
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  'Business Info',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Name, hours, contact',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                trailing: Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  size: 20,
+                                ),
+                                onTap: () {
+                                  final bpMap = _userProfile?['businessProfile'];
+                                  final bp = bpMap != null
+                                      ? BusinessProfile.fromMap(bpMap as Map<String, dynamic>)
+                                      : BusinessProfile();
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => BusinessInfoEdit(businessProfile: bp),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
 
                           // Account Type Card (non-interactive)
                           IgnorePointer(

@@ -25,7 +25,7 @@ import '../../res/config/app_text_styles.dart';
 import '../../res/config/app_assets.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../models/user_profile.dart';
-import '../../models/business_model.dart';
+// Old BusinessModel removed — business data now lives on UserProfile
 import '../../res/utils/photo_url_helper.dart';
 import '../../models/message_model.dart';
 import '../../services/notification_service.dart';
@@ -38,6 +38,7 @@ import '../call/voice_call_screen.dart';
 import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat_common.dart';
+import '../../widgets/catalog_chat_bubble.dart';
 import '../home/main_navigation_screen.dart';
 import 'media_gallery_screen.dart';
 import 'photo_viewer_dialog.dart';
@@ -47,7 +48,6 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
   final String? initialMessage;
   final String? chatId; // Optional chatId from Live Connect
   final bool isBusinessChat; // Whether this is a business conversation
-  final BusinessModel? business; // Business info if it's a business chat
 
   const EnhancedChatScreen({
     super.key,
@@ -55,7 +55,6 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
     this.initialMessage,
     this.chatId, // Accept chatId from Live Connect
     this.isBusinessChat = false,
-    this.business,
   });
 
   @override
@@ -1760,6 +1759,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                             ),
                                           ),
                                         ],
+                                      ),
+                                    // Catalog enquiry rich card
+                                    if (message.metadata?['type'] == 'catalog_enquiry')
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                            left: 4, right: 4, top: 4, bottom: 2),
+                                        child: CatalogChatBubble(
+                                          metadata: message.metadata!,
+                                          isMine: isMe,
+                                        ),
                                       ),
                                     if (message.text != null &&
                                         message.text!.isNotEmpty)
@@ -5397,7 +5406,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
       });
 
-      final currentUserProfile = this.ref
+      final currentUserProfile = ref
           .read(currentUserProfileProvider)
           .valueOrNull;
       final currentUserName = currentUserProfile?.name ?? 'Someone';
@@ -5891,7 +5900,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 if (isOptimistic)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       child: const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -5974,7 +5983,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Column(
@@ -6551,8 +6560,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               height: 32,
               decoration: BoxDecoration(
                 color: isOptimistic
-                    ? Colors.orange.withOpacity(0.9)
-                    : Colors.white.withOpacity(0.9),
+                    ? Colors.orange.withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.9),
                 shape: BoxShape.circle,
               ),
               child: isOptimistic
@@ -6599,7 +6608,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     decoration: BoxDecoration(
                       color: isActive
                           ? Colors.white
-                          : Colors.white.withOpacity(0.4),
+                          : Colors.white.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(1),
                     ),
                   );
@@ -6612,7 +6621,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           Text(
             formatDuration(duration),
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
               fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
@@ -7043,58 +7052,24 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   /// Initialize counter with smart retry mechanism
   void _initializeCounterWithRetry() {
     debugPrint('  ========== COUNTER INITIALIZATION STARTED ==========');
-    debugPrint('  Attempting to load counters with retry mechanism...');
 
-    // Attempt 1: Immediate (likely to fail on cold start)
-    debugPrint('  Attempt 1: Immediate load');
+    // Attempt 1: Immediate (uses FirebaseAuth fallback if provider not ready)
     _loadDailyMediaCounts();
 
-    // Attempt 2: After first frame (auth might be ready)
+    // Attempt 2: Post-frame fallback in case auth wasn't ready at all
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isCounterLoaded && mounted) {
-        debugPrint(
-          '  Attempt 2: Post-frame callback (userId may be ready now)',
-        );
         _loadDailyMediaCounts();
-      } else if (_isCounterLoaded) {
-        debugPrint(' Counter already loaded in Attempt 1, skipping retry');
       }
-    });
-
-    // Attempt 3: After 300ms (auth should definitely be ready)
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!_isCounterLoaded && mounted) {
-        debugPrint('  Attempt 3: 300ms delayed retry (auth should be ready)');
-        _loadDailyMediaCounts();
-      } else if (_isCounterLoaded) {
-        debugPrint(' Counter already loaded, skipping 300ms retry');
-      }
-    });
-
-    // Attempt 4: Final retry after 1 second (fallback)
-    Future.delayed(const Duration(seconds: 1), () {
-      if (!_isCounterLoaded && mounted) {
-        debugPrint('  Attempt 4: 1s delayed retry (FINAL ATTEMPT)');
-        _loadDailyMediaCounts();
-      } else if (_isCounterLoaded) {
-        debugPrint(' Counter already loaded, no need for final retry');
-      }
-
-      // After final attempt, report status
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_isCounterLoaded) {
-          debugPrint('    COUNTER SUCCESSFULLY LOADED!    ');
-        } else {
-          debugPrint('    COUNTER FAILED TO LOAD AFTER ALL RETRIES!    ');
-        }
-      });
     });
   }
 
   /// Load daily media counts from SharedPreferences
   Future<void> _loadDailyMediaCounts() async {
     debugPrint('  ========== LOADING COUNTERS (Enhanced Chat) ==========');
-    final currentUserId = _currentUserId;
+    // Fallback to FirebaseAuth directly if provider isn't ready yet
+    final currentUserId =
+        _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
     final otherUserId =
         widget.otherUser.uid; // Use otherUser.uid instead of conversationId!
     debugPrint('  CurrentUserId: $currentUserId, OtherUserId: $otherUserId');
@@ -7900,7 +7875,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.clear_rounded, color: Colors.white, size: 20),
+                      const Icon(Icons.clear_rounded, color: Colors.white, size: 20),
                       const SizedBox(width: 8),
                       const Text(
                         'None (Default)',
@@ -7912,7 +7887,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       ),
                       if (_selectedTheme == 'default') ...[
                         const SizedBox(width: 8),
-                        Icon(Icons.check_circle, color: Colors.white, size: 20),
+                        const Icon(Icons.check_circle, color: Colors.white, size: 20),
                       ],
                     ],
                   ),

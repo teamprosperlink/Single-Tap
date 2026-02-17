@@ -23,14 +23,14 @@ class ComingSoonWidget extends StatelessWidget {
     final color = primaryColor ?? Colors.purple;
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF1a1a2e),
-            const Color(0xFF16213e),
-            const Color(0xFF0f0f23),
+            Color(0xFF1a1a2e),
+            Color(0xFF16213e),
+            Color(0xFF0f0f23),
           ],
         ),
       ),
@@ -82,9 +82,9 @@ class ComingSoonWidget extends StatelessWidget {
                   shaderCallback: (bounds) => LinearGradient(
                     colors: [color, Colors.blue],
                   ).createShader(bounds),
-                  child: Text(
+                  child: const Text(
                     'Coming Soon',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,

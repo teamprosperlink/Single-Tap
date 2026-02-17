@@ -241,11 +241,11 @@ class SafetyTipsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.emergency, color: Colors.red, size: 24),
-              const SizedBox(width: 8),
-              const Text(
+              Icon(Icons.emergency, color: Colors.red, size: 24),
+              SizedBox(width: 8),
+              Text(
                 'In Case of Emergency',
                 style: TextStyle(
                   color: Colors.red,

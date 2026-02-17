@@ -2,8 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(flutter clean:*)",
-      "Read(/C:\\Desktop\\Plink\\flutter6\\lib\\services/**)",
-      "Bash(flutter analyze:*)"
+      "Read(/C:\\Desktop\\Plink\\flutter6\\lib\\services/**)"
     ],
     "deny": [],
     "ask": []

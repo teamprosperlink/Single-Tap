@@ -2338,7 +2338,7 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   width: 1,
                 ),
               ),
@@ -2350,7 +2350,7 @@ class _LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               indicatorWeight: 1,
               dividerColor: Colors.transparent,
               labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withOpacity(0.6),
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
 
               isScrollable: false,
               tabAlignment: TabAlignment.fill,

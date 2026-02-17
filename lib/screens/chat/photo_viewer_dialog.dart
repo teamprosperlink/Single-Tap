@@ -125,7 +125,7 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                     errorWidget: (context, url, error) => Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.error_outline,
                           color: Colors.red,
                           size: 48,
@@ -158,8 +158,8 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                     onPressed: () {
                       final currentScale = _transformationController.value.getMaxScaleOnAxis();
                       if (currentScale > 0.5) {
-                        _transformationController.value = Matrix4.identity()
-                          ..scale(currentScale - 0.5);
+                        final s = currentScale - 0.5;
+                        _transformationController.value = Matrix4.diagonal3Values(s, s, 1.0);
                       }
                     },
                   ),
@@ -180,8 +180,8 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                     onPressed: () {
                       final currentScale = _transformationController.value.getMaxScaleOnAxis();
                       if (currentScale < 4.0) {
-                        _transformationController.value = Matrix4.identity()
-                          ..scale(currentScale + 0.5);
+                        final s = currentScale + 0.5;
+                        _transformationController.value = Matrix4.diagonal3Values(s, s, 1.0);
                       }
                     },
                   ),

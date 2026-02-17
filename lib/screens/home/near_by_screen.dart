@@ -17,7 +17,9 @@ import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
-import 'near_by_posts _screen.dart';
+import 'near_by_posts_screen.dart';
+import '../../models/user_profile.dart' show UserProfile;
+import '../profile/profile_view_screen.dart';
 
 import 'edit_post_screen.dart';
 import '../../widgets/app_background.dart';
@@ -74,11 +76,17 @@ class _NearByScreenState extends State<NearByScreen>
   // Expanded posts tracking
   final Set<String> _expandedPosts = {};
 
+  // Businesses tab state
+  List<UserProfile> _businesses = [];
+  bool _isLoadingBusinesses = false;
+  bool _businessesLoaded = false;
+
   final List<Map<String, dynamic>> _categories = [
     {'name': 'All', 'icon': Icons.grid_view_rounded},
     {'name': 'Social', 'icon': Icons.computer_rounded},
     {'name': 'Jobs', 'icon': Icons.work_rounded},
     {'name': 'Products', 'icon': Icons.shopping_bag_rounded},
+    {'name': 'Businesses', 'icon': Icons.storefront_rounded},
   ];
 
   @override
@@ -760,6 +768,10 @@ class _NearByScreenState extends State<NearByScreen>
                   child: TabBarView(
                     controller: _tabController,
                     children: _categories.map((category) {
+                      // Businesses tab — show dedicated list
+                      if (category['name'] == 'Businesses') {
+                        return _buildBusinessesTab();
+                      }
                       return _isLoading && _posts.isEmpty
                           ? const Center(
                               child: CircularProgressIndicator(
@@ -1680,6 +1692,214 @@ class _NearByScreenState extends State<NearByScreen>
     } catch (e) {
       debugPrint('Error opening chat: $e');
     }
+  }
+
+  Future<void> _loadBusinesses() async {
+    if (_isLoadingBusinesses) return;
+    setState(() => _isLoadingBusinesses = true);
+
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .where('accountType', isEqualTo: 'business')
+          .limit(30)
+          .get();
+
+      final profiles = snap.docs
+          .map((doc) => UserProfile.fromFirestore(doc))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _businesses = profiles;
+          _isLoadingBusinesses = false;
+          _businessesLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading businesses: $e');
+      if (mounted) setState(() => _isLoadingBusinesses = false);
+    }
+  }
+
+  Widget _buildBusinessesTab() {
+    // Load on first view
+    if (!_businessesLoaded && !_isLoadingBusinesses) {
+      _loadBusinesses();
+    }
+
+    if (_isLoadingBusinesses && _businesses.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
+
+    if (_businesses.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.glassBackgroundDark(alpha: 0.2),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.glassBorder(alpha: 0.3)),
+                ),
+                child: const Icon(
+                  Icons.storefront_outlined,
+                  size: 64,
+                  color: Colors.white38,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No Businesses Found',
+                style: AppTextStyles.titleLarge.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No business accounts nearby yet',
+                style: AppTextStyles.bodyMedium.copyWith(color: Colors.white38),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _businesses.length,
+      itemBuilder: (context, index) {
+        final biz = _businesses[index];
+        final bp = biz.businessProfile;
+        final isOpen = bp?.isCurrentlyOpen ?? false;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.black.withValues(alpha: 0.6),
+            border: Border.all(
+              color: AppColors.glassBorder(alpha: 0.4),
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileViewScreen(userProfile: biz),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundImage: biz.profileImageUrl != null
+                          ? NetworkImage(biz.profileImageUrl!)
+                          : null,
+                      backgroundColor: Colors.grey[800],
+                      child: biz.profileImageUrl == null
+                          ? Text(
+                              biz.name.isNotEmpty
+                                  ? biz.name[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  bp?.businessName ?? biz.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFB300)
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Icon(
+                                  Icons.verified,
+                                  size: 12,
+                                  color: Color(0xFFFFB300),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (bp?.softLabel != null) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              bp!.softLabel!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (bp?.hours != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isOpen
+                              ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                              : Colors.red.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isOpen ? 'Open' : 'Closed',
+                          style: TextStyle(
+                            color: isOpen
+                                ? const Color(0xFF22C55E)
+                                : Colors.red,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildEmptyState() {

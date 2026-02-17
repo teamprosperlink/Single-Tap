@@ -8,6 +8,10 @@ import '../../models/post_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../widgets/account_badges.dart';
+import '../../widgets/catalog_card_widget.dart';
+import '../../models/catalog_item.dart';
+import '../../services/catalog_service.dart';
+import '../business/simple/catalog_item_detail.dart';
 import '../chat/enhanced_chat_screen.dart';
 
 class ProfileViewScreen extends StatefulWidget {
@@ -36,7 +40,9 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                 children: [
                   _buildImageSection(),
                   _buildProfileInfo(),
+                  if (widget.userProfile.isBusiness) _buildBusinessInfo(),
                   _buildPostDetails(),
+                  if (widget.userProfile.isBusiness) _buildCatalogSection(),
                   const SizedBox(height: 100),
                 ],
               ),
@@ -513,6 +519,185 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     );
   }
 
+  Widget _buildBusinessInfo() {
+    final bp = widget.userProfile.businessProfile;
+    if (bp == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(20),
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Open/Closed + Label
+          Row(
+            children: [
+              if (bp.hours != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bp.isCurrentlyOpen
+                        ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                        : Colors.red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    bp.isCurrentlyOpen ? 'Open Now' : 'Closed',
+                    style: TextStyle(
+                      color: bp.isCurrentlyOpen ? const Color(0xFF22C55E) : Colors.red,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              if (bp.softLabel != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    bp.softLabel!,
+                    style: const TextStyle(
+                      color: Color(0xFF3B82F6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          // Description
+          if (bp.description != null && bp.description!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              bp.description!,
+              style: TextStyle(fontSize: 15, color: Colors.grey.shade700, height: 1.4),
+            ),
+          ],
+          // Contact info
+          if (bp.contactPhone != null || bp.contactEmail != null || bp.website != null) ...[
+            const SizedBox(height: 16),
+            if (bp.contactPhone != null)
+              _contactRow(Icons.phone_outlined, bp.contactPhone!),
+            if (bp.contactEmail != null)
+              _contactRow(Icons.email_outlined, bp.contactEmail!),
+            if (bp.website != null)
+              _contactRow(Icons.language, bp.website!),
+          ],
+          // Hours
+          if (bp.hours != null) ...[
+            const SizedBox(height: 12),
+            _contactRow(Icons.access_time, 'Today: ${bp.hours!.todayHours}'),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _contactRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey.shade500),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCatalogSection() {
+    return FutureBuilder<List<CatalogItem>>(
+      future: CatalogService().getAvailableItems(widget.userProfile.uid, limit: 6),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? [];
+        if (items.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          color: Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Catalog',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    if (items.length >= 6)
+                      TextButton(
+                        onPressed: () {
+                          // Could navigate to full catalog view
+                        },
+                        child: const Text('See All',
+                            style: TextStyle(color: Color(0xFF3B82F6))),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 210,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return CatalogCardWidget(
+                      item: item,
+                      compact: true,
+                      onTap: () {
+                        CatalogItemDetail.show(
+                          context,
+                          item: item,
+                          businessUser: widget.userProfile,
+                          onEnquire: () {
+                            Navigator.pop(context); // Close bottom sheet
+                            _startChatWithEnquiry(item);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _startChatWithEnquiry(CatalogItem item) {
+    final message = 'Hi! I\'m interested in your ${item.name} (${item.formattedPrice})';
+    CatalogService().incrementBusinessStat(widget.userProfile.uid, 'enquiryCount');
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EnhancedChatScreen(
+          otherUser: widget.userProfile,
+          initialMessage: message,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomActions() {
     return Positioned(
       bottom: 0,
@@ -760,7 +945,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
   void _blockUser() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Block User', style: TextStyle(color: Colors.white)),
@@ -770,12 +955,12 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 final currentUserId = FirebaseAuth.instance.currentUser?.uid;
                 if (currentUserId == null) return;
@@ -790,26 +975,24 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                       'blockedAt': FieldValue.serverTimestamp(),
                     });
 
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '${widget.userProfile.name} has been blocked.',
-                      ),
-                      backgroundColor: Colors.orange,
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${widget.userProfile.name} has been blocked.',
                     ),
-                  );
-                  Navigator.pop(context); // Go back from profile view
-                }
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                Navigator.pop(context); // Go back from profile view
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to block user: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to block user: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             child: const Text('Block', style: TextStyle(color: Colors.red)),

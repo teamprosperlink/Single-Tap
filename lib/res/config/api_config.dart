@@ -10,7 +10,7 @@ class ApiConfig {
   static String get geminiApiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
 
   /// Gemini model names
-  static const String geminiFlashModel = 'gemini-1.5-flash-latest';
+  static const String geminiFlashModel = 'gemini-2.5-flash';
   static const String geminiEmbeddingModel = 'text-embedding-004';
 
   /// API endpoints
