@@ -33,7 +33,7 @@ When Device B logs in and Device A already logged in:
 ### Option 1: "Logout Other Device"
 - Device A gets logged out
 - Device B stays logged in
-- Only one device has access (WhatsApp-style)
+- Only one device has access (SingleTap-style)
 
 ### Option 2: "Stay Logged In"
 - Device A stays logged in
@@ -116,7 +116,7 @@ flutter run -d emulator-5556
 
 ## Common Questions
 
-**Q: What if I want only one device logged in (WhatsApp-style)?**
+**Q: What if I want only one device logged in (SingleTap-style)?**
 A: Click "Logout Other Device" - this logs out the old device
 
 **Q: What if I want multiple devices logged in?**

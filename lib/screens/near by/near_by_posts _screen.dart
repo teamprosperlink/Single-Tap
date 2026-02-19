@@ -9,8 +9,6 @@ import '../../res/config/app_text_styles.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/other widgets/user_avatar.dart';
-import '../../widgets/app_background.dart';
-
 
 class MyPostsScreen extends StatefulWidget {
   const MyPostsScreen({super.key});
@@ -28,6 +26,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
   // Current user data
   String _currentUserName = '';
   String? _currentUserPhoto;
+  bool _isAutoDeleting = false;
 
   @override
   void initState() {
@@ -68,82 +67,69 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 18,
-              color: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 48),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color.fromRGBO(64, 64, 64, 1),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 1)),
           ),
-        ),
-        title: Text(
-          'Posts',
-          style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
-        ),
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
-              ],
-            ),
-            border: const Border(
-              bottom: BorderSide(color: Colors.white, width: 0.5),
-            ),
-          ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 18,
+                  color: Colors.white,
                 ),
+                onPressed: () => Navigator.pop(context),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicatorColor: Colors.white,
-              indicatorWeight: 1,
-              dividerColor: Colors.transparent,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-              labelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+            title: Text(
+              'Posts',
+              style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
+            ),
+            centerTitle: true,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(48),
+              child: TabBar(
+                controller: _tabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorColor: Colors.white,
+                indicatorWeight: 1,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                labelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                ),
+                tabs: const [
+                  Tab(text: 'Saved'),
+                  Tab(text: 'Delete'),
+                ],
               ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.normal,
-              ),
-              tabs: const [
-                // Tab(text: 'My Posts'),
-                Tab(text: 'Saved'),
-                Tab(text: 'Delete'),
-              ],
             ),
           ),
         ),
       ),
-      body: AppBackground(
-        showParticles: true,
-        overlayOpacity: 0.6,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
         child: Column(
           children: [
             // Spacer for AppBar
@@ -212,7 +198,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         final savedPosts = snapshot.data!.docs;
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
           itemCount: savedPosts.length,
           itemBuilder: (context, index) {
             final doc = savedPosts[index];
@@ -296,9 +282,16 @@ class _MyPostsScreenState extends State<MyPostsScreen>
           deletedPosts.add(doc);
         }
 
-        // Auto-delete posts older than 30 days
-        if (postsToAutoDelete.isNotEmpty) {
-          _autoDeleteOldPosts(postsToAutoDelete);
+        // Auto-delete posts older than 30 days (scheduled after build)
+        if (postsToAutoDelete.isNotEmpty && !_isAutoDeleting) {
+          _isAutoDeleting = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _autoDeleteOldPosts(postsToAutoDelete).then((_) {
+                _isAutoDeleting = false;
+              });
+            }
+          });
         }
 
         if (deletedPosts.isEmpty) {
@@ -310,7 +303,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
           itemCount: deletedPosts.length,
           itemBuilder: (context, index) {
             final doc = deletedPosts[index];
@@ -361,13 +354,21 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         : rawDescription;
     final images = post['images'] as List<dynamic>? ?? [];
     final rawImageUrl = post['imageUrl'];
-    final imageUrl = (rawImageUrl != null && rawImageUrl.toString().isNotEmpty)
-        ? rawImageUrl.toString()
-        : (images.isNotEmpty &&
-              images[0] != null &&
-              images[0].toString().isNotEmpty)
-        ? images[0].toString()
-        : null;
+    // Collect all image URLs
+    final allImageUrls = <String>[];
+    if (rawImageUrl != null && rawImageUrl.toString().isNotEmpty) {
+      allImageUrls.add(rawImageUrl.toString());
+    }
+    for (final img in images) {
+      final url = img?.toString() ?? '';
+      if (url.isNotEmpty && !allImageUrls.contains(url)) {
+        allImageUrls.add(url);
+      }
+    }
+    // Limit to max 10 images
+    if (allImageUrls.length > 10)
+      allImageUrls.removeRange(10, allImageUrls.length);
+    final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -397,16 +398,23 @@ class _MyPostsScreenState extends State<MyPostsScreen>
 
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = contentLevel == 3 ? screenHeight * 0.16 : 0.0;
-    final cardPadding = contentLevel >= 2 ? 14.0 : 12.0;
+    final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(contentLevel >= 2 ? 18 : 14),
-        color: Colors.black.withValues(alpha: 0.6),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         border: Border.all(
-          color: AppColors.glassBorder(alpha: 0.4),
-          width: contentLevel >= 2 ? 1.5 : 1,
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
         ),
       ),
       child: Padding(
@@ -469,7 +477,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               ],
             ),
 
-            SizedBox(height: contentLevel >= 2 ? 12 : 8),
+            SizedBox(height: contentLevel >= 2 ? 8 : 6),
 
             // Title
             Text(
@@ -544,43 +552,170 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               ),
             ],
 
-            // Post Image
-            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+            // Post Images
+            if (allImageUrls.isNotEmpty) ...[
               const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  width: double.infinity,
-                  height: imageHeight,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
+              // Main image
+              GestureDetector(
+                onTap: () => _openImageViewer(allImageUrls, 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CachedNetworkImage(
+                    imageUrl: allImageUrls[0],
+                    width: double.infinity,
                     height: imageHeight,
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackgroundDark(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: imageHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.glassBackgroundDark(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       ),
                     ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    height: imageHeight,
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackgroundDark(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: AppColors.textTertiaryDark,
-                      size: 32,
+                    errorWidget: (context, url, error) => Container(
+                      height: imageHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.glassBackgroundDark(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: AppColors.textTertiaryDark,
+                        size: 32,
+                      ),
                     ),
                   ),
                 ),
               ),
+              // Additional images in grid
+              if (allImageUrls.length > 1) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    // 2nd image
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _openImageViewer(allImageUrls, 1),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: CachedNetworkImage(
+                            imageUrl: allImageUrls[1],
+                            height: screenHeight * 0.12,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              height: screenHeight * 0.12,
+                              decoration: BoxDecoration(
+                                color: AppColors.glassBackgroundDark(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              height: screenHeight * 0.12,
+                              decoration: BoxDecoration(
+                                color: AppColors.glassBackgroundDark(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.image_not_supported_outlined,
+                                color: AppColors.textTertiaryDark,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 3rd image with overlay
+                    if (allImageUrls.length > 2) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _openImageViewer(allImageUrls, 2),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Stack(
+                              children: [
+                                CachedNetworkImage(
+                                  imageUrl: allImageUrls[2],
+                                  height: screenHeight * 0.12,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    height: screenHeight * 0.12,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.glassBackgroundDark(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      Container(
+                                        height: screenHeight * 0.12,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.glassBackgroundDark(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.image_not_supported_outlined,
+                                          color: AppColors.textTertiaryDark,
+                                          size: 24,
+                                        ),
+                                      ),
+                                ),
+                                if (allImageUrls.length > 3)
+                                  Positioned.fill(
+                                    child: Container(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '+${allImageUrls.length - 3}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ],
           ],
         ),
@@ -602,13 +737,21 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         : rawDescription;
     final images = post['images'] as List<dynamic>? ?? [];
     final rawImageUrl = post['imageUrl'];
-    final imageUrl = (rawImageUrl != null && rawImageUrl.toString().isNotEmpty)
-        ? rawImageUrl.toString()
-        : (images.isNotEmpty &&
-              images[0] != null &&
-              images[0].toString().isNotEmpty)
-        ? images[0].toString()
-        : null;
+    // Collect all image URLs
+    final allImageUrls = <String>[];
+    if (rawImageUrl != null && rawImageUrl.toString().isNotEmpty) {
+      allImageUrls.add(rawImageUrl.toString());
+    }
+    for (final img in images) {
+      final url = img?.toString() ?? '';
+      if (url.isNotEmpty && !allImageUrls.contains(url)) {
+        allImageUrls.add(url);
+      }
+    }
+    // Limit to max 10 images
+    if (allImageUrls.length > 10)
+      allImageUrls.removeRange(10, allImageUrls.length);
+    final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -638,16 +781,23 @@ class _MyPostsScreenState extends State<MyPostsScreen>
 
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = contentLevel == 3 ? screenHeight * 0.16 : 0.0;
-    final cardPadding = contentLevel >= 2 ? 14.0 : 12.0;
+    final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(contentLevel >= 2 ? 18 : 14),
-        color: Colors.black.withValues(alpha: 0.6),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         border: Border.all(
-          color: AppColors.glassBorder(alpha: 0.4),
-          width: contentLevel >= 2 ? 1.5 : 1,
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
         ),
       ),
       child: Padding(
@@ -745,7 +895,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               ],
             ),
 
-            SizedBox(height: contentLevel >= 2 ? 12 : 8),
+            SizedBox(height: contentLevel >= 2 ? 8 : 6),
 
             // Title
             Text(
@@ -820,45 +970,228 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               ),
             ],
 
-            // Post Image
-            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+            // Post Images
+            if (allImageUrls.isNotEmpty) ...[
               const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  width: double.infinity,
-                  height: imageHeight,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
+              // Main image
+              GestureDetector(
+                onTap: () => _openImageViewer(allImageUrls, 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CachedNetworkImage(
+                    imageUrl: allImageUrls[0],
+                    width: double.infinity,
                     height: imageHeight,
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackgroundDark(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: imageHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.glassBackgroundDark(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       ),
                     ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    height: imageHeight,
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackgroundDark(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: AppColors.textTertiaryDark,
-                      size: 32,
+                    errorWidget: (context, url, error) => Container(
+                      height: imageHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.glassBackgroundDark(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: AppColors.textTertiaryDark,
+                        size: 32,
+                      ),
                     ),
                   ),
                 ),
               ),
+              // Additional images in grid
+              if (allImageUrls.length > 1) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    // 2nd image
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _openImageViewer(allImageUrls, 1),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: CachedNetworkImage(
+                            imageUrl: allImageUrls[1],
+                            height: screenHeight * 0.12,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              height: screenHeight * 0.12,
+                              decoration: BoxDecoration(
+                                color: AppColors.glassBackgroundDark(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              height: screenHeight * 0.12,
+                              decoration: BoxDecoration(
+                                color: AppColors.glassBackgroundDark(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.image_not_supported_outlined,
+                                color: AppColors.textTertiaryDark,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 3rd image with overlay
+                    if (allImageUrls.length > 2) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _openImageViewer(allImageUrls, 2),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Stack(
+                              children: [
+                                CachedNetworkImage(
+                                  imageUrl: allImageUrls[2],
+                                  height: screenHeight * 0.12,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    height: screenHeight * 0.12,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.glassBackgroundDark(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      Container(
+                                        height: screenHeight * 0.12,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.glassBackgroundDark(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.image_not_supported_outlined,
+                                          color: AppColors.textTertiaryDark,
+                                          size: 24,
+                                        ),
+                                      ),
+                                ),
+                                if (allImageUrls.length > 3)
+                                  Positioned.fill(
+                                    child: Container(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '+${allImageUrls.length - 3}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  // Fullscreen image viewer with swipe and zoom
+  void _openImageViewer(List<String> imageUrls, int initialIndex) {
+    final pageController = PageController(initialPage: initialIndex);
+    int currentPage = initialIndex;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.95),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(dialogContext),
+            ),
+            title: Text(
+              '${currentPage + 1} / ${imageUrls.length}',
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            centerTitle: true,
+          ),
+          body: PageView.builder(
+            controller: pageController,
+            itemCount: imageUrls.length,
+            onPageChanged: (index) {
+              setDialogState(() => currentPage = index);
+            },
+            itemBuilder: (context, index) {
+              return InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Center(
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrls[index],
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                    errorWidget: (_, __, ___) => const Icon(
+                      Icons.image_not_supported_outlined,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -975,9 +1308,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -1093,9 +1426,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),

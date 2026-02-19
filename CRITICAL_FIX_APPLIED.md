@@ -208,7 +208,7 @@ This will:
 1. Deploy the `forceLogoutOtherDevices` Cloud Function
 2. Deploy Firestore Security Rules
 3. Enable Device A to receive and process logout signal
-4. Complete the WhatsApp-style logout feature
+4. Complete the SingleTap-style logout feature
 
 ---
 

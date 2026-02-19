@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,7 +8,7 @@ import '../../services/other services/group_voice_call_service.dart';
 import '../../services/floating_call_service.dart';
 import '../../widgets/floating_particles.dart';
 
-/// WhatsApp-style Group Audio Call Screen
+/// SingleTap-style Group Audio Call Screen
 /// Supports multiple participants with audio-only conference call
 class GroupAudioCallScreen extends StatefulWidget {
   final String callId;
@@ -138,7 +137,8 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
         debugPrint('  Participant left WebRTC: $participantId');
 
         // Show notification that participant left
-        final participantName = _participantInfo[participantId]?['name'] as String? ?? 'Someone';
+        final participantName =
+            _participantInfo[participantId]?['name'] as String? ?? 'Someone';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -245,10 +245,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                 'type': 'call_participant_$action',
                 'title': 'Call Update',
                 'body': '$participantName $action the call',
-                'data': {
-                  'callId': widget.callId,
-                  'groupId': widget.groupId,
-                },
+                'data': {'callId': widget.callId, 'groupId': widget.groupId},
                 'read': false,
                 'createdAt': FieldValue.serverTimestamp(),
               });
@@ -273,7 +270,9 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
       debugPrint('GroupAudioCallScreen: Disposing - leaving call');
       _groupVoiceCallService.leaveCall();
     } else {
-      debugPrint('GroupAudioCallScreen: Disposing - keeping call active (minimized)');
+      debugPrint(
+        'GroupAudioCallScreen: Disposing - keeping call active (minimized)',
+      );
     }
 
     super.dispose();
@@ -321,7 +320,8 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
               }
             } else {
               // Existing participant - update active status
-              final wasActive = _participantInfo[userId]!['isActive'] as bool? ?? false;
+              final wasActive =
+                  _participantInfo[userId]!['isActive'] as bool? ?? false;
               final isNowActive = data['isActive'] == true;
 
               if (mounted) {
@@ -536,7 +536,9 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
 
   Future<void> _updateCallStatus(String status) async {
     try {
-      debugPrint('  Updating call status to: $status for callId: ${widget.callId}');
+      debugPrint(
+        '  Updating call status to: $status for callId: ${widget.callId}',
+      );
       await _firestore.collection('group_calls').doc(widget.callId).update({
         'status': status,
         if (status == 'ended') 'endedAt': FieldValue.serverTimestamp(),
@@ -588,7 +590,9 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
               .get();
           if (activeSnapshot.docs.isEmpty) {
             await _updateCallStatus('ended');
-            debugPrint(' Background: No active participants - call marked as ENDED');
+            debugPrint(
+              ' Background: No active participants - call marked as ENDED',
+            );
           }
         } catch (e) {
           debugPrint(' Background: Error checking active participants: $e');
@@ -620,15 +624,14 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
               .length;
 
           // Save joined participants info to the group_calls document
-          await _firestore
-              .collection('group_calls')
-              .doc(widget.callId)
-              .update({
-                'joinedParticipants': joinedParticipantIds,
-                'joinedCount': joinedParticipantIds.length,
-                'totalMembers': _participantInfo.length,
-              });
-          debugPrint(' Background: Saved joinedParticipants: $joinedParticipantIds');
+          await _firestore.collection('group_calls').doc(widget.callId).update({
+            'joinedParticipants': joinedParticipantIds,
+            'joinedCount': joinedParticipantIds.length,
+            'totalMembers': _participantInfo.length,
+          });
+          debugPrint(
+            ' Background: Saved joinedParticipants: $joinedParticipantIds',
+          );
 
           if (systemMessageId != null && groupId != null) {
             // Update the system message with call details
@@ -717,7 +720,9 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
         debugPrint(' _endCall: Error querying active participants: $e');
       }
 
-      debugPrint(' _endCall: othersActive=$othersActive, callDuration=$_callDuration');
+      debugPrint(
+        ' _endCall: othersActive=$othersActive, callDuration=$_callDuration',
+      );
 
       // Always mark call as ended if no one else is active
       // This ensures the banner disappears when caller leaves
@@ -735,7 +740,6 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
 
       // Update Firestore in background (non-blocking)
       _updateFirestoreInBackground();
-
     } catch (e) {
       debugPrint(' _endCall: ERROR - $e');
     }
@@ -750,7 +754,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
     }
   }
 
-  /// Minimize call to floating overlay (WhatsApp-style PiP)
+  /// Minimize call to floating overlay (SingleTap-style PiP)
   void _minimizeCall() {
     debugPrint('GroupAudioCallScreen: Minimizing call...');
 
@@ -759,7 +763,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
 
     // Get participant names for the floating UI
     final participantNames = _participantInfo.values
-        .where((info) => info['userId'] !=   widget.userId)
+        .where((info) => info['userId'] != widget.userId)
         .map((info) => info['name'] as String)
         .toList();
 
@@ -811,7 +815,9 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
       final remainingSeconds = 39 - _callWaitTime;
       if (remainingSeconds > 0) {
         FloatingCallService().startAutoEndTimer(remainingSeconds);
-        debugPrint('GroupAudioCallScreen: Auto-end timer transferred to floating overlay ($remainingSeconds sec)');
+        debugPrint(
+          'GroupAudioCallScreen: Auto-end timer transferred to floating overlay ($remainingSeconds sec)',
+        );
       }
     }
 
@@ -846,30 +852,12 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
       extendBodyBehindAppBar: false,
       body: Stack(
         children: [
-          // Background Image (same as home screen)
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Blur effect with dark overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(color: Colors.black.withValues(alpha: 0.6)),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
           ),
 
@@ -957,7 +945,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Left: Minimize button (WhatsApp-style)
+          // Left: Minimize button (SingleTap-style)
           Positioned(
             left: 0,
             child: Container(
@@ -1035,16 +1023,10 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
             ? CachedNetworkImage(
                 imageUrl: currentUserPhoto,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => const Icon(
-                  Icons.person,
-                  size: 40,
-                  color: Colors.white,
-                ),
-                errorWidget: (context, url, error) => const Icon(
-                  Icons.person,
-                  size: 40,
-                  color: Colors.white,
-                ),
+                placeholder: (context, url) =>
+                    const Icon(Icons.person, size: 40, color: Colors.white),
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.person, size: 40, color: Colors.white),
               )
             : const Icon(Icons.person, size: 40, color: Colors.white),
       ),
@@ -1447,16 +1429,16 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
     if (!isActive) {
       // Participant hasn't joined yet - always show "Ringing..."
       statusText = 'Ringing...';
-      statusColor = const Color(0xFFFF9500); // WhatsApp orange
+      statusColor = const Color(0xFFFF9500); // SingleTap orange
     } else if (_isMuted && isCurrentUser) {
       // This shouldn't happen since isCurrentUser check in grid excludes caller
       // But keeping as fallback
       statusText = 'Muted';
-      statusColor = const Color(0xFFFF3B30); // WhatsApp red
+      statusColor = const Color(0xFFFF3B30); // SingleTap red
     } else {
       // Participant is active/connected
       statusText = 'Connected';
-      statusColor = const Color(0xFF25D366); // WhatsApp green
+      statusColor = const Color(0xFF25D366); // SingleTap green
     }
 
     // Size adjustments based on isLarge flag
@@ -1499,55 +1481,39 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
           children: [
             // Profile picture
             Container(
-                width: avatarSize,
-                height: avatarSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isActive
-                        ? const Color(0xFF25D366) // WhatsApp green
-                        : Colors.white.withValues(alpha: 0.25),
-                    width: avatarBorderWidth,
-                  ),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF25D366,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : null,
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isActive
+                      ? const Color(0xFF25D366) // SingleTap green
+                      : Colors.white.withValues(alpha: 0.25),
+                  width: avatarBorderWidth,
                 ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Profile image
-                    ClipOval(
-                      child: photoUrl != null && photoUrl.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: photoUrl,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: AppColors.iosBlue.withValues(alpha: 0.2),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: AppColors.iosBlue.withValues(alpha: 0.2),
-                                child: Center(
-                                  child: Text(
-                                    name[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : Container(
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Profile image
+                  ClipOval(
+                    child: photoUrl != null && photoUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: photoUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: AppColors.iosBlue.withValues(alpha: 0.2),
+                            ),
+                            errorWidget: (context, url, error) => Container(
                               color: AppColors.iosBlue.withValues(alpha: 0.2),
                               child: Center(
                                 child: Text(
@@ -1560,55 +1526,69 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                                 ),
                               ),
                             ),
-                    ),
-
-                    // Waveform overlay when active/speaking
-                    if (isActive && !_isMuted)
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(40),
-                              bottomRight: Radius.circular(40),
+                          )
+                        : Container(
+                            color: AppColors.iosBlue.withValues(alpha: 0.2),
+                            child: Center(
+                              child: Text(
+                                name[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
-                          child: _buildMiniWaveform(),
-                        ),
-                      ),
+                  ),
 
-                    // Mute status indicator (WhatsApp style)
-                    if (_isMuted && isCurrentUser)
-                      Positioned(
-                        bottom: isLarge ? 8 : 4,
-                        right: isLarge ? 8 : 4,
-                        child: Container(
-                          padding: EdgeInsets.all(isLarge ? 6 : 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF3B30), // Red for muted
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.mic_off,
-                            color: Colors.white,
-                            size: isLarge ? 16 : 12,
+                  // Waveform overlay when active/speaking
+                  if (isActive && !_isMuted)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(40),
+                            bottomRight: Radius.circular(40),
                           ),
                         ),
+                        child: _buildMiniWaveform(),
                       ),
-                  ],
-                ),
+                    ),
+
+                  // Mute status indicator (SingleTap style)
+                  if (_isMuted && isCurrentUser)
+                    Positioned(
+                      bottom: isLarge ? 8 : 4,
+                      right: isLarge ? 8 : 4,
+                      child: Container(
+                        padding: EdgeInsets.all(isLarge ? 6 : 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF3B30), // Red for muted
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.mic_off,
+                          color: Colors.white,
+                          size: isLarge ? 16 : 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
 
             const SizedBox(height: 12),
 
@@ -1649,7 +1629,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
           height: heights[index],
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: const Color(0xFF25D366), // WhatsApp green
+            color: const Color(0xFF25D366), // SingleTap green
             borderRadius: BorderRadius.circular(1),
           ),
         );
@@ -1668,7 +1648,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
             icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
             onTap: _toggleMute,
             backgroundColor: _isMuted
-                ? const Color(0xFFFF3B30) // WhatsApp red when muted
+                ? const Color(0xFFFF3B30) // SingleTap red when muted
                 : const Color(0xFF3A3A3A), // Dark gray when unmuted
             iconColor: Colors.white,
           ),
@@ -1682,7 +1662,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                     debugPrint('  END CALL BUTTON TAPPED');
                     _endCall();
                   },
-            backgroundColor: const Color(0xFFFF3B30), // WhatsApp red
+            backgroundColor: const Color(0xFFFF3B30), // SingleTap red
             iconColor: Colors.white,
             size: 68,
           ),

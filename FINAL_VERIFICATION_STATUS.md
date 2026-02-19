@@ -270,7 +270,7 @@ users/{uid}:
 - When User D logs in → User C logs out immediately
 - Pattern continues indefinitely
 
-✅ **WhatsApp-Style Behavior**
+✅ **SingleTap-Style Behavior**
 - Only ONE device logged in at any time
 - New login automatically kicks out old device
 - User sees automatic logout (no action required)

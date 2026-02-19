@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/screens/home/product/checkout_screen.dart';
+import 'package:supper/screens/product/checkout_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> item;
@@ -924,7 +924,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildShareOption(Icons.message, 'WhatsApp', Colors.green),
+                  _buildShareOption(Icons.message, 'SingleTap', Colors.green),
                   _buildShareOption(Icons.telegram, 'Telegram', Colors.blue),
                   _buildShareOption(Icons.copy, 'Copy Link', Colors.grey),
                   _buildShareOption(Icons.more_horiz, 'More', Colors.purple),

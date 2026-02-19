@@ -125,7 +125,7 @@ if (!logoutSuccess && uid != null && tokenCheckTimer == null) {
 - Checks Firestore every 200ms for token deletion
 - When token becomes NULL, closes dialog automatically
 - Signs out Device B without user action
-- WhatsApp-style auto-logout ✓
+- SingleTap-style auto-logout ✓
 
 ---
 
@@ -202,7 +202,7 @@ Device B (on dialog):
 Device A: Logged out ✓
 Device B: Logged out ✓
 Only 1 device per account ✓
-WhatsApp-style behavior ✓
+SingleTap-style behavior ✓
 ```
 
 **Total time: 2-3 seconds**

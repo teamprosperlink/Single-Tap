@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../res/config/app_colors.dart';
 import '../../widgets/safe_circle_avatar.dart';
 import 'group_video_call_screen.dart';
 
-/// Incoming Group Video Call Screen (WhatsApp style)
+/// Incoming Group Video Call Screen (SingleTap style)
 class IncomingGroupVideoCallScreen extends StatefulWidget {
   final String callId;
   final String callerName;
@@ -22,10 +23,12 @@ class IncomingGroupVideoCallScreen extends StatefulWidget {
   });
 
   @override
-  State<IncomingGroupVideoCallScreen> createState() => _IncomingGroupVideoCallScreenState();
+  State<IncomingGroupVideoCallScreen> createState() =>
+      _IncomingGroupVideoCallScreenState();
 }
 
-class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScreen>
+class _IncomingGroupVideoCallScreenState
+    extends State<IncomingGroupVideoCallScreen>
     with TickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late AnimationController _pulseController;
@@ -57,22 +60,22 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
         .doc(widget.callId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
+          if (!mounted) return;
 
-      if (!snapshot.exists) {
-        _decline();
-        return;
-      }
+          if (!snapshot.exists) {
+            _decline();
+            return;
+          }
 
-      final data = snapshot.data();
-      if (data == null) return;
+          final data = snapshot.data();
+          if (data == null) return;
 
-      final status = data['status'] as String? ?? 'ringing';
+          final status = data['status'] as String? ?? 'ringing';
 
-      if (status == 'ended' || status == 'cancelled') {
-        _decline();
-      }
-    });
+          if (status == 'ended' || status == 'cancelled') {
+            _decline();
+          }
+        });
   }
 
   Future<void> _accept() async {
@@ -124,10 +127,10 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
           .collection('participants')
           .doc(widget.currentUserId)
           .update({
-        'isActive': false,
-        'declined': true,
-        'declinedAt': FieldValue.serverTimestamp(),
-      });
+            'isActive': false,
+            'declined': true,
+            'declinedAt': FieldValue.serverTimestamp(),
+          });
     } catch (e) {
       debugPrint('  IncomingGroupVideoCallScreen: Error declining call - $e');
     }
@@ -152,19 +155,9 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background gradient
+          // Gradient Background
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black,
-                  Colors.grey[900]!,
-                  Colors.black,
-                ],
-              ),
-            ),
+            decoration: const BoxDecoration(gradient: AppColors.splashGradient),
           ),
 
           // Content
@@ -223,7 +216,10 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
 
                 // Participant count
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -249,7 +245,7 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
 
                 const Spacer(flex: 3),
 
-                // Action buttons (WhatsApp style)
+                // Action buttons (SingleTap style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 50),
                   child: Row(
@@ -297,7 +293,8 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
           // Show up to 4 participant avatars overlapping
           ...List.generate(displayParticipants.length, (index) {
             final participant = displayParticipants[index];
-            final offset = (index - displayParticipants.length / 2 + 0.5) * 40.0;
+            final offset =
+                (index - displayParticipants.length / 2 + 0.5) * 40.0;
 
             return Positioned(
               left: MediaQuery.of(context).size.width / 2 + offset - 25,
@@ -381,11 +378,7 @@ class _IncomingGroupVideoCallScreenState extends State<IncomingGroupVideoCallScr
                       ),
                     ),
                   )
-                : Icon(
-                    icon,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+                : Icon(icon, color: Colors.white, size: 32),
           ),
         ),
         const SizedBox(height: 12),

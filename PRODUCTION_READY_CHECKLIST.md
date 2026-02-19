@@ -319,12 +319,12 @@ After deployment, monitor:
 2. **Protection Window**
    - 10-second window prevents local writes from triggering logout
    - Means device takes up to 10 seconds to stabilize after login
-   - This is acceptable and matches WhatsApp behavior
+   - This is acceptable and matches SingleTap behavior
 
 3. **Firestore Latency**
    - Listener has ~100-500ms Firestore latency
    - Means logout detection takes 100-500ms after Cloud Function writes
-   - This is acceptable for WhatsApp-style single device login
+   - This is acceptable for SingleTap-style single device login
 
 4. **Offline Devices**
    - Offline devices must reconnect to be detected
@@ -380,7 +380,7 @@ Monitor:
 ### Ready for Deployment: YES ✅
 
 The device logout system is **production-ready** with:
-- WhatsApp-style single device login
+- SingleTap-style single device login
 - Immediate logout for online devices
 - Offline device detection on reconnect
 - Stale session auto-cleanup

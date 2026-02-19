@@ -166,7 +166,7 @@ Login:
 [LoginScreen] Waiting 2.5 seconds for listener to initialize...
 [LoginScreen] Listener initialized, now logging out other device...
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 [LoginScreen] ✓ Other device logout command sent
 [LoginScreen] ✓ Navigating Device B to main app...
 ```
@@ -310,7 +310,7 @@ Use whichever is easiest for your system.
 
 4. **Verify** Device A logs out when Device B logs in
 
-5. **Done!** ✓ WhatsApp-style logout feature is working
+5. **Done!** ✓ SingleTap-style logout feature is working
 
 ---
 

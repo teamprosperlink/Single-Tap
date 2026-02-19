@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 import '../../models/message_model.dart';
 import 'video_player_screen.dart';
 import 'audio_player_dialog.dart';
@@ -64,26 +63,28 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? AppColors.backgroundDark : Colors.white,
+      backgroundColor: AppColors.splashDark3,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.white.withValues(alpha: 0.1),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TabBar(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 50),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.splashDark1,
+            border: const Border(bottom: BorderSide(color: Colors.white, width: 1)),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            centerTitle: true,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(50),
+              child: TabBar(
                 controller: _tabController,
-                indicatorColor: isDarkMode ? Colors.white : AppColors.iosBlue,
+                indicatorColor: Colors.white,
                 indicatorWeight: 3,
-                labelColor: isDarkMode ? Colors.white : AppColors.iosBlue,
-                unselectedLabelColor: isDarkMode
-                    ? Colors.white60
-                    : Colors.black54,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white60,
                 labelStyle: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -99,54 +100,41 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                   Tab(text: 'Files'),
                 ],
               ),
-            ],
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_rounded,
-            color: isDarkMode ? Colors.white : AppColors.iosBlue,
-            size: 22,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Media Gallery',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+            ),
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: const Text(
+              'Media Gallery',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          // Background Image - Same as chat screen
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.splashGradient,
+        ),
+        child: SafeArea(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildPhotosTab(isDarkMode),
+              _buildVideosTab(isDarkMode),
+              _buildLinksTab(isDarkMode),
+              _buildFilesTab(isDarkMode),
+            ],
           ),
-          // Dark overlay - Heavier for better contrast
-          Positioned.fill(
-            child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
-          ),
-          // Content
-          SafeArea(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPhotosTab(isDarkMode),
-                _buildVideosTab(isDarkMode),
-                _buildLinksTab(isDarkMode),
-                _buildFilesTab(isDarkMode),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -243,9 +231,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -456,9 +451,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -754,10 +756,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: isDarkMode
-                    ? const Color(0xFF1A2B3D)
-                    : const Color(0xFFF0F2F5),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -778,13 +786,12 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: (isVoice ? Colors.green : AppColors.iosBlue)
-                                .withValues(alpha: 0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             isVoice ? Icons.mic : Icons.insert_drive_file,
-                            color: isVoice ? Colors.green : AppColors.iosBlue,
+                            color: Colors.white,
                             size: 24,
                           ),
                         ),
@@ -899,8 +906,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1A2B3D) : const Color(0xFFF0F2F5),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -924,12 +939,12 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.iosBlue.withValues(alpha: 0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.link_rounded,
-                    color: AppColors.iosBlue,
+                    color: Colors.white,
                     size: 24,
                   ),
                 ),
@@ -941,7 +956,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                       Text(
                         urls.isNotEmpty ? urls.first : message.text!,
                         style: TextStyle(
-                          color: AppColors.iosBlue,
+                          color: Colors.white,
                           fontSize: 14,
                           decoration: TextDecoration.underline,
                         ),
@@ -1030,15 +1045,21 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: isDarkMode
-                  ? const Color(0xFF1A2B3D)
-                  : const Color(0xFFF0F2F5),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.25),
+                  Colors.white.withValues(alpha: 0.15),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.folder_open_rounded,
               size: 60,
-              color: isDarkMode ? Colors.white30 : Colors.black26,
+              color: Colors.white30,
             ),
           ),
           const SizedBox(height: 24),
@@ -1071,7 +1092,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     return Center(
       child: CircularProgressIndicator(
         valueColor: AlwaysStoppedAnimation<Color>(
-          isDarkMode ? Colors.white70 : AppColors.iosBlue,
+          Colors.white70,
         ),
       ),
     );

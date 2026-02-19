@@ -44,11 +44,7 @@ class LocationSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                Icon(
-                  Icons.location_on,
-                  size: 20,
-                  color: config.primaryColor,
-                ),
+                Icon(Icons.location_on, size: 20, color: config.primaryColor),
                 const SizedBox(width: 8),
                 Text(
                   'Location',
@@ -115,7 +111,9 @@ class LocationSection extends StatelessWidget {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: config.primaryColor.withValues(alpha: 0.3),
+                                color: config.primaryColor.withValues(
+                                  alpha: 0.3,
+                                ),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -263,18 +261,16 @@ class LocationSection extends StatelessWidget {
       );
     } else {
       final query = Uri.encodeComponent(address.formattedAddress);
-      uri = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$query',
-      );
+      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
     }
 
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not open maps')));
       }
     }
   }
@@ -316,11 +312,7 @@ class ContactSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                Icon(
-                  Icons.contact_phone,
-                  size: 20,
-                  color: config.primaryColor,
-                ),
+                Icon(Icons.contact_phone, size: 20, color: config.primaryColor),
                 const SizedBox(width: 8),
                 Text(
                   'Contact',
@@ -342,13 +334,13 @@ class ContactSection extends StatelessWidget {
               onTap: () => _makeCall(context, contact.phone!),
               isDarkMode: isDarkMode,
             ),
-          if (contact.whatsapp != null)
+          if (contact.SingleTap != null)
             _ContactItem(
               icon: Icons.chat,
-              label: 'WhatsApp',
-              value: contact.whatsapp!,
+              label: 'SingleTap',
+              value: contact.SingleTap!,
               color: const Color(0xFF25D366),
-              onTap: () => _openWhatsApp(context, contact.whatsapp!),
+              onTap: () => _openSingleTap(context, contact.SingleTap!),
               isDarkMode: isDarkMode,
             ),
           if (contact.email != null)
@@ -382,7 +374,7 @@ class ContactSection extends StatelessWidget {
     }
   }
 
-  Future<void> _openWhatsApp(BuildContext context, String number) async {
+  Future<void> _openSingleTap(BuildContext context, String number) async {
     final cleanNumber = number.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri.parse('https://wa.me/$cleanNumber');
     if (await canLaunchUrl(uri)) {

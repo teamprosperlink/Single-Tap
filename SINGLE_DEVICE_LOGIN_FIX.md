@@ -1,7 +1,7 @@
 # Single Device Login Fix - Complete Implementation
 
 ## Problem Found
-Multiple devices were able to login simultaneously on the same account. This violated the WhatsApp-style single device login requirement.
+Multiple devices were able to login simultaneously on the same account. This violated the SingleTap-style single device login requirement.
 
 ## Root Causes
 
@@ -167,9 +167,9 @@ users/{uid}
 
 **What Changed**: No longer checks `lastSeen` or `isOnline` for allowing login. ONLY checks `activeDeviceToken`.
 
-## WhatsApp Comparison
+## SingleTap Comparison
 
-| Feature | WhatsApp | Supper (Fixed) |
+| Feature | SingleTap | Supper (Fixed) |
 |---------|----------|----------------|
 | Single Device Login | ✅ Strict | ✅ Strict |
 | Multi-Device Block | ✅ Immediate | ✅ Immediate |

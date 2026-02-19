@@ -16,10 +16,10 @@ import '../services/notification_service.dart' show navigatorKey;
 import '../screens/login/onboarding_screen.dart';
 import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
-import '../screens/home/product/my_orders_screen.dart';
+import '../screens/product/my_orders_screen.dart';
 import '../screens/home/main_navigation_screen.dart';
 
-/// ChatGPT-style drawer widget for the app
+/// SingleTap-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
   /// Global key to access AppDrawer state for refresh
   static final GlobalKey<AppDrawerState> globalKey =
@@ -180,7 +180,10 @@ class AppDrawerState extends State<AppDrawer> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+                        colors: [
+                          Color.fromRGBO(64, 64, 64, 1),
+                          Color.fromRGBO(0, 0, 0, 1),
+                        ],
                       ),
                     ),
                   ),
@@ -635,7 +638,7 @@ class AppDrawerState extends State<AppDrawer> {
           onTap: () {
             HapticFeedback.lightImpact();
             Navigator.pop(context);
-            // Load this conversation (ChatGPT style)
+            // Load this conversation (SingleTap style)
             if (chatId != null) {
               widget.onLoadChat?.call(chatId);
             }
@@ -830,7 +833,7 @@ class AppDrawerState extends State<AppDrawer> {
 
       if (messagesSnapshot.docs.isEmpty) {
         // If no messages subcollection, share just the title
-        Share.share('Chat: $chatName\n\nShared from Supper');
+        Share.share('Chat: $chatName\n\nShared from SingleTap');
         return;
       }
 
@@ -849,13 +852,13 @@ class AppDrawerState extends State<AppDrawer> {
       }
 
       buffer.writeln('---');
-      buffer.writeln('Shared from Supper');
+      buffer.writeln('Shared from SingleTap');
 
       Share.share(buffer.toString(), subject: chatName);
     } catch (e) {
       debugPrint('Error sharing chat: $e');
       // Fallback: share just the title
-      Share.share('Chat: $chatName\n\nShared from Supper');
+      Share.share('Chat: $chatName\n\nShared from SingleTap');
     }
   }
 

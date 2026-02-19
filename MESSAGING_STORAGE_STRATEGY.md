@@ -37,11 +37,11 @@ User A sends message → Firestore → User B receives
 
 ---
 
-## ✅ How WhatsApp Does It (FREE/CHEAP)
+## ✅ How SingleTap Does It (FREE/CHEAP)
 
-### **WhatsApp Architecture**
+### **SingleTap Architecture**
 ```
-User A → End-to-end encryption → WhatsApp Server (relay only) → User B
+User A → End-to-end encryption → SingleTap Server (relay only) → User B
          ↓                                                        ↓
     SQLite on device                                     SQLite on device
     (free, permanent)                                    (free, permanent)
@@ -54,11 +54,11 @@ User A → End-to-end encryption → WhatsApp Server (relay only) → User B
 4. **Once delivered, deleted from server**
 5. **E2E encryption** means server can't read messages anyway
 
-**Why WhatsApp is "Free"**:
+**Why SingleTap is "Free"**:
 - No permanent cloud storage costs
 - Server only relays messages (cheap)
-- Storage is on user's device (free for WhatsApp)
-- Meta makes money from ads on Facebook/Instagram, not WhatsApp directly
+- Storage is on user's device (free for SingleTap)
+- Meta makes money from ads on Facebook/Instagram, not SingleTap directly
 
 ---
 
@@ -167,7 +167,7 @@ TOTAL: ~$0.50/month (10K users) ✅ 10x CHEAPER
 TOTAL: ~$5-20/month ✅ 25x CHEAPER
 ```
 
-### **Option 3: Pure P2P (Like WhatsApp)**
+### **Option 3: Pure P2P (Like SingleTap)**
 ```
 Costs:
 - No storage costs (only on devices)
@@ -590,7 +590,7 @@ Pricing:
 Pros:
 - No message storage costs
 - True privacy
-- Like WhatsApp architecture
+- Like SingleTap architecture
 
 Cons:
 - Complex implementation
@@ -650,7 +650,7 @@ Based on cost vs. value analysis:
    - 10x-20x cost reduction
    - Instant message loading (local DB)
    - Works offline
-   - WhatsApp-like UX
+   - SingleTap-like UX
    - Scalable to millions of users
 ```
 
@@ -660,4 +660,4 @@ Based on cost vs. value analysis:
 3. Week 2: Migrate to hybrid messaging
 4. Week 3: Add essential features
 
-This gives you **WhatsApp-like performance and costs** while keeping Firebase for real-time sync! 🚀
+This gives you **SingleTap-like performance and costs** while keeping Firebase for real-time sync! 🚀

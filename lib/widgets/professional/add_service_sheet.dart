@@ -102,9 +102,7 @@ class _AddServiceSheetState extends State<AddServiceSheet> {
   Future<void> _pickImage() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF2D2D44)
-          : Colors.white,
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -260,7 +258,7 @@ class _AddServiceSheetState extends State<AddServiceSheet> {
             ),
             decoration: BoxDecoration(
               color: isDarkMode
-                  ? const Color(0xFF1A1A2E).withValues(alpha: 0.95)
+                  ? const Color.fromRGBO(32, 32, 32, 1).withValues(alpha: 0.95)
                   : Colors.white.withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
@@ -619,7 +617,7 @@ class _AddServiceSheetState extends State<AddServiceSheet> {
           ),
         ),
       ),
-      dropdownColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+      dropdownColor: isDarkMode ? const Color.fromRGBO(32, 32, 32, 1) : Colors.white,
       style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
       items: ServiceCategories.all.map((category) {
         return DropdownMenuItem(
@@ -725,7 +723,7 @@ class _AddServiceSheetState extends State<AddServiceSheet> {
                   });
                 }
               },
-              dropdownColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+              dropdownColor: isDarkMode ? const Color.fromRGBO(32, 32, 32, 1) : Colors.white,
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
               items: SupportedCurrencies.all.map((currency) {
                 return DropdownMenuItem(
@@ -927,7 +925,7 @@ class _AddServiceSheetState extends State<AddServiceSheet> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF2D2D44)
+            ? const Color.fromRGBO(32, 32, 32, 1)
             : Colors.white,
         title: const Text('Discard Changes?'),
         content: const Text('You have unsaved changes. Are you sure you want to discard them?'),

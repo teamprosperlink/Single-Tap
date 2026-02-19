@@ -20,11 +20,7 @@ class _PerformanceMonitorState extends State<PerformanceMonitor> {
   int _frameCount = 0;
   DateTime _lastTime = DateTime.now();
 
-  // Memory tracking
-  final int _memoryUsage = 0; // ignore: unused_field
-
   // Frame timing
-  final Duration _lastFrameDuration = Duration.zero; // ignore: unused_field
   int _droppedFrames = 0;
 
   @override

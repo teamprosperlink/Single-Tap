@@ -164,7 +164,7 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
                   isDarkMode: isDarkMode,
                   onTap: () => _showInquiryDetails(inquiry),
                   onCall: () => _makePhoneCall(inquiry),
-                  onWhatsApp: () => _openWhatsApp(inquiry),
+                  onSingleTap: () => _openSingleTap(inquiry),
                   onResponded: () => _markAsResponded(inquiry),
                   onComplete: () => _markAsCompleted(inquiry),
                   onDecline: () => _confirmDecline(inquiry),
@@ -339,7 +339,7 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
       builder: (context) => _InquiryDetailsSheet(
         inquiry: inquiry,
         onCall: () => _makePhoneCall(inquiry),
-        onWhatsApp: () => _openWhatsApp(inquiry),
+        onSingleTap: () => _openSingleTap(inquiry),
         onResponded: () {
           Navigator.pop(context);
           _markAsResponded(inquiry);
@@ -373,7 +373,7 @@ class _BusinessInquiriesScreenState extends State<BusinessInquiriesScreen> {
     }
   }
 
-  Future<void> _openWhatsApp(BusinessOrder inquiry) async {
+  Future<void> _openSingleTap(BusinessOrder inquiry) async {
     final phone = inquiry.customerPhone;
     if (phone == null || phone.isEmpty) {
       if (mounted) {
@@ -468,7 +468,7 @@ class _InquiryCard extends StatelessWidget {
   final bool isDarkMode;
   final VoidCallback onTap;
   final VoidCallback onCall;
-  final VoidCallback onWhatsApp;
+  final VoidCallback onSingleTap;
   final VoidCallback onResponded;
   final VoidCallback onComplete;
   final VoidCallback onDecline;
@@ -478,7 +478,7 @@ class _InquiryCard extends StatelessWidget {
     required this.isDarkMode,
     required this.onTap,
     required this.onCall,
-    required this.onWhatsApp,
+    required this.onSingleTap,
     required this.onResponded,
     required this.onComplete,
     required this.onDecline,
@@ -646,9 +646,9 @@ class _InquiryCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _buildContactButton(
                   icon: Icons.chat,
-                  label: 'WhatsApp',
+                  label: 'SingleTap',
                   color: const Color(0xFF25D366),
-                  onTap: onWhatsApp,
+                  onTap: onSingleTap,
                 ),
                 const Spacer(),
                 // Status action
@@ -827,7 +827,7 @@ class _InquiryCard extends StatelessWidget {
 class _InquiryDetailsSheet extends StatelessWidget {
   final BusinessOrder inquiry;
   final VoidCallback onCall;
-  final VoidCallback onWhatsApp;
+  final VoidCallback onSingleTap;
   final VoidCallback onResponded;
   final VoidCallback onComplete;
   final VoidCallback onDecline;
@@ -835,7 +835,7 @@ class _InquiryDetailsSheet extends StatelessWidget {
   const _InquiryDetailsSheet({
     required this.inquiry,
     required this.onCall,
-    required this.onWhatsApp,
+    required this.onSingleTap,
     required this.onResponded,
     required this.onComplete,
     required this.onDecline,
@@ -953,9 +953,9 @@ class _InquiryDetailsSheet extends StatelessWidget {
                           Expanded(
                             child: _buildLargeContactButton(
                               icon: Icons.chat,
-                              label: 'WhatsApp',
+                              label: 'SingleTap',
                               color: const Color(0xFF25D366),
-                              onTap: onWhatsApp,
+                              onTap: onSingleTap,
                             ),
                           ),
                         ],

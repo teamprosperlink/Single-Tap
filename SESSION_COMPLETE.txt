@@ -176,7 +176,7 @@ Feature Behavior:
   ✓ Only one device can be logged in per account
   ✓ Old device auto-logout when new device logs in
   ✓ No dialogs shown to user
-  ✓ Instant UX like WhatsApp
+  ✓ Instant UX like SingleTap
 
 Logs Show (Device B):
   [LoginScreen] ========== AUTO LOGOUT START ==========

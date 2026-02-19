@@ -110,9 +110,7 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
             maxHeight: MediaQuery.of(context).size.height * 0.9,
           ),
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? const Color(0xFF1A1A2E).withValues(alpha: 0.95)
-                : Colors.white.withValues(alpha: 0.95),
+            color: const Color.fromRGBO(32, 32, 32, 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
@@ -435,7 +433,7 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
             ),
           ),
           isExpanded: true,
-          dropdownColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+          dropdownColor: const Color.fromRGBO(32, 32, 32, 1),
           style: TextStyle(
             color: isDarkMode ? Colors.white : Colors.black87,
           ),

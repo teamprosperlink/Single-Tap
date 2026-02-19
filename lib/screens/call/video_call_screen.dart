@@ -862,7 +862,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       ),
               ),
 
-            // When connected, show local video as Picture-in-Picture (WhatsApp style - top right)
+            // When connected, show local video as Picture-in-Picture (SingleTap style - top right)
             if (_callStatus == 'connected' && hasLocalVideo && _isVideoEnabled)
               Positioned(
                 top: 60,
@@ -940,7 +940,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-            // Top overlay with call info (WhatsApp style)
+            // Top overlay with call info (SingleTap style)
             Positioned(
               top: 0,
               left: 0,
@@ -1004,7 +1004,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-            // Bottom control buttons and end call button (WhatsApp style)
+            // Bottom control buttons and end call button (SingleTap style)
             Positioned(
               bottom: 0,
               left: 0,
@@ -1028,12 +1028,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Control buttons row (WhatsApp style - simple and clean)
+                      // Control buttons row (SingleTap style - simple and clean)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           // Camera toggle (Video On/Off)
-                          _buildWhatsAppControlButton(
+                          _buildSingleTapControlButton(
                             icon: _isVideoEnabled
                                 ? Icons.videocam
                                 : Icons.videocam_off,
@@ -1042,21 +1042,21 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                           ),
 
                           // Switch camera (Front/Back)
-                          _buildWhatsAppControlButton(
+                          _buildSingleTapControlButton(
                             icon: Icons.flip_camera_android,
                             onPressed: _switchCamera,
                             isActive: true,
                           ),
 
                           // Mute toggle
-                          _buildWhatsAppControlButton(
+                          _buildSingleTapControlButton(
                             icon: _isMuted ? Icons.mic_off : Icons.mic,
                             onPressed: _toggleMute,
                             isActive: !_isMuted,
                           ),
 
                           // Speaker toggle
-                          _buildWhatsAppControlButton(
+                          _buildSingleTapControlButton(
                             icon: _isSpeakerOn
                                 ? Icons.volume_up
                                 : Icons.volume_down,
@@ -1066,14 +1066,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         ],
                       ),
                       const SizedBox(height: 30),
-                      // End call button (WhatsApp style - prominent red button)
+                      // End call button (SingleTap style - prominent red button)
                       GestureDetector(
                         onTap: _endCall,
                         child: Container(
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF3B30), // WhatsApp red
+                            color: const Color(0xFFFF3B30), // SingleTap red
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -1103,8 +1103,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 
-  // WhatsApp-style control button (minimal, clean design)
-  Widget _buildWhatsAppControlButton({
+  // SingleTap-style control button (minimal, clean design)
+  Widget _buildSingleTapControlButton({
     required IconData icon,
     required VoidCallback onPressed,
     required bool isActive,

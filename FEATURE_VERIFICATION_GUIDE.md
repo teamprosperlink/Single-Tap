@@ -1,8 +1,8 @@
-# 🔍 WhatsApp-Style Single Device Login - Verification & Testing Guide
+# 🔍 SingleTap-Style Single Device Login - Verification & Testing Guide
 
 ## ✅ Implementation Status: COMPLETE
 
-The WhatsApp-style single device login feature is fully implemented and ready for testing.
+The SingleTap-style single device login feature is fully implemented and ready for testing.
 
 ---
 
@@ -241,16 +241,16 @@ flutter run -d emulator-5556
 ```
 [LoginScreen] Logout other device - pending user ID: [userId]
 [AuthService] Current token: DEF456...
-[AuthService] 🔄 Force logout other devices (WhatsApp-style)
+[AuthService] 🔄 Force logout other devices (SingleTap-style)
 [AuthService] Step 1: Setting forceLogout=true to trigger instant logout...
 [AuthService] 🔴 forceLogout signal sent! Waiting for old device to logout...
 [AuthService] Step 2: Setting new device as active...
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 ---
 
-### STEP 4: Instant Logout Happens (WhatsApp-Style)
+### STEP 4: Instant Logout Happens (SingleTap-Style)
 **Expected**: Device A INSTANTLY shows login page, Device B shows main app
 ```
 ⏱️  TOTAL TIME: < 200ms
@@ -269,7 +269,7 @@ DEVICE B (New Device):
 **Console Output (Device A - Instant):**
 ```
 [DeviceSession] 📡 Snapshot - forceLogout: true, Local: ABC123..., Server: NULL...
-[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out IMMEDIATELY (WhatsApp-style)...
+[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out IMMEDIATELY (SingleTap-style)...
 [RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========
 [RemoteLogout] Reason: Logged out: Account accessed on another device
 [RemoteLogout] ✓ All subscriptions cancelled

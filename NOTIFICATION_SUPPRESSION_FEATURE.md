@@ -1,12 +1,12 @@
-# WhatsApp-Style Notification Suppression Feature
+# SingleTap-Style Notification Suppression Feature
 
 ## Overview
-Implemented notification suppression for active chat conversations - exactly like WhatsApp. When user is viewing a chat screen, notifications for new messages in that chat are automatically suppressed.
+Implemented notification suppression for active chat conversations - exactly like SingleTap. When user is viewing a chat screen, notifications for new messages in that chat are automatically suppressed.
 
 ## Problem Solved
 Previously, users would receive notifications for messages even when they were actively viewing that conversation. This caused:
 - Annoying duplicate notifications
-- Poor UX compared to WhatsApp/Telegram
+- Poor UX compared to SingleTap/Telegram
 - Unnecessary sound/vibration when already reading messages
 
 ## Solution Architecture
@@ -36,7 +36,7 @@ _activeChatService.clearActiveChat();
 Modified `_handleForegroundMessage()` to check active chat before showing notification:
 
 ```dart
-// WhatsApp-style: Don't show notification for messages in the CURRENT OPEN chat
+// SingleTap-style: Don't show notification for messages in the CURRENT OPEN chat
 if (type == 'message') {
   final senderId = data['senderId'] as String?;
   final conversationId = data['conversationId'] as String?;
@@ -59,7 +59,7 @@ if (type == 'message') {
 
 #### On Chat Open (initState - Line 157-161):
 ```dart
-// Set this chat as active to suppress notifications (WhatsApp-style)
+// Set this chat as active to suppress notifications (SingleTap-style)
 _activeChatService.setActiveChat(
   conversationId: _conversationId,
   userId: widget.otherUser.uid,
@@ -68,7 +68,7 @@ _activeChatService.setActiveChat(
 
 #### On Chat Close (dispose - Line 336-337):
 ```dart
-// Clear active chat status to re-enable notifications (WhatsApp-style)
+// Clear active chat status to re-enable notifications (SingleTap-style)
 _activeChatService.clearActiveChat();
 ```
 
@@ -166,7 +166,7 @@ _activeChatService.clearActiveChat();
 
 ## Benefits
 
-✅ **WhatsApp-like UX** - Professional notification behavior
+✅ **SingleTap-like UX** - Professional notification behavior
 ✅ **No duplicate alerts** - Messages in active chat don't trigger notifications
 ✅ **Better focus** - User can read messages without interruption
 ✅ **Automatic** - No user configuration needed

@@ -88,7 +88,7 @@ When clicking "Logout Other Device":
 [AuthService] STEP 0: Immediately clearing old device token from Firestore...
 [AuthService] ✓ STEP 0 succeeded - old device token cleared
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 ---

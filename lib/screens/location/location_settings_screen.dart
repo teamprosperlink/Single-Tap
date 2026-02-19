@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/location services/location_service.dart';
 import '../../providers/other providers/app_providers.dart';
 
 class LocationSettingsScreen extends ConsumerStatefulWidget {
@@ -16,8 +15,6 @@ class LocationSettingsScreen extends ConsumerStatefulWidget {
 
 class _LocationSettingsScreenState
     extends ConsumerState<LocationSettingsScreen> {
-  // ignore: unused_field
-  final LocationService _locationService = LocationService();
 
   // Helper getter for current user ID from provider
   String? get _currentUserId => ref.read(currentUserIdProvider);

@@ -11,7 +11,6 @@ import '../../res/utils/photo_url_helper.dart';
 import '../../widgets/chat_common.dart';
 import '../../widgets/app_background.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
-import '../../services/current_user_cache.dart';
 import '../../mixins/voice_search_mixin.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../chat/create_group_screen.dart';
@@ -280,10 +279,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         centerTitle: true,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: _buildProfileAvatar(isDarkMode),
-        ),
+        leading: const SizedBox.shrink(),
+        leadingWidth: 0,
         title: const Text(
           'Messages',
           style: TextStyle(
@@ -406,101 +403,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  /// Build profile avatar for AppBar
-  Widget _buildProfileAvatar(bool isDarkMode) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore
-          .collection('users')
-          .doc(_auth.currentUser?.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        // Try multiple sources for photoUrl and name
-        String? photoUrl;
-        String userName = 'User';
-
-        // 1. Try from Firestore snapshot
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>?;
-          photoUrl = userData?['photoUrl'] as String?;
-          userName =
-              userData?['name'] as String? ??
-              userData?['displayName'] as String? ??
-              'User';
-          // Fallback to phone number for phone login users
-          if (userName == 'User' || userName.isEmpty) {
-            userName = userData?['phone'] as String? ?? 'User';
-          }
-        }
-
-        // 2. Fallback to cache
-        photoUrl ??= CurrentUserCache().photoUrl;
-        if (userName == 'User') {
-          userName = CurrentUserCache().name;
-        }
-
-        // 3. Fallback to Firebase Auth
-        photoUrl ??= _auth.currentUser?.photoURL;
-        if (userName == 'User') {
-          userName = _auth.currentUser?.displayName ?? 'User';
-        }
-
-        final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
-        final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
-
-        // Avatar fallback widget with user's initial
-        Widget buildAvatarFallback() {
-          return Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Colors.purple.shade400, Colors.blue.shade400],
-              ),
-            ),
-            child: Center(
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isDarkMode
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : Colors.grey.withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          child: ClipOval(
-            child: fixedPhotoUrl != null && fixedPhotoUrl.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: fixedPhotoUrl,
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    fadeInDuration: Duration.zero,
-                    fadeOutDuration: Duration.zero,
-                    placeholder: (context, url) => buildAvatarFallback(),
-                    errorWidget: (context, url, error) => buildAvatarFallback(),
-                  )
-                : buildAvatarFallback(),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildSearchBar(bool isDarkMode) {
     return Container(
@@ -508,7 +410,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       child: GlassSearchField(
         controller: _searchController,
         hintText: 'Search conversations...',
-        borderRadius: 26,
+        borderRadius: 16,
         showMic: true,
         isListening: isListening, // From VoiceSearchMixin
         onMicTap: _startVoiceSearch,
@@ -1489,10 +1391,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: Colors.white.withValues(alpha: 0.12),
           width: 1,
         ),
       ),
@@ -2165,14 +2067,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final isSelected = _selectedConversationIds.contains(conversation.id);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
         color: isSelected
-            ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
-            : Colors.black.withValues(alpha: 0.4),
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.12),
           width: 1,
         ),
       ),
@@ -2193,7 +2097,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             }
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
                 // Checkbox for selection mode
@@ -2215,7 +2119,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   children: [
                     conversation.isGroup
                         ? CircleAvatar(
-                            radius: 26,
+                            radius: 22,
                             backgroundColor: Theme.of(
                               context,
                             ).primaryColor.withValues(alpha: 0.15),
@@ -2228,7 +2132,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                         : _buildUserAvatar(
                             photoUrl: fixedPhotoUrl,
                             initial: initial,
-                            radius: 26,
+                            radius: 22,
                             context: context,
                             uniqueId: conversation.id,
                           ),
@@ -2290,7 +2194,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                   : conversation.lastMessage ??
                                         'Start a conversation',
                               style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 12,
                                 color: Colors.white,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -2690,137 +2594,209 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-          return AppBackground(
-            showParticles: true,
-            overlayOpacity: 0.6,
-            child: Container(
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Column(
-                children: [
-                  // Header with close button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'New Message',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: _buildContactsList(
-                      currentUserId,
-                      scrollController,
-                      isDarkMode,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _NewMessageScreen(currentUserId: currentUserId),
       ),
     );
   }
 
-  Widget _buildContactsList(
-    String currentUserId,
-    ScrollController scrollController,
-    bool isDarkMode,
-  ) {
+
+}
+
+class _NewMessageScreen extends StatefulWidget {
+  final String currentUserId;
+
+  const _NewMessageScreen({required this.currentUserId});
+
+  @override
+  State<_NewMessageScreen> createState() => _NewMessageScreenState();
+}
+
+class _NewMessageScreenState extends State<_NewMessageScreen>
+    with TickerProviderStateMixin, VoiceSearchMixin {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  static const List<Color> _avatarColors = [
+    Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFEC4899),
+    Color(0xFFEF4444), Color(0xFFF97316), Color(0xFF22C55E),
+    Color(0xFF14B8A6), Color(0xFF06B6D4), Color(0xFF3B82F6),
+    Color(0xFFA855F7), Color(0xFFF43F5E), Color(0xFF10B981),
+  ];
+
+  Color _getAvatarColor(String id) {
+    int hash = 0;
+    for (int i = 0; i < id.length; i++) {
+      hash = id.codeUnitAt(i) + ((hash << 5) - hash);
+    }
+    return _avatarColors[hash.abs() % _avatarColors.length];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initSpeech();
+  }
+
+  @override
+  void dispose() {
+    disposeVoiceSearch();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'New Message',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(50, 50, 50, 1),
+              ],
+            ),
+            border: Border(
+              bottom: BorderSide(color: Colors.white, width: 0.5),
+            ),
+          ),
+        ),
+      ),
+      body: AppBackground(
+        showParticles: true,
+        overlayOpacity: 0.6,
+        child: Column(
+          children: [
+            SizedBox(height: MediaQuery.of(context).padding.top + 56 + 12),
+            // Search field
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GlassSearchField(
+                controller: _searchController,
+                hintText: 'Search contacts...',
+                borderRadius: 16,
+                showMic: true,
+                isListening: isListening,
+                onMicTap: () {
+                  startVoiceSearch((recognizedText) {
+                    _searchController.text = recognizedText;
+                    setState(() => _searchQuery = recognizedText.toLowerCase());
+                  });
+                },
+                onStopListening: () {
+                  stopVoiceSearch();
+                },
+                onChanged: (value) {
+                  setState(() => _searchQuery = value.toLowerCase());
+                },
+                onClear: () {
+                  setState(() => _searchQuery = '');
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Contacts list
+            Expanded(
+              child: _buildContacts(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContacts() {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('conversations')
-          .where('participants', arrayContains: currentUserId)
+          .where('participants', arrayContains: widget.currentUserId)
           .where('isGroup', isEqualTo: false)
           .snapshots(),
       builder: (context, convSnapshot) {
         if (convSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (!convSnapshot.hasData || convSnapshot.data!.docs.isEmpty) {
-          return _buildEmptyContactsState(isDarkMode);
+          return _buildEmpty();
         }
 
         final Set<String> otherUserIds = {};
         for (var doc in convSnapshot.data!.docs) {
-          final rawData = doc.data();
-          if (rawData == null) continue;
-          final data = rawData as Map<String, dynamic>;
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) continue;
           final participants = List<String>.from(data['participants'] ?? []);
-          for (var participant in participants) {
-            if (participant != currentUserId) {
-              otherUserIds.add(participant);
-            }
+          for (var p in participants) {
+            if (p != widget.currentUserId) otherUserIds.add(p);
           }
         }
 
-        if (otherUserIds.isEmpty) {
-          return _buildEmptyContactsState(isDarkMode);
-        }
+        if (otherUserIds.isEmpty) return _buildEmpty();
 
         return FutureBuilder<List<DocumentSnapshot>>(
           future: Future.wait(
-            otherUserIds.map(
-              (id) => _firestore.collection('users').doc(id).get(),
-            ),
+            otherUserIds.map((id) => _firestore.collection('users').doc(id).get()),
           ),
           builder: (context, usersSnapshot) {
             if (usersSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-
             if (!usersSnapshot.hasData) {
-              return const Center(child: Text('Error loading contacts'));
+              return const Center(child: Text('Error loading contacts', style: TextStyle(color: Colors.white)));
             }
 
-            final validUsers = usersSnapshot.data!
-                .where((doc) => doc.exists)
-                .toList();
+            var validUsers = usersSnapshot.data!.where((doc) => doc.exists).toList();
+
+            // Filter by search
+            if (_searchQuery.isNotEmpty) {
+              validUsers = validUsers.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final name = (data['name'] ?? '').toString().toLowerCase();
+                return name.contains(_searchQuery);
+              }).toList();
+            }
 
             if (validUsers.isEmpty) {
-              return _buildEmptyContactsState(isDarkMode);
+              return Center(
+                child: Text(
+                  _searchQuery.isNotEmpty ? 'No results found' : 'No contacts yet',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                ),
+              );
             }
 
             return ListView.builder(
-              controller: scrollController,
+              padding: const EdgeInsets.only(top: 4),
               itemCount: validUsers.length,
               itemBuilder: (context, index) {
                 final userDoc = validUsers[index];
                 final userData = userDoc.data() as Map<String, dynamic>;
                 final userId = userDoc.id;
-
-                return _buildContactTile(userData, userId, isDarkMode);
+                return _buildContactTile(userData, userId);
               },
             );
           },
@@ -2829,74 +2805,62 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  Widget _buildContactTile(
-    Map<String, dynamic> userData,
-    String userId,
-    bool isDarkMode,
-  ) {
+  Widget _buildContactTile(Map<String, dynamic> userData, String userId) {
     final name = userData['name'] ?? 'Unknown';
-    final photoUrl = userData['photoUrl'];
-    final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(photoUrl);
+    final photoUrl = PhotoUrlHelper.fixGooglePhotoUrl(userData['photoUrl']);
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final avatarColor = _getAvatarColor(userId);
 
-    // Properly validate online status with lastSeen check
     bool isOnline = false;
-    final showOnlineStatus = userData['showOnlineStatus'] ?? true;
-    if (showOnlineStatus && userData['isOnline'] == true) {
+    if ((userData['showOnlineStatus'] ?? true) && userData['isOnline'] == true) {
       final lastSeen = userData['lastSeen'];
-      if (lastSeen != null && lastSeen is Timestamp) {
-        final difference = DateTime.now().difference(lastSeen.toDate());
-        // Only show as online if lastSeen within 5 minutes
-        isOnline = difference.inMinutes <= 5;
+      if (lastSeen is Timestamp) {
+        isOnline = DateTime.now().difference(lastSeen.toDate()).inMinutes <= 5;
       }
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.5),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () async {
-            Navigator.pop(context);
+          onTap: () {
             final userProfile = UserProfile.fromMap(userData, userId);
-            Navigator.push(
+            Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    EnhancedChatScreen(otherUser: userProfile),
+                builder: (context) => EnhancedChatScreen(otherUser: userProfile),
               ),
             );
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
-                // Avatar with online indicator
                 Stack(
                   children: [
-                    _buildUserAvatar(
-                      photoUrl: fixedPhotoUrl,
-                      initial: initial,
-                      radius: 26,
-                      context: context,
-                      uniqueId: userId,
-                    ),
+                    photoUrl != null && photoUrl.isNotEmpty
+                        ? CircleAvatar(
+                            radius: 22,
+                            backgroundImage: CachedNetworkImageProvider(photoUrl),
+                            backgroundColor: avatarColor,
+                          )
+                        : CircleAvatar(
+                            radius: 22,
+                            backgroundColor: avatarColor,
+                            child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          ),
                     if (isOnline)
                       Positioned(
-                        right: 0,
-                        bottom: 0,
+                        right: 0, bottom: 0,
                         child: Container(
-                          width: 14,
-                          height: 14,
+                          width: 14, height: 14,
                           decoration: BoxDecoration(
                             color: Colors.green,
                             shape: BoxShape.circle,
@@ -2907,29 +2871,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   ],
                 ),
                 const SizedBox(width: 14),
-                // Content
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         formatDisplayName(name),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         isOnline ? 'Active now' : 'Tap to message',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isOnline
-                              ? Colors.green
-                              : Colors.white.withValues(alpha: 0.7),
-                        ),
+                        style: TextStyle(fontSize: 12, color: isOnline ? Colors.green : Colors.white.withValues(alpha: 0.7)),
                       ),
                     ],
                   ),
@@ -2942,35 +2896,21 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  Widget _buildEmptyContactsState(bool isDarkMode) {
+  Widget _buildEmpty() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.people_outline,
-            size: 64,
-            color: isDarkMode ? Colors.grey[700] : Colors.grey[400],
-          ),
+          Icon(Icons.people_outline, size: 64, color: Colors.grey[700]),
           const SizedBox(height: 16),
-          Text(
-            'No contacts yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDarkMode ? Colors.white : Colors.black,
-            ),
-          ),
+          const Text('No contacts yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
               'Start chatting with people from Home or Live Connect',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.grey[600] : Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
           ),
         ],

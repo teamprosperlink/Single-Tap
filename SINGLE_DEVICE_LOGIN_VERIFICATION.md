@@ -129,7 +129,7 @@ T=0:13  Device B proceeds to home screen ✅
 RESULT: Only Device B active, Device A logged out
 ```
 
-**Status**: ✅ WORKING - Instant logout like WhatsApp
+**Status**: ✅ WORKING - Instant logout like SingleTap
 
 ---
 

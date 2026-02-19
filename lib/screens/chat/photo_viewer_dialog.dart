@@ -57,8 +57,13 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
           maxWidth: MediaQuery.of(context).size.width * 0.9,
         ),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1A2B3D) : Colors.white,
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

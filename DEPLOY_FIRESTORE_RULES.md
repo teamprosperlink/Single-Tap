@@ -2,7 +2,7 @@
 
 ## What Changed
 
-The Firestore security rules have been updated to allow users to update the device-related fields needed for WhatsApp-style single device login:
+The Firestore security rules have been updated to allow users to update the device-related fields needed for SingleTap-style single device login:
 
 **Now Allowed Fields:**
 - ✅ `activeDeviceToken` - Current active device token

@@ -2,7 +2,7 @@
 
 **Status**: ✅ Code fixes complete, ready for testing after Firebase deployment
 **Date**: January 12, 2026
-**Session Focus**: WhatsApp-style device logout fix (Device B immediate logout issue)
+**Session Focus**: SingleTap-style device logout fix (Device B immediate logout issue)
 
 ---
 
@@ -228,7 +228,7 @@ flutter run -d emulator-5554
 
 1. **Root Cause**: Timing race condition - Device B's listener wasn't ready when logout was called
 2. **Solution**: Two-part fix - 6-second protection window + 1.5-second initialization delay
-3. **Result**: Device B stays logged in when new device logs in (WhatsApp-style behavior)
+3. **Result**: Device B stays logged in when new device logs in (SingleTap-style behavior)
 4. **Blocker**: Firestore rules must be deployed to Firebase Cloud before testing
 
 ---

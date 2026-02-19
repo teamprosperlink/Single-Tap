@@ -26,8 +26,11 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
       '[DeviceLoginDialog]   Dialog build called - deviceName: ${widget.deviceName}',
     );
     return Dialog(
-      backgroundColor: const Color(0xFF1a1a2e),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Colors.white, width: 1),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

@@ -31,7 +31,10 @@ class QuickActionsBar extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16, vertical: AppTheme.spacing12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spacing16,
+        vertical: AppTheme.spacing12,
+      ),
       decoration: BoxDecoration(
         color: AppTheme.cardColor(isDarkMode),
         boxShadow: [
@@ -144,10 +147,7 @@ class _ActionButton extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             action.label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -162,8 +162,8 @@ class _ActionButton extends StatelessWidget {
       case QuickActionType.call:
         _makeCall(context);
         break;
-      case QuickActionType.whatsapp:
-        _openWhatsApp(context);
+      case QuickActionType.SingleTap:
+        _openSingleTap(context);
         break;
       case QuickActionType.directions:
         _openDirections(context);
@@ -224,22 +224,22 @@ class _ActionButton extends StatelessWidget {
     }
   }
 
-  Future<void> _openWhatsApp(BuildContext context) async {
-    final whatsapp = business.contact.whatsapp ?? business.contact.phone;
-    if (whatsapp == null || whatsapp.isEmpty) {
-      _showError(context, 'No WhatsApp number available');
+  Future<void> _openSingleTap(BuildContext context) async {
+    final SingleTap = business.contact.SingleTap ?? business.contact.phone;
+    if (SingleTap == null || SingleTap.isEmpty) {
+      _showError(context, 'No SingleTap number available');
       return;
     }
 
     // Remove any non-digit characters
-    final cleanNumber = whatsapp.replaceAll(RegExp(r'[^\d+]'), '');
+    final cleanNumber = SingleTap.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri.parse('https://wa.me/$cleanNumber');
 
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (context.mounted) {
-        _showError(context, 'Could not open WhatsApp');
+        _showError(context, 'Could not open SingleTap');
       }
     }
   }
@@ -258,9 +258,7 @@ class _ActionButton extends StatelessWidget {
       );
     } else {
       final query = Uri.encodeComponent(address.formattedAddress);
-      uri = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$query',
-      );
+      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
     }
 
     if (await canLaunchUrl(uri)) {
@@ -429,9 +427,7 @@ class _ActionButton extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Choose how you\'d like to order',
-                style: TextStyle(
-                  color: AppTheme.secondaryText(isDarkMode),
-                ),
+                style: TextStyle(color: AppTheme.secondaryText(isDarkMode)),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -530,7 +526,7 @@ class _ActionButton extends StatelessWidget {
                     _makeCall(context);
                   },
                 ),
-              if (business.contact.whatsapp != null ||
+              if (business.contact.SingleTap != null ||
                   business.contact.phone != null)
                 ListTile(
                   leading: Container(
@@ -541,12 +537,13 @@ class _ActionButton extends StatelessWidget {
                     ),
                     child: const Icon(Icons.chat, color: Colors.green),
                   ),
-                  title: const Text('WhatsApp'),
+                  title: const Text('SingleTap'),
                   subtitle: Text(
-                      business.contact.whatsapp ?? business.contact.phone!),
+                    business.contact.SingleTap ?? business.contact.phone!,
+                  ),
                   onTap: () {
                     Navigator.pop(context);
-                    _openWhatsApp(context);
+                    _openSingleTap(context);
                   },
                 ),
               if (business.contact.email != null)
@@ -590,9 +587,7 @@ class _ActionButton extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EnhancedChatScreen(
-          otherUser: otherUser,
-        ),
+        builder: (_) => EnhancedChatScreen(otherUser: otherUser),
       ),
     );
   }
@@ -600,19 +595,16 @@ class _ActionButton extends StatelessWidget {
   void _shareProfile(BuildContext context) {
     Share.share(
       'Check out ${business.businessName}!\n\n'
-          '${business.description ?? ""}\n\n'
-          'Location: ${business.address?.formattedAddress ?? "Address not available"}\n'
-          'Rating: ${business.rating} ⭐',
+      '${business.description ?? ""}\n\n'
+      'Location: ${business.address?.formattedAddress ?? "Address not available"}\n'
+      'Rating: ${business.rating} ⭐',
       subject: business.businessName,
     );
   }
 
   void _showError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 }

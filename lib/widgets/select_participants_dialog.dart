@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import 'safe_circle_avatar.dart';
 
-/// Dialog to select participants for group video call (WhatsApp style)
+/// Dialog to select participants for group video call (SingleTap style)
 class SelectParticipantsDialog extends StatefulWidget {
   final String currentUserId;
   final int maxParticipants;
@@ -15,7 +15,8 @@ class SelectParticipantsDialog extends StatefulWidget {
   });
 
   @override
-  State<SelectParticipantsDialog> createState() => _SelectParticipantsDialogState();
+  State<SelectParticipantsDialog> createState() =>
+      _SelectParticipantsDialogState();
 }
 
 class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
@@ -87,7 +88,9 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Maximum ${widget.maxParticipants} participants allowed'),
+              content: Text(
+                'Maximum ${widget.maxParticipants} participants allowed',
+              ),
               duration: const Duration(seconds: 2),
             ),
           );
@@ -109,11 +112,13 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
 
     final selectedUsers = _contacts
         .where((user) => _selectedUserIds.contains(user.uid))
-        .map((user) => {
-              'userId': user.uid,
-              'name': user.name,
-              'photoUrl': user.photoUrl,
-            })
+        .map(
+          (user) => {
+            'userId': user.uid,
+            'name': user.name,
+            'photoUrl': user.photoUrl,
+          },
+        )
         .toList();
 
     Navigator.of(context).pop(selectedUsers);
@@ -127,8 +132,13 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -149,11 +159,12 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -163,11 +174,18 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
             // Selected count indicator
             if (_selectedUserIds.isNotEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 color: Colors.green.withValues(alpha: 0.1),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       '${_selectedUserIds.length} participant${_selectedUserIds.length == 1 ? "" : "s"} selected',
@@ -190,93 +208,93 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
                       ),
                     )
                   : _contacts.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(40),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                                SizedBox(height: 16),
-                                Text(
-                                  'No contacts found',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 64,
+                              color: Colors.grey,
                             ),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _contacts.length,
-                          itemBuilder: (context, index) {
-                            final user = _contacts[index];
-                            final isSelected = _selectedUserIds.contains(user.uid);
-
-                            return ListTile(
-                              leading: Stack(
-                                children: [
-                                  SafeCircleAvatar(
-                                    photoUrl: user.photoUrl,
-                                    radius: 24,
-                                    name: user.name,
-                                  ),
-                                  if (isSelected)
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(2),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.green,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.check,
-                                          size: 12,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                            SizedBox(height: 16),
+                            Text(
+                              'No contacts found',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
                               ),
-                              title: Text(
-                                user.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              subtitle: user.isOnline
-                                  ? const Text(
-                                      'Online',
-                                      style: TextStyle(
-                                        color: Colors.green,
-                                        fontSize: 12,
-                                      ),
-                                    )
-                                  : null,
-                              trailing: Checkbox(
-                                value: isSelected,
-                                onChanged: (_) => _toggleSelection(user.uid),
-                                activeColor: Colors.green,
-                                shape: const CircleBorder(),
-                              ),
-                              onTap: () => _toggleSelection(user.uid),
-                            );
-                          },
+                            ),
+                          ],
                         ),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _contacts.length,
+                      itemBuilder: (context, index) {
+                        final user = _contacts[index];
+                        final isSelected = _selectedUserIds.contains(user.uid);
+
+                        return ListTile(
+                          leading: Stack(
+                            children: [
+                              SafeCircleAvatar(
+                                photoUrl: user.photoUrl,
+                                radius: 24,
+                                name: user.name,
+                              ),
+                              if (isSelected)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.check,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          title: Text(
+                            user.name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: user.isOnline
+                              ? const Text(
+                                  'Online',
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontSize: 12,
+                                  ),
+                                )
+                              : null,
+                          trailing: Checkbox(
+                            value: isSelected,
+                            onChanged: (_) => _toggleSelection(user.uid),
+                            activeColor: Colors.green,
+                            shape: const CircleBorder(),
+                          ),
+                          onTap: () => _toggleSelection(user.uid),
+                        );
+                      },
+                    ),
             ),
 
             // Action buttons
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey, width: 0.5),
-                ),
+                border: Border(top: BorderSide(color: Colors.grey, width: 0.5)),
               ),
               child: Row(
                 children: [
@@ -289,10 +307,7 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
+                        style: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                     ),
                   ),
@@ -314,7 +329,9 @@ class _SelectParticipantsDialogState extends State<SelectParticipantsDialog> {
                             'Start Call',
                             style: TextStyle(
                               fontSize: 16,
-                              color: _selectedUserIds.isEmpty ? Colors.grey : Colors.white,
+                              color: _selectedUserIds.isEmpty
+                                  ? Colors.grey
+                                  : Colors.white,
                             ),
                           ),
                         ],

@@ -124,7 +124,7 @@ BEFORE (Both devices staying logged in):
    Device A: Logged in
    Device B: Logs in → Both devices logged in ❌
 
-AFTER (WhatsApp-style single device):
+AFTER (SingleTap-style single device):
    Device A: Logged in
    Device B: Logs in → Device A logs out, Device B logged in ✓
 

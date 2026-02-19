@@ -23,8 +23,8 @@ import 'services/auth_service.dart';
 import 'services/profile services/profile_service.dart';
 import 'services/user_manager.dart';
 import 'services/notification_service.dart';
-import 'services/chat services/conversation_service.dart';
-import 'services/location services/location_service.dart';
+import 'services/chat_services/conversation_service.dart';
+import 'services/location_services/location_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/analytics_service.dart';
 import 'services/error services/error_tracking_service.dart';
@@ -97,7 +97,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         }
       }
     }
-    // For GROUP call notifications (WhatsApp-style)
+    // For GROUP call notifications (SingleTap-style)
     else if (type == 'group_call') {
       print('[FCM] Group call notification received in background');
       final callId = data['callId'] as String?;
@@ -176,7 +176,7 @@ Future<void> showFullScreenIncomingCall({
     final callKitParams = CallKitParams(
       id: callId, // Use Firestore callId as CallKit id
       nameCaller: callerName,
-      appName: 'Supper',
+      appName: 'SingleTap',
       avatar: callerPhoto,
       handle: 'Voice Call',
       type: 0, // 0 = Audio call
@@ -229,7 +229,7 @@ Future<void> showFullScreenIncomingCall({
 
     await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
 
-    // Update call status to 'ringing' so caller sees "Ringing..." (like WhatsApp)
+    // Update call status to 'ringing' so caller sees "Ringing..." (like SingleTap)
     try {
       await FirebaseFirestore.instance.collection('calls').doc(callId).update({
         'status': 'ringing',
@@ -353,7 +353,7 @@ class MyApp extends ConsumerWidget {
     final themeNotifier = ref.read(themeProvider.notifier);
 
     return MaterialApp(
-      title: 'Supper',
+      title: 'SingleTap',
       navigatorKey: navigatorKey,
       theme: themeNotifier.themeData.copyWith(
         scaffoldBackgroundColor: const Color(0xFF0f0f23),
@@ -447,7 +447,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     }
   }
 
-  /// Start real-time monitoring for device session changes (WhatsApp-style)
+  /// Start real-time monitoring for device session changes (SingleTap-style)
   /// Automatically logs out user if another device logs in with same account
   /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
@@ -614,10 +614,22 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
                 // CRITICAL: Only logout if forceLogout is TRUE AND it's a genuinely NEW signal
                 // Must have a valid timestamp that is AFTER the listener started
+                // AND the active token must NOT be our own token (prevents self-logout)
                 bool shouldLogout = false;
 
+                // Get the active device token to check if this is our own signal
+                final activeToken =
+                    snapshotData['activeDeviceToken'] as String?;
+
                 if (forceLogout == true) {
-                  if (forceLogoutTimestamp != null && _listenerStartTime != null) {
+                  // CRITICAL: If the active token is OUR token, this is our own logout signal - SKIP
+                  if (activeToken != null && activeToken == localToken) {
+                    print(
+                      '[DeviceSession]  forceLogout detected but activeToken matches local - this is OUR OWN signal, skipping',
+                    );
+                    shouldLogout = false;
+                  } else if (forceLogoutTimestamp != null &&
+                      _listenerStartTime != null) {
                     // Only logout if the force logout signal was sent AFTER this listener started
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
                     final listenerTime = _listenerStartTime!;
@@ -628,11 +640,15 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                     );
                   } else if (_listenerStartTime == null) {
                     // No listener time - should not happen, skip logout
-                    print('[DeviceSession]  No listener start time, skipping forceLogout');
+                    print(
+                      '[DeviceSession]  No listener start time, skipping forceLogout',
+                    );
                     shouldLogout = false;
                   } else {
                     // No timestamp on forceLogout - stale flag from previous session, ignore it
-                    print('[DeviceSession]  forceLogout has no timestamp - stale flag, ignoring');
+                    print(
+                      '[DeviceSession]  forceLogout has no timestamp - stale flag, ignoring',
+                    );
                     shouldLogout = false;
                   }
                 }
@@ -653,17 +669,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 // PRIORITY 2: Check token empty (fallback detection)
-                final serverToken =
-                    snapshotData['activeDeviceToken'] as String?;
+                final serverToken = activeToken;
                 final serverTokenValid = (serverToken?.isNotEmpty ?? false);
                 final localTokenValid = localToken.isNotEmpty;
 
                 if (!serverTokenValid && localTokenValid) {
-                  print('[DeviceSession]  TOKEN CLEARED ON SERVER');
-                  if (mounted && !_isPerformingLogout) {
-                    _isPerformingLogout = true;
-                    await _performRemoteLogout('Another device logged in');
-                  }
+                  // CRITICAL: Token might be temporarily cleared during logoutFromOtherDevices STEP 0
+                  // Wait for the next snapshot to confirm before logging out
+                  print('[DeviceSession]  TOKEN CLEARED ON SERVER - waiting for confirmation...');
                   return;
                 }
 
@@ -906,7 +919,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // Only start device session monitoring ONCE per user login
           // Starting on every build() causes race conditions and false logouts
-          if (_lastInitializedUserId != uid || _deviceSessionSubscription == null) {
+          if (_lastInitializedUserId != uid ||
+              _deviceSessionSubscription == null) {
             print(
               '[BUILD] Starting device session monitoring for NEW user or first time...',
             );

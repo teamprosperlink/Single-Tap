@@ -69,7 +69,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   final _instagramController = TextEditingController();
   final _facebookController = TextEditingController();
   final _twitterController = TextEditingController();
-  final _whatsappController = TextEditingController();
+  final _SingleTapController = TextEditingController();
 
   // Country code for phone
   String _selectedCountryCode = '+91';
@@ -191,7 +191,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
     _emailController.text = business.contact.email ?? '';
     _websiteController.text = business.contact.website ?? '';
-    _whatsappController.text = business.contact.whatsapp ?? '';
+    _SingleTapController.text = business.contact.SingleTap ?? '';
 
     if (business.address != null) {
       _streetController.text = business.address!.street ?? '';
@@ -214,7 +214,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     _instagramController.dispose();
     _facebookController.dispose();
     _twitterController.dispose();
-    _whatsappController.dispose();
+    _SingleTapController.dispose();
     _streetController.dispose();
     _cityController.dispose();
     _stateController.dispose();
@@ -562,9 +562,9 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         website: _websiteController.text.trim().isEmpty
             ? null
             : _websiteController.text.trim(),
-        whatsapp: _whatsappController.text.trim().isEmpty
+        SingleTap: _SingleTapController.text.trim().isEmpty
             ? null
-            : _whatsappController.text.trim(),
+            : _SingleTapController.text.trim(),
       );
 
       BusinessAddress? address;
@@ -1565,10 +1565,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           ),
           const SizedBox(height: 12),
 
-          // WhatsApp
+          // SingleTap
           _buildSocialField(
-            controller: _whatsappController,
-            hint: 'WhatsApp number',
+            controller: _SingleTapController,
+            hint: 'SingleTap number',
             icon: Icons.phone_android,
           ),
           const SizedBox(height: 100),

@@ -23,7 +23,7 @@ Device B logs in with same account
   ↓
 ✅ Device A automatically logs out
   ↓
-✅ Only Device B logged in (WhatsApp-style)
+✅ Only Device B logged in (SingleTap-style)
 ```
 
 ---
@@ -175,11 +175,11 @@ Check you have Editor access to Firebase project `suuper2`
 
 ## Next Steps
 
-✅ This will enable WhatsApp-style single device login where:
+✅ This will enable SingleTap-style single device login where:
 - Only one device can be logged in per account
 - Old device automatically logs out when new device logs in
 - No dialog, no user input required
-- Instant UX like WhatsApp
+- Instant UX like SingleTap
 
 ---
 

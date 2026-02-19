@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' show sin, cos, sqrt, atan2, pi;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,8 +13,11 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 // Screens used in navigation
 import 'home_screen.dart';
 import 'live_connect_tab_screen.dart';
-import 'near_by_screen.dart';
+import 'user_profile_detail_screen.dart';
+import '../near by/near_by_screen.dart';
 import 'conversations_screen.dart';
+import 'pending_requests_screen.dart';
+import '../../models/extended_user_profile.dart';
 
 // Professional & Business screens
 import '../professional/professional_dashboard_screen.dart';
@@ -23,8 +28,9 @@ import '../business/business_main_screen.dart';
 // import '../call/incoming_video_call_screen.dart';
 
 // services
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/connection_service.dart';
 import '../../models/message_model.dart';
 
 // widgets
@@ -49,9 +55,15 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   int _currentIndex = 0;
   late TabController _tabController;
+  late TabController _networkingTabController;
+  int _networkingTabIndex = 0;
+
+  // GlobalKeys to access LiveConnectTabScreen state for filter dialog
+  final GlobalKey<LiveConnectTabScreenState> _discoverConnectKey = GlobalKey();
+  final GlobalKey<LiveConnectTabScreenState> _smartConnectKey = GlobalKey();
 
   // Stream subscription for cleanup
   StreamSubscription<QuerySnapshot>? _unreadSubscription;
@@ -72,6 +84,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // Initialize TabController with 4 tabs
     _tabController = TabController(length: 4, vsync: this);
+
+    // Networking sub-tabs: Discover Connect, Smart Connect & Requests
+    _networkingTabController = TabController(length: 3, vsync: this);
+    _networkingTabController.addListener(() {
+      if (!_networkingTabController.indexIsChanging) {
+        setState(() {
+          _networkingTabIndex = _networkingTabController.index;
+        });
+      }
+    });
 
     // Set initial index based on login account type or initialIndex
     if (widget.initialIndex != null) {
@@ -254,6 +276,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
+    _networkingTabController.dispose();
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
     super.dispose();
@@ -609,7 +632,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       debugPrint('  Error getting call type: $e');
     }
 
-    // CRITICAL FIX: Use CallKit for WhatsApp-style full-screen incoming call UI
+    // CRITICAL FIX: Use CallKit for SingleTap-style full-screen incoming call UI
     // This replaces the old IncomingCallScreen widget approach
     // CallKit provides native full-screen UI even when app is in foreground
 
@@ -630,12 +653,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       return;
     }
 
-    // Show CallKit full-screen incoming call UI (like WhatsApp)
+    // Show CallKit full-screen incoming call UI (like SingleTap)
     try {
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName.isNotEmpty ? callerName : 'Unknown',
-        appName: 'Supper',
+        appName: 'SingleTap',
         avatar: callerPhoto,
         handle: 'Voice Call',
         type: 0, // Audio call
@@ -876,32 +899,855 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     // For Chat, Networking, and Nearby - show them fullscreen without the main TabBar
     // But still keep the bottom navigation for easy switching between screens
 
-    // Create bottom navigation bar widget with gradient like AppBar
-    Widget buildBottomNavBar() {
-      return ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.95),
-                  Colors.black.withValues(alpha: 0.85),
-                  Colors.black.withValues(alpha: 0.7),
+    String formatTimeAgo(DateTime dateTime) {
+      final now = DateTime.now();
+      final diff = now.difference(dateTime);
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${(diff.inDays / 7).floor()}w ago';
+    }
+
+    // Single request card widget — image LEFT, data + buttons RIGHT
+    // Haversine distance calculation
+    double calcDistance(double lat1, double lon1, double lat2, double lon2) {
+      const earthRadius = 6371.0;
+      final dLat = (lat2 - lat1) * pi / 180;
+      final dLon = (lon2 - lon1) * pi / 180;
+      final a = sin(dLat / 2) * sin(dLat / 2) +
+          cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
+          sin(dLon / 2) * sin(dLon / 2);
+      return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a));
+    }
+
+    Widget buildRequestCard({
+      required BuildContext context,
+      required String userId,
+      required String name,
+      required String? photo,
+      required dynamic age,
+      required String? occupation,
+      required double? otherLat,
+      required double? otherLng,
+      required double? myLat,
+      required double? myLng,
+      required String timeAgo,
+      required bool isSent,
+      required String requestId,
+      required ConnectionService connectionService,
+    }) {
+      final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+      // Calculate distance string
+      String? distanceStr;
+      if (myLat != null && myLng != null && otherLat != null && otherLng != null) {
+        final km = calcDistance(myLat, myLng, otherLat, otherLng);
+        if (km < 1) {
+          distanceStr = '${(km * 1000).round()} m';
+        } else {
+          distanceStr = '${km.toStringAsFixed(1)} km';
+        }
+      }
+
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // TOP: Profile image — scale up to crop past circular edges
+            SizedBox(
+              height: 100,
+              width: double.infinity,
+              child: photo != null && photo.isNotEmpty
+                  ? ClipRect(
+                      child: Transform.scale(
+                        scale: 1.35,
+                        child: Image.network(
+                          photo,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xFF016CFF).withValues(alpha: 0.3),
+                            child: Center(
+                              child: Text(
+                                initial,
+                                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: const Color(0xFF016CFF).withValues(alpha: 0.3),
+                      child: Center(
+                        child: Text(
+                          initial,
+                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+            ),
+            // BOTTOM: Info + buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 5, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name + time
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (timeAgo.isNotEmpty)
+                        Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.35),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // Profession
+                  if (occupation != null && occupation.isNotEmpty)
+                    Text(
+                      occupation,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 2),
+                  // Age (left) + Distance (right)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (age != null)
+                        Text(
+                          '$age yrs',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      if (distanceStr != null)
+                        Text(
+                          distanceStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.55),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () async {
+                            HapticFeedback.mediumImpact();
+                            debugPrint('Confirm tapped: requestId=$requestId, isSent=$isSent, userId=$userId');
+                            final result = await connectionService.acceptConnectionRequest(requestId);
+                            debugPrint('Accept result: $result');
+                            if (!context.mounted) return;
+                            if (result['success'] == true) {
+                              // Update Discover & Smart Connect tabs
+                              _discoverConnectKey.currentState?.updateConnectionCache(userId, true);
+                              _smartConnectKey.currentState?.updateConnectionCache(userId, true);
+                              // Navigate to profile detail with chat button
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => UserProfileDetailScreen(
+                                    user: ExtendedUserProfile(
+                                      uid: userId,
+                                      name: name,
+                                      photoUrl: photo,
+                                      age: age is int ? age : int.tryParse('$age'),
+                                      occupation: occupation,
+                                      latitude: otherLat,
+                                      longitude: otherLng,
+                                    ),
+                                    connectionStatus: 'connected',
+                                  ),
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result['message'] ?? 'Failed'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF016CFF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Confirm',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            HapticFeedback.lightImpact();
+                            if (isSent) {
+                              await connectionService.cancelConnectionRequest(requestId);
+                            } else {
+                              await connectionService.rejectConnectionRequest(requestId);
+                            }
+                          },
+                          child: Container(
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Delete',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              border: const Border(
-                top: BorderSide(color: Colors.white, width: 0.5),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Connection card — for accepted/confirmed connections
+    Widget buildConnectionCard({
+      required BuildContext context,
+      required String userId,
+      required String name,
+      required String? photo,
+      required dynamic age,
+      required String? occupation,
+      required double? otherLat,
+      required double? otherLng,
+      required double? myLat,
+      required double? myLng,
+      required String timeAgo,
+    }) {
+      final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+      String? distanceStr;
+      if (myLat != null && myLng != null && otherLat != null && otherLng != null) {
+        final km = calcDistance(myLat, myLng, otherLat, otherLng);
+        if (km < 1) {
+          distanceStr = '${(km * 1000).round()} m';
+        } else {
+          distanceStr = '${km.toStringAsFixed(1)} km';
+        }
+      }
+
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UserProfileDetailScreen(
+                user: ExtendedUserProfile(
+                  uid: userId,
+                  name: name,
+                  photoUrl: photo,
+                  age: age is int ? age : int.tryParse('$age'),
+                  occupation: occupation,
+                  latitude: otherLat,
+                  longitude: otherLng,
+                ),
+                connectionStatus: 'connected',
+              ),
+            ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 100,
+                width: double.infinity,
+                child: photo != null && photo.isNotEmpty
+                    ? ClipRect(
+                        child: Transform.scale(
+                          scale: 1.35,
+                          child: Image.network(
+                            photo,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: const Color(0xFF016CFF).withValues(alpha: 0.3),
+                              child: Center(
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: const Color(0xFF016CFF).withValues(alpha: 0.3),
+                        child: Center(
+                          child: Text(
+                            initial,
+                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 5, 8, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (timeAgo.isNotEmpty)
+                          Text(
+                            timeAgo,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (occupation != null && occupation.isNotEmpty)
+                      Text(
+                        occupation,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (age != null)
+                          Text(
+                            '$age yrs',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        if (distanceStr != null)
+                          Text(
+                            distanceStr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Single "Message" button
+                    Container(
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF016CFF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_rounded, size: 13, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Message',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // My Network tab — shows confirmed/accepted connections
+    Widget buildMyNetworkTab() {
+      final connectionService = ConnectionService();
+      final currentUid = _auth.currentUser?.uid;
+
+      return FutureBuilder<DocumentSnapshot>(
+        future: currentUid != null ? _firestore.collection('users').doc(currentUid).get() : null,
+        builder: (context, mySnap) {
+          final myData = mySnap.data?.data() as Map<String, dynamic>?;
+          final myLat = (myData?['latitude'] as num?)?.toDouble();
+          final myLng = (myData?['longitude'] as num?)?.toDouble();
+
+          // Two nested StreamBuilders: accepted as receiver + accepted as sender
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: connectionService.getAcceptedAsReceiverStream(),
+            builder: (context, receiverSnap) {
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                stream: connectionService.getAcceptedAsSenderStream(),
+                builder: (context, senderSnap) {
+                  if (receiverSnap.connectionState == ConnectionState.waiting &&
+                      senderSnap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Colors.white));
+                  }
+
+                  if (receiverSnap.hasError || senderSnap.hasError) {
+                    final error = (receiverSnap.error ?? senderSnap.error).toString();
+                    return Center(
+                      child: Text('Error: $error', style: TextStyle(color: Colors.red.shade300, fontSize: 14)),
+                    );
+                  }
+
+                  final asReceiver = receiverSnap.data ?? [];
+                  final asSender = senderSnap.data ?? [];
+                  final connections = [...asReceiver, ...asSender];
+
+                  // Sort by updatedAt descending (most recently accepted first)
+                  connections.sort((a, b) {
+                    final aTime = a['updatedAt'] as Timestamp? ?? a['createdAt'] as Timestamp?;
+                    final bTime = b['updatedAt'] as Timestamp? ?? b['createdAt'] as Timestamp?;
+                    if (aTime == null || bTime == null) return 0;
+                    return bTime.compareTo(aTime);
+                  });
+
+                  if (connections.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.people_outline_rounded,
+                            size: 72,
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No connections yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Accepted connections will appear here',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return MasonryGridView.count(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    itemCount: connections.length,
+                    itemBuilder: (context, index) {
+                      final conn = connections[index];
+                      final updatedAt = conn['updatedAt'] as Timestamp? ?? conn['createdAt'] as Timestamp?;
+                      final timeAgo = updatedAt != null ? formatTimeAgo(updatedAt.toDate()) : '';
+
+                      // Determine the OTHER user's ID
+                      final senderId = conn['senderId'] as String;
+                      final receiverId = conn['receiverId'] as String;
+                      final otherUserId = senderId == currentUid ? receiverId : senderId;
+
+                      // Get stored profile info for the other user
+                      final storedName = senderId == currentUid
+                          ? conn['receiverName'] as String?
+                          : conn['senderName'] as String?;
+                      final storedPhoto = senderId == currentUid
+                          ? conn['receiverPhoto'] as String?
+                          : conn['senderPhoto'] as String?;
+                      final storedAge = senderId == currentUid
+                          ? conn['receiverAge']
+                          : conn['senderAge'];
+                      final storedOccupation = senderId == currentUid
+                          ? conn['receiverOccupation'] as String?
+                          : conn['senderOccupation'] as String?;
+                      final storedLat = senderId == currentUid
+                          ? (conn['receiverLatitude'] as num?)?.toDouble()
+                          : (conn['senderLatitude'] as num?)?.toDouble();
+                      final storedLng = senderId == currentUid
+                          ? (conn['receiverLongitude'] as num?)?.toDouble()
+                          : (conn['senderLongitude'] as num?)?.toDouble();
+
+                      final needsFetch = storedName == null || storedName.isEmpty || storedName.length > 30;
+
+                      if (needsFetch) {
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: _firestore.collection('users').doc(otherUserId).get(),
+                          builder: (context, userSnap) {
+                            if (userSnap.connectionState == ConnectionState.waiting) {
+                              return Container(
+                                height: 160,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Center(child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2)),
+                              );
+                            }
+                            final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
+                            return buildConnectionCard(
+                              context: context,
+                              userId: otherUserId,
+                              name: userData['name'] as String? ?? 'Unknown',
+                              photo: userData['photoUrl'] as String?,
+                              age: userData['age'],
+                              occupation: userData['occupation'] as String?,
+                              otherLat: (userData['latitude'] as num?)?.toDouble(),
+                              otherLng: (userData['longitude'] as num?)?.toDouble(),
+                              myLat: myLat,
+                              myLng: myLng,
+                              timeAgo: timeAgo,
+                            );
+                          },
+                        );
+                      }
+
+                      return buildConnectionCard(
+                        context: context,
+                        userId: otherUserId,
+                        name: storedName,
+                        photo: storedPhoto,
+                        age: storedAge,
+                        occupation: storedOccupation,
+                        otherLat: storedLat,
+                        otherLng: storedLng,
+                        myLat: myLat,
+                        myLng: myLng,
+                        timeAgo: timeAgo,
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    }
+
+    // Requests tab — shows pending connection requests
+    Widget buildRequestsTab() {
+      final connectionService = ConnectionService();
+      final currentUid = _auth.currentUser?.uid;
+      // First fetch current user's location for distance calculation
+      return FutureBuilder<DocumentSnapshot>(
+        future: currentUid != null ? _firestore.collection('users').doc(currentUid).get() : null,
+        builder: (context, mySnap) {
+          final myData = mySnap.data?.data() as Map<String, dynamic>?;
+          final myLat = (myData?['latitude'] as num?)?.toDouble();
+          final myLng = (myData?['longitude'] as num?)?.toDouble();
+
+      // Use two nested StreamBuilders for reliable real-time updates
+      return StreamBuilder<List<Map<String, dynamic>>>(
+        stream: connectionService.getPendingRequestsStream(),
+        builder: (context, receivedSnapshot) {
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: connectionService.getSentRequestsStream(),
+            builder: (context, sentSnapshot) {
+              if (receivedSnapshot.connectionState == ConnectionState.waiting &&
+                  sentSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
+
+              // Show errors
+              if (receivedSnapshot.hasError || sentSnapshot.hasError) {
+                final error = (receivedSnapshot.error ?? sentSnapshot.error).toString();
+                debugPrint('Requests tab error: $error');
+                if (error.contains('index') || error.contains('FAILED_PRECONDITION')) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.build_rounded, size: 60, color: Colors.orange.withValues(alpha: 0.6)),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Firestore index required',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Check console logs for the index creation link.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.5)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return Center(
+                  child: Text('Error: $error', style: TextStyle(color: Colors.red.shade300, fontSize: 14)),
+                );
+              }
+
+              // Combine both lists
+              final received = receivedSnapshot.data ?? [];
+              final sent = sentSnapshot.data ?? [];
+              final requests = [...received, ...sent];
+              // Sort by createdAt descending
+              requests.sort((a, b) {
+                final aTime = a['createdAt'] as Timestamp?;
+                final bTime = b['createdAt'] as Timestamp?;
+                if (aTime == null || bTime == null) return 0;
+                return bTime.compareTo(aTime);
+              });
+
+          if (requests.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.person_add_disabled_rounded,
+                    size: 72,
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No pending requests',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'When someone sends you a connect request,\nit will appear here',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return MasonryGridView.count(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            itemCount: requests.length,
+            itemBuilder: (context, index) {
+              final request = requests[index];
+              final isSent = request['requestType'] == 'sent';
+              final requestId = request['id'] as String;
+              final createdAt = request['createdAt'] as Timestamp?;
+              final timeAgo = createdAt != null
+                  ? formatTimeAgo(createdAt.toDate())
+                  : '';
+
+              // Get the other user's ID to fetch their profile
+              final otherUserId = isSent
+                  ? request['receiverId'] as String
+                  : request['senderId'] as String;
+
+              // Check if we already have name/photo from the request doc
+              final storedName = isSent
+                  ? request['receiverName'] as String?
+                  : request['senderName'] as String?;
+              final storedPhoto = isSent
+                  ? request['receiverPhoto'] as String?
+                  : request['senderPhoto'] as String?;
+              final storedAge = isSent
+                  ? request['receiverAge']
+                  : request['senderAge'];
+              final storedOccupation = isSent
+                  ? request['receiverOccupation'] as String?
+                  : request['senderOccupation'] as String?;
+              final storedLat = isSent
+                  ? (request['receiverLatitude'] as num?)?.toDouble()
+                  : (request['senderLatitude'] as num?)?.toDouble();
+              final storedLng = isSent
+                  ? (request['receiverLongitude'] as num?)?.toDouble()
+                  : (request['senderLongitude'] as num?)?.toDouble();
+
+              // If name looks like a UID (no stored name), fetch from Firestore
+              final needsFetch = storedName == null || storedName.isEmpty || storedName.length > 30;
+
+              if (needsFetch) {
+                // Fetch user profile for old requests that don't have stored info
+                return FutureBuilder<DocumentSnapshot>(
+                  future: _firestore.collection('users').doc(otherUserId).get(),
+                  builder: (context, userSnap) {
+                    if (userSnap.connectionState == ConnectionState.waiting) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Center(child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2)),
+                      );
+                    }
+                    final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
+                    final name = userData['name'] as String? ?? 'Unknown';
+                    final photo = userData['photoUrl'] as String?;
+                    final age = userData['age'];
+                    final occupation = userData['occupation'] as String?;
+                    final userLat = (userData['latitude'] as num?)?.toDouble();
+                    final userLng = (userData['longitude'] as num?)?.toDouble();
+                    return buildRequestCard(
+                      context: context,
+                      userId: otherUserId,
+                      name: name,
+                      photo: photo,
+                      age: age,
+                      occupation: occupation,
+                      otherLat: userLat,
+                      otherLng: userLng,
+                      myLat: myLat,
+                      myLng: myLng,
+                      timeAgo: timeAgo,
+                      isSent: isSent,
+                      requestId: requestId,
+                      connectionService: connectionService,
+                    );
+                  },
+                );
+              }
+
+              return buildRequestCard(
+                context: context,
+                userId: otherUserId,
+                name: storedName,
+                photo: storedPhoto,
+                age: storedAge,
+                occupation: storedOccupation,
+                otherLat: storedLat,
+                otherLng: storedLng,
+                myLat: myLat,
+                myLng: myLng,
+                timeAgo: timeAgo,
+                isSent: isSent,
+                requestId: requestId,
+                connectionService: connectionService,
+              );
+            },
+          );
+        },  // inner StreamBuilder builder
+          );  // inner StreamBuilder
+        },  // outer StreamBuilder builder
+      );  // outer StreamBuilder
+        },  // FutureBuilder builder
+      );  // FutureBuilder
+    }
+
+    // Create bottom navigation bar widget with gradient like AppBar
+    Widget buildBottomNavBar() {
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
               ),
             ),
             child: SafeArea(
               top: false,
               child: SizedBox(
-                height: 60,
+                height: 64,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildNavItem(
                       icon: Icons.home,
@@ -948,7 +1794,205 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       return Scaffold(
         extendBody: true,
         backgroundColor: Colors.transparent,
-        body: const LiveConnectTabScreen(activateNetworkingFilter: true),
+        appBar: AppBar(
+          centerTitle: true,
+          toolbarHeight: 56,
+          automaticallyImplyLeading: false,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          title: const Text(
+            'Networking',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          actions: [
+            // Pending requests icon with badge
+            StreamBuilder<int>(
+              stream: ConnectionService().getPendingRequestsCountStream(),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PendingRequestsScreen(),
+                      ),
+                    );
+                  },
+                  child: SizedBox(
+                    width: 44,
+                    height: 36,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.person_add_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                count > 9 ? '9+' : '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Filter icon — only on Smart Connect tab
+            if (_networkingTabIndex == 1)
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    // Call showFilterDialog on the active tab's LiveConnectTabScreen
+                    if (_networkingTabIndex == 0) {
+                      _discoverConnectKey.currentState?.showFilterDialog();
+                    } else {
+                      _smartConnectKey.currentState?.showFilterDialog();
+                    }
+                  },
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: TabBar(
+                controller: _networkingTabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorColor: Colors.white,
+                indicatorWeight: 2,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                labelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                ),
+                tabs: [
+                  const Tab(text: 'Discover Connect'),
+                  const Tab(text: 'Smart Connect'),
+                  const Tab(text: 'My Network'),
+                ],
+              ),
+            ),
+          ),
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromRGBO(40, 40, 40, 1),
+                  Color.fromRGBO(64, 64, 64, 1),
+                ],
+              ),
+              border: Border(
+                bottom: BorderSide(color: Colors.white, width: 0.5),
+              ),
+            ),
+          ),
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(64, 64, 64, 1),
+                Color.fromRGBO(0, 0, 0, 1),
+              ],
+            ),
+          ),
+          child: TabBarView(
+            controller: _networkingTabController,
+            children: [
+              LiveConnectTabScreen(
+                key: _discoverConnectKey,
+                activateNetworkingFilter: false,
+              ),
+              LiveConnectTabScreen(
+                key: _smartConnectKey,
+                activateNetworkingFilter: true,
+              ),
+              buildMyNetworkTab(),
+            ],
+          ),
+        ),
         bottomNavigationBar: buildBottomNavBar(),
       );
     }
@@ -983,7 +2027,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           setState(() => _currentIndex = 0);
         },
         onLoadChat: (chatId) async {
-          // Load conversation from history (ChatGPT style)
+          // Load conversation from history (SingleTap style)
           await HomeScreen.globalKey.currentState?.loadConversation(chatId);
           // Navigate to home screen
           setState(() => _currentIndex = 0);
@@ -1058,19 +2102,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           ),
         ],
         flexibleSpace: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
               ],
             ),
-            border: const Border(
-              bottom: BorderSide(color: Colors.white, width: 0.5),
-            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
       ),

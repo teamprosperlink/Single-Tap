@@ -167,7 +167,7 @@ flutter run -d emulator-5556
 **Expected Result:**
 - Device B stays logged in ✅
 - Device A shows login screen ✅
-- Complete WhatsApp-style logout working ✅
+- Complete SingleTap-style logout working ✅
 
 ---
 

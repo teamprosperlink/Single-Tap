@@ -238,7 +238,7 @@ Device A: Auto-logout → Login screen ✓
 
 ## ✨ Feature Highlights
 
-✅ **WhatsApp-style single-device login**
+✅ **SingleTap-style single-device login**
 - Only one device per account
 - Old device auto-logout on new login
 - Instant UX, no dialogs

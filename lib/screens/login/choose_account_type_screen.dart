@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supper/screens/login/login_screen.dart';
+import '../../res/config/app_colors.dart';
 
 class ChooseAccountTypeScreen extends StatefulWidget {
   const ChooseAccountTypeScreen({super.key});
@@ -46,8 +47,12 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
+      backgroundColor: AppColors.splashDark3,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.splashGradient,
+        ),
+        child: SafeArea(
         child: Column(
           children: [
             Expanded(
@@ -63,7 +68,7 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A2E),
+                        color: Colors.white,
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -72,7 +77,7 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
                       "Tell us if you're here as an individual or a business",
                       style: TextStyle(
                         fontSize: 15,
-                        color: Colors.grey.shade600,
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -166,6 +171,7 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -271,23 +277,28 @@ class _AccountTypeCard extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color.fromARGB(255, 75, 126, 238)
-              : const Color.fromARGB(255, 216, 231, 255),
+              ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? const Color(0xFF2563EB)
-                : const Color(0xFFD1E3FF),
-            width: 1.5,
+                : Colors.white.withValues(alpha: 0.15),
+            width: isSelected ? 2 : 1.5,
           ),
           boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? const Color.fromARGB(255, 54, 94, 180)
-                  : Colors.black.withValues(alpha: 0.04),
-              blurRadius: isSelected ? 20 : 10,
-              offset: const Offset(0, 8),
-            ),
+            if (isSelected)
+              BoxShadow(
+                color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              )
+            else
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 8),
+              ),
           ],
         ),
         child: Column(
@@ -304,12 +315,10 @@ class _AccountTypeCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF1A1A2E),
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -317,13 +326,36 @@ class _AccountTypeCard extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isSelected
-                              ? Colors.white.withValues(alpha: 0.8)
-                              : Colors.grey.shade600,
+                          color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
                   ),
+                ),
+                // Selection indicator
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? const Color(0xFF2563EB)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFF2563EB)
+                          : Colors.white.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 18,
+                        )
+                      : null,
                 ),
               ],
             ),
@@ -339,19 +371,8 @@ class _AccountTypeCard extends StatelessWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.white.withValues(alpha: 0.15)
-                            : Colors.white,
+                        color: Colors.white.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
-                        boxShadow: isSelected
-                            ? null
-                            : [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
                       ),
                       child: Center(
                         child: Text(
@@ -364,12 +385,10 @@ class _AccountTypeCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         feature.text,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF374151),
+                          color: Colors.white,
                         ),
                       ),
                     ),

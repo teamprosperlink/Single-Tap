@@ -104,7 +104,7 @@ RESULT:
   ✅ Cloud Function can instantly write forceLogout=true
   ✅ Device A listener detects the signal
   ✅ Device A automatically logs out
-  ✅ WhatsApp-style behavior works
+  ✅ SingleTap-style behavior works
 
 ================================================================================
                        VERIFICATION CHECKLIST

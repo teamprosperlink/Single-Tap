@@ -121,7 +121,7 @@ Device B (on Already Logged In dialog):
 8. Device B returned to login screen ✓
 ```
 
-**Total time: 2-3 seconds** - WhatsApp style ✅
+**Total time: 2-3 seconds** - SingleTap style ✅
 
 ---
 

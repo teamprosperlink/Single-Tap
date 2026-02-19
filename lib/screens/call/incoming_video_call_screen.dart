@@ -10,7 +10,7 @@ import '../../res/config/app_text_styles.dart';
 import '../call/video_call_screen.dart';
 import '../call/call_history_screen.dart';
 
-/// WhatsApp-style incoming video call screen
+/// SingleTap-style incoming video call screen
 /// Shows caller's photo/name with accept/decline buttons
 class IncomingVideoCallScreen extends StatefulWidget {
   final String callId;
@@ -499,23 +499,9 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Dark gradient background
+          // Gradient Background
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [const Color(0xFF1C1C1E), const Color(0xFF000000)],
-              ),
-            ),
-          ),
-
-          // Blur effect overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(color: Colors.black.withValues(alpha: 0.2)),
-            ),
+            decoration: const BoxDecoration(gradient: AppColors.splashGradient),
           ),
 
           // Main content
@@ -619,7 +605,7 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
 
                 const Spacer(),
 
-                // Accept and Decline buttons (WhatsApp style)
+                // Accept and Decline buttons (SingleTap style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 60),
                   child: Row(

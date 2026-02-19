@@ -256,7 +256,7 @@ flutter run -d emulator-5556
 **Why It Matters**:
 - Device A's listener now ALWAYS detects when Device B logs in
 - Device A can now receive and process forceLogout signal
-- WhatsApp-style automatic logout now works correctly
+- SingleTap-style automatic logout now works correctly
 
 **Status**: 🚀 **READY FOR TESTING**
 
@@ -275,7 +275,7 @@ Solution: Remove the UID check and always restart the listener with
 a 500ms delay to ensure Firebase auth is ready.
 
 This ensures Device A can detect when Device B logs in and properly
-logout automatically (WhatsApp-style single device login).
+logout automatically (SingleTap-style single device login).
 ```
 
 ---

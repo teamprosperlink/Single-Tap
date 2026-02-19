@@ -1,8 +1,8 @@
-# WhatsApp-Style Video Call Implementation Guide
+# SingleTap-Style Video Call Implementation Guide
 
 ## ✅ Implementation Status: COMPLETE
 
-All WhatsApp-style video calling features have been implemented and are ready for testing.
+All SingleTap-style video calling features have been implemented and are ready for testing.
 
 ---
 
@@ -228,9 +228,9 @@ All WhatsApp-style video calling features have been implemented and are ready fo
 
 ---
 
-## 🔄 Comparison with WhatsApp
+## 🔄 Comparison with SingleTap
 
-| Feature | WhatsApp | Our App | Status |
+| Feature | SingleTap | Our App | Status |
 |---------|----------|---------|--------|
 | Fullscreen video | ✅ | ✅ | ✓ Complete |
 | Picture-in-Picture | ✅ | ✅ | ✓ Complete |
@@ -392,4 +392,4 @@ For technical issues or questions:
 4. Try with different users/devices
 5. Restart app and device if needed
 
-**Ready for WhatsApp-style video calling!** 🎉
+**Ready for SingleTap-style video calling!** 🎉

@@ -114,7 +114,7 @@ Removed the manual notification sending loop since Firestore listener handles it
 
 ### ✅ What Works NOW:
 - Full-screen CallKit incoming call UI
-- WhatsApp-style call messages (positioned correctly)
+- SingleTap-style call messages (positioned correctly)
 - Call duration tracking
 - Participant count display
 - Real-time call status updates
@@ -128,7 +128,7 @@ Removed the manual notification sending loop since Firestore listener handles it
 
 ## Next Steps
 
-### For Full WhatsApp Experience:
+### For Full SingleTap Experience:
 1. Upgrade to Firebase Blaze plan
 2. Deploy Cloud Function:
    ```bash
@@ -149,11 +149,11 @@ Removed the manual notification sending loop since Firestore listener handles it
 - ❌ Notifications not working
 
 **After:**
-- ✅ Full-screen incoming call UI (WhatsApp-style)
+- ✅ Full-screen incoming call UI (SingleTap-style)
 - ✅ Real-time call detection via Firestore
 - ✅ Automatic CallKit trigger
 - ✅ Works perfectly when app is open
-- ✅ WhatsApp-style call history and positioning
+- ✅ SingleTap-style call history and positioning
 
 ---
 

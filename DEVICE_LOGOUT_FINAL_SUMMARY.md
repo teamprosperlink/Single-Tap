@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the complete device logout system that ensures **WhatsApp-style single device login** - only one device can be logged in at a time.
+This document summarizes the complete device logout system that ensures **SingleTap-style single device login** - only one device can be logged in at a time.
 
 ---
 
@@ -349,7 +349,7 @@ Debug timestamp validation:
 ## Summary
 
 The device logout system is now **production-ready** with:
-- ✅ WhatsApp-style single device login
+- ✅ SingleTap-style single device login
 - ✅ Immediate logout for online devices
 - ✅ Offline device detection on reconnect
 - ✅ Stale session auto-cleanup

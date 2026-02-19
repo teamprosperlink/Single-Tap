@@ -12,8 +12,8 @@ import '../chat/enhanced_chat_screen.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../services/realtime_matching_service.dart';
 import '../../services/profile services/photo_cache_service.dart';
-import 'product/product_detail_screen.dart';
-import 'product/see_all_products_screen.dart';
+import '../product/product_detail_screen.dart';
+import '../product/see_all_products_screen.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -51,7 +51,7 @@ class HomeScreenState extends State<HomeScreen>
 
   final List<Map<String, dynamic>> _conversation = [];
 
-  // Current chat ID for auto-save (ChatGPT style)
+  // Current chat ID for auto-save (SingleTap style)
   String? _currentChatId;
 
   // Current project context (for Library/Projects feature)
@@ -71,7 +71,7 @@ class HomeScreenState extends State<HomeScreen>
   String? _currentlyPlayingKey;
   bool _isTtsSpeaking = false;
 
-  // ChatGPT-style action states
+  // SingleTap-style action states
   final Set<String> _likedMessages = {};
   final Set<String> _dislikedMessages = {};
   String _currentSpeechText = '';
@@ -91,7 +91,7 @@ class HomeScreenState extends State<HomeScreen>
 
     _conversation.add({
       'text':
-          'Hi! I\'m your Supper assistant. What would you like to find today?',
+          'Hi! I\'m your SingleTap assistant. What would you like to find today?',
       'isUser': false,
       'timestamp': DateTime.now(),
     });
@@ -165,7 +165,7 @@ class HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  /// Reset for new chat (ChatGPT style - conversation is auto-saved)
+  /// Reset for new chat (SingleTap style - conversation is auto-saved)
   Future<void> saveConversationAndReset() async {
     debugPrint('Starting new chat (previous auto-saved)');
     _resetConversation();
@@ -203,8 +203,10 @@ class HomeScreenState extends State<HomeScreen>
 
         // Restore messages
         for (var msg in messages) {
+          final text =
+              (msg['text'] as String?)?.replaceAll('Supper', 'SingleTap') ?? '';
           _conversation.add({
-            'text': msg['text'],
+            'text': text,
             'isUser': msg['isUser'],
             'timestamp': msg['timestamp'] is Timestamp
                 ? (msg['timestamp'] as Timestamp).toDate()
@@ -239,7 +241,7 @@ class HomeScreenState extends State<HomeScreen>
       // Add welcome message
       _conversation.add({
         'text':
-            'Hi! I\'m your Supper assistant. What would you like to find today?',
+            'Hi! I\'m your SingleTap assistant. What would you like to find today?',
         'isUser': false,
         'timestamp': DateTime.now(),
       });
@@ -405,11 +407,11 @@ class HomeScreenState extends State<HomeScreen>
       await _processWithIntent(userMessage);
     }
 
-    // Auto-save conversation to chat history (ChatGPT style)
+    // Auto-save conversation to chat history (SingleTap style)
     await _autoSaveConversation(userMessage);
   }
 
-  /// Auto-save conversation after each message (ChatGPT style)
+  /// Auto-save conversation after each message (SingleTap style)
   Future<void> _autoSaveConversation(String userMessage) async {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
@@ -1737,40 +1739,13 @@ class HomeScreenState extends State<HomeScreen>
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        toolbarHeight: 60,
-        centerTitle: false,
-        leadingWidth: 56,
-        title: const SizedBox.shrink(),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color.fromRGBO(64, 64, 64, 1),
-              Color.fromRGBO(0, 0, 0, 1),
-            ],
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
           ),
         ),
         child: Column(
@@ -1897,7 +1872,7 @@ class HomeScreenState extends State<HomeScreen>
                                     duration: const Duration(milliseconds: 300),
                                     width: 10,
                                     height: 10,
-                                    decoration: BoxDecoration(
+                                    decoration: const BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: Colors.red,
                                     ),
@@ -2020,7 +1995,6 @@ class HomeScreenState extends State<HomeScreen>
                         child: Container(
                           width: 40,
                           height: 40,
-                          margin: const EdgeInsets.only(bottom: 7.5),
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.red,
@@ -2039,7 +2013,6 @@ class HomeScreenState extends State<HomeScreen>
                         child: Container(
                           width: 40,
                           height: 40,
-                          margin: const EdgeInsets.only(left: 6, bottom: 7.5),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.grey[800],
@@ -2067,7 +2040,7 @@ class HomeScreenState extends State<HomeScreen>
                       child: Container(
                         width: 50,
                         height: 40,
-                        margin: const EdgeInsets.only(right: 6, bottom: 7.5),
+                        margin: const EdgeInsets.only(right: 6),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.grey[800],
@@ -2098,14 +2071,18 @@ class HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildChatState(bool isDarkMode) {
-    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight - 32;
+    final topPadding = MediaQuery.of(context).padding.top + 16;
     return Column(
       children: [
-        SizedBox(height: topPadding),
         Expanded(
           child: ListView.builder(
             controller: _chatScrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: topPadding,
+              bottom: 4,
+            ),
             reverse: false,
             itemCount: _conversation.length,
             itemBuilder: (context, index) {
@@ -2143,10 +2120,7 @@ class HomeScreenState extends State<HomeScreen>
     }
 
     return Container(
-      margin: EdgeInsets.only(
-        top: isUser ? 12 : 1,
-        bottom: isUser ? 8 : 1,
-      ),
+      margin: EdgeInsets.only(top: isUser ? 12 : 1, bottom: isUser ? 8 : 1),
       child: Column(
         crossAxisAlignment: isUser
             ? CrossAxisAlignment.end
@@ -2318,10 +2292,8 @@ class HomeScreenState extends State<HomeScreen>
                                     if (isUser) ...[
                                       const SizedBox(height: 4),
                                       GestureDetector(
-                                        onTap: () => _toggleTts(
-                                          'user_$index',
-                                          text,
-                                        ),
+                                        onTap: () =>
+                                            _toggleTts('user_$index', text),
                                         child: Icon(
                                           _currentlyPlayingKey ==
                                                       'user_$index' &&
@@ -2371,7 +2343,7 @@ class HomeScreenState extends State<HomeScreen>
             ],
           ),
 
-          // ChatGPT-style action icons row (assistant messages only, skip welcome)
+          // SingleTap-style action icons row (assistant messages only, skip welcome)
           // Hide if next message is a product result card
           if (!isUser && index > 0 && !_hasResultCardAfter(index))
             _buildActionRow(
@@ -2603,10 +2575,8 @@ class HomeScreenState extends State<HomeScreen>
   void _showSeeAllProducts(List<Map<String, dynamic>> data, String category) {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) => SeeAllProductsScreen(
-          products: data,
-          category: category,
-        ),
+        builder: (_) =>
+            SeeAllProductsScreen(products: data, category: category),
       ),
     );
   }

@@ -1,4 +1,4 @@
-# 🧪 Complete Testing Guide - WhatsApp-Style Device Login
+# 🧪 Complete Testing Guide - SingleTap-Style Device Login
 
 ## Ab Test करो सही तरीके से!
 
@@ -241,7 +241,7 @@ Device B को clear करो (app restart)
 | Device A detects signal | <50ms | Console shows message |
 | Device A screen updates | <200ms | Login page appears smoothly |
 | Device B navigates to app | <500ms | Main app appears |
-| **Total end-to-end** | **<200ms** | Instant WhatsApp-style logout |
+| **Total end-to-end** | **<200ms** | Instant SingleTap-style logout |
 
 ---
 
@@ -259,7 +259,7 @@ Device B को clear करो (app restart)
 **When Device B clicks logout:**
 ```
 [DeviceSession] 📡 Snapshot - forceLogout: true, Local: ABC123..., Server: NULL...
-[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out IMMEDIATELY (WhatsApp-style)...
+[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out IMMEDIATELY (SingleTap-style)...
 [RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========
 [RemoteLogout] Reason: Logged out: Account accessed on another device
 [RemoteLogout] ✓ All subscriptions cancelled
@@ -287,7 +287,7 @@ Device B को clear करो (app restart)
 [AuthService] Step 1: Setting forceLogout=true to trigger instant logout on old devices...
 [AuthService] 🔴 forceLogout signal sent! Waiting for old device to logout...
 [AuthService] Step 2: Setting new device as active...
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 [BUILD] StreamBuilder fired
 [BUILD] User logged in: <uid> (navigating to main app)
 ```
@@ -316,7 +316,7 @@ Once everything works:
 ✅ Device B immediately shows main app
 ✅ All console logs are clean
 ✅ No errors or exceptions
-✅ WhatsApp-style instant logout works
+✅ SingleTap-style instant logout works
 ```
 
 ---
@@ -328,7 +328,7 @@ Ab code ready है production के लिए!
 अगर सब कुछ ठीक काम कर रहा है तो:
 ```
 git add .
-git commit -m "WhatsApp-style single device login working"
+git commit -m "SingleTap-style single device login working"
 git push
 ```
 

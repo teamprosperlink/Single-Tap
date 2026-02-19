@@ -1,5 +1,5 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import '../res/config/app_colors.dart';
 import 'floating_particles.dart';
 
 /// A reusable background widget that matches the home screen's beautiful background.
@@ -26,38 +26,14 @@ class AppBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Image Background
+        // Gradient Background
         Positioned.fill(
-          child: Image.asset(
-            'assets/logo/home_background.webp',
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.grey.shade900, Colors.black],
-                  ),
-                ),
-              );
-            },
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: AppColors.splashGradient,
+            ),
           ),
         ),
-
-        // Blur effect (optional)
-        if (showBlur)
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
-              child: Container(color: Colors.black.withValues(alpha: 0.6)),
-            ),
-          )
-        else
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: overlayOpacity)),
-          ),
 
         // Floating particles (optional)
         if (showParticles)

@@ -94,15 +94,13 @@ class _ConversationalClarificationDialogState
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 400),
                 decoration: BoxDecoration(
-                  color: theme.dialogTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+                  ),
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.primaryColor.withValues(alpha: 0.2),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
+                  border: Border.all(color: Colors.white, width: 1),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

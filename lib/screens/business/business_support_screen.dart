@@ -20,7 +20,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
     FAQItem(
       question: 'How do inquiries work?',
       answer:
-          'When customers are interested in your products or services, they can send you an inquiry. You\'ll receive a notification and can view all inquiries in the Inquiries section. From there, you can contact them via call, WhatsApp, or message.',
+          'When customers are interested in your products or services, they can send you an inquiry. You\'ll receive a notification and can view all inquiries in the Inquiries section. From there, you can contact them via call, SingleTap, or message.',
     ),
     FAQItem(
       question: 'How do I update my business hours?',
@@ -137,8 +137,8 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                       Expanded(
                         child: _buildContactButton(
                           icon: Icons.chat_outlined,
-                          label: 'WhatsApp',
-                          onTap: () => _launchWhatsApp('+911234567890'),
+                          label: 'SingleTap',
+                          onTap: () => _launchSingleTap('+911234567890'),
                         ),
                       ),
                     ],
@@ -157,7 +157,9 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.05),
+                    color: Colors.black.withValues(
+                      alpha: isDarkMode ? 0.2 : 0.05,
+                    ),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -172,10 +174,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                   color: isDarkMode ? Colors.white12 : Colors.grey[200],
                 ),
                 itemBuilder: (context, index) {
-                  return _FAQTile(
-                    faq: _faqs[index],
-                    isDarkMode: isDarkMode,
-                  );
+                  return _FAQTile(faq: _faqs[index], isDarkMode: isDarkMode);
                 },
               ),
             ),
@@ -190,7 +189,9 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.05),
+                    color: Colors.black.withValues(
+                      alpha: isDarkMode ? 0.2 : 0.05,
+                    ),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -241,7 +242,9 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.05),
+                    color: Colors.black.withValues(
+                      alpha: isDarkMode ? 0.2 : 0.05,
+                    ),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -440,7 +443,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
     }
   }
 
-  Future<void> _launchWhatsApp(String phone) async {
+  Future<void> _launchSingleTap(String phone) async {
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri.parse('https://wa.me/$cleanPhone');
     if (await canLaunchUrl(uri)) {
@@ -473,7 +476,9 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
               decoration: InputDecoration(
                 hintText: 'Describe your issue...',
                 filled: true,
-                fillColor: isDarkMode ? const Color(0xFF1A1A2E) : Colors.grey[100],
+                fillColor: isDarkMode
+                    ? const Color(0xFF1A1A2E)
+                    : Colors.grey[100],
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -524,10 +529,7 @@ class _FAQTile extends StatefulWidget {
   final FAQItem faq;
   final bool isDarkMode;
 
-  const _FAQTile({
-    required this.faq,
-    required this.isDarkMode,
-  });
+  const _FAQTile({required this.faq, required this.isDarkMode});
 
   @override
   State<_FAQTile> createState() => _FAQTileState();

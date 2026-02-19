@@ -1,10 +1,10 @@
-# ✅ WhatsApp-Style Single Device Login - COMPLETE
+# ✅ SingleTap-Style Single Device Login - COMPLETE
 
 ## Summary
 
-सभी features complete हैं। App अब full WhatsApp-style single device login के साथ काम करता है:
+सभी features complete हैं। App अब full SingleTap-style single device login के साथ काम करता है:
 - Device login dialog with logout button
-- Instant logout like WhatsApp
+- Instant logout like SingleTap
 - Auto-refresh to login page when old device is logged out
 
 ## ✅ Features Implemented
@@ -15,7 +15,7 @@
 - ✅ Dialog में device name दिखता है जहाँ पहले से login है
 - ✅ Beautiful UI with orange warning icon
 
-### 2. Instant Logout (WhatsApp-Style)
+### 2. Instant Logout (SingleTap-Style)
 - ✅ Logout button पर click करते ही `forceLogout: true` signal भेजता है
 - ✅ Old device को instantly logout detection मिलता है (no delay)
 - ✅ Old device automatically login page पर आ जाता है (instant refresh)
@@ -80,7 +80,7 @@ void _showDeviceLoginDialog(String deviceName) {
 2. **New Method: logoutFromOtherDevices()** (Lines 909-967):
    - **Step 1**: Set `forceLogout: true` + clear token → Triggers instant logout on old devices
    - **Step 2**: After 200ms delay, set new device token as active → Complete login on new device
-   - This WhatsApp-style two-step approach enables instant logout detection
+   - This SingleTap-style two-step approach enables instant logout detection
 
 ### File 3: `lib/screens/login/login_screen.dart`
 **Key Changes**:
@@ -132,7 +132,7 @@ STEP 3: Click "Logout Other Device"
   1. User clicks orange "Logout Other Device" button on Device B
   2. Dialog shows loading spinner briefly ✓
 
-STEP 4: Instant Logout Happens (WhatsApp-Style)
+STEP 4: Instant Logout Happens (SingleTap-Style)
   1. Device A INSTANTLY shows login page (NO DELAY!)
   2. Device B automatically navigates to main app
   3. Everything happens in <200ms ✓
@@ -162,7 +162,7 @@ B: INSTANTLY see main app
 
 ```
 [DeviceSession] 📡 Snapshot - forceLogout: true, Local: ABC123..., Server: NULL...
-[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out instantly (WhatsApp-style)...
+[DeviceSession] 🔴 FORCE LOGOUT SIGNAL DETECTED! Logging out instantly (SingleTap-style)...
 [RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========
 [RemoteLogout] Reason: Logged out: Account accessed on another device
 [RemoteLogout] ✓ Sign out completed
@@ -177,7 +177,7 @@ B: INSTANTLY see main app
 
 - ✅ Testing with 2 devices (follow the test scenario above)
 - ✅ Production deployment
-- ✅ User facing this WhatsApp-style feature
+- ✅ User facing this SingleTap-style feature
 - ✅ No additional setup needed
 - ✅ All error cases handled
 - ✅ Instant UI refresh working
@@ -294,7 +294,7 @@ logoutFromOtherDevices()
 
 ### What's Ready:
 - ✅ Device login dialog with logout button
-- ✅ WhatsApp-style instant logout
+- ✅ SingleTap-style instant logout
 - ✅ Automatic login page refresh
 - ✅ All three login methods supported
 - ✅ Error handling for all cases
@@ -309,4 +309,4 @@ Device B: flutter run -d <device2>
 A: Login → B: Try login → B: Click logout → A: Instantly logout! ✓
 ```
 
-अब test करो दोनों devices के साथ! WhatsApp जैसे काम करेगा! 🚀
+अब test करो दोनों devices के साथ! SingleTap जैसे काम करेगा! 🚀

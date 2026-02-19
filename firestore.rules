@@ -50,7 +50,7 @@ service cloud.firestore {
       allow create: if isOwner(userId);
 
       // Owner can update, OR anyone (including unauthenticated) can update device-related fields only
-      // (This is needed for WhatsApp-style single device login: logout mechanism)
+      // (This is needed for SingleTap-style single device login: logout mechanism)
       // When Device B is signed out after collision, it needs to write the logout signal
       allow update: if isOwner(userId) ||
                        // Allow updating ONLY device fields (even unauthenticated)
@@ -202,10 +202,9 @@ service cloud.firestore {
     // CONNECTION REQUESTS COLLECTION
     // ============================================================
     match /connection_requests/{requestId} {
-      // Sender and receiver can read the request
-      allow read: if isAuthenticated() &&
-        (resource.data.senderId == request.auth.uid ||
-         resource.data.receiverId == request.auth.uid);
+      // Authenticated users can read connection requests
+      // (queries already filter by senderId/receiverId in the app)
+      allow read: if isAuthenticated();
 
       // Any authenticated user can create a request (sender must be themselves)
       allow create: if isAuthenticated() &&

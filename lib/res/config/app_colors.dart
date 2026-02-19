@@ -139,9 +139,9 @@ class AppColors {
   static const Color rainbowTeal = Color(0xFF00BCD4);
 
   //    SPLASH/LOGIN COLORS
-  static const Color splashDark1 = Color(0xFF1A1A2E);
-  static const Color splashDark2 = Color(0xFF16213E);
-  static const Color splashDark3 = Color(0xFF0F0F23);
+  static const Color splashDark1 = Color.fromRGBO(64, 64, 64, 1);
+  static const Color splashDark2 = Color.fromRGBO(32, 32, 32, 1);
+  static const Color splashDark3 = Color.fromRGBO(0, 0, 0, 1);
 
   //    AURORA BACKGROUND COLORS
   static const Color auroraDark1 = Color(0xFF0F0F1E);

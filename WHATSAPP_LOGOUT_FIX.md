@@ -1,4 +1,4 @@
-# WhatsApp-Style One-Device-Per-Account Logout - FIXED ✅
+# SingleTap-Style One-Device-Per-Account Logout - FIXED ✅
 
 **Commit:** d16639f - "Make dialog continuously detect token deletion - logout every device"
 **Status:** READY TO TEST
@@ -13,8 +13,8 @@
 - User B's dialog closes BUT Device B NOT logged out ❌
 - User B can still use the app (not actually logged out)
 
-**You said:** "jaise whatsapp me ek time ek hi device chal sakti hai ek id se waise hi isko bhi bnao"
-(Make it like WhatsApp where only one device can be active at a time)
+**You said:** "jaise SingleTap me ek time ek hi device chal sakti hai ek id se waise hi isko bhi bnao"
+(Make it like SingleTap where only one device can be active at a time)
 
 ---
 
@@ -38,7 +38,7 @@ Future.delayed(const Duration(milliseconds: 100)).then((_) async {
 
 ## The Fix
 
-Changed to **continuous checking every 200ms** (like WhatsApp):
+Changed to **continuous checking every 200ms** (like SingleTap):
 
 ```dart
 // NEW: Check continuously every 200ms
@@ -57,7 +57,7 @@ Timer.periodic(const Duration(milliseconds: 200), (timer) async {
 
 ---
 
-## How It Works Now (WhatsApp-Style)
+## How It Works Now (SingleTap-Style)
 
 ### Timeline:
 
@@ -82,7 +82,7 @@ Show success popup ✓              T=200ms: token exists ✓ (dialog stays)
                                    - Sign out from Firebase
                                    - Return to login screen
 
-TOTAL TIME: ~2.2 seconds (WhatsApp-style instant logout) ✅
+TOTAL TIME: ~2.2 seconds (SingleTap-style instant logout) ✅
 ```
 
 ---
@@ -123,7 +123,7 @@ flutter clean && flutter pub get && flutter build apk --release
    - Dialog closes automatically within 2-3 seconds ✅
    - Returns to login screen ✅
    - Cannot use the app anymore ✅
-   - WhatsApp-style instant logout ✅
+   - SingleTap-style instant logout ✅
 
 ---
 
@@ -134,7 +134,7 @@ flutter clean && flutter pub get && flutter build apk --release
 | Check token once | Check every 200ms |
 | Device B stuck on dialog | Dialog closes automatically |
 | User B can still use app | User B immediately logged out |
-| Not like WhatsApp | Like WhatsApp ✅ |
+| Not like SingleTap | Like SingleTap ✅ |
 
 ---
 
@@ -144,7 +144,7 @@ flutter clean && flutter pub get && flutter build apk --release
 2. **Source.server** reads fresh data from server (not cache)
 3. **When token == NULL**, Device B detects it immediately
 4. **FirebaseAuth.signOut()** actually signs out the user
-5. Only 1 device can be logged in at a time (WhatsApp-style) ✅
+5. Only 1 device can be logged in at a time (SingleTap-style) ✅
 
 ---
 

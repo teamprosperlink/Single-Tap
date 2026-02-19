@@ -149,7 +149,7 @@ adb devices
 ✅ Listener restart logic (the fix)
 ✅ Protection window (10 seconds)
 ✅ Automatic logout (Device B triggers Device A logout)
-✅ Single device login (WhatsApp-style)
+✅ Single device login (SingleTap-style)
 ✅ No user confusion (no dialog shown)
 ✅ Proper logout message (Device A gets logged out)
 
@@ -168,7 +168,7 @@ adb devices
 ## References
 
 - **Technical Details**: See `FIX_LISTENER_RESTART.md`
-- **Feature Docs**: See `WHATSAPP_STYLE_LOGOUT.md`
+- **Feature Docs**: See `SingleTap_STYLE_LOGOUT.md`
 - **Full Summary**: See `SESSION_SUMMARY_FIX_COMPLETE.md`
 
 ---

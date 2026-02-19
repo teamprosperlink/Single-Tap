@@ -110,9 +110,7 @@ class _AddPortfolioSheetState extends State<AddPortfolioSheet> {
   Future<void> _pickImages() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF2D2D44)
-          : Colors.white,
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -298,7 +296,7 @@ class _AddPortfolioSheetState extends State<AddPortfolioSheet> {
             ),
             decoration: BoxDecoration(
               color: isDarkMode
-                  ? const Color(0xFF1A1A2E).withValues(alpha: 0.95)
+                  ? const Color.fromRGBO(32, 32, 32, 1).withValues(alpha: 0.95)
                   : Colors.white.withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
@@ -727,7 +725,7 @@ class _AddPortfolioSheetState extends State<AddPortfolioSheet> {
           ),
         ),
       ),
-      dropdownColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+      dropdownColor: isDarkMode ? const Color.fromRGBO(32, 32, 32, 1) : Colors.white,
       style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
       items: [
         DropdownMenuItem<String>(
@@ -981,7 +979,7 @@ class _AddPortfolioSheetState extends State<AddPortfolioSheet> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF2D2D44)
+            ? const Color.fromRGBO(32, 32, 32, 1)
             : Colors.white,
         title: const Text('Discard Changes?'),
         content: const Text('You have unsaved changes. Are you sure you want to discard them?'),

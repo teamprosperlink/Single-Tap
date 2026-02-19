@@ -128,7 +128,7 @@ LOGIC: ✅ Listener always restarts on login
 TEST: ✅ Two emulators with same account
 
 KEY FEATURES ENABLED:
-  ✅ WhatsApp-style single device login
+  ✅ SingleTap-style single device login
   ✅ Automatic logout (no user input needed)
   ✅ No dialogs shown (instant UX)
   ✅ 10-second protection window
@@ -252,7 +252,7 @@ IMMEDIATE:
 
 EXPECTED RESULT:
   Device A will automatically log out when Device B logs in
-  with the same account, achieving WhatsApp-style behavior.
+  with the same account, achieving SingleTap-style behavior.
 
 TIMELINE:
   Build: ~2-3 minutes
@@ -292,7 +292,7 @@ TIMELINE:
    - Single device login
    - Device A automatically logs out
    - Device B shows main app instantly
-   - WhatsApp-style behavior
+   - SingleTap-style behavior
 
 ================================================================================
                          SUMMARY
@@ -303,14 +303,14 @@ restarts when a user logs in, even if the UID is the same. This enables
 Device A to detect when Device B logs in with the same account and receive
 the forceLogout signal, triggering an automatic logout.
 
-This completes the WhatsApp-style single device login implementation where:
+This completes the SingleTap-style single device login implementation where:
 1. Device B logs in
 2. Device A automatically receives logout signal
 3. Device A immediately logs out (shows login screen)
 4. Device B shows main app screen
 5. Only Device B has access
 
-NO DIALOG, NO USER INPUT, JUST LIKE WHATSAPP.
+NO DIALOG, NO USER INPUT, JUST LIKE SingleTap.
 
 STATUS: 🚀 READY FOR TESTING
 

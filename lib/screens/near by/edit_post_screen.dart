@@ -1001,7 +1001,10 @@ class _EditPostScreenState extends State<EditPostScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Text(
                           '${currency['symbol']} ${currency['code']}',
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     );

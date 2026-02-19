@@ -3,7 +3,7 @@
 ## Changes Made
 
 ### **What Was Changed:**
-Modified `lib/screens/call/video_call_screen.dart` to display fullscreen camera during the calling/ringing phase, matching WhatsApp behavior exactly.
+Modified `lib/screens/call/video_call_screen.dart` to display fullscreen camera during the calling/ringing phase, matching SingleTap behavior exactly.
 
 ---
 
@@ -309,9 +309,9 @@ Emulator cannot test camera functionality.
 
 ---
 
-## Comparison with WhatsApp
+## Comparison with SingleTap
 
-| Feature | WhatsApp | Supper (Now) |
+| Feature | SingleTap | Supper (Now) |
 |---------|----------|------------|
 | Camera before connection | Fullscreen, live feed | ✅ Fullscreen, live feed |
 | Other person info | Overlay on camera | ✅ Avatar + name + status |
@@ -338,7 +338,7 @@ Emulator cannot test camera functionality.
 
 ## Summary
 
-✅ **Video call now matches WhatsApp behavior**
+✅ **Video call now matches SingleTap behavior**
 ✅ **Fullscreen local camera while calling/ringing**
 ✅ **Fullscreen remote camera when connected**
 ✅ **Picture-in-Picture local camera in connected state**
@@ -373,5 +373,5 @@ Emulator cannot test camera functionality.
 
 ---
 
-**The video calling feature now works exactly like WhatsApp! 🎉**
+**The video calling feature now works exactly like SingleTap! 🎉**
 

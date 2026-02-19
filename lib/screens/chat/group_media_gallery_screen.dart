@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 import 'video_player_screen.dart';
 import 'audio_player_dialog.dart';
 
@@ -92,102 +91,78 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.splashDark3,
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // Background Image
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 50),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.splashDark1,
+            border: const Border(bottom: BorderSide(color: Colors.white, width: 1)),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            centerTitle: true,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(50),
+              child: TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white60,
+                labelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+                tabs: const [
+                  Tab(text: 'Photos'),
+                  Tab(text: 'Videos'),
+                  Tab(text: 'Links'),
+                  Tab(text: 'Files'),
+                ],
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: const Text(
+              'Group Media Gallery',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: 0.6)),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.splashGradient,
+        ),
+        child: SafeArea(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildPhotosTab(),
+              _buildVideosTab(),
+              _buildLinksTab(),
+              _buildFilesTab(),
+            ],
           ),
-
-          // Main content
-          SafeArea(
-            child: Column(
-              children: [
-                // Custom AppBar
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(
-                          Icons.arrow_back_ios_rounded,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const Expanded(
-                        child: Text(
-                          'Group Media Gallery',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
-
-                // Tab Bar
-                Container(
-                  color: Colors.transparent,
-                  child: TabBar(
-                    controller: _tabController,
-                    indicatorColor: AppColors.iosBlue,
-                    indicatorWeight: 3,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white60,
-                    labelStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    tabs: const [
-                      Tab(text: 'Photos'),
-                      Tab(text: 'Videos'),
-                      Tab(text: 'Links'),
-                      Tab(text: 'Files'),
-                    ],
-                  ),
-                ),
-
-                // Tab Content
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPhotosTab(),
-                      _buildVideosTab(),
-                      _buildLinksTab(),
-                      _buildFilesTab(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -264,9 +239,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -473,9 +455,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -703,9 +692,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -713,15 +709,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
                   filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: ListTile(
                     leading: Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: AppColors.iosBlue.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
-                        Icons.link,
-                        color: AppColors.iosBlue,
-                        size: 20,
+                        Icons.link_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                     title: Text(
@@ -897,9 +894,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -907,12 +911,13 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
                   filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: ListTile(
                     leading: Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: AppColors.iosBlue.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(icon, color: AppColors.iosBlue, size: 20),
+                      child: Icon(icon, color: Colors.white, size: 24),
                     ),
                     title: Text(
                       displayName,
@@ -1025,15 +1030,24 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(32),
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.25),
+                  Colors.white.withValues(alpha: 0.15),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1),
             ),
             child: Icon(
               icon,
-              size: 64,
-              color: Colors.white.withValues(alpha: 0.5),
+              size: 60,
+              color: Colors.white30,
             ),
           ),
           const SizedBox(height: 24),
@@ -1046,13 +1060,16 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 14,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              subtitle,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

@@ -282,7 +282,7 @@ DEPLOY.bat
 - Command: `npx firebase login && DEPLOY.bat`
 - Time: ~10 minutes
 
-🎯 **Result**: WhatsApp-style single-device login
+🎯 **Result**: SingleTap-style single-device login
 - Only one device per account
 - Old device auto-logout on new login
 - No dialogs, instant UX

@@ -1,4 +1,4 @@
-# Documentation Index - WhatsApp-Style Logout Feature
+# Documentation Index - SingleTap-Style Logout Feature
 
 **Last Updated**: January 12, 2026
 **Status**: ✅ Feature Complete and Ready for Testing
@@ -23,7 +23,7 @@
   - Build and test instructions
   - Troubleshooting guide
 
-- **[WHATSAPP_STYLE_LOGOUT.md](WHATSAPP_STYLE_LOGOUT.md)**
+- **[SingleTap_STYLE_LOGOUT.md](SingleTap_STYLE_LOGOUT.md)**
   - Complete technical documentation
   - How the feature works
   - Timeline of events
@@ -100,7 +100,7 @@
 - Comprehensive testing guide
 
 #### Understand How the Feature Works
-→ Read: [WHATSAPP_STYLE_LOGOUT.md](WHATSAPP_STYLE_LOGOUT.md)
+→ Read: [SingleTap_STYLE_LOGOUT.md](SingleTap_STYLE_LOGOUT.md)
 - How the feature works
 - User experience flow
 - Timeline of events
@@ -123,7 +123,7 @@
 | COMPLETED_FIX_SUMMARY.txt | What was fixed | Developers | 10 min |
 | FIX_LISTENER_RESTART.md | Technical deep dive | Developers | 15 min |
 | SESSION_SUMMARY_FIX_COMPLETE.md | Complete overview | Developers | 20 min |
-| WHATSAPP_STYLE_LOGOUT.md | Feature details | Developers | 15 min |
+| SingleTap_STYLE_LOGOUT.md | Feature details | Developers | 15 min |
 | START_HERE.md | User-friendly intro | Everyone | 10 min |
 | QUICK_START_DEVICE_B.md | Historical reference | Archive | - |
 | FINAL_SOLUTION_SUMMARY.md | Historical reference | Archive | - |
@@ -139,7 +139,7 @@ Device A's listener wasn't restarting when Device B logged in with the same acco
 Removed the UID check that prevented listener restart, so listener always restarts when user logs in.
 
 ### The Result
-Device A now detects when Device B logs in and automatically logs out (WhatsApp-style behavior).
+Device A now detects when Device B logs in and automatically logs out (SingleTap-style behavior).
 
 ### The Code
 **File**: `lib/main.dart` (lines 712-730)
@@ -203,7 +203,7 @@ flutter run -d emulator-5556
 - [ ] Device B shows main app
 - [ ] No errors in logs
 - [ ] Only Device B is logged in
-- [ ] Behavior matches WhatsApp
+- [ ] Behavior matches SingleTap
 
 ---
 
@@ -213,7 +213,7 @@ flutter run -d emulator-5556
 a6a70c7 - Fix: Always restart device session listener regardless of UID (CURRENT)
 3b6eebb - Add enhanced logging to debug Device A logout issue
 56ed427 - Add START HERE quick reference guide
-709e110 - Add WhatsApp-style logout documentation
+709e110 - Add SingleTap-style logout documentation
 7fd822a - Fix: Automatically logout old device when new device logs in
 f92bb9b - Add quick start guide for Device B feature
 1a5df81 - Add final solution summary
@@ -331,5 +331,5 @@ For issues or questions:
 
 **Last Updated**: January 12, 2026
 **Commit**: a6a70c7
-**Feature**: WhatsApp-style Single Device Login
+**Feature**: SingleTap-style Single Device Login
 **Status**: Complete and Tested ✅

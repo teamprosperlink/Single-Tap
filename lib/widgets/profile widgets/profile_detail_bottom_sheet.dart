@@ -81,7 +81,7 @@ class _ProfileDetailBottomSheetState extends State<ProfileDetailBottomSheet>
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             // Subtle border for the entire card
             border: Border.all(

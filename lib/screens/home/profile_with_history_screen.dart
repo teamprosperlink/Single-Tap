@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
@@ -910,7 +910,7 @@ class _ProfileWithHistoryScreenState
                                 ),
                               ),
                               subtitle: Text(
-                                'Share Supper with friends',
+                                'Share SingleTap with friends',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 14,
@@ -923,8 +923,8 @@ class _ProfileWithHistoryScreenState
                               ),
                               onTap: () {
                                 Share.share(
-                                  'Check out Supper - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
-                                  subject: 'Join me on Supper!',
+                                  'Check out SingleTap - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
+                                  subject: 'Join me on SingleTap!',
                                 );
                               },
                             ),

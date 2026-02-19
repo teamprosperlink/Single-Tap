@@ -101,7 +101,7 @@ flutter run -d emulator-5556
 ✓ Logged out completely
 ```
 
-**Status**: ✅ WhatsApp-style automatic logout working!
+**Status**: ✅ SingleTap-style automatic logout working!
 
 ---
 
@@ -228,7 +228,7 @@ npx firebase login && npx firebase deploy
 When complete:
 - ✅ Old device automatically logs out
 - ✅ New device automatically enters app
-- ✅ WhatsApp-style behavior
+- ✅ SingleTap-style behavior
 - ✅ No dialogs, no user input needed
 - ✅ Professional UX
 

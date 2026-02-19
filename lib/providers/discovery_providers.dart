@@ -217,7 +217,7 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
           messages: [
             ConversationMessage(
               text:
-                  'Hi! I\'m your Supper assistant. What would you like to find today?',
+                  'Hi! I\'m your SingleTap assistant. What would you like to find today?',
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -251,7 +251,7 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
       messages: [
         ConversationMessage(
           text:
-              'Hi! I\'m your Supper assistant. What would you like to find today?',
+              'Hi! I\'m your SingleTap assistant. What would you like to find today?',
           isUser: false,
           timestamp: DateTime.now(),
         ),

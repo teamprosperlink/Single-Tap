@@ -59,7 +59,7 @@ flutter clean && flutter pub get && flutter build apk --release
 ✅ Device A clicks button
 ✅ Device B auto-logout within 2-3 seconds
 ✅ Both devices logged out
-✅ WhatsApp-style behavior
+✅ SingleTap-style behavior
 
 ---
 

@@ -66,27 +66,6 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // Image Background
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.splashGradient,
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Dark overlay
-          Positioned.fill(
-            child: Container(
-              color: AppColors.darkOverlay(),
-            ),
-          ),
 
           // Background circular elements with glassmorphism
           CustomPaint(

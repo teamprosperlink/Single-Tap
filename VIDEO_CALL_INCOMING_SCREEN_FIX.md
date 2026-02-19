@@ -1,7 +1,7 @@
-# Video Call Incoming Screen Fix - WhatsApp Style
+# Video Call Incoming Screen Fix - SingleTap Style
 
 ## Problem Statement
-Jab user video call receive karta tha, toh directly `VideoCallScreen` open ho jaata tha jisme apna local camera dikhta tha. Proper WhatsApp-style incoming call screen nahi tha jisme caller ka photo aur naam dikhta hai.
+Jab user video call receive karta tha, toh directly `VideoCallScreen` open ho jaata tha jisme apna local camera dikhta tha. Proper SingleTap-style incoming call screen nahi tha jisme caller ka photo aur naam dikhta hai.
 
 ## Solution Implemented
 
@@ -9,7 +9,7 @@ Jab user video call receive karta tha, toh directly `VideoCallScreen` open ho ja
 Location: `lib/screens/call/incoming_video_call_screen.dart`
 
 **Features:**
-- ✅ WhatsApp-style dark gradient background with blur effect
+- ✅ SingleTap-style dark gradient background with blur effect
 - ✅ Large caller avatar with green pulse animation
 - ✅ Caller's name displayed prominently
 - ✅ Video call icon indication
@@ -20,7 +20,7 @@ Location: `lib/screens/call/incoming_video_call_screen.dart`
 - ✅ Automatic navigation to `VideoCallScreen` on accept
 - ✅ Call rejection handling
 
-**UI Design (WhatsApp-inspired):**
+**UI Design (SingleTap-inspired):**
 ```
 ┌─────────────────────────┐
 │  Incoming video call    │ ← Top status text
@@ -132,8 +132,8 @@ void _showIncomingCall({
 - Dynamically shows appropriate incoming screen
 - Supports both `'audio'` and `'video'` call types
 
-### 2. **WhatsApp-Style UI**
-- Dark gradient background (similar to WhatsApp)
+### 2. **SingleTap-Style UI**
+- Dark gradient background (similar to SingleTap)
 - Large animated caller avatar with green pulse effect
 - Clean, modern button design
 - Proper spacing and typography
@@ -237,9 +237,9 @@ await _firestore.collection('calls').doc(callId).set({
 - Flag reset via `onCallAccepted` callback
 - Prevents duplicate call screens
 
-## WhatsApp Comparison
+## SingleTap Comparison
 
-| Feature | WhatsApp | Our Implementation |
+| Feature | SingleTap | Our Implementation |
 |---------|----------|-------------------|
 | Incoming screen | ✅ Dark with caller photo | ✅ Dark gradient with photo |
 | Ringtone | ✅ Plays automatically | ✅ Native ringtone |
@@ -263,7 +263,7 @@ await _firestore.collection('calls').doc(callId).set({
 
 ## Conclusion
 
-Ab video call receive karne par proper WhatsApp-style screen dikhta hai jisme:
+Ab video call receive karne par proper SingleTap-style screen dikhta hai jisme:
 - ✅ Caller ka photo/avatar dikhta hai
 - ✅ Caller ka naam dikhta hai
 - ✅ Video call indicator hai
@@ -271,4 +271,4 @@ Ab video call receive karne par proper WhatsApp-style screen dikhta hai jisme:
 - ✅ Ringtone aur vibration properly work karta hai
 - ✅ Accept karne par caller ka face video call screen mein dikhta hai
 
-Yeh implementation WhatsApp ke jaise professional aur user-friendly hai! 🎉
+Yeh implementation SingleTap ke jaise professional aur user-friendly hai! 🎉

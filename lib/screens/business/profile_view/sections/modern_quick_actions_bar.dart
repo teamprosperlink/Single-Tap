@@ -56,11 +56,7 @@ class ModernQuickActionsBar extends StatelessWidget {
           if (actions.isNotEmpty)
             Expanded(
               flex: 2,
-              child: _buildPrimaryAction(
-                context,
-                actions.first,
-                isDarkMode,
-              ),
+              child: _buildPrimaryAction(context, actions.first, isDarkMode),
             ),
 
           // Secondary actions (remaining actions)
@@ -69,11 +65,7 @@ class ModernQuickActionsBar extends StatelessWidget {
             ...actions.skip(1).map((action) {
               return Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: _buildSecondaryAction(
-                  context,
-                  action,
-                  isDarkMode,
-                ),
+                child: _buildSecondaryAction(context, action, isDarkMode),
               );
             }),
           ],
@@ -101,10 +93,7 @@ class ModernQuickActionsBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                buttonColor,
-                buttonColor.withValues(alpha: 0.8),
-              ],
+              colors: [buttonColor, buttonColor.withValues(alpha: 0.8)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -120,11 +109,7 @@ class ModernQuickActionsBar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                action.icon,
-                color: Colors.white,
-                size: 22,
-              ),
+              Icon(action.icon, color: Colors.white, size: 22),
               const SizedBox(width: 10),
               Text(
                 action.label,
@@ -168,11 +153,7 @@ class ModernQuickActionsBar extends StatelessWidget {
               width: 1.5,
             ),
           ),
-          child: Icon(
-            action.icon,
-            color: buttonColor,
-            size: 24,
-          ),
+          child: Icon(action.icon, color: buttonColor, size: 24),
         ),
       ),
     );
@@ -183,8 +164,8 @@ class ModernQuickActionsBar extends StatelessWidget {
       case QuickActionType.call:
         _makeCall();
         break;
-      case QuickActionType.whatsapp:
-        _sendWhatsApp();
+      case QuickActionType.SingleTap:
+        _sendSingleTap();
         break;
       case QuickActionType.message:
         _openInAppChat(context);
@@ -237,13 +218,15 @@ class ModernQuickActionsBar extends StatelessWidget {
     }
   }
 
-  void _sendWhatsApp() async {
-    if (business.contact.whatsapp != null && business.contact.whatsapp!.isNotEmpty) {
-      final uri = Uri.parse('https://wa.me/${business.contact.whatsapp}');
+  void _sendSingleTap() async {
+    if (business.contact.SingleTap != null &&
+        business.contact.SingleTap!.isNotEmpty) {
+      final uri = Uri.parse('https://wa.me/${business.contact.SingleTap}');
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
-    } else if (business.contact.phone != null && business.contact.phone!.isNotEmpty) {
+    } else if (business.contact.phone != null &&
+        business.contact.phone!.isNotEmpty) {
       final uri = Uri.parse('https://wa.me/${business.contact.phone}');
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -261,7 +244,8 @@ class ModernQuickActionsBar extends StatelessWidget {
   }
 
   void _openMap() async {
-    if (business.address?.latitude != null && business.address?.longitude != null) {
+    if (business.address?.latitude != null &&
+        business.address?.longitude != null) {
       final uri = Uri.parse(
         'https://www.google.com/maps/search/?api=1&query=${business.address?.latitude},${business.address?.longitude}',
       );
@@ -272,7 +256,8 @@ class ModernQuickActionsBar extends StatelessWidget {
   }
 
   void _openWebsite() async {
-    if (business.contact.website != null && business.contact.website!.isNotEmpty) {
+    if (business.contact.website != null &&
+        business.contact.website!.isNotEmpty) {
       final uri = Uri.parse(business.contact.website!);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);

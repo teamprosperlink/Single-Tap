@@ -37,7 +37,7 @@ Total : 256 files,  87971 codes, 4355 comments, 9579 blanks, all 101905 lines
 | [UX\_IMPROVEMENTS\_GLOBAL\_LAUNCH.md](/UX_IMPROVEMENTS_GLOBAL_LAUNCH.md) | Markdown | 290 | 0 | 87 | 377 |
 | [VERIFICATION\_REPORT.md](/VERIFICATION_REPORT.md) | Markdown | 225 | 0 | 71 | 296 |
 | [VERSION.md](/VERSION.md) | Markdown | 100 | 0 | 26 | 126 |
-| [WHATSAPP\_IMPROVEMENTS\_ANALYSIS.md](/WHATSAPP_IMPROVEMENTS_ANALYSIS.md) | Markdown | 593 | 0 | 151 | 744 |
+| [SingleTap\_IMPROVEMENTS\_ANALYSIS.md](/SingleTap_IMPROVEMENTS_ANALYSIS.md) | Markdown | 593 | 0 | 151 | 744 |
 | [WORKING\_FEATURES.md](/WORKING_FEATURES.md) | Markdown | 347 | 0 | 87 | 434 |
 | [analysis\_options.yaml](/analysis_options.yaml) | YAML | 3 | 22 | 4 | 29 |
 | [android/app/google-services.json](/android/app/google-services.json) | JSON | 56 | 0 | 0 | 56 |

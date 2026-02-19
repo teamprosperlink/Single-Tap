@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Services
-import '../services/location services/gemini_service.dart';
-import '../services/location services/location_service.dart';
+import '../services/location_services/gemini_service.dart';
+import '../services/location_services/location_service.dart';
 import '../services/connection_service.dart';
-import '../services/chat services/conversation_service.dart';
+import '../services/chat_services/conversation_service.dart';
 import '../services/unified_post_service.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';

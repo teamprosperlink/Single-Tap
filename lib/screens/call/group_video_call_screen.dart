@@ -2,16 +2,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../res/config/app_colors.dart';
 import '../../widgets/safe_circle_avatar.dart';
 import '../../services/other services/group_video_call_service.dart';
 
-/// WhatsApp-style Group Video Call Screen
+/// SingleTap-style Group Video Call Screen
 /// Supports up to 8 participants with grid layout
 class GroupVideoCallScreen extends StatefulWidget {
   final String callId;
   final String userId;
   final String userName;
-  final List<Map<String, dynamic>> participants; // List of {userId, name, photoUrl}
+  final List<Map<String, dynamic>>
+  participants; // List of {userId, name, photoUrl}
 
   const GroupVideoCallScreen({
     super.key,
@@ -73,7 +75,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
   void _setupGroupVideoService() {
     _groupVideoService.onParticipantJoined = (participantId, participantName) {
       if (mounted) {
-        debugPrint('  GroupVideoCallScreen: Participant joined: $participantName');
+        debugPrint(
+          '  GroupVideoCallScreen: Participant joined: $participantName',
+        );
         setState(() {
           _participantVideoStatus[participantId] = false;
         });
@@ -91,7 +95,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
 
     _groupVideoService.onRemoteStreamReady = (participantId) {
       if (mounted) {
-        debugPrint('  GroupVideoCallScreen: Remote stream ready for $participantId');
+        debugPrint(
+          '  GroupVideoCallScreen: Remote stream ready for $participantId',
+        );
         setState(() {
           _participantVideoStatus[participantId] = true;
         });
@@ -119,7 +125,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
   }
 
   void _joinCall() {
-    _groupVideoService.joinGroupCall(widget.callId, widget.userId).then((success) {
+    _groupVideoService.joinGroupCall(widget.callId, widget.userId).then((
+      success,
+    ) {
       if (!success && mounted) {
         _endCall();
       }
@@ -219,10 +227,10 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.splashDark3,
         body: Stack(
           children: [
-            // Grid layout for video feeds (WhatsApp style)
+            // Grid layout for video feeds (SingleTap style)
             Positioned.fill(
               child: _buildVideoGrid(totalParticipants, remoteRenderers),
             ),
@@ -244,7 +252,10 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                       ],
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -309,7 +320,10 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                       ],
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 30,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -318,7 +332,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildControlButton(
-                            icon: _isVideoEnabled ? Icons.videocam : Icons.videocam_off,
+                            icon: _isVideoEnabled
+                                ? Icons.videocam
+                                : Icons.videocam_off,
                             onPressed: _toggleVideo,
                             isActive: _isVideoEnabled,
                           ),
@@ -333,7 +349,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                             isActive: !_isMuted,
                           ),
                           _buildControlButton(
-                            icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_down,
+                            icon: _isSpeakerOn
+                                ? Icons.volume_up
+                                : Icons.volume_down,
                             onPressed: _toggleSpeaker,
                             isActive: _isSpeakerOn,
                           ),
@@ -351,7 +369,9 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFFF3B30).withValues(alpha: 0.5),
+                                color: const Color(
+                                  0xFFFF3B30,
+                                ).withValues(alpha: 0.5),
                                 blurRadius: 20,
                                 spreadRadius: 3,
                               ),
@@ -375,8 +395,11 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
     );
   }
 
-  /// Build video grid layout (WhatsApp style)
-  Widget _buildVideoGrid(int participantCount, Map<String, RTCVideoRenderer> remoteRenderers) {
+  /// Build video grid layout (SingleTap style)
+  Widget _buildVideoGrid(
+    int participantCount,
+    Map<String, RTCVideoRenderer> remoteRenderers,
+  ) {
     // Create list of all video tiles (local + remote)
     final List<Widget> videoTiles = [];
 
@@ -390,13 +413,15 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
       final hasVideo = _participantVideoStatus[participantId] ?? false;
       final info = _participantInfo[participantId];
 
-      videoTiles.add(_buildRemoteVideoTile(
-        renderer: renderer,
-        participantId: participantId,
-        participantName: info?['name'] ?? 'Unknown',
-        participantPhotoUrl: info?['photoUrl'],
-        hasVideo: hasVideo,
-      ));
+      videoTiles.add(
+        _buildRemoteVideoTile(
+          renderer: renderer,
+          participantId: participantId,
+          participantName: info?['name'] ?? 'Unknown',
+          participantPhotoUrl: info?['photoUrl'],
+          hasVideo: hasVideo,
+        ),
+      );
     }
 
     // Determine grid layout based on participant count
@@ -508,11 +533,7 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                   color: Colors.red.withValues(alpha: 0.8),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.mic_off,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                child: const Icon(Icons.mic_off, color: Colors.white, size: 16),
               ),
             ),
         ],
@@ -558,10 +579,7 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
                   const SizedBox(height: 8),
                   Text(
                     participantName,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
@@ -618,11 +636,7 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
             ),
           ],
         ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 26,
-        ),
+        child: Icon(icon, color: Colors.white, size: 26),
       ),
     );
   }

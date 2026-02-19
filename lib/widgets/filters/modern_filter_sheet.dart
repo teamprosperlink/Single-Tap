@@ -93,7 +93,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
               decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                color: const Color.fromRGBO(32, 32, 32, 1),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -168,7 +168,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
               decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                color: const Color.fromRGBO(32, 32, 32, 1),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -240,7 +240,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
               decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                color: const Color.fromRGBO(32, 32, 32, 1),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -593,7 +593,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: ['Dating', 'Friendship', 'Business', 'Networking', 'Roommate', 'Travel Buddy'].map((type) {
+                    children: ['Dating', 'Friendship', 'Networking', 'Career Advice', 'Mentorship', 'Travel Buddy'].map((type) {
                       final isSelected = _selectedConnectionTypes.contains(type);
                       return GestureDetector(
                         onTap: () {

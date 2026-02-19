@@ -1,11 +1,11 @@
-# Group Audio Call Implementation - WhatsApp Style
+# Group Audio Call Implementation - SingleTap Style
 
 ## Overview
-Full WhatsApp-style group audio calling functionality has been implemented with the following features:
+Full SingleTap-style group audio calling functionality has been implemented with the following features:
 
 ### ✅ Implemented Features
 
-1. **WhatsApp-Style Call Messages**
+1. **SingleTap-Style Call Messages**
    - Call messages positioned on RIGHT side for caller
    - Call messages positioned on LEFT side for other members
    - Caller name displayed above call info for non-callers
@@ -13,7 +13,7 @@ Full WhatsApp-style group audio calling functionality has been implemented with 
    - Icons indicate outgoing/incoming/missed calls
 
 2. **Full-Screen Call Notifications**
-   - WhatsApp-style CallKit incoming call UI
+   - SingleTap-style CallKit incoming call UI
    - Works in foreground mode (when app is active)
    - Shows caller name, group name, and avatar
    - Accept/Decline buttons
@@ -36,7 +36,7 @@ Full WhatsApp-style group audio calling functionality has been implemented with 
    - Automatic system message creation
    - Updates with final call duration when call ends
    - Shows participant count
-   - WhatsApp-style formatting and positioning
+   - SingleTap-style formatting and positioning
 
 ## 🔧 Technical Implementation
 
@@ -45,7 +45,7 @@ Full WhatsApp-style group audio calling functionality has been implemented with 
 1. **lib/screens/chat/group_chat_screen.dart**
    - Added participant subcollection initialization
    - Implemented client-side notification fallback
-   - WhatsApp-style call message positioning
+   - SingleTap-style call message positioning
    - Added `groupName` to call document
 
 2. **lib/services/notification_service.dart**
@@ -161,7 +161,7 @@ Your Firebase project is on the **Spark (free) plan**, which does NOT support Cl
 
 ## 🎨 UI Features
 
-### Call Message Positioning (WhatsApp Style)
+### Call Message Positioning (SingleTap Style)
 
 **For Caller:**
 ```

@@ -102,7 +102,7 @@ For Complete Details:
   → DOCUMENTATION_INDEX_LOGOUT_FIX.md
 
 For Feature Overview:
-  → WHATSAPP_STYLE_LOGOUT.md
+  → SingleTap_STYLE_LOGOUT.md
   → START_HERE.md
 
 ================================================================================
@@ -127,7 +127,7 @@ Explanation:
 Impact:
   - Device A now ALWAYS detects when Device B logs in
   - Device A can receive and process forceLogout signal
-  - WhatsApp-style automatic logout now works correctly
+  - SingleTap-style automatic logout now works correctly
 
 ================================================================================
                           VERIFICATION
@@ -157,7 +157,7 @@ What Works:
   ✅ Device B shows main app
   ✅ Single device login achieved
   ✅ No dialogs shown
-  ✅ Automatic behavior (like WhatsApp)
+  ✅ Automatic behavior (like SingleTap)
 
 What's Protected:
   ✅ 10-second protection window (prevents Device B self-logout)
@@ -170,7 +170,7 @@ What's New:
   ✅ Listener always restarts on login
   ✅ Device A detects same-UID logins
   ✅ Automatic logout flow works
-  ✅ WhatsApp-style behavior enabled
+  ✅ SingleTap-style behavior enabled
 
 ================================================================================
                            NEXT STEPS
@@ -197,7 +197,7 @@ What's New:
    - Device A: "FORCE LOGOUT SIGNAL DETECTED" ✓
 
 6. CELEBRATE:
-   🎉 WhatsApp-style single device login is working!
+   🎉 SingleTap-style single device login is working!
 
 ================================================================================
                             SUMMARY
@@ -212,6 +212,6 @@ Time to fix: ~1 hour
 Time to test: ~5-10 minutes
 Ready to deploy: When testing confirms expected behavior
 
-🚀 READY TO TEST THE WHATSAPP-STYLE LOGOUT FEATURE!
+🚀 READY TO TEST THE SingleTap-STYLE LOGOUT FEATURE!
 
 ================================================================================

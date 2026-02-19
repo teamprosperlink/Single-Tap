@@ -174,14 +174,6 @@ class MatchCardWithActions extends StatelessWidget {
     );
   }
 
-  // ignore: unused_element
-  Color _getScoreColor(double score) {
-    if (score >= 0.9) return Colors.green;
-    if (score >= 0.8) return Colors.teal;
-    if (score >= 0.7) return Colors.orange;
-    return Colors.grey;
-  }
-
   Future<void> _startChat(BuildContext context) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;

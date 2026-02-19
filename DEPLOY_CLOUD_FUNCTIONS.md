@@ -172,7 +172,7 @@ Solution:
 **Device B logs should show**:
 ```
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 If you see "Cloud Function error" instead, check:
@@ -317,4 +317,4 @@ If deployment fails:
 
 **Status**: 🚀 Ready to deploy
 
-Execute the commands above to enable the WhatsApp-style logout feature!
+Execute the commands above to enable the SingleTap-style logout feature!

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../res/config/app_colors.dart';
+
 
 class LinkPreviewDialog extends StatelessWidget {
   final String url;
@@ -66,12 +66,21 @@ class LinkPreviewDialog extends StatelessWidget {
     final domain = _getDomainFromUrl(url);
 
     return Dialog(
-      backgroundColor: isDarkMode ? const Color(0xFF1A2B3D) : Colors.white,
+      backgroundColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 1),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -107,7 +116,7 @@ class LinkPreviewDialog extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.iosBlue.withValues(alpha: 0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -116,12 +125,12 @@ class LinkPreviewDialog extends StatelessWidget {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: AppColors.iosBlue.withValues(alpha: 0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.link_rounded,
-                      color: AppColors.iosBlue,
+                      color: Colors.white,
                       size: 40,
                     ),
                   ),
@@ -146,7 +155,7 @@ class LinkPreviewDialog extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF0A1828) : const Color(0xFFF0F2F5),
+                color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -155,7 +164,7 @@ class LinkPreviewDialog extends StatelessWidget {
                     child: Text(
                       url,
                       style: TextStyle(
-                        color: AppColors.iosBlue,
+                        color: Colors.white70,
                         fontSize: 13,
                       ),
                       maxLines: 3,
@@ -178,7 +187,7 @@ class LinkPreviewDialog extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF0A1828) : const Color(0xFFF0F2F5),
+                  color: Colors.white.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -228,8 +237,8 @@ class LinkPreviewDialog extends StatelessWidget {
                       icon: const Icon(Icons.open_in_new, size: 18),
                       label: const Text('Open Link'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.iosBlue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),

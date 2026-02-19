@@ -103,7 +103,7 @@ Look for these log patterns:
 
 **Option A - Cloud Function Success** ✅:
 ```
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 **Option B - Cloud Function Fails** (shows fallback):

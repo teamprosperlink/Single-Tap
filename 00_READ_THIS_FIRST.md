@@ -24,7 +24,7 @@ Translation: Whenever any device logs in with same credentials, the old device m
 - Device A shows login screen within 1-2 seconds ✅
 
 ### How Many Devices?
-- ✅ WhatsApp-style: Only ONE device can be logged in at a time
+- ✅ SingleTap-style: Only ONE device can be logged in at a time
 - Any new login = Old device logs out automatically
 - Works when online: < 1-2 seconds
 - Works when offline: < 2-3 seconds after reconnecting
@@ -131,7 +131,7 @@ T0:09  Device A: Logs out automatically ✅
 - ✅ Automatic - user doesn't do anything on Device A
 - ✅ Fast - happens within 1-2 seconds
 - ✅ Reliable - works online and offline
-- ✅ WhatsApp-style - only one device at a time
+- ✅ SingleTap-style - only one device at a time
 
 ---
 
@@ -227,8 +227,8 @@ A: System has 2-second margin for clock skew. Offline devices detected on reconn
 **Q: What about stale sessions?**
 A: Auto-cleanup after 5 minutes of inactivity. Prevents stuck sessions.
 
-**Q: Is this like WhatsApp?**
-A: Yes, exactly like WhatsApp single device login. Only one device at a time.
+**Q: Is this like SingleTap?**
+A: Yes, exactly like SingleTap single device login. Only one device at a time.
 
 ---
 

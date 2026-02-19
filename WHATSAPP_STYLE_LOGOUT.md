@@ -1,4 +1,4 @@
-# WhatsApp-Style Single Device Login - Automatic Logout
+# SingleTap-Style Single Device Login - Automatic Logout
 
 **Status**: ✅ **COMPLETE AND COMMITTED**
 **Date**: January 12, 2026
@@ -8,7 +8,7 @@
 
 ## The Feature
 
-**Exactly like WhatsApp:**
+**Exactly like SingleTap:**
 - Device A: User is logged in and using the app
 - Device B: User logs in with same account
 - **Automatic**: Device A immediately logs out (no dialog, no confirmation needed)
@@ -191,7 +191,7 @@ Ready to login again if needed ✓
 ✅ **Instant**: Single device login achieved in ~3.5 seconds
 ✅ **Clean**: Old device cleanly logs out
 ✅ **Safe**: Device sessions properly managed in Firestore
-✅ **WhatsApp-Style**: Exactly like WhatsApp's behavior
+✅ **SingleTap-Style**: Exactly like SingleTap's behavior
 ✅ **Protected**: 10-second listener protection window active
 
 ---
@@ -224,7 +224,7 @@ Ready to login again if needed ✓
 | 6 | Logs out | Navigating to app | - |
 | 7 | Login screen | Main app | - |
 
-**User Experience**: Instant, automatic, like WhatsApp ✓
+**User Experience**: Instant, automatic, like SingleTap ✓
 
 ---
 
@@ -288,7 +288,7 @@ Device A should show:
 
 ```
 Commit: 7fd822a
-Message: Fix: Automatically logout old device when new device logs in (WhatsApp-style)
+Message: Fix: Automatically logout old device when new device logs in (SingleTap-style)
 
 Files Changed:
 - lib/screens/login/login_screen.dart (replace dialog with automatic logout)
@@ -312,7 +312,7 @@ Files Changed:
 - ✅ New device logs in
 - ✅ Old device automatically logs out (no dialog)
 - ✅ New device automatically goes to main app (no waiting)
-- ✅ Perfect WhatsApp-style behavior
+- ✅ Perfect SingleTap-style behavior
 - ✅ No user confusion
 
 **What Changed**:
@@ -344,4 +344,4 @@ Files Changed:
 
 ---
 
-**This is exactly like WhatsApp. When you login on a new phone, the old phone automatically logs out.** ✓
+**This is exactly like SingleTap. When you login on a new phone, the old phone automatically logs out.** ✓

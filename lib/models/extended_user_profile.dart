@@ -56,6 +56,10 @@ class ExtendedUserProfile {
   final VerificationStatus verificationStatus;
   final String? businessName; // For Professional/Business accounts
   final String? category; // Professional category or Business industry
+  final String? occupation; // User's profession/job title
+  final String? networkingCategory; // Networking category (Professional, Business, etc.)
+  final String? networkingSubcategory; // Subcategory within the networking category
+  final Map<String, String> categoryFilters; // Category-specific filter values (e.g., Experience Level, Employment Type, etc.)
 
   // Calculated field
   double? distance; // Will be calculated based on current user's location
@@ -87,6 +91,10 @@ class ExtendedUserProfile {
     this.verificationStatus = VerificationStatus.none,
     this.businessName,
     this.category,
+    this.occupation,
+    this.networkingCategory,
+    this.networkingSubcategory,
+    this.categoryFilters = const {},
   });
 
   // Helper getters
@@ -163,6 +171,12 @@ class ExtendedUserProfile {
       verificationStatus: verificationStatus,
       businessName: businessName,
       category: category,
+      occupation: map['occupation'] as String?,
+      networkingCategory: map['networkingCategory'] as String?,
+      networkingSubcategory: map['networkingSubcategory'] as String?,
+      categoryFilters: map['categoryFilters'] != null
+          ? Map<String, String>.from(map['categoryFilters'])
+          : const {},
     );
   }
 
@@ -191,7 +205,47 @@ class ExtendedUserProfile {
       // Account type fields
       'accountType': accountType.name,
       'accountStatus': accountStatus.name,
+      'occupation': occupation,
+      'networkingCategory': networkingCategory,
+      'networkingSubcategory': networkingSubcategory,
+      'categoryFilters': categoryFilters.isNotEmpty ? categoryFilters : null,
     };
+  }
+
+  /// Creates a copy with optional field overrides
+  ExtendedUserProfile copyWith({double? distance}) {
+    return ExtendedUserProfile(
+      uid: uid,
+      name: name,
+      photoUrl: photoUrl,
+      city: city,
+      location: location,
+      latitude: latitude,
+      longitude: longitude,
+      interests: interests,
+      verified: verified,
+      connectionTypes: connectionTypes,
+      activities: activities,
+      aboutMe: aboutMe,
+      isOnline: isOnline,
+      lastSeen: lastSeen,
+      age: age,
+      gender: gender,
+      discoveryModeEnabled: discoveryModeEnabled,
+      blockedUsers: blockedUsers,
+      connections: connections,
+      connectionCount: connectionCount,
+      distance: distance ?? this.distance,
+      accountType: accountType,
+      accountStatus: accountStatus,
+      verificationStatus: verificationStatus,
+      businessName: businessName,
+      category: category,
+      occupation: occupation,
+      networkingCategory: networkingCategory,
+      networkingSubcategory: networkingSubcategory,
+      categoryFilters: categoryFilters,
+    );
   }
 
   // Helper to get display location

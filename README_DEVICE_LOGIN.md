@@ -1,8 +1,8 @@
-# 🎉 WhatsApp-Style Single Device Login - Complete Implementation
+# 🎉 SingleTap-Style Single Device Login - Complete Implementation
 
 ## 📖 Welcome to the Documentation Hub
 
-This master document guides you through the WhatsApp-style device login feature implementation.
+This master document guides you through the SingleTap-style device login feature implementation.
 
 ---
 
@@ -76,7 +76,7 @@ This master document guides you through the WhatsApp-style device login feature 
 ## 🎯 What Was Built
 
 ### Feature Summary
-A complete WhatsApp-style single device login system that:
+A complete SingleTap-style single device login system that:
 
 ✅ **Prevents Multiple Device Login** - Only one device can be logged into an account at a time
 ✅ **Shows Beautiful Dialog** - When collision detected, shows dialog with device name
@@ -132,7 +132,7 @@ flutter run -d emulator-5556  # Use your Device B ID
 4. **Device A**: INSTANTLY see login page ✅
 5. **Device B**: INSTANTLY see main app ✅
 
-**Expected Result**: WhatsApp-style instant logout, no delays!
+**Expected Result**: SingleTap-style instant logout, no delays!
 
 ---
 
@@ -150,7 +150,7 @@ flutter run -d emulator-5556  # Use your Device B ID
 - **Performance**: Instant (<50ms) detection
 - **Debouncing**: _isPerformingLogout flag prevents race conditions
 
-### WhatsApp-Style Force Logout
+### SingleTap-Style Force Logout
 - **Signal**: `forceLogout: true` boolean field
 - **Step 1**: Send signal + clear token (instant detection)
 - **Step 2**: Wait 200ms + set new device token (clean state)
@@ -359,7 +359,7 @@ To search: Open console and search for log prefix
 
 ## 🎉 Conclusion
 
-**WhatsApp-style single device login is fully implemented, comprehensively documented, and ready for production deployment.**
+**SingleTap-style single device login is fully implemented, comprehensively documented, and ready for production deployment.**
 
 ### What You Get
 ✅ Complete working feature

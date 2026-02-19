@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_profile.dart';
+import '../../res/config/app_colors.dart';
 import '../../widgets/floating_particles.dart';
 import '../../services/other services/voice_call_service.dart';
 import '../../services/floating_call_service.dart';
@@ -560,30 +560,12 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       extendBodyBehindAppBar: false, // Don't extend body behind app bar
       body: Stack(
         children: [
-          // Background Image (same as home screen)
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Blur effect with dark overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(color: Colors.black.withValues(alpha: 0.6)),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
           ),
 

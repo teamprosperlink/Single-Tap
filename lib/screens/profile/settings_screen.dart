@@ -595,62 +595,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ignore: unused_element
-  Widget _buildLogoutButton(BuildContext context, AuthService authService) {
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Icon(Icons.logout, color: Colors.red, size: 20),
-      ),
-      title: const Text(
-        'Logout',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: Colors.red,
-        ),
-      ),
-      subtitle: Text(
-        FirebaseAuth.instance.currentUser?.email ?? '',
-        style: const TextStyle(fontSize: 14),
-      ),
-      trailing: const Icon(CupertinoIcons.chevron_forward, color: Colors.red),
-      onTap: () async {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Logout'),
-            content: const Text('Are you sure you want to logout?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
 
-                  // Call signOut - this triggers StreamBuilder to detect logout
-                  await authService.signOut();
-
-                  // StreamBuilder should rebuild and handle navigation
-                  // Give it time to detect the auth state change
-                  await Future.delayed(const Duration(milliseconds: 1000));
-                },
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Logout'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   // Blocked Users
   void _showBlockedUsers(BuildContext context) {
@@ -1630,7 +1575,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Supper',
+                  'SingleTap',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -1653,7 +1598,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Supper is an AI-powered matching app that connects people for various purposes - marketplace, dating, friendship, jobs, and more.',
+              'SingleTap is an AI-powered matching app that connects people for various purposes - marketplace, dating, friendship, jobs, and more.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 14,
@@ -1666,7 +1611,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Icon(Icons.copyright, size: 16, color: Colors.white.withValues(alpha: 0.5)),
                 const SizedBox(width: 8),
                 Text(
-                  '2024 Supper Inc. All rights reserved.',
+                  '2024 SingleTap Inc. All rights reserved.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,

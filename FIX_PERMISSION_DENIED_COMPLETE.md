@@ -155,7 +155,7 @@ Device B: INSTANTLY shows main app
 **Device B (Success):**
 ```
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 OR (without Cloud Function):
@@ -294,7 +294,7 @@ POST-DEPLOYMENT:
 ✅ Firestore rules allow device fields
 ✅ Cloud Function provides admin-level operation
 ✅ Fallback direct write works
-✅ Instant WhatsApp-style logout
+✅ Instant SingleTap-style logout
 ✅ Both devices work independently
 
 ---
@@ -327,7 +327,7 @@ firebase rules:list
 
 Once Firestore rules are deployed, the permission-denied error is **PERMANENTLY FIXED**! 🎉
 
-The feature will work instantly with <200ms end-to-end logout (WhatsApp-style).
+The feature will work instantly with <200ms end-to-end logout (SingleTap-style).
 
 ---
 

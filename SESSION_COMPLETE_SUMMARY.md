@@ -158,7 +158,7 @@ Once Firestore rules deployed:
 - Device B stays logged in ✅
 - Device A shows login screen ✅
 - No PERMISSION_DENIED errors ✅
-- Complete WhatsApp-style logout ✅
+- Complete SingleTap-style logout ✅
 
 ---
 
@@ -349,7 +349,7 @@ The device logout feature is **fully implemented and ready**. The only thing blo
 Once rules deployed, run the test and you should see:
 - ✅ Device B stays logged in
 - ✅ Device A shows login screen
-- ✅ WhatsApp-style logout working perfectly
+- ✅ SingleTap-style logout working perfectly
 
 **See:** `MANUAL_FIREBASE_LOGIN_AND_DEPLOY.md` for deployment steps.
 

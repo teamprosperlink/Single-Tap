@@ -438,4 +438,4 @@ Before marking this as complete:
 
 **You're ready to go! 🚀**
 
-Start testing and enjoy your WhatsApp-style group video calling feature!
+Start testing and enjoy your SingleTap-style group video calling feature!

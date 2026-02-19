@@ -22,14 +22,13 @@ import 'package:chewie/chewie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
-import '../../res/config/app_assets.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../models/user_profile.dart';
 import '../../models/business_model.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../models/message_model.dart';
 import '../../services/notification_service.dart';
-import '../../services/chat services/conversation_service.dart';
+import '../../services/chat_services/conversation_service.dart';
 import '../../services/hybrid_chat_service.dart';
 import '../../services/active_chat_service.dart';
 import '../../providers/other providers/app_providers.dart';
@@ -106,6 +105,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   final List<DocumentSnapshot> _loadedMessages = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMoreMessages = true;
+
+  // Cached messages stream to prevent re-subscription on setState
+  Stream<QuerySnapshot>? _messagesStream;
   bool _isLoadingMore = false;
 
   // Single stream for user status (avoid duplicate queries)
@@ -185,7 +187,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // Initialize conversation IMMEDIATELY for faster loading
       _initializeConversation();
 
-      // Set this chat as active to suppress notifications (WhatsApp-style)
+      // Set this chat as active to suppress notifications (SingleTap-style)
       _activeChatService.setActiveChat(
         conversationId: _conversationId,
         userId: widget.otherUser.uid,
@@ -347,6 +349,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       if (mounted) {
         setState(() {
           _conversationId = conversationId;
+          _messagesStream = _firestore
+              .collection('conversations')
+              .doc(conversationId)
+              .collection('messages')
+              .orderBy('timestamp', descending: true)
+              .limit(_messagesPerPage)
+              .snapshots();
         });
         // Load chat theme after conversation is initialized
         _loadThemeFromFirestore();
@@ -367,7 +376,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   @override
   void dispose() {
-    // Clear active chat status to re-enable notifications (WhatsApp-style)
+    // Clear active chat status to re-enable notifications (SingleTap-style)
     _activeChatService.clearActiveChat();
 
     try {
@@ -458,19 +467,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         appBar: _buildAppBar(isDarkMode),
         body: Stack(
           children: [
-            // Default background - always shows (for default theme)
+            // Gradient Background
             Positioned.fill(
-              child: Image.asset(
-                AppAssets.homeBackgroundImage,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppColors.splashGradient,
+                ),
               ),
-            ),
-
-            // Dark overlay - always shows (for default theme)
-            Positioned.fill(
-              child: Container(color: AppColors.darkOverlay(alpha: 0.6)),
             ),
 
             // Main content
@@ -592,10 +595,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 0.5,
-          color: const Color(0x4DFFFFFF), // Fixed white with 30% opacity
-        ),
+        child: Container(height: 1, color: Colors.white),
       ),
       leading: IconButton(
         icon: Icon(
@@ -912,13 +912,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     // Use StreamBuilder for real-time updates from Firebase with pagination
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('conversations')
-          .doc(_conversationId!)
-          .collection('messages')
-          .orderBy('timestamp', descending: true)
-          .limit(_messagesPerPage)
-          .snapshots(),
+      stream: _messagesStream,
       builder: (context, snapshot) {
         // Show nothing while loading - prevents profile icon flash
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -940,7 +934,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
 
         // Convert Firestore documents to MessageModel
-        // Filter out messages deleted for current user (WhatsApp-style "Delete for me")
+        // Filter out messages deleted for current user (SingleTap-style "Delete for me")
         // Also filter out videos/images that are still uploading (status == sending) for receivers
         final currentUserId = _currentUserId;
         final messages = snapshot.data!.docs
@@ -1085,7 +1079,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           data['imageUrl'] as String?),
                 localPath:
                     data['localPath']
-                        as String?, // For WhatsApp-style preview during upload
+                        as String?, // For SingleTap-style preview during upload
                 audioUrl: isDeleted ? null : data['audioUrl'] as String?,
                 audioDuration: _parseIntFromDynamic(data['audioDuration']),
                 timestamp: data['timestamp'] != null
@@ -1111,7 +1105,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
         // Update _allMessages after build using post-frame callback to avoid state mutation in build
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _allMessages.length != messages.length) {
+          if (mounted) {
             _allMessages = List.from(messages);
           }
         });
@@ -1494,9 +1488,15 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? AppColors.iosGrayDark.withValues(alpha: 0.8)
-                : AppColors.backgroundDark.withValues(alpha: 0.06),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.25),
+                Colors.white.withValues(alpha: 0.15),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white, width: 1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -1521,13 +1521,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     bool isHighlighted = false,
     String? searchQuery,
   }) {
-    // Handle deleted messages first (WhatsApp-style "This message was deleted")
+    // Handle deleted messages first (SingleTap-style "This message was deleted")
     // This applies to ALL message types including calls
     if (message.isDeleted) {
       return _buildDeletedMessageBubble(message, isMe, isDarkMode);
     }
 
-    // Handle call messages (WhatsApp-style centered call events)
+    // Handle call messages (SingleTap-style centered call events)
     if (message.type == MessageType.voiceCall ||
         message.type == MessageType.missedCall ||
         message.type == MessageType.videoCall) {
@@ -1579,7 +1579,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             );
           },
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 4, right: 4),  // Increased spacing
+            padding: const EdgeInsets.only(
+              bottom: 8,
+              left: 4,
+              right: 4,
+            ), // Increased spacing
             child: Row(
               mainAxisAlignment: isMe
                   ? MainAxisAlignment.end
@@ -1617,24 +1621,30 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                 ),
                                 decoration: BoxDecoration(
                                   gradient:
-                                      isMe &&
-                                          message.type != MessageType.audio &&
+                                      message.type != MessageType.audio &&
                                           message.type != MessageType.video &&
                                           message.type != MessageType.image
                                       ? LinearGradient(
-                                          colors:
-                                              chatThemeColors[_selectedTheme] ??
-                                              chatThemeColors['default']!,
+                                          colors: [
+                                            Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
+                                            Colors.white.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                          ],
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
                                         )
                                       : null,
-                                  color:
-                                      !isMe &&
-                                          message.type != MessageType.audio &&
+                                  border:
+                                      message.type != MessageType.audio &&
                                           message.type != MessageType.video &&
                                           message.type != MessageType.image
-                                      ? Colors.black.withValues(alpha: 0.6)
+                                      ? Border.all(
+                                          color: Colors.white,
+                                          width: 1,
+                                        )
                                       : null,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -2305,7 +2315,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   String _formatMessageTime(DateTime? timestamp) {
     if (timestamp == null) return '';
 
-    // Always show actual time like WhatsApp/iMessage
+    // Always show actual time like SingleTap/iMessage
     final hour = timestamp.hour;
     final minute = timestamp.minute.toString().padLeft(2, '0');
     final period = hour >= 12 ? 'PM' : 'AM';
@@ -2885,13 +2895,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             height: 42,
                             width: 42,
                             margin: const EdgeInsets.only(bottom: 2),
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
                               shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
                             ),
                             child: const Icon(
                               Icons.arrow_upward_rounded,
@@ -3287,10 +3297,22 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     HapticFeedback.mediumImpact();
 
     final hasText = message.text != null && message.text!.isNotEmpty;
-    final hasImage = message.type == MessageType.image && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
-    final hasVideo = message.type == MessageType.video && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
-    final hasAudio = message.type == MessageType.audio && message.audioUrl != null && message.audioUrl!.isNotEmpty;
-    final hasFile = message.type == MessageType.file && message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final hasImage =
+        message.type == MessageType.image &&
+        message.mediaUrl != null &&
+        message.mediaUrl!.isNotEmpty;
+    final hasVideo =
+        message.type == MessageType.video &&
+        message.mediaUrl != null &&
+        message.mediaUrl!.isNotEmpty;
+    final hasAudio =
+        message.type == MessageType.audio &&
+        message.audioUrl != null &&
+        message.audioUrl!.isNotEmpty;
+    final hasFile =
+        message.type == MessageType.file &&
+        message.mediaUrl != null &&
+        message.mediaUrl!.isNotEmpty;
 
     showDialog(
       context: context,
@@ -3307,9 +3329,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E),
+                    color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24, width: 1),
+                    border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.5),
@@ -3495,7 +3517,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   void _forwardMessage(MessageModel message) async {
-    // Show WhatsApp-style forward screen
+    // Show SingleTap-style forward screen
     final result = await Navigator.push<List<UserProfile>>(
       context,
       MaterialPageRoute(
@@ -3795,13 +3817,24 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // Use original file name or generate one with correct extension
       String fileName;
       if (originalFileName != null && originalFileName.isNotEmpty) {
-        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
+        fileName =
+            'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
       } else {
         // Try to detect extension from URL
         final uri = Uri.parse(fileUrl);
         final urlPath = uri.path.toLowerCase();
         String ext = '.pdf';
-        for (final e in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']) {
+        for (final e in [
+          '.pdf',
+          '.doc',
+          '.docx',
+          '.xls',
+          '.xlsx',
+          '.ppt',
+          '.pptx',
+          '.txt',
+          '.csv',
+        ]) {
           if (urlPath.contains(e)) {
             ext = e;
             break;
@@ -4351,7 +4384,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     });
   }
 
-  /// Delete message for current user only (WhatsApp-style "Delete for me")
+  /// Delete message for current user only (SingleTap-style "Delete for me")
   /// The message is hidden for current user but still visible to other user
   Future<void> _deleteMessageForMe(MessageModel message) async {
     try {
@@ -4407,7 +4440,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Delete message for everyone - WhatsApp style "This message was deleted"
+  /// Delete message for everyone - SingleTap style "This message was deleted"
   /// Message is marked as deleted, content cleared, but document remains
   Future<void> _deleteMessageForEveryone(MessageModel message) async {
     try {
@@ -4475,7 +4508,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
       }
 
-      // Mark message as deleted (WhatsApp style - shows "This message was deleted")
+      // Mark message as deleted (SingleTap style - shows "This message was deleted")
       await _firestore
           .collection('conversations')
           .doc(_conversationId!)
@@ -4571,9 +4604,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E),
+                    color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24, width: 1),
+                    border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.5),
@@ -4664,7 +4697,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       //   Don't increment counter yet - wait for user to actually pick images!
 
-      // Pick multiple images (max 4) like WhatsApp
+      // Pick multiple images (max 4) like SingleTap
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 70,
         maxWidth: 1280,
@@ -5146,7 +5179,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Show media preview screen (WhatsApp-style) before sending multiple images/videos
+  /// Show media preview screen (SingleTap-style) before sending multiple images/videos
   void _showMediaPreviewScreen(List<File> mediaFiles, {required bool isVideo}) {
     Navigator.push(
       context,
@@ -5815,7 +5848,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Build image message with WhatsApp-style upload preview
+  /// Build image message with SingleTap-style upload preview
   /// Shows local image immediately with blur/progress overlay while uploading
   Widget _buildImageMessage(MessageModel message, bool isMe, bool isDarkMode) {
     final hasMediaUrl =
@@ -5854,10 +5887,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           border: Border.all(
             color: isOptimistic
                 ? Colors.orange.withValues(alpha: 0.5)
-                : isMe
-                ? const Color(0xFF007AFF)
-                : Colors.black.withValues(alpha: 0.6),
-            width: 2,
+                : Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
+            width: 1,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -5869,7 +5900,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               children: [
                 // Show local file or network image
                 isLocalFile
-                    ? Image.file(File(imageSource), width: 200, fit: BoxFit.cover)
+                    ? Image.file(
+                        File(imageSource),
+                        width: 200,
+                        fit: BoxFit.cover,
+                      )
                     : CachedNetworkImage(
                         imageUrl: imageSource,
                         width: 200,
@@ -5878,7 +5913,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           width: 200,
                           height: 180,
                           color: Colors.grey[300],
-                          child: const Center(child: CircularProgressIndicator()),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
                         errorWidget: (context, url, error) => Container(
                           width: 200,
@@ -5947,10 +5984,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           border: Border.all(
             color: isOptimistic
                 ? Colors.orange.withValues(alpha: 0.5)
-                : isMe
-                ? const Color(0xFF007AFF)
-                : Colors.black.withValues(alpha: 0.6),
-            width: 2,
+                : Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
+            width: 1,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -6005,7 +6040,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     );
   }
 
-  /// Build deleted message bubble (WhatsApp-style "This message was deleted")
+  /// Build deleted message bubble (SingleTap-style "This message was deleted")
   Widget _buildDeletedMessageBubble(
     MessageModel message,
     bool isMe,
@@ -6200,7 +6235,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Build WhatsApp-style call message UI (left for incoming, right for outgoing)
+  /// Build SingleTap-style call message UI (left for incoming, right for outgoing)
   Widget _buildCallMessageBubble(
     MessageModel message,
     bool isMe,
@@ -6242,7 +6277,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     // isMe means current user was the CALLER (senderId = current user)
     // !isMe means current user was the RECEIVER
 
-    // Determine call text, icon, and color based on call type (WhatsApp style)
+    // Determine call text, icon, and color based on call type (SingleTap style)
     String callLabel; // "Incoming" or "Outgoing" or "Missed"
     String callDurationText; // Duration like "0:45" or status text
     IconData callIcon;
@@ -6268,7 +6303,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       }
     } else {
       //   Answered call - GREEN color for all answered calls
-      iconColor = const Color(0xFF25D366); // WhatsApp green
+      iconColor = const Color(0xFF25D366); // SingleTap green
 
       debugPrint(
         '  Setting GREEN color for answered call: isVideoCall=$isVideoCall',
@@ -6308,33 +6343,25 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       'Icon color must be either RED or GREEN, but got: $iconColor',
     );
 
-    // WhatsApp-style call widget (exact replica)
+    // SingleTap-style call widget (exact replica)
     final callWidget = Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? LinearGradient(
-                colors:
-                    chatThemeColors[_selectedTheme] ??
-                    chatThemeColors['default']!,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        color: !isMe ? Colors.black.withValues(alpha: 0.6) : null,
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white, width: 1),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Call icon inside circular background (WhatsApp style)
+          // Call icon inside circular background (SingleTap style)
           Container(
             width: 40,
             height: 40,
@@ -6352,7 +6379,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             ),
           ),
           const SizedBox(width: 10),
-          // WhatsApp-style call info: direction + label, duration, time
+          // SingleTap-style call info: direction + label, duration, time
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -6445,7 +6472,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
     }
 
-    // Normal mode - WhatsApp style: outgoing (right), incoming (left)
+    // Normal mode - SingleTap style: outgoing (right), incoming (left)
     return Padding(
       padding: EdgeInsets.only(
         top: 4,
@@ -6490,7 +6517,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
 
-    // Waveform bar heights pattern (30 bars for WhatsApp style)
+    // Waveform bar heights pattern (30 bars for SingleTap style)
     final heights = [
       6.0,
       10.0,
@@ -6524,17 +6551,27 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       8.0,
     ];
 
-    // Audio player WhatsApp style - gradient background
+    // Audio player SingleTap style - gradient background
     return Container(
       constraints: const BoxConstraints(maxWidth: 220),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isMe
-              ? [const Color(0xFF5856D6), const Color(0xFF007AFF)]
-              : [const Color(0xFF3A3A3A), const Color(0xFF2A2A2A)],
+              ? [
+                  Colors.white.withValues(alpha: 0.25),
+                  Colors.white.withValues(alpha: 0.15),
+                ]
+              : [
+                  Colors.white.withValues(alpha: 0.12),
+                  Colors.white.withValues(alpha: 0.06),
+                ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
+          width: 1,
         ),
         borderRadius: BorderRadius.circular(20),
       ),
@@ -6573,9 +6610,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       isCurrentlyPlaying
                           ? Icons.pause_rounded
                           : Icons.play_arrow_rounded,
-                      color: isMe
-                          ? const Color(0xFF007AFF)
-                          : const Color(0xFF3A3A3A),
+                      color: const Color(0xFF3A3A3A),
                       size: 20,
                     ),
             ),
@@ -6653,12 +6688,15 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               : 9999;
 
           // Stale thresholds: calling/ringing > 60s, connected > 2min
-          final isStale = (activeStatus == 'calling' || activeStatus == 'ringing')
+          final isStale =
+              (activeStatus == 'calling' || activeStatus == 'ringing')
               ? callAge > 60
               : callAge > 120; // connected
 
           if (isStale) {
-            debugPrint('  Stale call detected (${callAge}s old, status=$activeStatus) - auto-cleaning ${activeDoc.id}');
+            debugPrint(
+              '  Stale call detected (${callAge}s old, status=$activeStatus) - auto-cleaning ${activeDoc.id}',
+            );
             await _firestore.collection('calls').doc(activeDoc.id).update({
               'status': activeStatus == 'connected' ? 'ended' : 'missed',
               'endedAt': FieldValue.serverTimestamp(),
@@ -7855,9 +7893,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -8028,9 +8066,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -8277,19 +8315,13 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background Image (same as feed screen)
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
-          ),
-
-          // Dark overlay with more opacity
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: 0.6)),
           ),
 
           // Main content
@@ -8329,10 +8361,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                 ),
 
                 // Divider line
-                Container(
-                  height: 0.5,
-                  color: Colors.white.withValues(alpha: 0.2),
-                ),
+                Container(height: 1, color: Colors.white),
 
                 // Content
                 Expanded(
@@ -8360,33 +8389,42 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                               child: Column(
                                 children: [
                                   // Profile avatar
-                                  CircleAvatar(
-                                    radius: 60,
-                                    backgroundColor: Colors.grey[800],
-                                    backgroundImage:
-                                        PhotoUrlHelper.isValidUrl(
-                                          widget.otherUser.profileImageUrl,
-                                        )
-                                        ? CachedNetworkImageProvider(
-                                            widget.otherUser.profileImageUrl!,
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 60,
+                                      backgroundColor: Colors.grey[800],
+                                      backgroundImage:
+                                          PhotoUrlHelper.isValidUrl(
+                                            widget.otherUser.profileImageUrl,
                                           )
-                                        : null,
-                                    child:
-                                        !PhotoUrlHelper.isValidUrl(
-                                          widget.otherUser.profileImageUrl,
-                                        )
-                                        ? Text(
-                                            widget.otherUser.name.isNotEmpty
-                                                ? widget.otherUser.name[0]
-                                                      .toUpperCase()
-                                                : 'U',
-                                            style: const TextStyle(
-                                              fontSize: 48,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                          ? CachedNetworkImageProvider(
+                                              widget.otherUser.profileImageUrl!,
+                                            )
+                                          : null,
+                                      child:
+                                          !PhotoUrlHelper.isValidUrl(
+                                            widget.otherUser.profileImageUrl,
                                           )
-                                        : null,
+                                          ? Text(
+                                              widget.otherUser.name.isNotEmpty
+                                                  ? widget.otherUser.name[0]
+                                                        .toUpperCase()
+                                                  : 'U',
+                                              style: const TextStyle(
+                                                fontSize: 48,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
                                   ),
 
                                   const SizedBox(height: 20),
@@ -8577,9 +8615,9 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -8707,7 +8745,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
   }
 }
 
-// WhatsApp-style Forward Message Screen
+// SingleTap-style Forward Message Screen
 class _ForwardMessageScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -8967,15 +9005,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
       backgroundColor: const Color(0xFF0f0f23),
       body: Stack(
         children: [
-          // Background
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: 0.7)),
           ),
 
           // Main content
@@ -9414,17 +9450,13 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background Image
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
-          ),
-
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: Colors.black.withValues(alpha: 0.7)),
           ),
 
           // Main content
@@ -9702,7 +9734,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date header like WhatsApp
+            // Date header like SingleTap
             Container(
               margin: const EdgeInsets.symmetric(vertical: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -10803,9 +10835,9 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           margin: const EdgeInsets.symmetric(horizontal: 40),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -10817,10 +10849,13 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Audio Player UI - WhatsApp style
+              // Audio Player UI - SingleTap style
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF007AFF), width: 2),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
                   borderRadius: BorderRadius.circular(32),
                 ),
                 child: Container(
@@ -10842,21 +10877,12 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: Colors.white.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF5856D6,
-                                ).withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ],
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
                           ),
                           child: Icon(
                             _isPlaying
@@ -10912,7 +10938,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                                     height: heights[index],
                                     decoration: BoxDecoration(
                                       color: isActive
-                                          ? const Color(0xFF5856D6)
+                                          ? Colors.white
                                           : Colors.white24,
                                       borderRadius: BorderRadius.circular(2),
                                     ),
@@ -10996,21 +11022,19 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.25),
+                            Colors.white.withValues(alpha: 0.15),
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF5856D6,
-                            ).withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ],
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -11149,8 +11173,8 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
         allowMuting: true,
         showControls: true,
         materialProgressColors: ChewieProgressColors(
-          playedColor: const Color(0xFF007AFF),
-          handleColor: const Color(0xFF007AFF),
+          playedColor: Colors.white,
+          handleColor: Colors.white,
           backgroundColor: Colors.grey.shade800,
           bufferedColor: Colors.grey.shade600,
         ),
@@ -11158,7 +11182,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
           color: Colors.black,
           child: const Center(
             child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
           ),
         ),
@@ -11225,7 +11249,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
       body: Center(
         child: _isLoading
             ? const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
               )
             : _error != null
             ? Column(
@@ -11244,7 +11268,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
   }
 }
 
-/// WhatsApp-style media preview screen for multiple images/videos
+/// SingleTap-style media preview screen for multiple images/videos
 class _MediaPreviewScreen extends StatefulWidget {
   final List<File> mediaFiles;
   final bool isVideo;
@@ -11364,9 +11388,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                       margin: const EdgeInsets.only(right: 8),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF007AFF)
-                              : Colors.transparent,
+                          color: isSelected ? Colors.white : Colors.transparent,
                           width: 2,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -11437,19 +11459,17 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.25),
+                            Colors.white.withValues(alpha: 0.15),
+                          ],
                         ),
                         borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF007AFF,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,

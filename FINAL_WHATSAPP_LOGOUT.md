@@ -1,4 +1,4 @@
-# Final WhatsApp-Style Logout - NOW CORRECT ✅
+# Final SingleTap-Style Logout - NOW CORRECT ✅
 
 **Commit:** a5c1353 - "Fix: 'Logout Other Device' button logs out THIS device"
 **Status:** PRODUCTION READY
@@ -41,7 +41,7 @@ await _authService.signOut();
 ```dart
 // Just sign out THIS device
 await _authService.signOut();
-// Done! Other device will auto-logout via WhatsApp mechanism
+// Done! Other device will auto-logout via SingleTap mechanism
 ```
 
 ---
@@ -64,7 +64,7 @@ Device B (logged in, using app):
      - Device A's session expires
 ```
 
-### Scenario 2: WhatsApp Auto-Logout
+### Scenario 2: SingleTap Auto-Logout
 
 ```
 Device A: Logged in ✓
@@ -173,7 +173,7 @@ try {
 |---|---|---|
 | "Logout Other Device" | ❌ Logout the OTHER device | ✓ Logout THIS device |
 | Clarity | Confusing | Clear ✓ |
-| WhatsApp-like | ❌ No | ✓ Yes |
+| SingleTap-like | ❌ No | ✓ Yes |
 
 ---
 
@@ -189,7 +189,7 @@ Now there are two correct ways devices logout:
 ### 2. Automatic: When New Device Logs In
 - New device registers (deletes old token)
 - Old device detects token deletion
-- Old device auto-logouts (WhatsApp-style)
+- Old device auto-logouts (SingleTap-style)
 - Only new device stays logged in
 
 ---
@@ -262,14 +262,14 @@ Device B: Can still use account ✓
 
 ---
 
-## Git Commits for WhatsApp Logout
+## Git Commits for SingleTap Logout
 
 ```
 a5c1353 - FIX: 'Logout' button logs out THIS device, not other ⭐
 e245dd1 - Increase Firestore propagation delays (2000ms + 1000ms)
 d16639f - Make dialog continuously detect token deletion (200ms timer)
-5e779d7 - Complete WhatsApp-style documentation
-d42c33d - WhatsApp logout documentation
+5e779d7 - Complete SingleTap-style documentation
+d42c33d - SingleTap logout documentation
 ```
 
 ---
@@ -280,7 +280,7 @@ d42c33d - WhatsApp logout documentation
 ✅ Compiled successfully
 ✅ No errors
 ✅ Production ready
-✅ Proper WhatsApp behavior
+✅ Proper SingleTap behavior
 
 ---
 
@@ -304,7 +304,7 @@ flutter clean && flutter pub get && flutter build apk --release
 You were RIGHT! The button should logout the device that clicks it, not the other device.
 
 ✅ Fixed and committed
-✅ Now works like WhatsApp
+✅ Now works like SingleTap
 ✅ Both manual and auto-logout work correctly
 ✅ True one-device-per-account behavior
 

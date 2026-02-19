@@ -469,4 +469,4 @@ The system uses **3-layer fallback detection**:
    - Last resort
    - Works as ultimate fallback
 
-**Result**: WhatsApp-style single device login ✅
+**Result**: SingleTap-style single device login ✅

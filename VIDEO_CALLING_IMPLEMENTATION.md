@@ -1,8 +1,8 @@
-# WhatsApp-Style Video Calling Implementation - Complete Guide
+# SingleTap-Style Video Calling Implementation - Complete Guide
 
 ## 🎉 Implementation Complete
 
-Video calling has been fully implemented in the Supper app with WhatsApp-style UI and features.
+Video calling has been fully implemented in the Supper app with SingleTap-style UI and features.
 
 ---
 
@@ -34,7 +34,7 @@ Core WebRTC service handling all video call functionality:
 ### 2. **VideoCallScreen**
 **Location:** `lib/screens/call/video_call_screen.dart`
 
-WhatsApp-style UI with full control features:
+SingleTap-style UI with full control features:
 - ✅ Fullscreen remote video display
 - ✅ Picture-in-Picture local video (top-right, 120x160)
 - ✅ Auto-hide controls (3 seconds, tap to toggle)
@@ -314,7 +314,7 @@ Notification → IncomingCallScreen → Detect type:'video' → VideoCallScreen
 
 ## 🎯 Key Features
 
-✅ **WhatsApp-Style UI**
+✅ **SingleTap-Style UI**
 - Fullscreen video display
 - Picture-in-picture local video
 - Auto-hide controls with tap overlay

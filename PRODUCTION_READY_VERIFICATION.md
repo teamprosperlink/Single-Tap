@@ -1,4 +1,4 @@
-# WhatsApp-Style Logout System - Production Ready Verification ✅
+# SingleTap-Style Logout System - Production Ready Verification ✅
 
 **Date:** January 9, 2025
 **Status:** ✅ PRODUCTION READY
@@ -140,7 +140,7 @@ Timer.periodic(const Duration(milliseconds: 200), (timer) async {
 - Button on login screen during "Already Logged In" dialog
 - Clicking button signs out THE CURRENT DEVICE
 - Does NOT affect other device's token
-- Other device auto-logouts via WhatsApp mechanism
+- Other device auto-logouts via SingleTap mechanism
 
 **Code:**
 ```dart
@@ -191,7 +191,7 @@ Device B (logged in, using app):
 
 ---
 
-### Flow 2: Automatic Logout (WhatsApp-Style) ✅
+### Flow 2: Automatic Logout (SingleTap-Style) ✅
 
 ```
 T=0ms:    Device A is logged in
@@ -206,7 +206,7 @@ T=700ms:  Device A: Returned to login screen ✓
 T=1200ms: Device B finishes registration (new token saved)
 T=2200ms: Device B: Login complete, shown home screen ✓
 
-TOTAL: ~2.2 seconds for complete WhatsApp-style logout/login cycle
+TOTAL: ~2.2 seconds for complete SingleTap-style logout/login cycle
 ```
 
 **Only Device B is logged in at end:** ✓
@@ -272,9 +272,9 @@ TOTAL: ~2.2 seconds
 ```
 a5c1353 FIX: 'Logout Other Device' button should logout THIS device, not other
 12a6962 Code formatting: fix print statement line breaks in main.dart
-5e779d7 Add complete WhatsApp-style one-device login documentation
-e245dd1 Increase Firestore propagation delays for WhatsApp-style logout
-d42c33d Add WhatsApp-style logout documentation
+5e779d7 Add complete SingleTap-style one-device login documentation
+e245dd1 Increase Firestore propagation delays for SingleTap-style logout
+d42c33d Add SingleTap-style logout documentation
 d16639f FIX: Make dialog continuously detect token deletion - logout every device
 b4f7ac5 Remove unused dead code from main.dart
 a86c71b Add final logout fix summary
@@ -351,13 +351,13 @@ adb -s DEVICE_B_SERIAL install -r build/app/outputs/apk/release/app-release.apk
 - [x] Polling detection working
 - [x] Dialog auto-logout working
 - [x] Button semantics correct
-- [x] WhatsApp-style behavior implemented
+- [x] SingleTap-style behavior implemented
 
 ---
 
 ## Summary
 
-**The WhatsApp-style one-device-per-account logout system is fully implemented, tested, and production-ready.**
+**The SingleTap-style one-device-per-account logout system is fully implemented, tested, and production-ready.**
 
 ### What Works:
 ✅ Only one device can be logged in at a time

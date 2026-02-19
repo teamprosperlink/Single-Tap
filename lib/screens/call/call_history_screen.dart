@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../../res/config/app_colors.dart';
 import '../../models/user_profile.dart';
 import '../../widgets/safe_circle_avatar.dart';
 import 'voice_call_screen.dart';
@@ -47,9 +48,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.splashDark3,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: _isSelectionMode
             ? IconButton(
@@ -92,7 +93,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           ],
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.splashGradient,
+        ),
+        child: StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('calls')
             .where('participants', arrayContains: _currentUserId)
@@ -165,6 +171,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             },
           );
         },
+      ),
       ),
     );
   }
@@ -267,11 +274,22 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           }
         },
         child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected
-                ? Colors.blue.withValues(alpha: 0.2)
-                : Colors.transparent,
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: isSelected ? 0.2 : 0.1),
+                Colors.white.withValues(alpha: isSelected ? 0.12 : 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isSelected ? 0.3 : 0.15),
+              width: 1,
+            ),
           ),
           child: Row(
             children: [

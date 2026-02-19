@@ -63,7 +63,7 @@ if (minutesSinceUpdate > 5) {
 }
 ```
 
-## How It Works - WhatsApp Style
+## How It Works - SingleTap Style
 
 ### Scenario: Device A (Old) is OFFLINE when Device B logs in
 
@@ -154,7 +154,7 @@ Device A's listener fires        Device B now logged in
 ✅ **Single device login enforced** - Only one device can be logged in at a time
 ✅ **No duplicate sessions** - Old device token is deleted, preventing both from being active
 ✅ **Instant logout** - Within 500ms for online devices, 2-3s for offline ones
-✅ **WhatsApp-style behavior** - User expects this, industry standard
+✅ **SingleTap-style behavior** - User expects this, industry standard
 
 ## Deployment Checklist
 

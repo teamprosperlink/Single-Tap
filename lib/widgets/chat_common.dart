@@ -15,7 +15,7 @@ String formatDisplayName(String name) {
 
 /// Chat theme colors for message bubbles
 const Map<String, List<Color>> chatThemeColors = {
-  'default': [Color(0xFF007AFF), Color(0xFF5856D6)], // iOS Blue-Purple
+  'default': [Color(0xFF404040), Color(0xFF000000)], // Dark gray-black (matches home screen)
   'sunset': [Color(0xFFFF6B6B), Color(0xFFFF8E53)], // Red-Orange
   'ocean': [Color(0xFF00B4DB), Color(0xFF0083B0)], // Cyan-Blue
   'forest': [Color(0xFF56AB2F), Color(0xFFA8E063)], // Green gradient
@@ -307,7 +307,6 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final colors = themeColors ?? chatThemeColors['default']!;
 
     return GestureDetector(
       onLongPress: onLongPress,
@@ -343,16 +342,18 @@ class ChatMessageBubble extends StatelessWidget {
                   maxWidth: MediaQuery.of(context).size.width * 0.7,
                 ),
                 decoration: BoxDecoration(
-                  gradient: isMe
-                      ? LinearGradient(
-                          colors: colors,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isMe
-                      ? null
-                      : (isDarkMode ? const Color(0xFF2C2C2E) : const Color(0xFFE9E9EB)),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.25),
+                      Colors.white.withValues(alpha: 0.15),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 1,
+                  ),
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(18),
                     topRight: const Radius.circular(18),

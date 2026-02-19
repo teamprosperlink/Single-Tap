@@ -134,9 +134,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
             maxHeight: MediaQuery.of(context).size.height * 0.85,
           ),
           decoration: BoxDecoration(
-            color: isDarkMode
-                ? const Color(0xFF1A1A2E).withValues(alpha: 0.95)
-                : Colors.white.withValues(alpha: 0.95),
+            color: const Color.fromRGBO(32, 32, 32, 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(

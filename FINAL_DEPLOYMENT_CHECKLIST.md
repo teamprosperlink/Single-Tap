@@ -200,7 +200,7 @@ Then run `flutter run` in separate terminals
 
 ## ✅ What Happens When Complete
 
-- ✅ Old device automatically logs out (WhatsApp-style)
+- ✅ Old device automatically logs out (SingleTap-style)
 - ✅ New device automatically enters app (no dialogs)
 - ✅ Only one device can be logged in at a time
 - ✅ No user input required

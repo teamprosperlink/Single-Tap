@@ -246,7 +246,7 @@ Future<void> logoutFromOtherDevices({String? userId}) async {
 **If Working**:
 ```
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 **If Broken** (What you're probably seeing):
@@ -329,7 +329,7 @@ This deploys everything needed.
 Should show:
 ```
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 [LoginScreen] ✓ Other device logout command sent
 [LoginScreen] ✓ Navigating Device B to main app...
 ```
@@ -411,7 +411,7 @@ Result: Unreliable, may fail
 | Cloud Function deployed | ❌ **NOT DEPLOYED** | **REQUIRED** |
 | Firestore rules deployed | ❓ **UNKNOWN** | **RECOMMENDED** |
 | Device A logout signal | ❌ **Not detected** | Deploy functions |
-| Complete WhatsApp logout | ❌ **NOT WORKING** | Deploy & test |
+| Complete SingleTap logout | ❌ **NOT WORKING** | Deploy & test |
 
 ---
 
@@ -453,4 +453,4 @@ Result: Unreliable, may fail
 
 - [DEPLOY_CLOUD_FUNCTIONS.md](DEPLOY_CLOUD_FUNCTIONS.md) - Detailed deployment instructions
 - [FIX_LISTENER_RESTART.md](FIX_LISTENER_RESTART.md) - Listener restart fix (already done)
-- [WHATSAPP_STYLE_LOGOUT.md](WHATSAPP_STYLE_LOGOUT.md) - Feature documentation
+- [SingleTap_STYLE_LOGOUT.md](SingleTap_STYLE_LOGOUT.md) - Feature documentation

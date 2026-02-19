@@ -1,5 +1,5 @@
 ================================================================================
-                    WHATSAPP-STYLE LOGOUT - VISUAL FLOW
+                    SingleTap-STYLE LOGOUT - VISUAL FLOW
 ================================================================================
 
 The complete flow of how Device A automatically logs out when Device B
@@ -245,7 +245,7 @@ Issue: Device A detects its own logout during protection window
                     USER EXPERIENCE COMPARISON
 ================================================================================
 
-WHATSAPP-STYLE (Current Implementation):
+SingleTap-STYLE (Current Implementation):
 
 Device A: Using app
 Device B: Login
@@ -389,7 +389,7 @@ I/flutter (12346): [RemoteLogout] ✓ Firebase sign out completed
 │ └─ Ready to use                                            │
 └─────────────────────────────────────────────────────────────┘
 
-RESULT: ✅ WHATSAPP-STYLE SINGLE DEVICE LOGIN
+RESULT: ✅ SingleTap-STYLE SINGLE DEVICE LOGIN
   Device A: Logged out
   Device B: Logged in
   Only one device has access ✓

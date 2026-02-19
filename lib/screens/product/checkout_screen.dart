@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/screens/home/product/order_summary_screen.dart';
+import 'package:supper/screens/product/order_summary_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Map<String, dynamic> item;

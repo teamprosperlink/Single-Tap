@@ -1,4 +1,4 @@
-# WhatsApp-Like Optimistic Updates Implementation for enhanced_chat_screen.dart
+# SingleTap-Like Optimistic Updates Implementation for enhanced_chat_screen.dart
 
 ## Summary
 This document outlines the implementation of optimistic updates for the normal chat screen (`enhanced_chat_screen.dart`), following the same pattern implemented in `group_chat_screen.dart`.

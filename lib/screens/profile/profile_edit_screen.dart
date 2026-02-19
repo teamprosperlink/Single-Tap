@@ -10,7 +10,7 @@ import 'dart:io';
 import '../../res/config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_manager.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -201,25 +201,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  // ignore: unused_element
-  Future<void> _createInitialProfile() async {
-    if (user == null) return;
-
-    try {
-      await _firestore.collection('users').doc(user!.uid).set({
-        'uid': user!.uid,
-        'name': user!.displayName ?? user!.email?.split('@')[0] ?? 'User',
-        'email': user!.email ?? '',
-        'photoUrl': user!.photoURL,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastSeen': FieldValue.serverTimestamp(),
-        'isOnline': true,
-      });
-    } catch (e) {
-      debugPrint('Error creating initial profile: $e');
     }
   }
 

@@ -118,9 +118,19 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Dialog(
-      backgroundColor: isDarkMode ? const Color(0xFF1A2B3D) : Colors.white,
+      backgroundColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 1),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -173,12 +183,12 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       _isPlaying ? Icons.graphic_eq : Icons.mic,
-                      color: Colors.green,
+                      color: Colors.white,
                       size: 40,
                     ),
                   ),
@@ -195,12 +205,10 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
                       overlayShape: const RoundSliderOverlayShape(
                         overlayRadius: 12,
                       ),
-                      activeTrackColor: Colors.green,
-                      inactiveTrackColor: isDarkMode
-                          ? Colors.white24
-                          : Colors.black12,
-                      thumbColor: Colors.green,
-                      overlayColor: Colors.green.withValues(alpha: 0.2),
+                      activeTrackColor: Colors.white,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: Colors.white,
+                      overlayColor: Colors.white.withValues(alpha: 0.2),
                     ),
                     child: Slider(
                       value: _position.inMilliseconds.toDouble(),
@@ -265,9 +273,10 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
 
                       // Play/Pause
                       Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
                           shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
                         ),
                         child: IconButton(
                           icon: Icon(
@@ -301,6 +310,7 @@ class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
               ),
           ],
         ),
+      ),
       ),
     );
   }

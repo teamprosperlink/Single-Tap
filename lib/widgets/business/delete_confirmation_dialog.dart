@@ -125,9 +125,10 @@ class DeleteConfirmationDialog extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return AlertDialog(
-      backgroundColor: isDarkMode ? const Color(0xFF2D2D44) : Colors.white,
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Colors.white, width: 1),
       ),
       title: Row(
         children: [

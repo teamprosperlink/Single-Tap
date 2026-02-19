@@ -2,7 +2,7 @@
                     ✅ DEPLOYMENT READY
 ================================================================================
 
-The device logout feature (WhatsApp-style single-device login) is ready 
+The device logout feature (SingleTap-style single-device login) is ready 
 for Cloud Function deployment.
 
 All code changes complete ✅
@@ -53,7 +53,7 @@ Without these deployments:
 
 With these deployments:
   - Device A will instantly receive logout signals
-  - Feature will work like WhatsApp
+  - Feature will work like SingleTap
 
 ================================================================================
                     DEPLOYMENT STEPS (5 MINUTES)
@@ -177,7 +177,7 @@ The problem was two-fold:
 
 Once deployed:
    Device B login → Auto-logout Device A → Only Device B logged in ✓
-   (WhatsApp-style behavior)
+   (SingleTap-style behavior)
 
 ================================================================================
                     READY TO PROCEED?

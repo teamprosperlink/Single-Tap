@@ -911,7 +911,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Text(
                           '${currency['symbol']} ${currency['code']}',
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     );

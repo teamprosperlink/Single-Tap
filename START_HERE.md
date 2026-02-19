@@ -1,4 +1,4 @@
-# 🚀 START HERE - WhatsApp-Style Single Device Login
+# 🚀 START HERE - SingleTap-Style Single Device Login
 
 **Feature**: Jab naya device login ho, purana device automatically logout hojaye
 = **When new device logs in, old device automatically logs out**
@@ -7,7 +7,7 @@
 
 ## What It Does
 
-**Exactly like WhatsApp:**
+**Exactly like SingleTap:**
 
 ```
 Device A: Logged in, using app
@@ -93,7 +93,7 @@ Total: ~3.5 seconds for complete device switch
 **After**:
 - No dialog
 - Automatic logout
-- Clean, instant UX like WhatsApp ✓
+- Clean, instant UX like SingleTap ✓
 
 ---
 
@@ -163,7 +163,7 @@ npx firebase deploy --only firestore:rules
 
 ✅ **Automatic**: No user input needed
 ✅ **Instant**: 3.5 seconds total
-✅ **WhatsApp-style**: Exactly like WhatsApp
+✅ **SingleTap-style**: Exactly like SingleTap
 ✅ **Safe**: Firestore session management
 ✅ **Clean**: No dialogs or confusion
 ✅ **Reliable**: 10-second protection window active
@@ -186,13 +186,13 @@ Device B Navigates to App
 Single Device Login Achieved ✓
 ```
 
-**No dialog. No user input. Just like WhatsApp.**
+**No dialog. No user input. Just like SingleTap.**
 
 ---
 
 ## Documentation
 
-- **WHATSAPP_STYLE_LOGOUT.md** - Complete technical details
+- **SingleTap_STYLE_LOGOUT.md** - Complete technical details
 - **This file** - Quick start guide
 
 ---

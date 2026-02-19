@@ -19,7 +19,7 @@ Device B: Also logged in ✓   ← BUG: Should be blocked!
 Device C: Also logged in ✓   ← BUG: Should be blocked!
 ```
 
-This violated the WhatsApp-style single device login requirement.
+This violated the SingleTap-style single device login requirement.
 
 ---
 
@@ -184,11 +184,11 @@ Device B: Tries login → ❌ BLOCKED
 
 ---
 
-## Comparison with WhatsApp
+## Comparison with SingleTap
 
-✅ **Identical behavior to WhatsApp**
+✅ **Identical behavior to SingleTap**
 
-| Feature | WhatsApp | Supper |
+| Feature | SingleTap | Supper |
 |---------|----------|--------|
 | Single Device Strict | ✅ | ✅ |
 | Multi-Device Block | ✅ | ✅ |

@@ -264,7 +264,7 @@ Return to login screen
 - Device B's dialog closes within 2-3 seconds
 - Both devices logged out
 - No manual action needed on Device B
-- WhatsApp-style behavior ✓
+- SingleTap-style behavior ✓
 
 ---
 

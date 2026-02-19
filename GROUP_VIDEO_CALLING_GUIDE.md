@@ -2,11 +2,11 @@
 
 ## Overview
 
-This guide explains how to implement WhatsApp-style group video calling in your Flutter app using WebRTC and Firebase. The implementation supports:
+This guide explains how to implement SingleTap-style group video calling in your Flutter app using WebRTC and Firebase. The implementation supports:
 
 - ✅ **Single-person video calls** (existing feature)
 - ✅ **Group video calls** with up to 8 participants (new feature)
-- ✅ WhatsApp-style UI with grid layout
+- ✅ SingleTap-style UI with grid layout
 - ✅ Dynamic participant management (join/leave)
 - ✅ Real-time video/audio streaming
 - ✅ Call controls (mute, video toggle, camera switch, speaker)
@@ -465,7 +465,7 @@ All participants have access to:
 2. **`lib/screens/call/group_video_call_screen.dart`**
    - Main group call UI with grid layout
    - Call controls and participant management
-   - WhatsApp-style design
+   - SingleTap-style design
 
 3. **`lib/screens/call/incoming_group_video_call_screen.dart`**
    - Incoming call notification screen

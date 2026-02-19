@@ -1,5 +1,5 @@
 /// Service to track which chat screen is currently active
-/// Used to prevent notifications for messages in the open chat (WhatsApp-style)
+/// Used to prevent notifications for messages in the open chat (SingleTap-style)
 class ActiveChatService {
   static final ActiveChatService _instance = ActiveChatService._internal();
   factory ActiveChatService() => _instance;
@@ -15,12 +15,16 @@ class ActiveChatService {
   void setActiveChat({String? conversationId, String? userId}) {
     _activeConversationId = conversationId;
     _activeUserId = userId;
-    print('[ActiveChat] Active chat set: conversationId=$conversationId, userId=$userId');
+    print(
+      '[ActiveChat] Active chat set: conversationId=$conversationId, userId=$userId',
+    );
   }
 
   /// Clear active chat when user closes the conversation
   void clearActiveChat() {
-    print('[ActiveChat] Clearing active chat: was conversationId=$_activeConversationId, userId=$_activeUserId');
+    print(
+      '[ActiveChat] Clearing active chat: was conversationId=$_activeConversationId, userId=$_activeUserId',
+    );
     _activeConversationId = null;
     _activeUserId = null;
   }

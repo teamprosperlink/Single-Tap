@@ -30,7 +30,7 @@
 - If it works, return to troubleshooting step 4
 
 ### **Step 4: Ensure Another App Isn't Using Camera**
-- Close all other apps (especially other messaging apps like WhatsApp, Telegram)
+- Close all other apps (especially other messaging apps like SingleTap, Telegram)
 - Camera can only be used by ONE app at a time
 - Try video call again
 

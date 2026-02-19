@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 enum QuickActionType {
   call,
   chat,
-  whatsapp,
+  SingleTap,
   book,
   order,
   enquire,

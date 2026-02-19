@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 import '../../widgets/country_code_picker_sheet.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -404,25 +403,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ),
       body: Stack(
         children: [
-          // Image Background
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.splashGradient,
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Dark overlay
+          // Gradient Background
           Positioned.fill(
             child: Container(
-              color: AppColors.darkOverlay(alpha: 0.5),
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
           ),
 

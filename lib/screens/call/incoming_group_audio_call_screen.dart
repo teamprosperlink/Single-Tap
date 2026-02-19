@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../res/config/app_colors.dart';
 import '../../widgets/floating_particles.dart';
 import 'group_audio_call_screen.dart';
 
@@ -241,21 +241,12 @@ class _IncomingGroupAudioCallScreenState
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background
+          // Gradient Background
           Positioned.fill(
-            child: widget.callerPhoto != null
-                ? CachedNetworkImage(
-                    imageUrl: widget.callerPhoto!,
-                    fit: BoxFit.cover,
-                  )
-                : Container(color: const Color(0xFF111B21)),
-          ),
-
-          // Blur Overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(color: Colors.black.withValues(alpha: 0.6)),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
           ),
 

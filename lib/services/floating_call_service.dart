@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Service to manage floating call overlay (WhatsApp-style PiP)
+/// Service to manage floating call overlay (SingleTap-style PiP)
 class FloatingCallService {
   static final FloatingCallService _instance = FloatingCallService._internal();
   factory FloatingCallService() => _instance;
@@ -64,7 +64,9 @@ class FloatingCallService {
     _autoEndTimer?.cancel();
     if (remainingSeconds <= 0) remainingSeconds = 1;
 
-    debugPrint('FloatingCallService: Auto-end timer started ($remainingSeconds sec remaining)');
+    debugPrint(
+      'FloatingCallService: Auto-end timer started ($remainingSeconds sec remaining)',
+    );
 
     _autoEndTimer = Timer(Duration(seconds: remainingSeconds), () async {
       if (!_isShowing || _callId == null || _userId == null) return;
@@ -83,13 +85,17 @@ class FloatingCallService {
             .isNotEmpty;
 
         if (!othersActive) {
-          debugPrint('FloatingCallService: Auto-end - no one joined, ending call');
+          debugPrint(
+            'FloatingCallService: Auto-end - no one joined, ending call',
+          );
           // Trigger end call (which hides overlay + cleans up WebRTC + updates Firestore)
           final endCall = _onEndCall;
           hide();
           endCall?.call();
         } else {
-          debugPrint('FloatingCallService: Auto-end - someone joined, keeping call');
+          debugPrint(
+            'FloatingCallService: Auto-end - someone joined, keeping call',
+          );
         }
       } catch (e) {
         debugPrint('FloatingCallService: Auto-end timer error: $e');
@@ -120,7 +126,7 @@ class FloatingCallService {
   }
 }
 
-/// Floating call widget (WhatsApp-style minimized call UI)
+/// Floating call widget (SingleTap-style minimized call UI)
 class FloatingCallWidget extends StatefulWidget {
   final String callId;
   final String groupId;
@@ -185,7 +191,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF00C853), // WhatsApp green
+                  Color(0xFF00C853), // SingleTap green
                   Color(0xFF00E676),
                 ],
               ),

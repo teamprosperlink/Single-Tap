@@ -205,7 +205,7 @@ class NotificationService {
 
         debugPrint('  _handleCallAccepted: currentUserId=$currentUserId');
 
-        // IMMEDIATE NAVIGATION - WhatsApp-like instant call screen
+        // IMMEDIATE NAVIGATION - SingleTap-like instant call screen
         // Dismiss CallKit and navigate FIRST, then update status in background
         debugPrint(
           '  _handleCallAccepted: Navigating IMMEDIATELY to call screen...',
@@ -309,7 +309,7 @@ class NotificationService {
           );
         }
 
-        // Dismiss CallKit UI IMMEDIATELY (no await) for WhatsApp-like smooth transition
+        // Dismiss CallKit UI IMMEDIATELY (no await) for SingleTap-like smooth transition
         FlutterCallkitIncoming.endCall(callId)
             .then((_) {
               debugPrint('  _handleCallAccepted: CallKit UI dismissed');
@@ -513,7 +513,7 @@ class NotificationService {
     }
   }
 
-  /// Request all Android permissions needed for WhatsApp-style incoming calls
+  /// Request all Android permissions needed for SingleTap-style incoming calls
   Future<void> _requestAndroidPermissions() async {
     try {
       // Android 13+ requires POST_NOTIFICATIONS permission
@@ -693,7 +693,7 @@ class NotificationService {
 
     // CRITICAL FIX: For call notifications, ALWAYS show full-screen CallKit UI
     // Even when app is in foreground (both devices active)
-    // This ensures WhatsApp-style incoming call experience
+    // This ensures SingleTap-style incoming call experience
     if (type == 'call') {
       debugPrint('  FOREGROUND 1-ON-1 CALL: Showing full-screen CallKit UI');
       _navigateToCall(data); // Show full-screen incoming call
@@ -701,14 +701,14 @@ class NotificationService {
     }
 
     // CRITICAL FIX: For GROUP call notifications, ALWAYS show full-screen CallKit UI
-    // Even when app is in foreground - WhatsApp-style
+    // Even when app is in foreground - SingleTap-style
     if (type == 'group_audio_call') {
       debugPrint('  FOREGROUND GROUP CALL: Showing full-screen CallKit UI');
       _navigateToGroupCall(data); // Show full-screen incoming group call
       return;
     }
 
-    // WhatsApp-style: Don't show notification for messages in the CURRENT OPEN chat
+    // SingleTap-style: Don't show notification for messages in the CURRENT OPEN chat
     // Check if user is currently viewing this conversation
     if (type == 'message') {
       final senderId = data['senderId'] as String?;
@@ -904,12 +904,12 @@ class NotificationService {
 
     debugPrint('  _navigateToCall: Showing CallKit incoming call UI');
 
-    // Show CallKit incoming call UI (like WhatsApp)
+    // Show CallKit incoming call UI (like SingleTap)
     // This provides full-screen native call UI
     final callKitParams = CallKitParams(
       id: callId,
       nameCaller: callerName,
-      appName: 'Supper',
+      appName: 'SingleTap',
       avatar: callerPhoto,
       handle: 'Voice Call',
       type: 0, // Audio call
@@ -1003,7 +1003,9 @@ class NotificationService {
     // Don't show incoming call screen to the caller
     final currentUserId = _auth.currentUser?.uid;
     if (callerId == currentUserId) {
-      debugPrint('  _navigateToGroupCall: Current user is the caller, skipping');
+      debugPrint(
+        '  _navigateToGroupCall: Current user is the caller, skipping',
+      );
       return;
     }
 
@@ -1638,9 +1640,14 @@ class NotificationService {
 
     // Get Firestore token
     try {
-      final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
       final firestoreToken = userDoc.data()?['fcmToken'] as String?;
-      debugPrint('   Firestore FCM token: ${firestoreToken?.substring(0, 20)}...');
+      debugPrint(
+        '   Firestore FCM token: ${firestoreToken?.substring(0, 20)}...',
+      );
 
       if (localToken == firestoreToken) {
         debugPrint('  Tokens match - FCM setup is correct!');
@@ -1704,7 +1711,7 @@ class NotificationService {
     }
   }
 
-  /// Request all permissions needed for WhatsApp-style calls (public API)
+  /// Request all permissions needed for SingleTap-style calls (public API)
   Future<bool> requestCallPermissions() async {
     if (kIsWeb) return true;
 
@@ -1744,11 +1751,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (callId != null && callerId != null) {
       debugPrint('  Background: Showing incoming 1-on-1 call from $callerName');
 
-      // Show WhatsApp-style incoming call UI
+      // Show SingleTap-style incoming call UI
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName,
-        appName: 'Supper',
+        appName: 'SingleTap',
         avatar: callerPhoto,
         handle: 'Voice Call',
         type: 0, // Audio call
@@ -1802,7 +1809,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
     }
   }
-  // Handle incoming GROUP call in background - WhatsApp style
+  // Handle incoming GROUP call in background - SingleTap style
   else if (type == 'group_audio_call') {
     final callId = data['callId'] as String?;
     final callerId = data['callerId'] as String?;
@@ -1816,11 +1823,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         '  Background: Showing incoming GROUP call from $callerName in $groupName',
       );
 
-      // Show WhatsApp-style incoming GROUP call UI with full-screen notification
+      // Show SingleTap-style incoming GROUP call UI with full-screen notification
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName,
-        appName: 'Supper',
+        appName: 'SingleTap',
         avatar: callerPhoto,
         handle: 'Group Voice Call - $groupName',
         type: 0, // Audio call
@@ -1854,7 +1861,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           incomingCallNotificationChannelName: 'Incoming Calls',
           missedCallNotificationChannelName: 'Missed Calls',
           isShowCallID: false,
-          isShowFullLockedScreen: true, // Full-screen like WhatsApp
+          isShowFullLockedScreen: true, // Full-screen like SingleTap
         ),
         ios: const IOSParams(
           iconName: 'CallKitLogo',

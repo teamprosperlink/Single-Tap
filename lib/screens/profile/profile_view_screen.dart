@@ -677,12 +677,12 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     final bio = widget.userProfile.bio;
     final location = widget.userProfile.location ?? '';
 
-    String shareText = 'Check out $name on Supper!\n';
+    String shareText = 'Check out $name on SingleTap!\n';
     if (bio.isNotEmpty) shareText += '\n$bio\n';
     if (location.isNotEmpty) shareText += '\nLocation: $location\n';
-    shareText += '\nDownload Supper to connect: https://supper.app';
+    shareText += '\nDownload SingleTap to connect: https://supper.app';
 
-    Share.share(shareText, subject: 'Check out $name on Supper!');
+    Share.share(shareText, subject: 'Check out $name on SingleTap!');
   }
 
   void _reportUser() {
@@ -737,7 +737,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Report submitted. Thank you for keeping Supper safe.',
+                  'Report submitted. Thank you for keeping SingleTap safe.',
                 ),
                 backgroundColor: Colors.green,
               ),

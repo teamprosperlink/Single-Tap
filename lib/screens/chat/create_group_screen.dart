@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../services/group_chat_service.dart';
 import '../../res/utils/photo_url_helper.dart';
+import '../../res/config/app_colors.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -93,64 +94,107 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final currentUserId = _currentUserId;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF000000) : Colors.white,
-      appBar: AppBar(
-        backgroundColor: isDarkMode ? const Color(0xFF000000) : Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.close,
-            color: isDarkMode ? Colors.white : Colors.black,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.splashDark1,
+            border: Border(
+              bottom: BorderSide(color: Colors.white, width: 1),
+            ),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'New Group',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isCreating ? null : _createGroup,
-            child: _isCreating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    'Create',
-                    style: TextStyle(
-                      color: _selectedUserIds.isNotEmpty
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Group name input
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: GlassTextField(
-              controller: _groupNameController,
-              hintText: 'Group name',
-              prefixIcon: Icon(
-                Icons.group,
-                color: Theme.of(context).primaryColor,
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
               ),
-              borderRadius: 12,
+              onPressed: () => Navigator.pop(context),
+            ),
+            centerTitle: true,
+            title: const Text(
+              'New Group',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isCreating ? null : _createGroup,
+                child: _isCreating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Create',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.splashGradient,
+        ),
+        child: SafeArea(
+          child: Column(
+        children: [
+          // Group name + Search in one row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GlassTextField(
+                    controller: _groupNameController,
+                    hintText: 'Group name',
+                    prefixIcon: const Icon(
+                      Icons.group,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                    borderRadius: 12,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GlassTextField(
+                    controller: _searchController,
+                    hintText: 'Search users...',
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                    borderRadius: 12,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.toLowerCase();
+                      });
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -171,19 +215,20 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         child: Chip(
                           label: Text(
                             name,
-                            style: TextStyle(
-                              color: isDarkMode ? Colors.white : Colors.black,
+                            style: const TextStyle(
+                              color: Colors.white,
                             ),
                           ),
-                          deleteIcon: const Icon(Icons.close, size: 18),
+                          deleteIcon: const Icon(Icons.close, size: 18, color: Colors.white70),
                           onDeleted: () {
                             setState(() {
                               _selectedUserIds.remove(userId);
                             });
                           },
-                          backgroundColor: isDarkMode
-                              ? Colors.grey[800]
-                              : Colors.grey[200],
+                          backgroundColor: Colors.white.withValues(alpha: 0.15),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
                         ),
                       );
                     },
@@ -191,25 +236,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                 }).toList(),
               ),
             ),
-
-          // Search bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: GlassTextField(
-              controller: _searchController,
-              hintText: 'Search users...',
-              prefixIcon: Icon(
-                Icons.search,
-                color: isDarkMode ? Colors.grey[600] : Colors.grey,
-              ),
-              borderRadius: 12,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
-            ),
-          ),
 
           // User list
           Expanded(
@@ -234,11 +260,11 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     .toList();
 
                 if (users.isEmpty) {
-                  return Center(
+                  return const Center(
                     child: Text(
                       'No users found',
                       style: TextStyle(
-                        color: isDarkMode ? Colors.grey[600] : Colors.grey,
+                        color: Colors.white54,
                       ),
                     ),
                   );
@@ -257,23 +283,30 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     return ListTile(
                       leading: Stack(
                         children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundImage: PhotoUrlHelper.isValidUrl(photoUrl)
-                                ? CachedNetworkImageProvider(photoUrl)
-                                : null,
-                            backgroundColor: Theme.of(
-                              context,
-                            ).primaryColor.withValues(alpha: 0.1),
-                            child: !PhotoUrlHelper.isValidUrl(photoUrl)
-                                ? Text(
-                                    name[0].toUpperCase(),
-                                    style: TextStyle(
-                                      color: Theme.of(context).primaryColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : null,
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 24,
+                              backgroundImage: PhotoUrlHelper.isValidUrl(photoUrl)
+                                  ? CachedNetworkImageProvider(photoUrl)
+                                  : null,
+                              backgroundColor: Colors.white.withValues(alpha: 0.1),
+                              child: !PhotoUrlHelper.isValidUrl(photoUrl)
+                                  ? Text(
+                                      name[0].toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : null,
+                            ),
                           ),
                           if (isSelected)
                             Positioned(
@@ -283,19 +316,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                 width: 20,
                                 height: 20,
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).primaryColor,
+                                  color: Colors.white,
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isDarkMode
-                                        ? Colors.black
-                                        : Colors.white,
+                                    color: Colors.black,
                                     width: 2,
                                   ),
                                 ),
                                 child: const Icon(
                                   Icons.check,
                                   size: 12,
-                                  color: Colors.white,
+                                  color: Colors.black,
                                 ),
                               ),
                             ),
@@ -304,22 +335,20 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                       title: Text(
                         name,
                         style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
+                          color: Colors.white,
                           fontWeight: isSelected
                               ? FontWeight.w600
                               : FontWeight.normal,
                         ),
                       ),
                       trailing: isSelected
-                          ? Icon(
+                          ? const Icon(
                               Icons.check_circle,
-                              color: Theme.of(context).primaryColor,
+                              color: Colors.white,
                             )
                           : Icon(
                               Icons.circle_outlined,
-                              color: isDarkMode
-                                  ? Colors.grey[600]
-                                  : Colors.grey,
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
                       onTap: () {
                         HapticFeedback.selectionClick();
@@ -338,6 +367,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

@@ -215,7 +215,7 @@ Once the Cloud Function is deployed, the app will use it:
 
 ```
 [AuthService] Calling Cloud Function: forceLogoutOtherDevices
-[AuthService] ✓ Successfully forced logout on other devices - instant like WhatsApp!
+[AuthService] ✓ Successfully forced logout on other devices - instant like SingleTap!
 ```
 
 ---

@@ -1,11 +1,11 @@
-# 🏗️ WhatsApp-Style Device Login - Architecture Diagram
+# 🏗️ SingleTap-Style Device Login - Architecture Diagram
 
 ## 1️⃣ Complete System Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         PLINK LIVE APP ARCHITECTURE                          │
-│                     WhatsApp-Style Single Device Login                       │
+│                     SingleTap-Style Single Device Login                       │
 └──────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -359,7 +359,7 @@ Firestore Update #2:
   ├─ forceLogout = false             ← Clear signal
   └─ lastSessionUpdate = timestamp
   ↓
-Print: "Successfully forced logout on other devices - instant like WhatsApp!"
+Print: "Successfully forced logout on other devices - instant like SingleTap!"
   ↓
 Return to caller
   ↓
@@ -813,7 +813,7 @@ FINAL STATE: INDEPENDENT DEVICES
 │     COLLISION happens again → Dialog shown again            │
 └─────────────────────────────────────────────────────────────┘
 
-TOTAL TIME: < 200ms from button click to login page ✅ (WhatsApp-style!)
+TOTAL TIME: < 200ms from button click to login page ✅ (SingleTap-style!)
 ```
 
 ---
@@ -823,7 +823,7 @@ TOTAL TIME: < 200ms from button click to login page ✅ (WhatsApp-style!)
 This architecture provides:
 - ✅ Real-time device session monitoring
 - ✅ Instant collision detection
-- ✅ WhatsApp-style instant logout
+- ✅ SingleTap-style instant logout
 - ✅ No app restart needed
 - ✅ All three login methods supported
 - ✅ Secure token management

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Your Flutter app now supports **both single-person and group video calls**, similar to WhatsApp. This document provides a complete overview of the implementation.
+Your Flutter app now supports **both single-person and group video calls**, similar to SingleTap. This document provides a complete overview of the implementation.
 
 ---
 
@@ -14,7 +14,7 @@ Your Flutter app now supports **both single-person and group video calls**, simi
 - **Features:**
   - 1-to-1 video calls
   - Audio/video controls (mute, video toggle, camera switch)
-  - WhatsApp-style UI with floating local video
+  - SingleTap-style UI with floating local video
   - WebRTC peer-to-peer connection
 
 ### 2. Group Video Calls (NEW) 🎉
@@ -28,7 +28,7 @@ Your Flutter app now supports **both single-person and group video calls**, simi
   - Dynamic grid layout (2×2, 2×3, 2×4)
   - Real-time participant join/leave
   - Same controls as single calls
-  - WhatsApp-style UI
+  - SingleTap-style UI
 
 ---
 
@@ -58,7 +58,7 @@ lib/
 
 ---
 
-## 🎨 UI Design (WhatsApp Style)
+## 🎨 UI Design (SingleTap Style)
 
 ### Single Video Call
 ```
@@ -380,7 +380,7 @@ Your app now has **complete video calling functionality**:
 
 ✅ **Single-person video calls** (existing)
 ✅ **Group video calls** with up to 8 participants (NEW)
-✅ **WhatsApp-style UI** for both types
+✅ **SingleTap-style UI** for both types
 ✅ **Dynamic grid layouts** for groups
 ✅ **Real-time participant management**
 ✅ **Full call controls** (mute, video, camera, speaker)

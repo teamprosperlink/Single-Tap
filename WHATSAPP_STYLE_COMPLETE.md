@@ -1,15 +1,15 @@
-# WhatsApp-Style One-Device-Per-Account - COMPLETE ✅
+# SingleTap-Style One-Device-Per-Account - COMPLETE ✅
 
 **Final Commits:**
 - d16639f: Continuous token checking in dialog
 - e245dd1: Increased Firestore propagation delays
-- d42c33d: WhatsApp documentation
+- d42c33d: SingleTap documentation
 
 **Status:** PRODUCTION READY - Test now!
 
 ---
 
-## WhatsApp Behavior (What You Wanted)
+## SingleTap Behavior (What You Wanted)
 
 ```
 Device A: Logged in ✓
@@ -117,7 +117,7 @@ await Future.delayed(const Duration(milliseconds: 2000));
 
 ---
 
-## Full Timeline (WhatsApp-Style)
+## Full Timeline (SingleTap-Style)
 
 ```
 T=0ms:   Device B starts login (enters password)
@@ -130,7 +130,7 @@ T=1500ms: Device A signs out, redirects to login ✅
 T=2100ms: Device B finishes registration (saves new token)
 T=3100ms: Device B shows "Login successful" ✅
 
-TOTAL: ~3 seconds for complete WhatsApp-style logout/login cycle
+TOTAL: ~3 seconds for complete SingleTap-style logout/login cycle
 ```
 
 ---
@@ -150,7 +150,7 @@ flutter clean && flutter pub get && flutter build apk --release
 3. Device A: Click "Logout Other Device"
 4. Device B: Dialog closes, logged out ✓
 
-**AFTER (New - Automatic like WhatsApp):**
+**AFTER (New - Automatic like SingleTap):**
 1. Device A: Login with email/password → Logged in ✓
 2. Device B: Open app → Enter same email/password
 3. **Device A: AUTOMATICALLY logs out** (no button click needed!) ✓
@@ -165,9 +165,9 @@ flutter clean && flutter pub get && flutter build apk --release
 |--------|--------|-------|
 | Login behavior | Both devices stay logged in | New device logs in, old device auto-logs out |
 | Manual action | Need to click "Logout Other Device" | Automatic, no action needed |
-| Like WhatsApp? | ❌ No | ✅ Yes |
+| Like SingleTap? | ❌ No | ✅ Yes |
 | Detection timing | 2-3 seconds (with button click) | 1-2 seconds (automatic) |
-| User experience | Confusing | Clear, like WhatsApp |
+| User experience | Confusing | Clear, like SingleTap |
 
 ---
 
@@ -215,7 +215,7 @@ flutter clean && flutter pub get && flutter build apk --release
 - Battery: Minimal impact (polling runs only during login)
 - Network: ~5-10 Firestore reads per logout cycle
 
-Acceptable for WhatsApp-style behavior ✅
+Acceptable for SingleTap-style behavior ✅
 
 ---
 
@@ -257,14 +257,14 @@ Acceptable for WhatsApp-style behavior ✅
 
 ## Summary
 
-**You asked for:** "jaise whatsapp me ek time ek device login hoti hai"
-(Like WhatsApp where only one device can be logged in at a time)
+**You asked for:** "jaise SingleTap me ek time ek device login hoti hai"
+(Like SingleTap where only one device can be logged in at a time)
 
 **You now have:**
 ✅ Only 1 device per account can be logged in
 ✅ New device login auto-logs out old devices
 ✅ Instant detection without manual button clicks
-✅ WhatsApp-style behavior ✓
+✅ SingleTap-style behavior ✓
 ✅ No confusion or stuck dialogs
 ✅ Production-ready code
 

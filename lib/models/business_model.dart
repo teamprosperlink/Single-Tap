@@ -173,8 +173,8 @@ class BusinessModel {
     this.bankAccount,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   factory BusinessModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -237,7 +237,8 @@ class BusinessModel {
           ? (map['lastAnalyticsUpdate'] as Timestamp).toDate()
           : null,
       itemCount: map['itemCount'] ?? 0,
-      featuredItems: (map['featuredItems'] as List<dynamic>?)
+      featuredItems:
+          (map['featuredItems'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],
@@ -315,7 +316,9 @@ class BusinessModel {
       'cachedADR': cachedADR,
       'cachedRevPAR': cachedRevPAR,
       'cachedOccupancyRate': cachedOccupancyRate,
-      'lastAnalyticsUpdate': lastAnalyticsUpdate != null ? Timestamp.fromDate(lastAnalyticsUpdate!) : null,
+      'lastAnalyticsUpdate': lastAnalyticsUpdate != null
+          ? Timestamp.fromDate(lastAnalyticsUpdate!)
+          : null,
       'itemCount': itemCount,
       'featuredItems': featuredItems,
       'totalOrders': totalOrders,
@@ -327,8 +330,12 @@ class BusinessModel {
       'totalEarnings': totalEarnings,
       'monthlyEarnings': monthlyEarnings,
       'todayEarnings': todayEarnings,
-      'lastDailyReset': lastDailyReset != null ? Timestamp.fromDate(lastDailyReset!) : null,
-      'lastMonthlyReset': lastMonthlyReset != null ? Timestamp.fromDate(lastMonthlyReset!) : null,
+      'lastDailyReset': lastDailyReset != null
+          ? Timestamp.fromDate(lastDailyReset!)
+          : null,
+      'lastMonthlyReset': lastMonthlyReset != null
+          ? Timestamp.fromDate(lastMonthlyReset!)
+          : null,
       'bankAccount': bankAccount?.toMap(),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -504,7 +511,8 @@ class BusinessModel {
   double get effectiveTodayEarnings => needsDailyReset ? 0.0 : todayEarnings;
 
   /// Get effective monthly earnings (returns 0 if monthly reset is needed)
-  double get effectiveMonthlyEarnings => needsMonthlyReset ? 0.0 : monthlyEarnings;
+  double get effectiveMonthlyEarnings =>
+      needsMonthlyReset ? 0.0 : monthlyEarnings;
 }
 
 /// Business contact information
@@ -512,21 +520,16 @@ class BusinessContact {
   final String? phone;
   final String? email;
   final String? website;
-  final String? whatsapp;
+  final String? SingleTap;
 
-  BusinessContact({
-    this.phone,
-    this.email,
-    this.website,
-    this.whatsapp,
-  });
+  BusinessContact({this.phone, this.email, this.website, this.SingleTap});
 
   factory BusinessContact.fromMap(Map<String, dynamic> map) {
     return BusinessContact(
       phone: map['phone'],
       email: map['email'],
       website: map['website'],
-      whatsapp: map['whatsapp'],
+      SingleTap: map['SingleTap'],
     );
   }
 
@@ -535,7 +538,7 @@ class BusinessContact {
       'phone': phone,
       'email': email,
       'website': website,
-      'whatsapp': whatsapp,
+      'SingleTap': SingleTap,
     };
   }
 
@@ -543,13 +546,13 @@ class BusinessContact {
     String? phone,
     String? email,
     String? website,
-    String? whatsapp,
+    String? SingleTap,
   }) {
     return BusinessContact(
       phone: phone ?? this.phone,
       email: email ?? this.email,
       website: website ?? this.website,
-      whatsapp: whatsapp ?? this.whatsapp,
+      SingleTap: SingleTap ?? this.SingleTap,
     );
   }
 }
@@ -617,10 +620,7 @@ class BusinessHours {
   final Map<String, DayHours> schedule;
   final String? timezone;
 
-  BusinessHours({
-    required this.schedule,
-    this.timezone,
-  });
+  BusinessHours({required this.schedule, this.timezone});
 
   factory BusinessHours.fromMap(Map<String, dynamic> map) {
     final scheduleMap = <String, DayHours>{};
@@ -632,10 +632,7 @@ class BusinessHours {
       }
     });
 
-    return BusinessHours(
-      schedule: scheduleMap,
-      timezone: map['timezone'],
-    );
+    return BusinessHours(schedule: scheduleMap, timezone: map['timezone']);
   }
 
   Map<String, dynamic> toMap() {
@@ -663,7 +660,15 @@ class BusinessHours {
   }
 
   String _getDayName(int weekday) {
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
     return days[weekday - 1];
   }
 
@@ -699,11 +704,7 @@ class DayHours {
   final String? close;
   final bool isClosed;
 
-  DayHours({
-    this.open,
-    this.close,
-    this.isClosed = false,
-  });
+  DayHours({this.open, this.close, this.isClosed = false});
 
   factory DayHours.fromMap(Map<String, dynamic> map) {
     return DayHours(
@@ -714,11 +715,7 @@ class DayHours {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'open': open,
-      'close': close,
-      'isClosed': isClosed,
-    };
+    return {'open': open, 'close': close, 'isClosed': isClosed};
   }
 
   /// Get formatted hours string

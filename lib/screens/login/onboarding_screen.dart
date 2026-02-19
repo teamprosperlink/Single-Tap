@@ -21,7 +21,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
-      title: 'Welcome to Supper',
+      title: 'Welcome to SingleTap',
       subtitle:
           'Your ultimate campus marketplace for buying, selling, and connecting with students',
       imagePath: AppAssets.logoPath,
@@ -55,7 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ),
     OnboardingPage(
       title: 'Get Started',
-      subtitle: 'Join thousands of students already using Supper every day',
+      subtitle: 'Join thousands of students already using SingleTap every day',
       imagePath: AppAssets.searchDataImage,
       color: AppColors.lightPurpleTint,
       gradient: [
@@ -114,25 +114,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
 
-            // Image Background
-            Positioned.fill(
-              child: Image.asset(
-                AppAssets.homeBackgroundImage,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.splashGradient,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // Dark overlay
-            Positioned.fill(
-              child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
-            ),
 
             // Content
             SafeArea(
@@ -145,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Supper',
+                          'SingleTap',
                           style: AppTextStyles.displaySmall.copyWith(
                             shadows: [
                               Shadow(

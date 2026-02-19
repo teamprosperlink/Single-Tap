@@ -20,8 +20,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       color: Colors.blue,
       faqs: [
         _FAQ(
-          question: 'What is Supper?',
-          answer: 'Supper is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
+          question: 'What is SingleTap?',
+          answer: 'SingleTap is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
         ),
         _FAQ(
           question: 'How do I create a post?',

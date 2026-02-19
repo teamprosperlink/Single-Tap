@@ -60,13 +60,31 @@ class ConnectionService {
       final senderData = senderDoc.data() ?? {};
       final senderName = senderData['name'] ?? 'Someone';
 
+      // Get receiver info
+      final receiverDoc = await _firestore
+          .collection('users')
+          .doc(receiverId)
+          .get();
+      final receiverData = receiverDoc.data() ?? {};
+      final receiverName = receiverData['name'] ?? 'Unknown';
+
       // Create connection request
       final requestRef = await _firestore.collection('connection_requests').add(
         {
           'senderId': senderId,
           'senderName': senderName,
           'senderPhoto': senderData['photoUrl'],
+          'senderAge': senderData['age'],
+          'senderOccupation': senderData['occupation'],
+          'senderLatitude': senderData['latitude'],
+          'senderLongitude': senderData['longitude'],
           'receiverId': receiverId,
+          'receiverName': receiverName,
+          'receiverPhoto': receiverData['photoUrl'],
+          'receiverAge': receiverData['age'],
+          'receiverOccupation': receiverData['occupation'],
+          'receiverLatitude': receiverData['latitude'],
+          'receiverLongitude': receiverData['longitude'],
           'message': message,
           'status': 'pending', // pending, accepted, rejected
           'createdAt': FieldValue.serverTimestamp(),
@@ -115,8 +133,8 @@ class ConnectionService {
       final senderId = requestData['senderId'] as String;
       final receiverId = requestData['receiverId'] as String;
 
-      // Verify current user is the receiver
-      if (receiverId != currentUserId) {
+      // Verify current user is either sender or receiver
+      if (receiverId != currentUserId && senderId != currentUserId) {
         return {'success': false, 'message': 'Unauthorized'};
       }
 
@@ -136,9 +154,10 @@ class ConnectionService {
           .get();
       final currentUserName = currentUserDoc.data()?['name'] ?? 'Someone';
 
-      // Send notification to the SENDER (the person who sent the request)
+      // Send notification to the OTHER user
+      final otherUserId = currentUserId == senderId ? receiverId : senderId;
       await _notificationService.sendNotificationToUser(
-        userId: senderId,
+        userId: otherUserId,
         title: 'Connection Accepted',
         body: '$currentUserName accepted your connection request',
         type: 'connection_accepted',
@@ -237,16 +256,16 @@ class ConnectionService {
     final batch = _firestore.batch();
 
     // Add to user1's connections
-    batch.update(_firestore.collection('users').doc(user1Id), {
+    batch.set(_firestore.collection('users').doc(user1Id), {
       'connections': FieldValue.arrayUnion([user2Id]),
       'connectionCount': FieldValue.increment(1),
-    });
+    }, SetOptions(merge: true));
 
     // Add to user2's connections
-    batch.update(_firestore.collection('users').doc(user2Id), {
+    batch.set(_firestore.collection('users').doc(user2Id), {
       'connections': FieldValue.arrayUnion([user1Id]),
       'connectionCount': FieldValue.increment(1),
-    });
+    }, SetOptions(merge: true));
 
     await batch.commit();
   }
@@ -262,16 +281,16 @@ class ConnectionService {
       final batch = _firestore.batch();
 
       // Remove from current user's connections
-      batch.update(_firestore.collection('users').doc(currentUserId), {
+      batch.set(_firestore.collection('users').doc(currentUserId), {
         'connections': FieldValue.arrayRemove([userId]),
         'connectionCount': FieldValue.increment(-1),
-      });
+      }, SetOptions(merge: true));
 
       // Remove from other user's connections
-      batch.update(_firestore.collection('users').doc(userId), {
+      batch.set(_firestore.collection('users').doc(userId), {
         'connections': FieldValue.arrayRemove([currentUserId]),
         'connectionCount': FieldValue.increment(-1),
-      });
+      }, SetOptions(merge: true));
 
       await batch.commit();
 
@@ -342,14 +361,22 @@ class ConnectionService {
         .collection('connection_requests')
         .where('receiverId', isEqualTo: currentUserId)
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
+          final list = snapshot.docs.map((doc) {
             final data = doc.data();
             data['id'] = doc.id;
+            data['requestType'] = 'received';
             return data;
           }).toList();
+          // Sort by createdAt descending (client-side to avoid index)
+          list.sort((a, b) {
+            final aTime = a['createdAt'] as Timestamp?;
+            final bTime = b['createdAt'] as Timestamp?;
+            if (aTime == null || bTime == null) return 0;
+            return bTime.compareTo(aTime);
+          });
+          return list;
         });
   }
 
@@ -362,7 +389,58 @@ class ConnectionService {
         .collection('connection_requests')
         .where('senderId', isEqualTo: currentUserId)
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          final list = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            data['requestType'] = 'sent';
+            return data;
+          }).toList();
+          list.sort((a, b) {
+            final aTime = a['createdAt'] as Timestamp?;
+            final bTime = b['createdAt'] as Timestamp?;
+            if (aTime == null || bTime == null) return 0;
+            return bTime.compareTo(aTime);
+          });
+          return list;
+        });
+  }
+
+  /// Get ALL pending requests (both received and sent) combined
+  Stream<List<Map<String, dynamic>>> getAllPendingRequestsStream() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return Stream.value([]);
+
+    // Combine received and sent streams
+    return getPendingRequestsStream().asyncExpand((received) {
+      return getSentRequestsStream().map((sent) {
+        final combined = [...received, ...sent];
+        combined.sort((a, b) {
+          final aTime = a['createdAt'] as Timestamp?;
+          final bTime = b['createdAt'] as Timestamp?;
+          if (aTime == null || bTime == null) return 0;
+          return bTime.compareTo(aTime);
+        });
+        return combined;
+      });
+    });
+  }
+
+  /// Get pending requests count (received only)
+  Stream<int> getPendingRequestsCountStream() {
+    return getPendingRequestsStream().map((requests) => requests.length);
+  }
+
+  /// Get accepted connections where current user is receiver
+  Stream<List<Map<String, dynamic>>> getAcceptedAsReceiverStream() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return Stream.value([]);
+
+    return _firestore
+        .collection('connection_requests')
+        .where('receiverId', isEqualTo: currentUserId)
+        .where('status', isEqualTo: 'accepted')
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
@@ -373,9 +451,23 @@ class ConnectionService {
         });
   }
 
-  /// Get pending requests count
-  Stream<int> getPendingRequestsCountStream() {
-    return getPendingRequestsStream().map((requests) => requests.length);
+  /// Get accepted connections where current user is sender
+  Stream<List<Map<String, dynamic>>> getAcceptedAsSenderStream() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return Stream.value([]);
+
+    return _firestore
+        .collection('connection_requests')
+        .where('senderId', isEqualTo: currentUserId)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+        });
   }
 
   /// Check if connection request exists between users

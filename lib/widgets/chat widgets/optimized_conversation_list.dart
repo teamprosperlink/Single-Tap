@@ -274,9 +274,7 @@ class _OptimizedConversationListState extends State<OptimizedConversationList>
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
-      backgroundColor: widget.isDarkMode
-          ? const Color(0xFF1C1C1E)
-          : Colors.white,
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

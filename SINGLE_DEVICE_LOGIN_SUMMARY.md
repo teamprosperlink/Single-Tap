@@ -1,4 +1,4 @@
-# ✅ WhatsApp-Style Single Device Login - FIXED
+# ✅ SingleTap-Style Single Device Login - FIXED
 
 ## Problem
 Multiple devices were logging in simultaneously on the same account - violating strict single device login requirement.
@@ -185,9 +185,9 @@ Added user-friendly error handling for session check failures:
    Expected: "Unable to verify device session... check internet" ❌
 ```
 
-## Comparison with WhatsApp
+## Comparison with SingleTap
 
-| Feature | WhatsApp | Supper (Fixed) |
+| Feature | SingleTap | Supper (Fixed) |
 |---------|----------|----------------|
 | Single Device Strict | ✅ Yes | ✅ Yes |
 | Multi-Device Block | ✅ Immediate | ✅ Immediate |
@@ -203,7 +203,7 @@ Added user-friendly error handling for session check failures:
 ✅ **Strict single device login enforced**
 ✅ **Error handling fail-closed**
 ✅ **User-friendly error messages**
-✅ **WhatsApp-equivalent security**
+✅ **SingleTap-equivalent security**
 
 The app now guarantees:
 - **Only ONE device can be logged in at a time**

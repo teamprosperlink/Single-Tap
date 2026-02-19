@@ -1,8 +1,8 @@
-# WhatsApp-Style Single Device Login - Complete Implementation
+# SingleTap-Style Single Device Login - Complete Implementation
 
 ## Overview
 
-This document describes the complete implementation of WhatsApp-style single device login for the Supper app. Only one device can be logged in with a user's account at any time. When a user logs in on a new device, they are automatically logged out from the previous device in real-time.
+This document describes the complete implementation of SingleTap-style single device login for the Supper app. Only one device can be logged in with a user's account at any time. When a user logs in on a new device, they are automatically logged out from the previous device in real-time.
 
 ---
 
@@ -397,7 +397,7 @@ firebase_auth: ^4.10.0             # Authentication
 
 ## Conclusion
 
-The WhatsApp-style single device login system is fully implemented and working across all authentication methods. Users can:
+The SingleTap-style single device login system is fully implemented and working across all authentication methods. Users can:
 - ✅ Login on only one device at a time
 - ✅ Automatically logout when another device logs in
 - ✅ View device information in settings

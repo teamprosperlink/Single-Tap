@@ -11,7 +11,7 @@
 ### Initial Problem
 **User Report**: "Both devices stay logged in - old device logout nahi hua"
 
-**Translation**: When Device B logs in with the same account, Device A should automatically logout (WhatsApp-style), but both devices remained logged in.
+**Translation**: When Device B logs in with the same account, Device A should automatically logout (SingleTap-style), but both devices remained logged in.
 
 ---
 
@@ -290,7 +290,7 @@ DEPLOY.bat
 - [ ] No dialog shown
 - [ ] Instant navigation for Device B
 - [ ] Automatic logout for Device A
-- [ ] WhatsApp-style behavior
+- [ ] SingleTap-style behavior
 
 ---
 
@@ -330,7 +330,7 @@ flutter run -d emulator-5556
 **Solution**: Fixed listener restart + Fixed all dialog paths + Added logging
 **Status**: Code complete ✅ - Deployment pending ⏳
 **Time Remaining**: ~10 minutes (deployment + testing)
-**Result**: WhatsApp-style single-device login 🎯
+**Result**: SingleTap-style single-device login 🎯
 
 ---
 

@@ -52,7 +52,7 @@
 - Device A gets logout signal
 - Device A shows login screen
 - Device B continues to main app
-- **Result**: Single device login (WhatsApp-style)
+- **Result**: Single device login (SingleTap-style)
 
 **Option 2: "Stay Logged In"** (NEW)
 - Device A stays logged in
@@ -161,7 +161,7 @@ Logout Other Device   Stay Logged In
 
 ## Feature Comparison
 
-### WhatsApp-Style Single Device (Option A)
+### SingleTap-Style Single Device (Option A)
 
 ```
 When User Clicks: "Logout Other Device"
@@ -238,7 +238,7 @@ b52f395 Add latest fix status and summary
 907a58e Add comprehensive testing and fix documentation
 92e0f80 Fix: Add listener ready flag to prevent race condition
 a4d782f Fix: Extend protection window to 10 seconds and delay to 2.5 seconds
-5206194 Fix: Implement WhatsApp-style single-device logout mechanism
+5206194 Fix: Implement SingleTap-style single-device logout mechanism
 ```
 
 ---

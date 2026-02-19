@@ -2,7 +2,7 @@
 
 ## 🎉 Status: ✅ COMPLETE & READY TO USE
 
-WhatsApp-style video calling has been fully implemented in the Supper app.
+SingleTap-style video calling has been fully implemented in the Supper app.
 
 ---
 
@@ -410,7 +410,7 @@ Before deploying to production:
 ✅ Error handling implemented
 ✅ Permissions handled correctly
 ✅ Cross-platform compatible (Android + iOS)
-✅ Matches WhatsApp behavior
+✅ Matches SingleTap behavior
 ✅ Production-ready code quality
 
 **The video calling feature is complete and ready for real-world use!**
@@ -437,4 +437,4 @@ Before deploying to production:
 - Choppy? Use WiFi instead of cellular
 - Black screen? Ask other person to turn on camera
 
-Enjoy your WhatsApp-style video calling! 🎉
+Enjoy your SingleTap-style video calling! 🎉

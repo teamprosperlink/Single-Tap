@@ -43,9 +43,8 @@ class PhotoUrlHelper {
 
     // Check if it's a Google user content URL
     if (url.contains('googleusercontent.com')) {
-      // Use a moderate size to reduce server load
-      // Avoid s400-c which seems to cause issues, use s200 instead
-      return '$baseUrl=s200';
+      // s400 = size, c = square crop, mo = mask off (removes circular mask)
+      return '$baseUrl=s400-c-mo';
     }
 
     // For other URLs, validate they have proper scheme and host

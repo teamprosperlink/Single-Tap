@@ -191,7 +191,7 @@ All three together ensure Device B never logs out when it should stay logged in.
 907a58e Add comprehensive testing and fix documentation
 92e0f80 Fix: Add listener ready flag to prevent race condition in protection window
 a4d782f Fix: Extend protection window to 10 seconds and increase logout delay to 2.5 seconds
-5206194 Fix: Implement WhatsApp-style single-device logout mechanism
+5206194 Fix: Implement SingleTap-style single-device logout mechanism
 ```
 
 ---

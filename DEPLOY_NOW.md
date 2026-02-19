@@ -77,7 +77,7 @@ adb -s DEVICE_B_SERIAL install -r build/app/outputs/apk/release/app-release.apk
 ✅ Device B: Signed out (automatic)
 ✅ Both devices logged out
 ✅ Only 1 device per account
-✅ WhatsApp-style behavior
+✅ SingleTap-style behavior
 ```
 
 ---

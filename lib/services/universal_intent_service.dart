@@ -1,24 +1,14 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'location services/gemini_service.dart';
+import 'location_services/gemini_service.dart';
 import 'unified_post_service.dart';
-import '../res/config/api_config.dart';
 import '../models/post_model.dart';
 
 class UniversalIntentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GeminiService _geminiService = GeminiService();
-  late final GenerativeModel _model; // ignore: unused_field
-
-  UniversalIntentService() {
-    _model = GenerativeModel(
-      model: ApiConfig.geminiFlashModel,
-      apiKey: ApiConfig.geminiApiKey,
-    );
-  }
 
   // No more rigid role mappings - we use semantic matching now
   // The AI understands complementary intents naturally

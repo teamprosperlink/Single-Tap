@@ -268,5 +268,5 @@ AFTER:   Device A crash (isOnline=false) → ❌ BLOCKED   = SECURE
 **Before**: 3 security holes, multi-device login possible
 **After**: Strict token matching, multi-device login impossible
 
-**Result**: WhatsApp-grade security ✅
+**Result**: SingleTap-grade security ✅
 

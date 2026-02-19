@@ -689,12 +689,12 @@ class _BusinessDashboardScreenState
               isDarkMode,
               onTap: () => _launchUrl(contact.website!),
             ),
-          if (contact.whatsapp != null)
+          if (contact.SingleTap != null)
             _buildContactRow(
               Icons.chat_outlined,
-              contact.whatsapp!,
+              contact.SingleTap!,
               isDarkMode,
-              onTap: () => _launchWhatsApp(contact.whatsapp!),
+              onTap: () => _launchSingleTap(contact.SingleTap!),
             ),
         ],
       ),
@@ -1461,7 +1461,7 @@ class _BusinessDashboardScreenState
     }
   }
 
-  Future<void> _launchWhatsApp(String phone) async {
+  Future<void> _launchSingleTap(String phone) async {
     // Remove any non-digit characters except +
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri.parse('https://wa.me/$cleanPhone');
@@ -1470,7 +1470,7 @@ class _BusinessDashboardScreenState
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch WhatsApp')),
+          const SnackBar(content: Text('Could not launch SingleTap')),
         );
       }
     }

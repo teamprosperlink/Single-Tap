@@ -141,7 +141,7 @@ class SafetyTipsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Follow these tips to stay safe while using Supper',
+                  'Follow these tips to stay safe while using SingleTap',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,

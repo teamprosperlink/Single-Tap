@@ -159,7 +159,7 @@ Verified:
 - ✅ `lib/main.dart` - Device session monitoring and protection window
 
 ### Features Enabled
-✅ WhatsApp-style single device login (automatic logout)
+✅ SingleTap-style single device login (automatic logout)
 ✅ 10-second protection window (prevents Device B self-logout)
 ✅ 2.5-second listener initialization delay
 ✅ Real-time Firestore listener for logout signals
@@ -284,7 +284,7 @@ flutter run -d emulator-5556
 
 - ✅ `FIX_LISTENER_RESTART.md` - Detailed technical explanation of this fix
 - ✅ `START_HERE.md` - Quick start guide (already exists)
-- ✅ `WHATSAPP_STYLE_LOGOUT.md` - Feature documentation (already exists)
+- ✅ `SingleTap_STYLE_LOGOUT.md` - Feature documentation (already exists)
 
 ---
 
@@ -309,7 +309,7 @@ flutter run -d emulator-5556
 ✅ **Documented**: Technical details in FIX_LISTENER_RESTART.md
 ✅ **Ready**: Build and test on two emulators now
 
-**Key Achievement**: Device A will now detect when Device B logs in with the same account and automatically logout, achieving WhatsApp-style single device login behavior.
+**Key Achievement**: Device A will now detect when Device B logs in with the same account and automatically logout, achieving SingleTap-style single device login behavior.
 
 ---
 
@@ -328,4 +328,4 @@ flutter run -d emulator-5556
 # Verify behavior and check logs
 ```
 
-🚀 **Ready to test the complete WhatsApp-style logout feature!**
+🚀 **Ready to test the complete SingleTap-style logout feature!**

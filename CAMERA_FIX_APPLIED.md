@@ -20,7 +20,7 @@ if (_callStatus == 'connected')  // ← Only shows when connected!
 This meant:
 - User A starts video call → Camera NOT visible yet
 - User B accepts → NOW camera shows
-- This was confusing and didn't match WhatsApp behavior
+- This was confusing and didn't match SingleTap behavior
 
 ### **The Fix:**
 Removed the conditional so camera shows from the VERY START of the call:
@@ -59,7 +59,7 @@ Positioned(
 ✅ Camera now visible immediately when video call starts
 ✅ Shows in top-right corner (120x160px) with white border
 ✅ Mirrored for front camera (user expectation)
-✅ Works like WhatsApp
+✅ Works like SingleTap
 
 ---
 
@@ -158,7 +158,7 @@ Positioned(
 **Why:**
 - Camera stream starts immediately when `joinCall()` is called
 - No reason to wait until "connected" status
-- WhatsApp shows camera immediately
+- SingleTap shows camera immediately
 - Better user experience
 
 ---
@@ -201,7 +201,7 @@ Positioned(
 
 ✅ **Camera now appears immediately** when video call starts
 ✅ **No longer waits for connection status**
-✅ **Matches WhatsApp behavior**
+✅ **Matches SingleTap behavior**
 ✅ **Better user experience**
 
 The fix is simple but important for making the video calling experience feel responsive and professional! 🎉

@@ -248,8 +248,11 @@ void showComingSoonDialog(
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: const Color.fromRGBO(32, 32, 32, 1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Colors.white, width: 1),
+      ),
       title: Row(
         children: [
           Container(

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'notification_service.dart';
-import 'location services/gemini_service.dart';
+import 'location_services/gemini_service.dart';
 
 class RealtimeMatchingService {
   static final RealtimeMatchingService _instance =
@@ -52,64 +52,6 @@ class RealtimeMatchingService {
         });
 
     debugPrint(' Listening for new posts in real-time');
-  }
-
-  // ignore: unused_element
-  Future<void> _checkIntentMatch(
-    DocumentSnapshot newIntent,
-    String currentUserId,
-  ) async {
-    try {
-      // Get user's active intents
-      final userIntents = await _firestore
-          .collection('intents')
-          .where('userId', isEqualTo: currentUserId)
-          .where('expiresAt', isGreaterThan: Timestamp.now())
-          .get();
-
-      if (userIntents.docs.isEmpty) return;
-
-      final newIntentData = newIntent.data() as Map<String, dynamic>;
-      final newEmbedding = List<double>.from(newIntentData['embedding'] ?? []);
-
-      if (newEmbedding.isEmpty) return;
-
-      // Check each user intent against the new intent
-      for (var userIntent in userIntents.docs) {
-        final userIntentData = userIntent.data();
-        final userEmbedding = List<double>.from(
-          userIntentData['embedding'] ?? [],
-        );
-
-        if (userEmbedding.isEmpty) continue;
-
-        // Calculate similarity
-        final similarity = _geminiService.calculateSimilarity(
-          userEmbedding,
-          newEmbedding,
-        );
-
-        // Check if it's a complementary match
-
-        final isComplementary = await _checkComplementaryMatch(
-          userIntentData['text'] ?? '',
-          newIntentData['text'] ?? '',
-        );
-
-        if (similarity > 0.7 || isComplementary) {
-          // We have a match! Send notification
-          await _sendMatchNotification(
-            currentUserId: currentUserId,
-            matchedUserId: newIntentData['userId'],
-            matchedUserName: newIntentData['userName'] ?? 'Someone',
-            matchedIntent: newIntentData['text'] ?? '',
-            similarity: similarity,
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error checking intent match: $e');
-    }
   }
 
   Future<void> _checkPostMatch(
@@ -198,31 +140,6 @@ class RealtimeMatchingService {
       }
     } catch (e) {
       debugPrint(' Error checking post match: $e');
-    }
-  }
-
-  Future<bool> _checkComplementaryMatch(String intent1, String intent2) async {
-    try {
-      final prompt =
-          '''
-Check if these two intents are complementary matches:
-Intent 1: "$intent1"
-Intent 2: "$intent2"
-
-Complementary matches include:
-- Buyer ↔ Seller
-- Lost ↔ Found
-- Job Seeker ↔ Job Poster
-- Looking for service ↔ Offering service
-- Need something ↔ Have something
-
-Return "true" if they complement each other, "false" otherwise.
-''';
-
-      final response = await _geminiService.generateContent(prompt);
-      return response?.toLowerCase().contains('true') ?? false;
-    } catch (e) {
-      return false;
     }
   }
 
