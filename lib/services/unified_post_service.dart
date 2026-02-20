@@ -1,17 +1,16 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'location services/gemini_service.dart';
 import '../models/post_model.dart';
+import '../res/config/api_config.dart';
 
 /// Unified Post Service - Single source of truth for all post operations
 ///
-/// This service:
-/// - Creates posts in ONE collection only (posts)
-/// - Ensures all posts have embeddings
-/// - Handles intent analysis automatically
-/// - Provides matching functionality
-/// - No data fragmentation
+/// Matching: relevance = max(semantic, keyword×0.70) + intentBonus(0.15) + locBonus(0.05) - lifestylePenalty
+/// Threshold: final_score ≥ 0.45 to surface a match (see ApiConfig)
 class UnifiedPostService {
   static final UnifiedPostService _instance = UnifiedPostService._internal();
   factory UnifiedPostService() => _instance;
@@ -20,6 +19,21 @@ class UnifiedPostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GeminiService _geminiService = GeminiService();
+
+  // Incompatible lifestyle-value pairs (order-independent)
+  static const List<List<String>> _incompatibleValues = [
+    ['vegan', 'meat_based'],
+    ['vegan', 'bbq'],
+    ['vegan', 'non_vegetarian'],
+    ['vegetarian', 'meat_based'],
+    ['vegetarian', 'bbq'],
+    ['vegetarian', 'non_vegetarian'],
+    ['pets', 'no_pets'],
+    ['smoking', 'no_smoking'],
+    ['quiet', 'loud'],
+    ['night_owl', 'early_bird'],
+    ['hunting', 'animal_rights'],
+  ];
 
   /// Create a new post with automatic AI processing
   Future<Map<String, dynamic>> createPost({
@@ -36,22 +50,17 @@ class UnifiedPostService {
   }) async {
     try {
       final userId = _auth.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('User not authenticated');
-      }
+      if (userId == null) throw Exception('User not authenticated');
 
-      // Get user profile for location context
       final userDoc = await _firestore.collection('users').doc(userId).get();
       final userProfile = userDoc.data() ?? {};
 
-      // Use provided location or user's profile location
       final postLocation = location ?? userProfile['location'];
       final postLatitude = latitude ?? userProfile['latitude']?.toDouble();
       final postLongitude = longitude ?? userProfile['longitude']?.toDouble();
 
       debugPrint(' Creating post: $originalPrompt');
 
-      // Step 1: Analyze intent with AI
       final intentAnalysis = await _analyzeIntent(
         originalPrompt,
         clarificationAnswers ?? {},
@@ -59,28 +68,24 @@ class UnifiedPostService {
 
       debugPrint(' Intent analyzed: ${intentAnalysis['primary_intent']}');
 
-      // Step 2: Generate title and description
       final title = intentAnalysis['title'] ?? _generateTitle(originalPrompt);
       final description = intentAnalysis['description'] ?? originalPrompt;
 
-      // Step 3: Generate embedding for semantic matching
       final embeddingText = _createTextForEmbedding(
         title: title,
         description: description,
         location: postLocation,
         domain: intentAnalysis['domain'],
         actionType: intentAnalysis['action_type'],
+        skillLevel: intentAnalysis['skill_level'],
+        exchangeModel: intentAnalysis['exchange_model'],
       );
 
       final embedding = await _geminiService.generateEmbedding(embeddingText);
-
       debugPrint(' Embedding generated: ${embedding.length} dimensions');
 
-      // Step 4: Extract keywords for search
       final keywords = _extractKeywords('$title $description');
 
-      // Get user name and photo for display
-      // Fallback to phone number for phone login users
       String? userName = userProfile['name'] ?? userProfile['displayName'];
       if (userName == null || userName.isEmpty || userName == 'User') {
         userName = userProfile['phone'];
@@ -90,9 +95,8 @@ class UnifiedPostService {
           userProfile['photoURL'] ??
           userProfile['profileImageUrl'];
 
-      // Step 5: Create PostModel
       final post = PostModel(
-        id: '', // Will be set by Firestore
+        id: '',
         userId: userId,
         originalPrompt: originalPrompt,
         title: title,
@@ -103,7 +107,7 @@ class UnifiedPostService {
         images: images,
         metadata: {
           'createdBy': 'UnifiedPostService',
-          'version': '2.0',
+          'version': '3.0',
           'embeddingModel': 'gemini-embedding',
         },
         createdAt: DateTime.now(),
@@ -123,14 +127,9 @@ class UnifiedPostService {
         userPhoto: userPhoto,
       );
 
-      // Step 6: Validate post before storing
       _validatePost(post);
 
-      // Step 7: Store in posts collection ONLY
-      final docRef = await _firestore
-          .collection('posts')
-          .add(post.toFirestore());
-
+      final docRef = await _firestore.collection('posts').add(post.toFirestore());
       debugPrint(' Post created successfully: ${docRef.id}');
 
       return {
@@ -149,38 +148,92 @@ class UnifiedPostService {
     }
   }
 
-  /// Analyze user intent with AI
+  /// Analyze user intent with AI — extracts all fields needed for matching
   Future<Map<String, dynamic>> _analyzeIntent(
     String userInput,
     Map<String, dynamic> clarificationAnswers,
   ) async {
     try {
-      final prompt =
-          '''
-Analyze this user request and extract intent information:
+      final prompt = '''
+Analyze this user request and extract structured intent for a two-sided matching app:
 "$userInput"
 
 ${clarificationAnswers.isNotEmpty ? 'User provided clarifications: $clarificationAnswers' : ''}
 
-Return ONLY valid JSON with this structure:
+Return ONLY valid JSON (no markdown, no backticks):
 {
-  "primary_intent": "what user wants (e.g., buying, selling, dating, friendship, etc.)",
+  "primary_intent": "what user wants in plain terms",
   "action_type": "offering/seeking/neutral",
-  "domain": "marketplace/social/jobs/housing/services/etc",
+  "is_symmetric": false,
+  "skill_level": "beginner/intermediate/advanced/expert/any",
+  "exchange_model": "free/paid/barter/equity/flexible/unspecified",
+  "service_type": "in_person/community/professional/digital",
+  "value_profile": [],
+  "domain": "marketplace/social/jobs/housing/services/education/fitness/etc",
   "title": "short title (max 50 chars)",
   "description": "detailed description",
-  "entities": {
-    "item": "main item/service mentioned",
-    "category": "category"
-  },
-  "search_keywords": ["keyword1", "keyword2", "keyword3"],
-  "confidence": 0.0-1.0
+  "entities": {"item": "main item/service", "category": "category"},
+  "complementary_intents": ["phrases describing the ideal matching person"],
+  "search_keywords": ["keyword1", "keyword2"],
+  "confidence": 0.9
 }
 
-Examples:
-- "selling iPhone 13" → primary_intent: "sell iPhone 13", action_type: "offering", domain: "marketplace"
-- "need plumber" → primary_intent: "plumber service", action_type: "seeking", domain: "services"
-- "looking for friend" → primary_intent: "friendship", action_type: "seeking", domain: "social"
+Field rules:
+- action_type: "offering" (providing/selling/teaching/renting out), "seeking" (needing/buying/learning/renting), "neutral" (unclear)
+- is_symmetric: true ONLY when both sides want the SAME thing (gym partner, chess partner, travel buddy, study group, co-founder, running partner, language exchange partner, book club member, hiking buddy, carpool partner). false for all offer/need pairs.
+- skill_level: expertise level involved. "any" if not specified.
+- exchange_model: "free" (no cost), "paid" (money expected), "barter" (trade skills/items), "equity" (ownership share), "flexible" (open to options), "unspecified" (not mentioned)
+- service_type: "in_person" (plumber/cleaner/tutor at home/local meetup), "community" (gym partner/book club/local social), "professional" (developer/lawyer/accountant — can be remote), "digital" (online tutor/remote VA/software — fully remote)
+- value_profile: lifestyle/value tags ONLY if clearly stated. Choose from: ["vegan","vegetarian","meat_based","bbq","non_vegetarian","pets","no_pets","smoking","no_smoking","quiet","loud","night_owl","early_bird","hunting","animal_rights"]. Empty array if none apply.
+- complementary_intents: THE MOST IMPORTANT FIELD. For is_symmetric=false, describe what the OPPOSITE side would say. For is_symmetric=true, describe the SAME intent from another person's perspective. Write 3-5 varied, natural-sounding phrases. Include domain-specific terms.
+
+=== EXAMPLES (24) ===
+
+--- Buyer/Seller (classic two-sided) ---
+1. "selling my iPhone 14 Pro" → action_type:"offering", is_symmetric:false, exchange_model:"paid", domain:"marketplace", complementary_intents:["looking to buy iPhone 14 Pro","want to purchase iPhone 14","need secondhand iPhone"]
+2. "want to buy a used laptop" → action_type:"seeking", is_symmetric:false, exchange_model:"paid", domain:"marketplace", complementary_intents:["selling used laptop","laptop for sale","secondhand laptop available"]
+3. "selling homemade cakes and pastries" → action_type:"offering", is_symmetric:false, exchange_model:"paid", domain:"food", complementary_intents:["want to order homemade cake","looking for custom pastries","need birthday cake"]
+
+--- Indirect Complementary (problem ↔ solution) ---
+4. "my sink is leaking badly" → action_type:"seeking", is_symmetric:false, service_type:"in_person", domain:"services", complementary_intents:["licensed plumber available","plumbing repair service","plumber for hire","fix leaking pipes"]
+5. "experienced plumber, available for jobs" → action_type:"offering", is_symmetric:false, service_type:"in_person", domain:"services", complementary_intents:["need plumber urgently","leaking pipe","toilet not working","bathroom renovation help"]
+6. "my car won't start, need help" → action_type:"seeking", is_symmetric:false, service_type:"in_person", domain:"automotive", complementary_intents:["mobile mechanic available","car repair service","auto electrician for hire","roadside assistance"]
+
+--- Symmetric (both sides want the same) ---
+7. "looking for a running partner" → action_type:"seeking", is_symmetric:true, service_type:"community", domain:"fitness", complementary_intents:["want a running partner","looking for jogging buddy","morning run companion"]
+8. "need a gym workout buddy" → action_type:"seeking", is_symmetric:true, service_type:"community", domain:"fitness", complementary_intents:["looking for gym partner","want workout buddy","fitness accountability partner"]
+9. "looking for chess partner to play weekly" → action_type:"seeking", is_symmetric:true, service_type:"community", domain:"social", complementary_intents:["want chess partner","looking for someone to play chess","weekly chess opponent"]
+10. "seeking co-founder for AI startup" → action_type:"seeking", is_symmetric:true, exchange_model:"equity", service_type:"professional", domain:"jobs", complementary_intents:["looking for co-founder","want to join AI startup","seeking startup partner"]
+
+--- Barter / Exchange ---
+11. "I teach Hindi, want to learn English" → action_type:"offering", is_symmetric:false, exchange_model:"barter", service_type:"community", domain:"education", complementary_intents:["I teach English want to learn Hindi","English speaker learning Hindi","English-Hindi language exchange"]
+12. "can do web design in exchange for photography" → action_type:"offering", is_symmetric:false, exchange_model:"barter", service_type:"professional", domain:"services", complementary_intents:["photographer willing to trade for web design","need website will trade photography","photographer seeking web designer for barter"]
+
+--- Professional Services ---
+13. "freelance web developer taking projects" → action_type:"offering", service_type:"professional", exchange_model:"paid", domain:"services", complementary_intents:["need website built","hire web developer","looking for freelance developer","web app project needs developer"]
+14. "need advanced PhD-level statistics tutor" → action_type:"seeking", skill_level:"expert", service_type:"professional", exchange_model:"paid", domain:"education", complementary_intents:["expert statistics tutor PhD level","advanced stats coaching available","statistics professor offering tutoring"]
+15. "online English tutor for kids" → action_type:"offering", service_type:"digital", domain:"education", complementary_intents:["need English tutor for child","online kids tutor wanted","English lessons for my daughter"]
+
+--- Housing ---
+16. "room available in 2BHK apartment" → action_type:"offering", service_type:"in_person", exchange_model:"paid", domain:"housing", complementary_intents:["looking for room to rent","need flatmate","searching for shared apartment","room needed near city"]
+17. "looking for a flatmate, non-smoker preferred" → action_type:"seeking", service_type:"in_person", exchange_model:"paid", domain:"housing", value_profile:["no_smoking"], complementary_intents:["room available non-smoking flat","flatmate wanted","apartment share available"]
+
+--- Lifestyle Values ---
+18. "vegan chef offering plant-based cooking classes" → action_type:"offering", service_type:"in_person", value_profile:["vegan"], domain:"education", complementary_intents:["want to learn vegan cooking","plant-based cooking student","vegan cooking class near me"]
+19. "need someone to teach me BBQ and grilling" → action_type:"seeking", service_type:"in_person", value_profile:["meat_based","bbq"], domain:"education", complementary_intents:["BBQ instructor available","teach grilling techniques","pitmaster offering classes"]
+
+--- Community / Social ---
+20. "starting a weekend hiking group" → action_type:"offering", is_symmetric:true, service_type:"community", exchange_model:"free", domain:"fitness", complementary_intents:["want to join hiking group","looking for hiking buddies","weekend hiking partner"]
+21. "looking for a book club to join" → action_type:"seeking", is_symmetric:true, service_type:"community", exchange_model:"free", domain:"social", complementary_intents:["book club looking for members","join our reading group","book discussion group open"]
+
+--- Same-side note: two sellers should NOT match ---
+22. "selling acoustic guitar, barely used" → action_type:"offering", is_symmetric:false, exchange_model:"paid", domain:"marketplace", complementary_intents:["want to buy acoustic guitar","looking for secondhand guitar","need beginner guitar"]
+
+--- Digital / Remote ---
+23. "offering virtual assistant services remotely" → action_type:"offering", service_type:"digital", exchange_model:"paid", domain:"services", complementary_intents:["need virtual assistant","looking for remote VA","hire someone for admin tasks remotely"]
+
+--- Lost & Found ---
+24. "lost golden retriever near downtown" → action_type:"seeking", is_symmetric:false, domain:"community", complementary_intents:["found golden retriever downtown","found dog near downtown","stray golden retriever found"]
 ''';
 
       final response = await _geminiService.generateContent(prompt);
@@ -188,12 +241,10 @@ Examples:
       if (response != null && response.isNotEmpty) {
         final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(response);
         if (jsonMatch != null) {
-          final jsonStr = jsonMatch.group(0)!;
-          return _parseIntentJson(jsonStr);
+          return _parseIntentJson(jsonMatch.group(0)!);
         }
       }
 
-      // Fallback if AI fails
       return _createFallbackIntent(userInput);
     } catch (e) {
       debugPrint('   Error analyzing intent: $e');
@@ -204,32 +255,30 @@ Examples:
   /// Parse intent JSON from AI response
   Map<String, dynamic> _parseIntentJson(String jsonStr) {
     try {
-      // Clean JSON string
-      jsonStr = jsonStr.replaceAll(RegExp(r'[\n\r\t]'), ' ');
-      jsonStr = jsonStr.replaceAll(RegExp(r'\s+'), ' ');
+      final cleaned = jsonStr
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
 
-      // Extract fields manually (safer than json.decode for AI output)
-      final primaryIntentMatch = RegExp(
-        r'"primary_intent":\s*"([^"]+)"',
-      ).firstMatch(jsonStr);
-      final actionTypeMatch = RegExp(
-        r'"action_type":\s*"([^"]+)"',
-      ).firstMatch(jsonStr);
-      final domainMatch = RegExp(r'"domain":\s*"([^"]+)"').firstMatch(jsonStr);
-      final titleMatch = RegExp(r'"title":\s*"([^"]+)"').firstMatch(jsonStr);
-      final descriptionMatch = RegExp(
-        r'"description":\s*"([^"]+)"',
-      ).firstMatch(jsonStr);
+      final decoded = jsonDecode(cleaned) as Map<String, dynamic>;
 
       return {
-        'primary_intent': primaryIntentMatch?.group(1) ?? 'general',
-        'action_type': actionTypeMatch?.group(1) ?? 'neutral',
-        'domain': domainMatch?.group(1) ?? 'general',
-        'title': titleMatch?.group(1),
-        'description': descriptionMatch?.group(1),
-        'entities': {},
-        'search_keywords': [],
-        'confidence': 0.8,
+        'primary_intent': decoded['primary_intent'] ?? 'general',
+        'action_type': decoded['action_type'] ?? 'neutral',
+        'is_symmetric': decoded['is_symmetric'] ?? false,
+        'skill_level': decoded['skill_level'] ?? 'any',
+        'exchange_model': decoded['exchange_model'] ?? 'unspecified',
+        'service_type': decoded['service_type'] ?? 'professional',
+        'value_profile': List<String>.from(decoded['value_profile'] ?? []),
+        'domain': decoded['domain'] ?? 'general',
+        'title': decoded['title'],
+        'description': decoded['description'],
+        'entities': decoded['entities'] ?? {},
+        'complementary_intents':
+            List<String>.from(decoded['complementary_intents'] ?? []),
+        'search_keywords':
+            List<String>.from(decoded['search_keywords'] ?? []),
+        'confidence': (decoded['confidence'] as num?)?.toDouble() ?? 0.8,
       };
     } catch (e) {
       debugPrint('   Error parsing intent JSON: $e');
@@ -237,268 +286,597 @@ Examples:
     }
   }
 
-  /// Create fallback intent when AI fails
+  /// Fallback intent when AI fails
   Map<String, dynamic> _createFallbackIntent(String userInput) {
     return {
       'primary_intent': userInput,
       'action_type': 'neutral',
+      'is_symmetric': false,
+      'skill_level': 'any',
+      'exchange_model': 'unspecified',
+      'service_type': 'professional',
+      'value_profile': <String>[],
       'domain': 'general',
-      'title': userInput.length > 50
-          ? '${userInput.substring(0, 47)}...'
-          : userInput,
+      'title': userInput.length > 50 ? '${userInput.substring(0, 47)}...' : userInput,
       'description': userInput,
       'entities': {},
+      'complementary_intents': <String>[],
       'search_keywords': userInput.toLowerCase().split(' '),
       'confidence': 0.5,
     };
   }
 
-  /// Generate title from prompt
   String _generateTitle(String prompt) {
     if (prompt.length <= 50) return prompt;
     return '${prompt.substring(0, 47)}...';
   }
 
-  /// Create text for embedding generation
+  /// Create text for embedding — richer text = better vector differentiation
   String _createTextForEmbedding({
     required String title,
     required String description,
     String? location,
     String? domain,
     String? actionType,
+    String? skillLevel,
+    String? exchangeModel,
   }) {
     final parts = <String>[title, description];
-    if (location != null && location.isNotEmpty) {
-      parts.add('Location: $location');
+    if (location != null && location.isNotEmpty) parts.add('Location: $location');
+    if (domain != null && domain.isNotEmpty) parts.add('Domain: $domain');
+    if (actionType != null && actionType.isNotEmpty) parts.add('Action: $actionType');
+    if (skillLevel != null && skillLevel.isNotEmpty && skillLevel != 'any') {
+      parts.add('Level: $skillLevel');
     }
-    if (domain != null && domain.isNotEmpty) {
-      parts.add('Domain: $domain');
-    }
-    if (actionType != null && actionType.isNotEmpty) {
-      parts.add('Action: $actionType');
+    if (exchangeModel != null &&
+        exchangeModel.isNotEmpty &&
+        exchangeModel != 'unspecified') {
+      parts.add('Exchange: $exchangeModel');
     }
     return parts.join(' ');
   }
 
   /// Extract keywords from text
   List<String> _extractKeywords(String text) {
-    final stopWords = {
-      'the',
-      'a',
-      'an',
-      'is',
-      'are',
-      'was',
-      'were',
-      'be',
-      'been',
-      'being',
-      'have',
-      'has',
-      'had',
-      'do',
-      'does',
-      'did',
-      'will',
-      'would',
-      'could',
-      'should',
-      'may',
-      'might',
-      'must',
-      'shall',
-      'can',
-      'need',
-      'dare',
-      'ought',
-      'used',
-      'to',
-      'of',
-      'in',
-      'for',
-      'on',
-      'with',
-      'at',
-      'by',
-      'from',
-      'as',
-      'into',
-      'through',
-      'during',
-      'before',
-      'after',
-      'above',
-      'below',
-      'between',
-      'under',
-      'again',
-      'further',
-      'then',
-      'once',
-      'and',
-      'but',
-      'or',
-      'nor',
-      'so',
-      'yet',
-      'both',
-      'either',
-      'neither',
-      'not',
-      'only',
-      'own',
-      'same',
-      'than',
-      'too',
-      'very',
-      'just',
-      'i',
-      'me',
-      'my',
-      'myself',
-      'we',
-      'our',
-      'ours',
-      'you',
-      'your',
-      'he',
-      'him',
-      'his',
-      'she',
-      'her',
-      'it',
-      'its',
-      'they',
-      'them',
-      'their',
-      'what',
-      'which',
-      'who',
-      'whom',
-      'this',
-      'that',
-      'these',
-      'those',
-      'am',
+    const stopWords = {
+      'the','a','an','is','are','was','were','be','been','being','have','has',
+      'had','do','does','did','will','would','could','should','may','might',
+      'must','shall','can','need','dare','ought','used','to','of','in','for',
+      'on','with','at','by','from','as','into','through','during','before',
+      'after','above','below','between','under','again','further','then','once',
+      'and','but','or','nor','so','yet','both','either','neither','not','only',
+      'own','same','than','too','very','just','i','me','my','myself','we','our',
+      'ours','you','your','he','him','his','she','her','it','its','they','them',
+      'their','what','which','who','whom','this','that','these','those','am',
+      // Intent-direction words — describe the side (offer/seek), not the subject.
+      // Keeping these causes "selling X" and "selling Y" to share a keyword,
+      // making the keyword fallback fire on unrelated domain pairs.
+      'sell','selling','sold','buy','buying','bought','want','wanting','wanted',
+      'look','looking','looked','find','finding','found','search','searching',
+      'seek','seeking','offer','offering','offered','provide','providing',
+      'give','giving','get','getting','hire','hiring','rent','renting',
+      'needing','require','requiring','request','requesting',
+      'available','help','helping',
     };
-
     return text
         .toLowerCase()
         .replaceAll(RegExp(r'[^\w\s]'), '')
         .split(RegExp(r'\s+'))
-        .where((word) => word.length > 2 && !stopWords.contains(word))
+        .where((w) => w.length > 2 && !stopWords.contains(w))
         .toSet()
         .take(20)
         .toList();
   }
 
-  /// Validate post before storing
   void _validatePost(PostModel post) {
-    if (post.userId.isEmpty) {
-      throw Exception('Post must have userId');
-    }
-    if (post.originalPrompt.isEmpty) {
-      throw Exception('Post must have originalPrompt');
-    }
+    if (post.userId.isEmpty) throw Exception('Post must have userId');
+    if (post.originalPrompt.isEmpty) throw Exception('Post must have originalPrompt');
     if (post.embedding == null || post.embedding!.isEmpty) {
       throw Exception('Post must have embedding');
     }
-    if (post.title.isEmpty) {
-      throw Exception('Post must have title');
-    }
+    if (post.title.isEmpty) throw Exception('Post must have title');
   }
 
-  /// Find matching posts for a given post
+  // ── Scoring helpers ──────────────────────────────────────────────────────
+
+  /// Haversine distance in km between two lat/lon points
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371.0; // Earth radius km
+    final dLat = _toRad(lat2 - lat1);
+    final dLon = _toRad(lon2 - lon1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRad(lat1)) * cos(_toRad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  double _toRad(double deg) => deg * pi / 180;
+
+  /// Location score 0.0–1.0 based on service_type and distance
+  /// Returns 0.5 (neutral) if either post has no coordinates
+  double _locationScore(PostModel src, PostModel cnd) {
+    final srcLat = src.latitude;
+    final srcLon = src.longitude;
+    final cndLat = cnd.latitude;
+    final cndLon = cnd.longitude;
+
+    // Determine service type — use source; if digital, skip location entirely
+    final serviceType =
+        (src.intentAnalysis['service_type'] ??
+                cnd.intentAnalysis['service_type'] ??
+                'professional')
+            .toString()
+            .toLowerCase();
+
+    if (serviceType == 'digital') return 1.0; // location irrelevant
+
+    if (srcLat == null || srcLon == null || cndLat == null || cndLon == null) {
+      return 0.65; // favour match when coords unknown — don't penalise missing GPS
+    }
+
+    final distKm = _haversineKm(srcLat, srcLon, cndLat, cndLon);
+
+    // Wide radii for early-stage app with few users.
+    // Tighten these once the user base grows.
+    double innerKm;
+    double outerKm;
+    switch (serviceType) {
+      case 'in_person':
+        innerKm = 50.0;
+        outerKm = 500.0;
+      case 'community':
+        innerKm = 100.0;
+        outerKm = 500.0;
+      case 'professional':
+      default:
+        innerKm = 200.0;
+        outerKm = 500.0;
+    }
+
+    if (distKm <= innerKm) return 1.0;
+    if (distKm >= outerKm) return 0.0;
+    // Linear decay in the band
+    return 1.0 - (distKm - innerKm) / (outerKm - innerKm);
+  }
+
+  /// Lifestyle/value incompatibility penalty — 0.0 (ok) or 0.15 (clash)
+  double _lifestylePenalty(PostModel src, PostModel cnd) {
+    final srcVals =
+        List<String>.from(src.intentAnalysis['value_profile'] ?? []);
+    final cndVals =
+        List<String>.from(cnd.intentAnalysis['value_profile'] ?? []);
+
+    if (srcVals.isEmpty || cndVals.isEmpty) return 0.0;
+
+    for (final pair in _incompatibleValues) {
+      final a = pair[0];
+      final b = pair[1];
+      if ((srcVals.contains(a) && cndVals.contains(b)) ||
+          (srcVals.contains(b) && cndVals.contains(a))) {
+        return 0.15;
+      }
+    }
+    return 0.0;
+  }
+
+  /// Normalize action-type synonyms into canonical sides for same-side blocking.
+  String _canonicalSide(String action) {
+    const offerSide = {
+      'offering', 'selling', 'sell', 'sold', 'giving', 'give',
+      'providing', 'provide', 'renting', 'rent', 'hiring', 'hire',
+    };
+    const seekSide = {
+      'seeking', 'buying', 'buy', 'bought', 'looking', 'look',
+      'wanting', 'want', 'requesting', 'request', 'rent_seeking', 'job_seeking',
+      'finding', 'find', 'searching', 'search',
+    };
+    if (offerSide.contains(action)) return 'offer';
+    if (seekSide.contains(action)) return 'seek';
+    return action;
+  }
+
+  /// Infer the side of a post — uses action_type first, falls back to scanning
+  /// the original prompt text. Handles old posts that have action_type "neutral".
+  String inferSide(PostModel post) {
+    final action = (post.intentAnalysis['action_type'] ?? 'neutral')
+        .toString()
+        .toLowerCase();
+    final side = _canonicalSide(action);
+    if (side == 'offer' || side == 'seek') return side;
+
+    // action_type was neutral/unrecognised — scan the actual post text
+    final text = '${post.originalPrompt} ${post.title}'.toLowerCase();
+
+    // Check offer phrases first (order matters — "selling" before "looking")
+    const offerPhrases = [
+      'selling', 'i sell', 'for sale', 'offering', 'i offer',
+      'providing', 'i provide', 'teaching', 'i teach', 'i tutor',
+      'available for', 'renting out', 'i am a ', 'i am an ', 'freelance',
+      'i can ', 'i have a ', 'i have an ',
+    ];
+    for (final p in offerPhrases) {
+      if (text.contains(p)) return 'offer';
+    }
+
+    // Then check seek phrases — covers "i am looking X" (no "for")
+    const seekPhrases = [
+      'looking for', 'i am looking', 'am looking', 'looking to',
+      'i need', 'i want', 'searching for', 'buying', 'seeking',
+      'need a ', 'need an ', 'want a ', 'want an ', 'want to buy',
+      'want to find', 'find a ', 'hire a ', 'need someone',
+      'where can i', 'anyone selling', 'anyone have',
+    ];
+    for (final p in seekPhrases) {
+      if (text.contains(p)) return 'seek';
+    }
+
+    // Last-resort: "I am [profession]" without article (e.g., "I am plumber")
+    final iAmMatch = RegExp(r'\bi am (\w+)').firstMatch(text);
+    if (iAmMatch != null) {
+      final word = iAmMatch.group(1)!;
+      // Exclude seeking-type words that follow "I am"
+      const seekingWords = {
+        'looking', 'searching', 'seeking', 'trying', 'wanting',
+        'interested', 'new', 'based', 'located', 'here', 'ready',
+      };
+      if (!seekingWords.contains(word)) return 'offer';
+    }
+
+    return 'neutral';
+  }
+
+  // ── Find matches ─────────────────────────────────────────────────────────
+
+  /// Find matching posts — dual-signal approach:
+  ///   Signal 1: Semantic embedding similarity (when Gemini works)
+  ///   Signal 2: Keyword overlap (always works, no API needed)
+  ///   relevance = max(signal1, signal2) → picks whichever is stronger
+  ///   Only hard filter: same-side block (both seeking or both offering)
   Future<List<PostModel>> findMatches(String postId) async {
     try {
-      // Get the source post
       final postDoc = await _firestore.collection('posts').doc(postId).get();
-      if (!postDoc.exists) {
-        throw Exception('Post not found');
-      }
+      if (!postDoc.exists) throw Exception('Post not found');
 
       final sourcePost = PostModel.fromFirestore(postDoc);
       final sourceEmbedding = sourcePost.embedding ?? [];
 
       if (sourceEmbedding.isEmpty) {
-        debugPrint(' Source post has no embedding, regenerating...');
-        // Regenerate embedding
+        debugPrint('Source post has no embedding, regenerating...');
         final embeddingText = _createTextForEmbedding(
           title: sourcePost.title,
           description: sourcePost.description,
           location: sourcePost.location,
         );
-        final newEmbedding = await _geminiService.generateEmbedding(
-          embeddingText,
-        );
-
+        final newEmbedding = await _geminiService.generateEmbedding(embeddingText);
         await postDoc.reference.update({
           'embedding': newEmbedding,
           'embeddingUpdatedAt': FieldValue.serverTimestamp(),
         });
-
-        return findMatches(postId); // Retry with new embedding
+        return findMatches(postId);
       }
 
-      debugPrint(' Finding matches for: ${sourcePost.title}');
+      debugPrint('Finding matches for: ${sourcePost.title}');
 
-      // Query active posts (exclude own posts)
+      // Search embedding: use complementary phrases when available
+      final complementaryIntents = List<String>.from(
+        sourcePost.intentAnalysis['complementary_intents'] ?? [],
+      );
+      List<double> searchEmbedding;
+      if (complementaryIntents.isNotEmpty) {
+        final searchText =
+            '${complementaryIntents.join('. ')} ${sourcePost.searchKeywords.join(' ')}';
+        debugPrint('[Path A] complementary: $searchText');
+        searchEmbedding = await _geminiService.generateEmbedding(searchText);
+      } else {
+        // Path B: No complementary_intents (AI failed or fallback).
+        // Build a composite search text for a better search vector.
+        final fallbackText = '${sourcePost.title} ${sourcePost.description} '
+            '${sourcePost.searchKeywords.join(' ')}';
+        debugPrint('[Path B] fallback text: $fallbackText');
+        searchEmbedding = await _geminiService.generateEmbedding(fallbackText);
+      }
+
       final querySnapshot = await _firestore
           .collection('posts')
           .where('isActive', isEqualTo: true)
-          .where('userId', isNotEqualTo: sourcePost.userId)
-          .limit(100)
+          .limit(ApiConfig.matchQueryLimit)
           .get();
 
-      List<PostModel> matches = [];
+      final List<PostModel> matches = [];
+      final sourceSide = inferSide(sourcePost);
+      final sourceSymmetric =
+          sourcePost.intentAnalysis['is_symmetric'] == true;
+      final sourceKw = Set<String>.from(sourcePost.keywords ?? []);
 
-      for (var doc in querySnapshot.docs) {
-        final candidatePost = PostModel.fromFirestore(doc);
-        final candidateEmbedding = candidatePost.embedding ?? [];
+      debugPrint('=== MATCH DEBUG ===');
+      debugPrint('Source: "${sourcePost.title}" side=$sourceSide '
+          'kw=$sourceKw userId=${sourcePost.userId}');
+      debugPrint('Total docs: ${querySnapshot.docs.length}');
 
-        // Skip if no embedding
-        if (candidateEmbedding.isEmpty) {
-          debugPrint(' Skipping post ${doc.id} - no embedding');
+      int skipUser = 0, skipEmbed = 0, skipLowRel = 0;
+      int skipSameSide = 0, skipExchange = 0, skipThreshold = 0;
+
+      for (final doc in querySnapshot.docs) {
+        if (doc.data()['userId'] == sourcePost.userId) {
+          skipUser++;
+          continue;
+        }
+        final candidate = PostModel.fromFirestore(doc);
+        final candidateEmbedding = candidate.embedding ?? [];
+        if (candidateEmbedding.isEmpty) { skipEmbed++; continue; }
+
+        // ── Signal 1: Semantic similarity ──────────────────────────────
+        final semSim = _geminiService.calculateSimilarity(
+          searchEmbedding, candidateEmbedding,
+        );
+
+        // ── Signal 2: Keyword overlap ──────────────────────────────────
+        final candidateKw = Set<String>.from(candidate.keywords ?? []);
+        final shared = sourceKw.intersection(candidateKw);
+        int compHits = 0;
+        for (final ci in complementaryIntents) {
+          for (final word in ci.toLowerCase().split(' ')) {
+            if (word.length > 3 && candidateKw.contains(word)) {
+              compHits++;
+              break;
+            }
+          }
+        }
+        final totalKwHits = shared.length + compHits;
+        // 1 hit = 0.50, 2 hits = 0.75, 3+ = 1.0
+        final kwScore = totalKwHits <= 0
+            ? 0.0
+            : totalKwHits == 1
+                ? 0.50
+                : totalKwHits == 2
+                    ? 0.75
+                    : 1.0;
+
+        // Relevance = best of semantic OR keyword signal
+        final relevance = max(semSim, kwScore * ApiConfig.matchKeywordDamping);
+
+        debugPrint('  "${candidate.title}" sem=${semSim.toStringAsFixed(3)} '
+            'kw=$shared compHits=$compHits kwScore=${kwScore.toStringAsFixed(2)} '
+            'rel=${relevance.toStringAsFixed(3)}');
+
+        // Pre-filter: neither signal shows relevance
+        if (relevance < ApiConfig.matchPreFilterThreshold) {
+          debugPrint('    SKIP: low relevance');
+          skipLowRel++;
           continue;
         }
 
-        // Calculate semantic similarity
-        final similarity = _geminiService.calculateSimilarity(
-          sourceEmbedding,
-          candidateEmbedding,
-        );
-
-        // Check if intents match (complementary)
-        final intentMatch = sourcePost.matchesIntent(candidatePost);
-
-        // Check if price matches
-        final priceMatch = sourcePost.matchesPrice(candidatePost);
-
-        // Calculate final match score
-        final matchScore =
-            (similarity * 0.6) +
-            (intentMatch ? 0.3 : 0.0) +
-            (priceMatch ? 0.1 : 0.0);
-
-        // Only include good matches (score > 0.65)
-        if (matchScore > 0.65) {
-          matches.add(candidatePost.copyWith(similarityScore: matchScore));
-          debugPrint(
-            ' Match found: ${candidatePost.title} (score: ${matchScore.toStringAsFixed(2)})',
-          );
+        // ── Same-side block ────────────────────────────────────────────
+        final candidateSide = inferSide(candidate);
+        final candidateSymmetric =
+            candidate.intentAnalysis['is_symmetric'] == true;
+        if (sourceSide == candidateSide &&
+            sourceSide != 'neutral' &&
+            !(sourceSymmetric && candidateSymmetric)) {
+          debugPrint('    SKIP: same-side ($sourceSide)');
+          skipSameSide++;
+          continue;
         }
+
+        // ── Exchange block ─────────────────────────────────────────────
+        final srcEx = (sourcePost.intentAnalysis['exchange_model'] ??
+                'unspecified')
+            .toString();
+        final cndEx = (candidate.intentAnalysis['exchange_model'] ??
+                'unspecified')
+            .toString();
+        if ((srcEx == 'free' && cndEx == 'paid') ||
+            (srcEx == 'paid' && cndEx == 'free') ||
+            (srcEx == 'equity' && cndEx == 'paid')) {
+          debugPrint('    SKIP: exchange ($srcEx vs $cndEx)');
+          skipExchange++;
+          continue;
+        }
+
+        // ── Intent complement bonus ────────────────────────────────────
+        // Only award bonus when there's solid evidence of domain relevance
+        // (good semantic sim OR keyword overlap). Prevents cross-domain
+        // false positives like plumbing → roommate.
+        final complementary =
+            (sourceSide == 'offer' && candidateSide == 'seek') ||
+            (sourceSide == 'seek' && candidateSide == 'offer') ||
+            (sourceSymmetric && candidateSymmetric) ||
+            sourceSide == 'neutral' ||
+            candidateSide == 'neutral';
+        final hasEvidence = semSim >= 0.65 || kwScore > 0;
+        final intentBonus =
+            complementary && hasEvidence ? ApiConfig.matchIntentBonus : 0.0;
+
+        // ── Location bonus (small — just for ranking) ──────────────────
+        final locBonus = _locationScore(sourcePost, candidate) * ApiConfig.matchLocationWeight;
+
+        // ── Lifestyle penalty ──────────────────────────────────────────
+        final penalty = _lifestylePenalty(sourcePost, candidate);
+
+        // ── Final score ────────────────────────────────────────────────
+        final finalScore =
+            (relevance + intentBonus + locBonus - penalty).clamp(0.0, 1.0);
+
+        if (finalScore < ApiConfig.matchFinalThreshold) {
+          debugPrint('    SKIP: score ${finalScore.toStringAsFixed(2)}');
+          skipThreshold++;
+          continue;
+        }
+
+        matches.add(candidate.copyWith(similarityScore: finalScore));
+        debugPrint('    MATCHED! ${finalScore.toStringAsFixed(2)} '
+            '(rel=${relevance.toStringAsFixed(2)} intent=$complementary '
+            'pen=${penalty.toStringAsFixed(2)})');
       }
 
-      // Sort by match score
+      debugPrint('=== STATS: user=$skipUser embed=$skipEmbed '
+          'lowRel=$skipLowRel sameSide=$skipSameSide '
+          'exchange=$skipExchange threshold=$skipThreshold '
+          'MATCHED=${matches.length} ===');
+
       matches.sort(
-        (a, b) => (b.similarityScore ?? 0).compareTo(a.similarityScore ?? 0),
+        (a, b) =>
+            (b.similarityScore ?? 0).compareTo(a.similarityScore ?? 0),
       );
 
-      debugPrint(' Total matches found: ${matches.length}');
-
-      return matches.take(20).toList();
+      debugPrint('Total matches: ${matches.length}');
+      return matches.take(ApiConfig.matchMaxResults).toList();
     } catch (e) {
-      debugPrint(' Error finding matches: $e');
+      debugPrint('Error finding matches: $e');
+      return [];
+    }
+  }
+
+  // ── Reusable scoring ─────────────────────────────────────────────────
+
+  /// Score a single candidate against a source post. Returns null if the
+  /// candidate should be filtered out (same-side, exchange block, below threshold).
+  /// Public so RealtimeMatchingService and VoiceAssistantService can reuse it.
+  double? scoreCandidate({
+    required PostModel sourcePost,
+    required PostModel candidate,
+    required List<double> searchEmbedding,
+    required String sourceSide,
+    required bool sourceSymmetric,
+    required Set<String> sourceKw,
+    required List<String> complementaryIntents,
+  }) {
+    final candidateEmbedding = candidate.embedding ?? [];
+    if (candidateEmbedding.isEmpty) return null;
+
+    // Signal 1: Semantic similarity
+    final semSim = _geminiService.calculateSimilarity(
+      searchEmbedding,
+      candidateEmbedding,
+    );
+
+    // Signal 2: Keyword overlap
+    final candidateKw = Set<String>.from(candidate.keywords ?? []);
+    final shared = sourceKw.intersection(candidateKw);
+    int compHits = 0;
+    for (final ci in complementaryIntents) {
+      for (final word in ci.toLowerCase().split(' ')) {
+        if (word.length > 3 && candidateKw.contains(word)) {
+          compHits++;
+          break;
+        }
+      }
+    }
+    final totalKwHits = shared.length + compHits;
+    final kwScore = totalKwHits <= 0
+        ? 0.0
+        : totalKwHits == 1
+            ? 0.50
+            : totalKwHits == 2
+                ? 0.75
+                : 1.0;
+
+    final relevance = max(semSim, kwScore * ApiConfig.matchKeywordDamping);
+    if (relevance < ApiConfig.matchPreFilterThreshold) return null;
+
+    // Same-side block
+    final candidateSide = inferSide(candidate);
+    final candidateSymmetric =
+        candidate.intentAnalysis['is_symmetric'] == true;
+    if (sourceSide == candidateSide &&
+        sourceSide != 'neutral' &&
+        !(sourceSymmetric && candidateSymmetric)) {
+      return null;
+    }
+
+    // Exchange model block
+    final srcEx =
+        (sourcePost.intentAnalysis['exchange_model'] ?? 'unspecified')
+            .toString();
+    final cndEx =
+        (candidate.intentAnalysis['exchange_model'] ?? 'unspecified')
+            .toString();
+    if ((srcEx == 'free' && cndEx == 'paid') ||
+        (srcEx == 'paid' && cndEx == 'free') ||
+        (srcEx == 'equity' && cndEx == 'paid')) {
+      return null;
+    }
+
+    // Intent complement bonus — gated on evidence to block cross-domain noise
+    final complementary =
+        (sourceSide == 'offer' && candidateSide == 'seek') ||
+            (sourceSide == 'seek' && candidateSide == 'offer') ||
+            (sourceSymmetric && candidateSymmetric) ||
+            sourceSide == 'neutral' ||
+            candidateSide == 'neutral';
+    final hasEvidence = semSim >= 0.50 || kwScore > 0;
+    final intentBonus =
+        complementary && hasEvidence ? ApiConfig.matchIntentBonus : 0.0;
+
+    // Location bonus
+    final locBonus =
+        _locationScore(sourcePost, candidate) * ApiConfig.matchLocationWeight;
+
+    // Lifestyle penalty
+    final penalty = _lifestylePenalty(sourcePost, candidate);
+
+    final finalScore =
+        (relevance + intentBonus + locBonus - penalty).clamp(0.0, 1.0);
+    if (finalScore < ApiConfig.matchFinalThreshold) return null;
+
+    return finalScore;
+  }
+
+  /// Find matches for a given PostModel directly (no Firestore fetch needed).
+  /// Used by RealtimeMatchingService and VoiceAssistantService.
+  Future<List<PostModel>> findMatchesForPost(PostModel sourcePost) async {
+    try {
+      final sourceEmbedding = sourcePost.embedding ?? [];
+      if (sourceEmbedding.isEmpty) return [];
+
+      final complementaryIntents = List<String>.from(
+        sourcePost.intentAnalysis['complementary_intents'] ?? [],
+      );
+      List<double> searchEmbedding;
+      if (complementaryIntents.isNotEmpty) {
+        final searchText =
+            '${complementaryIntents.join('. ')} ${sourcePost.searchKeywords.join(' ')}';
+        searchEmbedding = await _geminiService.generateEmbedding(searchText);
+      } else {
+        final fallbackText = '${sourcePost.title} ${sourcePost.description} '
+            '${sourcePost.searchKeywords.join(' ')}';
+        searchEmbedding = await _geminiService.generateEmbedding(fallbackText);
+      }
+
+      final querySnapshot = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .limit(ApiConfig.matchQueryLimit)
+          .get();
+
+      final List<PostModel> matches = [];
+      final sourceSide = inferSide(sourcePost);
+      final sourceSymmetric =
+          sourcePost.intentAnalysis['is_symmetric'] == true;
+      final sourceKw = Set<String>.from(sourcePost.keywords ?? []);
+
+      for (final doc in querySnapshot.docs) {
+        if (doc.data()['userId'] == sourcePost.userId) continue;
+        final candidate = PostModel.fromFirestore(doc);
+
+        final score = scoreCandidate(
+          sourcePost: sourcePost,
+          candidate: candidate,
+          searchEmbedding: searchEmbedding,
+          sourceSide: sourceSide,
+          sourceSymmetric: sourceSymmetric,
+          sourceKw: sourceKw,
+          complementaryIntents: complementaryIntents,
+        );
+
+        if (score == null) continue;
+        matches.add(candidate.copyWith(similarityScore: score));
+      }
+
+      matches.sort((a, b) =>
+          (b.similarityScore ?? 0).compareTo(a.similarityScore ?? 0));
+      return matches.take(ApiConfig.matchMaxResults).toList();
+    } catch (e) {
+      debugPrint('Error in findMatchesForPost: $e');
       return [];
     }
   }
@@ -512,7 +890,6 @@ Examples:
           .where('isActive', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .get();
-
       return querySnapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
@@ -522,7 +899,6 @@ Examples:
     }
   }
 
-  /// Deactivate a post (soft delete)
   Future<bool> deactivatePost(String postId) async {
     try {
       await _firestore.collection('posts').doc(postId).update({
@@ -536,7 +912,6 @@ Examples:
     }
   }
 
-  /// Permanently delete a post
   Future<bool> deletePost(String postId) async {
     try {
       await _firestore.collection('posts').doc(postId).delete();
@@ -547,7 +922,6 @@ Examples:
     }
   }
 
-  /// Stream user's active posts
   Stream<List<PostModel>> streamUserPosts(String userId) {
     return _firestore
         .collection('posts')
@@ -555,14 +929,9 @@ Examples:
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => PostModel.fromFirestore(doc))
-              .toList();
-        });
+        .map((s) => s.docs.map((d) => PostModel.fromFirestore(d)).toList());
   }
 
-  /// Increment view count
   Future<void> incrementViewCount(String postId) async {
     try {
       await _firestore.collection('posts').doc(postId).update({
@@ -573,7 +942,6 @@ Examples:
     }
   }
 
-  /// Add matched user ID
   Future<void> addMatchedUser(String postId, String matchedUserId) async {
     try {
       await _firestore.collection('posts').doc(postId).update({

@@ -1,74 +1,14 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'location services/gemini_service.dart';
 import 'unified_post_service.dart';
-import '../res/config/api_config.dart';
 import '../models/post_model.dart';
 
 class UniversalIntentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GeminiService _geminiService = GeminiService();
-  late final GenerativeModel _model; // ignore: unused_field
 
-  UniversalIntentService() {
-    _model = GenerativeModel(
-      model: ApiConfig.geminiFlashModel,
-      apiKey: ApiConfig.geminiApiKey,
-    );
-  }
-
-  // No more rigid role mappings - we use semantic matching now
-  // The AI understands complementary intents naturally
-
-  // Wrapper method for unified processor
-  Future<Map<String, dynamic>> processIntent(String text) async {
-    return await processIntentAndMatch(text);
-  }
-
-  // Find matches for a given intent
-  Future<List<Map<String, dynamic>>> findMatches(
-    Map<String, dynamic> intent,
-  ) async {
-    // Use the intent to find matches
-    final intents = await FirebaseFirestore.instance
-        .collection('intents')
-        .where('expiresAt', isGreaterThan: Timestamp.now())
-        .limit(20)
-        .get();
-
-    List<Map<String, dynamic>> matches = [];
-    final intentEmbedding = intent['embedding'] as List<double>?;
-
-    if (intentEmbedding != null) {
-      for (var doc in intents.docs) {
-        final data = doc.data();
-        final docEmbedding = List<double>.from(data['embedding'] ?? []);
-
-        if (docEmbedding.isNotEmpty) {
-          final similarity = _geminiService.calculateSimilarity(
-            intentEmbedding,
-            docEmbedding,
-          );
-          if (similarity > 0.65) {
-            data['id'] = doc.id;
-            data['similarity'] = similarity;
-            matches.add(data);
-          }
-        }
-      }
-    }
-
-    // Sort by similarity
-    matches.sort(
-      (a, b) => (b['similarity'] ?? 0).compareTo(a['similarity'] ?? 0),
-    );
-    return matches.take(10).toList();
-  }
-
-  // UPDATED: Process user intent and find matches using UnifiedPostService
+  // Process user intent and find matches using UnifiedPostService
   Future<Map<String, dynamic>> processIntentAndMatch(String userInput) async {
     try {
       final userId = _auth.currentUser?.uid;
@@ -133,14 +73,24 @@ class UniversalIntentService {
       if (userDoc.exists) {
         final userProfile = userDoc.data();
 
+        // Resolve user name — prefer post-stored name, fall back to profile fields
+        final resolvedName =
+            (match.userName?.isNotEmpty == true ? match.userName : null) ??
+            userProfile?['name'] ??
+            userProfile?['displayName'] ??
+            userProfile?['phone'] ??
+            'User';
+
         enrichedMatches.add({
           'id': match.id,
           'userId': match.userId,
+          'userName': resolvedName,
           'title': match.title,
           'description': match.description,
+          'text': match.originalPrompt, // used by MatchCardWithActions
           'originalPrompt': match.originalPrompt,
           'intentAnalysis': match.intentAnalysis,
-          'location': match.location,
+          'location': match.location ?? userProfile?['location'],
           'latitude': match.latitude,
           'longitude': match.longitude,
           'price': match.price,

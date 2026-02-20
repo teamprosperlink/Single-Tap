@@ -232,15 +232,17 @@ Return ONLY valid JSON (no markdown, no backticks):
     await _ensureInitialized();
 
     try {
-      // Generate embedding for user's intent
-      final userText =
-          '${userIntent.primaryIntent} ${userIntent.searchKeywords.join(' ')}';
-      final userEmbedding = await generateEmbedding(userText);
+      // Generate embedding from AI-generated complementary intents.
+      // A seller's complementary is "buyer" — so we search for buyer posts.
+      // This is purely Gemini-driven, no hardcoded action types.
+      final searchText = userIntent.complementaryIntents.isNotEmpty
+          ? '${userIntent.complementaryIntents.join('. ')} ${userIntent.searchKeywords.join(' ')}'
+          : '${userIntent.primaryIntent} ${userIntent.searchKeywords.join(' ')}';
+      final userEmbedding = await generateEmbedding(searchText);
 
-      // Get active posts from other users
+      // Get active posts (filter own posts in memory to avoid composite index requirement)
       final snapshot = await _firestore
           .collection(ApiConfig.postsCollection)
-          .where('userId', isNotEqualTo: userId)
           .where('isActive', isEqualTo: true)
           .limit(500) // Limit to prevent excessive reads
           .get();
@@ -250,6 +252,8 @@ Return ONLY valid JSON (no markdown, no backticks):
       for (final doc in snapshot.docs) {
         try {
           final postData = doc.data();
+          // Skip current user's own posts
+          if ((postData['userId'] as String?) == userId) continue;
 
           // Get or generate embedding for this post
           List<double> postEmbedding;
@@ -389,48 +393,70 @@ Return ONLY valid JSON (no markdown, no backticks):
     );
   }
 
-  /// Calculate intent compatibility
+  /// Calculate intent compatibility using Gemini-generated complementary intents.
+  /// No hardcoded action types — AI decides what is complementary.
   Future<double> _calculateIntentCompatibility(
     IntentAnalysis userIntent,
     Map<String, dynamic> postData,
   ) async {
-    // Check if post has intent analysis
-    if (postData['intent_analysis'] == null) {
-      // Fallback: Check action types
-      final postAction = postData['action_type'] as String?;
-      if (postAction == null) return 0.5;
+    // Posts are stored with 'intentAnalysis' (camelCase) by UnifiedPostService.
+    // Fall back to snake_case for backward compatibility.
+    final postIntentRaw =
+        postData['intentAnalysis'] ?? postData['intent_analysis'];
+    final postKeywords = postData['keywords'] != null
+        ? List<String>.from(postData['keywords']).map((k) => k.toLowerCase()).toList()
+        : <String>[];
 
-      // Complementary actions score higher
-      if ((userIntent.actionType == 'seeking' && postAction == 'offering') ||
-          (userIntent.actionType == 'offering' && postAction == 'seeking')) {
-        return 1.0;
+    IntentAnalysis? postIntent;
+    if (postIntentRaw != null) {
+      postIntent = IntentAnalysis.fromJson(postIntentRaw as Map<String, dynamic>);
+    }
+
+    final postPrimary =
+        (postIntent?.primaryIntent ?? postData['originalInput'] ?? '').toLowerCase();
+
+    // --- USER → POST direction ---
+    // Gemini told us what would complement the user's intent.
+    // If the post's primary intent matches any of those, it's a good match.
+    if (userIntent.complementaryIntents.isNotEmpty) {
+      for (final ci in userIntent.complementaryIntents) {
+        final ciLower = ci.toLowerCase();
+        // Direct text overlap
+        if (postPrimary.contains(ciLower) || ciLower.contains(postPrimary)) {
+          return 1.0;
+        }
+        // Keyword overlap with complementary description
+        if (postKeywords.any(
+          (k) => ciLower.contains(k) || k.contains(ciLower),
+        )) {
+          return 0.85;
+        }
       }
-
-      return 0.3;
     }
 
-    final postIntent = IntentAnalysis.fromJson(postData['intent_analysis']);
+    // --- POST → USER direction ---
+    // The post also has complementary intents. If user's intent matches those,
+    // it's a reciprocal match.
+    if (postIntent != null && postIntent.complementaryIntents.isNotEmpty) {
+      final userPrimary = userIntent.primaryIntent.toLowerCase();
+      final userKeywords =
+          userIntent.searchKeywords.map((k) => k.toLowerCase()).toList();
 
-    // Check if intents are complementary
-    if (userIntent.complementaryIntents.any(
-      (ci) => postIntent.primaryIntent.toLowerCase().contains(ci.toLowerCase()),
-    )) {
-      return 1.0;
+      for (final ci in postIntent.complementaryIntents) {
+        final ciLower = ci.toLowerCase();
+        if (userPrimary.contains(ciLower) || ciLower.contains(userPrimary)) {
+          return 0.9;
+        }
+        if (userKeywords.any(
+          (k) => ciLower.contains(k) || k.contains(ciLower),
+        )) {
+          return 0.75;
+        }
+      }
     }
 
-    // Check action type compatibility
-    if ((userIntent.actionType == 'seeking' &&
-            postIntent.actionType == 'offering') ||
-        (userIntent.actionType == 'offering' &&
-            postIntent.actionType == 'seeking')) {
-      return 0.9;
-    }
-
-    // Similar intents
-    if (userIntent.actionType == postIntent.actionType) {
-      return 0.4;
-    }
-
+    // No complementarity detected — let semantic similarity decide,
+    // but give a low base score.
     return 0.2;
   }
 
