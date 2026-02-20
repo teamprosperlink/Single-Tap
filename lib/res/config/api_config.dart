@@ -14,7 +14,8 @@ class ApiConfig {
   static const String geminiEmbeddingModel = 'text-embedding-004';
 
   /// API endpoints
-  static const String geminiApiBaseUrl = 'https://generativelanguage.googleapis.com';
+  static const String geminiApiBaseUrl =
+      'https://generativelanguage.googleapis.com';
 
   /// Model configuration
   static const double temperature = 0.7;
@@ -25,7 +26,38 @@ class ApiConfig {
   /// Embedding configuration
   static const int embeddingDimension = 768;
 
-  /// Matching thresholds
+  /// ── Unified Matching Constants ────────────────────────────────────────
+  /// Single source of truth for ALL matching in the app.
+  /// Used by: UnifiedPostService, RealtimeMatchingService, VoiceAssistantService
+
+  /// Minimum relevance before detailed scoring. Below this, skip candidate.
+  static const double matchPreFilterThreshold = 0.40;
+
+  /// Final score must be >= this to surface as a match.
+  static const double matchFinalThreshold = 0.60;
+
+  /// Realtime notification threshold (slightly higher to reduce noise).
+  static const double matchRealtimeThreshold = 0.65;
+
+  /// Intent complement bonus when offer↔seek or symmetric↔symmetric.
+  static const double matchIntentBonus = 0.15;
+
+  /// Location bonus multiplier (location score 0-1 scaled by this).
+  static const double matchLocationWeight = 0.05;
+
+  /// Lifestyle clash penalty.
+  static const double matchLifestylePenalty = 0.15;
+
+  /// Keyword-signal damping factor (kwScore * this vs semantic).
+  static const double matchKeywordDamping = 0.70;
+
+  /// Max posts to query from Firestore for matching.
+  static const int matchQueryLimit = 200;
+
+  /// Max results returned from findMatches.
+  static const int matchMaxResults = 20;
+
+  /// Legacy constants (kept for backward compat with UnifiedMatchingService)
   static const double semanticSimilarityThreshold = 0.7;
   static const double intentMatchWeight = 0.4;
   static const double semanticMatchWeight = 0.3;
