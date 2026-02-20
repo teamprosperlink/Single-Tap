@@ -189,6 +189,134 @@ class GeminiService {
         }, fallback: () => query) ??
         query;
   }
+  // ── Voice assistant cached model ──────────────────────────────────────────
+
+  GenerativeModel? _voiceModel;
+
+  /// Call once during VoiceAssistantService.initialize() with the user-context
+  /// system prompt and the full tool set. Subsequent calls to [sendVoiceMessage]
+  /// reuse the same model instance — no allocation overhead per turn.
+  void initVoiceAssistant({
+    required List<Tool> tools,
+    required String systemPrompt,
+  }) {
+    _voiceModel = GenerativeModel(
+      model: ApiConfig.geminiFlashModel,
+      apiKey: ApiConfig.geminiApiKey,
+      tools: tools,
+      toolConfig: ToolConfig(
+        functionCallingConfig: FunctionCallingConfig(
+          mode: FunctionCallingMode.auto,
+        ),
+      ),
+      systemInstruction: Content.system(systemPrompt),
+    );
+  }
+
+  /// Send one voice-assistant turn. Handles the function-call loop up to
+  /// [maxRounds] times. Retries once on transient errors, then falls back
+  /// to plain generation.
+  Future<String?> sendVoiceMessage({
+    required String userMessage,
+    required List<Content> history,
+    required Future<Map<String, dynamic>> Function(
+            String functionName, Map<String, dynamic> args)
+        functionHandler,
+    void Function(String hint)? onHint,
+    int maxRounds = 3,
+  }) async {
+    final model = _voiceModel;
+    if (model == null) {
+      debugPrint('sendVoiceMessage: voice model not initialized');
+      return _plainFallback(userMessage);
+    }
+
+    // Retry once on transient API errors (rate limit, network blip)
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final chat = model.startChat(history: history);
+        var response = await chat.sendMessage(Content.text(userMessage));
+
+        for (int round = 0; round < maxRounds; round++) {
+          final calls = response.functionCalls.toList();
+          if (calls.isEmpty) break;
+
+          debugPrint('Voice function call(s): ${calls.map((c) => c.name).join(', ')}');
+
+          final responses = <FunctionResponse>[];
+          for (final call in calls) {
+            onHint?.call(_hintForFunction(call.name));
+            final result = await functionHandler(call.name, call.args);
+            responses.add(FunctionResponse(call.name, result));
+          }
+
+          response =
+              await chat.sendMessage(Content.functionResponses(responses));
+        }
+
+        final text = response.text;
+        if (text != null && text.isNotEmpty) return text;
+      } catch (e, st) {
+        debugPrint('sendVoiceMessage attempt ${attempt + 1} error: $e\n$st');
+        if (attempt == 0) {
+          onHint?.call('Retrying...');
+          await Future.delayed(const Duration(milliseconds: 1500));
+        }
+      }
+    }
+
+    return _plainFallback(userMessage);
+  }
+
+  Future<String> _plainFallback(String userMessage) async {
+    try {
+      debugPrint('Voice: falling back to plain generation');
+      final prompt =
+          'You are Supra, a friendly voice assistant inside the SingleTap app. '
+          'Answer this concisely in 1-3 plain sentences with no markdown: "$userMessage"';
+      final response = await _model.generateContent([Content.text(prompt)]);
+      if (response.text != null && response.text!.isNotEmpty) {
+        return response.text!;
+      }
+    } catch (e) {
+      debugPrint('Plain fallback also failed: $e');
+    }
+    // Last resort: always return a helpful response, never null
+    return 'I heard you say "$userMessage". '
+        'My AI connection is slow right now, but you can try again in a moment '
+        'or use the home screen to search and find matches.';
+  }
+
+  /// Human-readable hint shown in the UI while a function is executing.
+  static String _hintForFunction(String name) {
+    switch (name) {
+      case 'searchPosts':
+        return 'Searching posts...';
+      case 'searchByEmbedding':
+        return 'Finding semantic matches...';
+      case 'searchNearby':
+        return 'Searching nearby posts...';
+      case 'getMyPosts':
+        return 'Loading your posts...';
+      case 'getMatches':
+        return 'Finding post matches...';
+      case 'getUserProfile':
+        return 'Fetching your profile...';
+      case 'findMatchesForMe':
+        return 'Running your match algorithm...';
+      case 'createPost':
+        return 'Creating your post...';
+      case 'navigateTo':
+        return 'Navigating...';
+      case 'getRecentConversations':
+        return 'Loading conversations...';
+      default:
+        return 'Processing...';
+    }
+  }
+
+  // ── Legacy method kept for any callers outside voice assistant ─────────────
+
   /// Sends a message to Gemini with function calling support.
   /// Handles the call/respond loop up to [maxRounds] times.
   /// Falls back to plain text generation if function calling fails.
@@ -201,7 +329,6 @@ class GeminiService {
         functionHandler,
     int maxRounds = 3,
   }) async {
-    // Try function calling first
     try {
       final model = GenerativeModel(
         model: ApiConfig.geminiFlashModel,
@@ -216,54 +343,85 @@ class GeminiService {
           'You are a smart, friendly voice assistant inside the SingleTap app. '
           'You can answer ANY question — general knowledge, current affairs, science, math, history, tech, coding, weather, sports, entertainment, or anything else. '
           'IMPORTANT RULES:\n'
-          '1. For general questions (e.g. "who is PM of India", "what is AI", "tell me a joke", "I want pizza recommendations"), answer DIRECTLY from your knowledge. DO NOT call any function.\n'
-          '2. ONLY call functions when the user EXPLICITLY asks about SingleTap app data like "search posts", "show my posts", "find matches", "check my profile".\n'
-          '3. If the user says something casual like "I want pizza", just respond conversationally. Do NOT search for pizza posts.\n'
-          '4. Respond in the same language the user speaks.\n'
-          '5. Keep responses concise (2-3 sentences) since they will be spoken aloud.\n'
-          '6. Be helpful, accurate, and natural.',
+          '1. For general questions, answer DIRECTLY from your knowledge. DO NOT call any function.\n'
+          '2. ONLY call functions for SingleTap app data: posts, matches, profile.\n'
+          '3. Keep responses concise (2-3 sentences) since they will be spoken aloud.\n'
+          '4. Be helpful, accurate, and natural. No markdown.',
         ),
       );
       final chat = model.startChat(history: history);
-
       var response = await chat.sendMessage(Content.text(userMessage));
 
       for (int round = 0; round < maxRounds; round++) {
         final calls = response.functionCalls.toList();
         if (calls.isEmpty) break;
-
-        debugPrint('Gemini function call: ${calls.map((c) => c.name).join(', ')}');
-
         final responses = <FunctionResponse>[];
         for (final call in calls) {
           final result = await functionHandler(call.name, call.args);
           responses.add(FunctionResponse(call.name, result));
         }
-
-        response = await chat.sendMessage(
-          Content.functionResponses(responses),
-        );
+        response = await chat.sendMessage(Content.functionResponses(responses));
       }
 
-      return response.text;
+      final text = response.text;
+      if (text != null && text.isNotEmpty) return text;
     } catch (e, stackTrace) {
-      debugPrint('sendWithFunctionCalling error: $e');
-      debugPrint('Stack trace: $stackTrace');
+      debugPrint('sendWithFunctionCalling error: $e\n$stackTrace');
     }
 
-    // Fallback: plain text generation without function calling
     try {
-      debugPrint('Falling back to plain generateContent');
-      final systemPrompt =
+      final prompt =
           'You are a smart, friendly voice assistant inside the SingleTap app. '
-          'Answer any question the user asks — general knowledge, current affairs, or anything else. '
-          'Keep responses concise and conversational (2-3 sentences). '
+          'Answer concisely (2-3 sentences, no markdown). '
           'The user said: "$userMessage"';
-      final response = await _model.generateContent([Content.text(systemPrompt)]);
-      return response.text;
+      final response = await _model.generateContent([Content.text(prompt)]);
+      return response.text?.isNotEmpty == true ? response.text : null;
     } catch (e) {
       debugPrint('Fallback generateContent also failed: $e');
       return null;
     }
+  }
+
+  // ── Markdown stripper for TTS ──────────────────────────────────────────────
+
+  /// Strips markdown so the text sounds natural when spoken aloud.
+  static String stripMarkdownForSpeech(String text) {
+    var result = text;
+
+    // Remove code blocks
+    result = result.replaceAll(RegExp(r'```[\s\S]*?```'), '');
+    result = result.replaceAll(RegExp(r'`[^`]+`'), '');
+
+    // Remove headings (#, ##, ###)
+    result = result.replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '');
+
+    // Bold / italic: **text**, *text*, __text__, _text_
+    result = result.replaceAll(RegExp(r'\*{1,3}([^*]+)\*{1,3}'), r'$1');
+    result = result.replaceAll(RegExp(r'_{1,2}([^_]+)_{1,2}'), r'$1');
+
+    // Remove bullet list markers (-, *, +) and numbered list markers
+    result = result.replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '');
+    result = result.replaceAll(RegExp(r'^\s*\d+\.\s+', multiLine: true), '');
+
+    // Remove markdown links [text](url) → text
+    result = result.replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1');
+
+    // Remove inline images
+    result = result.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]+\)'), '');
+
+    // Remove horizontal rules
+    result = result.replaceAll(RegExp(r'^[-*_]{3,}\s*$', multiLine: true), '');
+
+    // Remove blockquote markers
+    result = result.replaceAll(RegExp(r'^\s*>\s+', multiLine: true), '');
+
+    // Collapse multiple blank lines to a single space / period pause
+    result = result.replaceAll(RegExp(r'\n{2,}'), '. ');
+    result = result.replaceAll('\n', ' ');
+
+    // Collapse multiple spaces
+    result = result.replaceAll(RegExp(r' {2,}'), ' ');
+
+    return result.trim();
   }
 }

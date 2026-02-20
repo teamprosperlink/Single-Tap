@@ -1,12 +1,16 @@
 import 'dart:ui' show ImageFilter;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/user_profile.dart';
+import '../../screens/chat/enhanced_chat_screen.dart';
 import '../../screens/profile/profile_view_screen.dart';
+import '../../services/firebase_provider.dart';
 import '../../services/voice_assistant_service.dart';
 import '../../widgets/voice_orb.dart';
 import '../../widgets/audio_visualizer.dart';
+import 'conversations_screen.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});
@@ -25,6 +29,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   void initState() {
     super.initState();
     _service = VoiceAssistantService();
+    _service.onNavigate = _handleNavigation;
     _service.addListener(_onServiceUpdate);
     _service.initialize();
   }
@@ -79,9 +84,48 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       case VoiceAssistantState.listening:
         return 'Listening...';
       case VoiceAssistantState.processing:
-        return 'Thinking...';
+        return _service.processingHint.isNotEmpty
+            ? _service.processingHint
+            : 'Thinking...';
       case VoiceAssistantState.speaking:
-        return 'Speaking...';
+        return 'Tap orb to stop';
+    }
+  }
+
+  void _handleNavigation(String screen) {
+    if (!mounted) return;
+    final s = screen.toLowerCase();
+    if (s == 'messages' || s == 'conversations') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ConversationsScreen()),
+      );
+    } else if (s == 'profile' || s == 'my profile') {
+      _navigateToOwnProfile();
+    } else {
+      // For discover / home / nearby / live — pop back to main nav
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _navigateToOwnProfile() async {
+    final uid = FirebaseProvider.currentUserId;
+    if (uid == null || !mounted) return;
+    try {
+      final doc = await FirebaseProvider.firestore
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (!doc.exists || !mounted) return;
+      final profile = UserProfile.fromFirestore(doc);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileViewScreen(userProfile: profile),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error navigating to own profile: $e');
     }
   }
 
@@ -96,6 +140,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         _service.stopListening();
         break;
       case VoiceAssistantState.speaking:
+        _service.interruptSpeaking();
+        break;
       case VoiceAssistantState.processing:
         break;
     }
@@ -377,7 +423,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: SizedBox(
-                height: 140,
+                height: 220,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: message.results!.length,
@@ -392,12 +438,9 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     );
   }
 
-  void _onResultCardTap(Map<String, dynamic> post) async {
-    final userId = post['userId'] as String?;
-    if (userId == null) return;
-
+  Future<void> _openProfile(String userId) async {
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await FirebaseProvider.firestore
           .collection('users')
           .doc(userId)
           .get();
@@ -415,89 +458,241 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
-  Widget _buildResultCard(Map<String, dynamic> post) {
-    final userName = post['userName']?.toString() ?? '';
-    final hasScore = post['score'] != null;
+  Future<void> _openOrCreateConversation(String targetUserId) async {
+    final currentUid = FirebaseProvider.currentUserId;
+    if (currentUid == null || !mounted) return;
 
-    return GestureDetector(
-      onTap: () => _onResultCardTap(post),
-      child: Container(
-        width: 170,
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.15),
-              Colors.white.withValues(alpha: 0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.15),
+    try {
+      // Check for existing conversation
+      final snap = await FirebaseProvider.firestore
+          .collection('conversations')
+          .where('participants', arrayContains: currentUid)
+          .limit(50)
+          .get();
+
+      String? existingChatId;
+      for (final doc in snap.docs) {
+        final participants = List<String>.from(doc.data()['participants'] ?? []);
+        if (participants.contains(targetUserId)) {
+          existingChatId = doc.id;
+          break;
+        }
+      }
+
+      // Create new conversation if none exists
+      existingChatId ??= (await FirebaseProvider.firestore
+              .collection('conversations')
+              .add({
+        'participants': [currentUid, targetUserId],
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+      }))
+          .id;
+
+      if (!mounted) return;
+
+      // Fetch target user profile for EnhancedChatScreen
+      final userDoc = await FirebaseProvider.firestore
+          .collection('users')
+          .doc(targetUserId)
+          .get();
+      if (!userDoc.exists || !mounted) return;
+
+      final profile = UserProfile.fromFirestore(userDoc);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EnhancedChatScreen(
+            otherUser: profile,
+            chatId: existingChatId,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              post['title']?.toString() ?? 'Post',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+      );
+    } catch (e) {
+      debugPrint('Error opening conversation: $e');
+    }
+  }
+
+  Widget _buildResultCard(Map<String, dynamic> post) {
+    final userName = post['userName']?.toString() ?? '';
+    final userId = post['userId'] as String?;
+    final hasScore = post['score'] != null;
+    final distanceKm = post['distanceKm'] as double?;
+    final photoUrl = (post['userPhoto'] ?? post['userPhotoUrl'])?.toString() ?? '';
+    final initials = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+
+    return Container(
+      width: 180,
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.15),
+            Colors.white.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Profile photo + name row
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: const Color(0xFF8B5CF6),
+                backgroundImage: photoUrl.isNotEmpty
+                    ? CachedNetworkImageProvider(photoUrl)
+                    : null,
+                child: photoUrl.isEmpty
+                    ? Text(initials,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600))
+                    : null,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (userName.isNotEmpty) ...[
-              const SizedBox(height: 3),
-              Text(
-                userName,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 10,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName.isNotEmpty ? userName : 'User',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (distanceKm != null)
+                      Text(
+                        '$distanceKm km away',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 9,
+                        ),
+                      ),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
-                post['description']?.toString() ?? '',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  fontSize: 11,
-                  height: 1.3,
+          ),
+          const SizedBox(height: 6),
+
+          // Title
+          Text(
+            post['title']?.toString() ?? 'Post',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 3),
+
+          // Description
+          Expanded(
+            child: Text(
+              post['description']?.toString() ?? '',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 10,
+                height: 1.3,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // Match badge
+          if (hasScore)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  '${((post['score'] as double) * 100).toStringAsFixed(0)}% match',
+                  style: const TextStyle(
+                    color: Color(0xFF06B6D4),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
+
+          // Action buttons
+          if (userId != null)
             Row(
               children: [
-                if (hasScore)
-                  Text(
-                    '${((post['score'] as double) * 100).toStringAsFixed(0)}% match',
-                    style: const TextStyle(
-                      color: Color(0xFF06B6D4),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _openProfile(userId),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: const Text(
+                        'View Profile',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
-                const Spacer(),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 10,
-                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _openOrCreateConversation(userId),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                        ),
+                      ),
+                      child: const Text(
+                        'Message',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
