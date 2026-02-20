@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../services/universal_intent_service.dart';
+import '../../services/location services/gemini_service.dart';
 import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../widgets/other widgets/user_avatar.dart';
@@ -16,6 +17,7 @@ import 'product/product_detail_screen.dart';
 import 'product/see_all_products_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../../widgets/voice_orb.dart';
+import '../profile/profile_view_screen.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -33,6 +35,7 @@ class HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final UniversalIntentService _intentService = UniversalIntentService();
   final RealtimeMatchingService _realtimeService = RealtimeMatchingService();
+  final GeminiService _geminiService = GeminiService();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final PhotoCacheService _photoCache = PhotoCacheService();
@@ -45,8 +48,7 @@ class HomeScreenState extends State<HomeScreen>
   bool _isProcessing = false;
 
   final List<String> _suggestions = [];
-  List<Map<String, dynamic>> _matches = [];
-  String _currentUserName = '';
+  final List<Map<String, dynamic>> _matches = [];
 
   late AnimationController _controller;
   Timer? _timer;
@@ -275,9 +277,7 @@ class HomeScreenState extends State<HomeScreen>
           .get();
 
       if (userDoc.exists && mounted) {
-        setState(() {
-          _currentUserName = userDoc.data()?['name'] ?? 'User';
-        });
+        setState(() {});
       }
     }
   }
@@ -313,11 +313,10 @@ class HomeScreenState extends State<HomeScreen>
 
     _intentController.clear();
 
-    await Future.delayed(const Duration(milliseconds: 1000));
+    // Get real Gemini AI response
+    final aiResponse = await _getGeminiResponse(userMessage);
 
     if (!mounted) return;
-
-    final aiResponse = _generateAIResponse(userMessage);
 
     setState(() {
       _conversation.add({
@@ -325,76 +324,6 @@ class HomeScreenState extends State<HomeScreen>
         'isUser': false,
         'timestamp': DateTime.now(),
       });
-
-      final lowerMessage = userMessage.toLowerCase();
-
-      // If food query, add food results to conversation
-      if (_isFoodQuery(lowerMessage)) {
-        final foodResults = _getFoodResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'food_results',
-          'data': foodResults,
-        });
-      }
-      // If electric query, add electric results
-      else if (_isElectricQuery(lowerMessage)) {
-        final electricResults = _getElectricResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'electric_results',
-          'data': electricResults,
-        });
-      }
-      // If house query, add house results
-      else if (_isHouseQuery(lowerMessage)) {
-        final houseResults = _getHouseResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'house_results',
-          'data': houseResults,
-        });
-      }
-      // If place query, add place results
-      else if (_isPlaceQuery(lowerMessage)) {
-        final placeResults = _getPlaceResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'place_results',
-          'data': placeResults,
-        });
-      }
-      // If news query, add news results
-      else if (_isNewsQuery(lowerMessage)) {
-        final newsResults = _getNewsResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'news_results',
-          'data': newsResults,
-        });
-      }
-      // If reels query, add reels results
-      else if (_isReelsQuery(lowerMessage)) {
-        final reelsResults = _getReelsResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'reels_results',
-          'data': reelsResults,
-        });
-      }
-
       _isProcessing = false;
     });
 
@@ -402,9 +331,8 @@ class HomeScreenState extends State<HomeScreen>
       _scrollToBottom();
     });
 
-    if (_shouldProcessForMatches(userMessage)) {
-      await _processWithIntent(userMessage);
-    }
+    // Always create post + find matches for every user message
+    await _processWithIntent(userMessage);
 
     // Auto-save conversation to chat history (ChatGPT style)
     await _autoSaveConversation(userMessage);
@@ -495,938 +423,6 @@ class HomeScreenState extends State<HomeScreen>
     }
   }
 
-  String _generateAIResponse(String userMessage) {
-    final message = userMessage.toLowerCase();
-
-    if (message.contains('hello') ||
-        message.contains('hi') ||
-        message.contains('hey')) {
-      return 'Hello ${_currentUserName.split(' ')[0]}! How can I help you find what you need today?';
-    } else if (_isFoodQuery(message)) {
-      return 'Great choice! Here are some nearby restaurants serving delicious food:';
-    } else if (_isElectricQuery(message)) {
-      return 'Looking for electronics? Here are some great options for you:';
-    } else if (_isHouseQuery(message)) {
-      return 'Looking for a place to stay? Here are some properties that might interest you:';
-    } else if (_isPlaceQuery(message)) {
-      return 'Planning a trip? Here are some amazing places to visit:';
-    } else if (_isNewsQuery(message)) {
-      return 'Here are the latest news updates for you:';
-    } else if (_isReelsQuery(message)) {
-      return 'Here are some trending reels for you:';
-    } else if (message.contains('bike') || message.contains('cycle')) {
-      return 'Looking for a bike? I can help you find people selling or renting bicycles in your area. What\'s your budget?';
-    } else if (message.contains('book') || message.contains('study')) {
-      return 'Need books? Tell me which subject or specific books you\'re looking for, and I\'ll find students who have them.';
-    } else if (message.contains('job') ||
-        message.contains('work') ||
-        message.contains('hire')) {
-      return 'Job hunting? Let me know what kind of work you\'re looking for or if you\'re hiring, and I\'ll find relevant matches.';
-    } else if (message.contains('sell') || message.contains('buy')) {
-      return 'Looking to buy or sell something? Describe what you need, and I\'ll find the perfect match for you!';
-    } else if (message.contains('thank') || message.contains('thanks')) {
-      return 'You\'re welcome! Let me know if you need help with anything else.';
-    } else if (message.contains('help')) {
-      return 'I can help you find:\n• Electronics & Gadgets\n• Houses & Properties\n• Hill Stations & Places\n• Food & Restaurants\n• Items to buy/sell\n• Part-time jobs\nJust tell me what you need!';
-    } else {
-      return 'I understand you\'re looking for: "$userMessage". Let me find the best matches for you in our community!';
-    }
-  }
-
-  bool _isFoodQuery(String message) {
-    final foodKeywords = [
-      'food',
-      'eat',
-      'hungry',
-      'restaurant',
-      'hotel',
-      'pizza',
-      'burger',
-      'biryani',
-      'chicken',
-      'paneer',
-      'dal',
-      'rice',
-      'roti',
-      'naan',
-      'dosa',
-      'idli',
-      'samosa',
-      'chaat',
-      'momos',
-      'noodles',
-      'chinese',
-      'italian',
-      'mexican',
-      'thai',
-      'indian',
-      'breakfast',
-      'lunch',
-      'dinner',
-      'snack',
-      'dessert',
-      'ice cream',
-      'cake',
-      'coffee',
-      'tea',
-      'juice',
-      'shake',
-      'thali',
-      'paratha',
-      'chole',
-      'pav bhaji',
-      'vada pav',
-      'sandwich',
-      'wrap',
-      'roll',
-      'fried rice',
-      'manchurian',
-      'curry',
-      'kebab',
-      'tandoori',
-      'masala',
-      'korma',
-      'pulao',
-    ];
-    return foodKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isElectricQuery(String message) {
-    final electricKeywords = [
-      'electric',
-      'electronics',
-      'phone',
-      'mobile',
-      'laptop',
-      'computer',
-      'tv',
-      'television',
-      'fridge',
-      'refrigerator',
-      'ac',
-      'air conditioner',
-      'washing machine',
-      'microwave',
-      'fan',
-      'cooler',
-      'heater',
-      'iron',
-      'mixer',
-      'grinder',
-      'blender',
-      'toaster',
-      'oven',
-      'camera',
-      'speaker',
-      'headphone',
-      'earphone',
-      'charger',
-      'power bank',
-      'tablet',
-      'ipad',
-      'smartwatch',
-      'watch',
-      'gadget',
-      'appliance',
-      'led',
-      'bulb',
-      'light',
-    ];
-    return electricKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isHouseQuery(String message) {
-    final houseKeywords = [
-      'house',
-      'home',
-      'flat',
-      'apartment',
-      'villa',
-      'bungalow',
-      'property',
-      'real estate',
-      'pg',
-      'paying guest',
-      'hostel',
-      '1bhk',
-      '2bhk',
-      '3bhk',
-      '4bhk',
-      'bedroom',
-      'kitchen',
-      'bathroom',
-      'balcony',
-      'terrace',
-      'duplex',
-      'penthouse',
-      'studio',
-      'furnished',
-      'unfurnished',
-      'semi furnished',
-    ];
-    return houseKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isPlaceQuery(String message) {
-    final placeKeywords = [
-      'hill station',
-      'hill',
-      'mountain',
-      'beach',
-      'lake',
-      'waterfall',
-      'temple',
-      'mandir',
-      'church',
-      'mosque',
-      'gurudwara',
-      'monument',
-      'fort',
-      'palace',
-      'museum',
-      'zoo',
-      'park',
-      'garden',
-      'mall',
-      'market',
-      'tourist',
-      'travel',
-      'trip',
-      'vacation',
-      'holiday',
-      'resort',
-      'camping',
-      'trekking',
-      'hiking',
-      'adventure',
-      'shimla',
-      'manali',
-      'goa',
-      'kashmir',
-      'kerala',
-      'rajasthan',
-      'ladakh',
-      'ooty',
-      'darjeeling',
-      'mussoorie',
-      'nainital',
-      'lonavala',
-      'mahabaleshwar',
-      'munnar',
-      'coorg',
-      'rishikesh',
-      'varanasi',
-      'jaipur',
-      'udaipur',
-      'agra',
-      'delhi',
-      'mumbai',
-      'kolkata',
-      'chennai',
-      'bangalore',
-      'hyderabad',
-      'place',
-      'visit',
-      'destination',
-      'sightseeing',
-    ];
-    return placeKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isNewsQuery(String message) {
-    final newsKeywords = [
-      'news',
-      'khabar',
-      'headline',
-      'headlines',
-      'latest',
-      'breaking',
-      'update',
-      'updates',
-      'today',
-      'trending',
-      'viral',
-      'current affairs',
-      'current events',
-      'whats happening',
-      'what\'s happening',
-      'politics',
-      'sports',
-      'cricket',
-      'football',
-      'business',
-      'tech news',
-      'technology news',
-      'entertainment',
-      'bollywood',
-      'hollywood',
-      'weather',
-      'stock market',
-      'election',
-      'world news',
-      'india news',
-      'local news',
-    ];
-    return newsKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isReelsQuery(String message) {
-    final reelsKeywords = [
-      'reels',
-      'reel',
-      'video',
-      'videos',
-      'shorts',
-      'short video',
-      'funny video',
-      'comedy',
-      'meme',
-      'memes',
-      'entertainment video',
-      'watch video',
-      'show video',
-      'tiktok',
-      'instagram reels',
-      'youtube shorts',
-      'viral video',
-      'trending video',
-      'dance',
-      'music video',
-      'song',
-      'clip',
-      'clips',
-    ];
-    return reelsKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  List<Map<String, dynamic>> _getFoodResults(String query) {
-    // Mock food data - in production, this would come from an API
-    final allFoods = [
-      {
-        'name': 'Butter Chicken',
-        'restaurant': 'Punjab Grill',
-        'rating': 4.5,
-        'price': '₹350',
-        'image':
-            'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=400',
-        'distance': '1.2 km',
-      },
-      {
-        'name': 'Margherita Pizza',
-        'restaurant': 'Pizza Hut',
-        'rating': 4.2,
-        'price': '₹299',
-        'image':
-            'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400',
-        'distance': '0.8 km',
-      },
-      {
-        'name': 'Veg Biryani',
-        'restaurant': 'Biryani House',
-        'rating': 4.3,
-        'price': '₹220',
-        'image':
-            'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400',
-        'distance': '2.1 km',
-      },
-      {
-        'name': 'Masala Dosa',
-        'restaurant': 'South Indian Cafe',
-        'rating': 4.6,
-        'price': '₹120',
-        'image':
-            'https://images.unsplash.com/photo-1668236543090-82eb5eace9f8?w=400',
-        'distance': '0.5 km',
-      },
-      {
-        'name': 'Chicken Momos',
-        'restaurant': 'Momo Junction',
-        'rating': 4.4,
-        'price': '₹150',
-        'image':
-            'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=400',
-        'distance': '1.5 km',
-      },
-      {
-        'name': 'Paneer Tikka',
-        'restaurant': 'Tandoor Nights',
-        'rating': 4.3,
-        'price': '₹280',
-        'image':
-            'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=400',
-        'distance': '1.8 km',
-      },
-      {
-        'name': 'Classic Burger',
-        'restaurant': 'Burger King',
-        'rating': 4.1,
-        'price': '₹199',
-        'image':
-            'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
-        'distance': '0.6 km',
-      },
-      {
-        'name': 'Chole Bhature',
-        'restaurant': 'Delhi Darbar',
-        'rating': 4.5,
-        'price': '₹180',
-        'image':
-            'https://images.unsplash.com/photo-1626132647523-66c4bf1e8e5c?w=400',
-        'distance': '1.0 km',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on query or return all
-    return allFoods.where((food) {
-      final name = (food['name'] as String).toLowerCase();
-      final restaurant = (food['restaurant'] as String).toLowerCase();
-      return name.contains(lowerQuery) ||
-          restaurant.contains(lowerQuery) ||
-          lowerQuery.contains('food') ||
-          lowerQuery.contains('eat') ||
-          lowerQuery.contains('hungry') ||
-          lowerQuery.contains('restaurant');
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> _getElectricResults(String query) {
-    final allElectrics = [
-      {
-        'name': 'iPhone 15 Pro',
-        'brand': 'Apple',
-        'rating': 4.8,
-        'price': '₹1,34,900',
-        'image':
-            'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400',
-        'condition': 'New',
-        'distance': '1.5 km',
-      },
-      {
-        'name': 'MacBook Air M2',
-        'brand': 'Apple',
-        'rating': 4.9,
-        'price': '₹1,14,900',
-        'image':
-            'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400',
-        'condition': 'New',
-        'distance': '2.3 km',
-      },
-      {
-        'name': 'Samsung Smart TV 55"',
-        'brand': 'Samsung',
-        'rating': 4.5,
-        'price': '₹54,990',
-        'image':
-            'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400',
-        'condition': 'New',
-        'distance': '0.8 km',
-      },
-      {
-        'name': 'Sony WH-1000XM5',
-        'brand': 'Sony',
-        'rating': 4.7,
-        'price': '₹29,990',
-        'image':
-            'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=400',
-        'condition': 'New',
-        'distance': '3.1 km',
-      },
-      {
-        'name': 'LG Refrigerator 260L',
-        'brand': 'LG',
-        'rating': 4.4,
-        'price': '₹28,990',
-        'image':
-            'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=400',
-        'condition': 'New',
-        'distance': '1.9 km',
-      },
-      {
-        'name': 'Dyson Air Purifier',
-        'brand': 'Dyson',
-        'rating': 4.6,
-        'price': '₹42,900',
-        'image':
-            'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
-        'condition': 'New',
-        'distance': '4.2 km',
-      },
-      {
-        'name': 'Canon EOS R6',
-        'brand': 'Canon',
-        'rating': 4.8,
-        'price': '₹2,15,995',
-        'image':
-            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-        'condition': 'New',
-        'distance': '2.7 km',
-      },
-      {
-        'name': 'iPad Pro 12.9"',
-        'brand': 'Apple',
-        'rating': 4.9,
-        'price': '₹1,12,900',
-        'image':
-            'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400',
-        'condition': 'New',
-        'distance': '1.1 km',
-      },
-    ];
-
-    return allElectrics;
-  }
-
-  List<Map<String, dynamic>> _getHouseResults(String query) {
-    final allHouses = [
-      {
-        'name': '3 BHK Luxury Apartment',
-        'location': 'Bandra West, Mumbai',
-        'rating': 4.6,
-        'price': '₹2.5 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
-        'type': 'Apartment',
-        'area': '1450 sq.ft',
-        'distance': '3.2 km',
-      },
-      {
-        'name': '2 BHK Furnished Flat',
-        'location': 'Koramangala, Bangalore',
-        'rating': 4.4,
-        'price': '₹45,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400',
-        'type': 'Flat',
-        'area': '1100 sq.ft',
-        'distance': '5.6 km',
-      },
-      {
-        'name': 'Premium Villa',
-        'location': 'Jubilee Hills, Hyderabad',
-        'rating': 4.8,
-        'price': '₹4.2 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=400',
-        'type': 'Villa',
-        'area': '3200 sq.ft',
-        'distance': '8.4 km',
-      },
-      {
-        'name': '1 BHK Studio Apartment',
-        'location': 'Andheri East, Mumbai',
-        'rating': 4.2,
-        'price': '₹18,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400',
-        'type': 'Studio',
-        'area': '550 sq.ft',
-        'distance': '1.8 km',
-      },
-      {
-        'name': 'Duplex Penthouse',
-        'location': 'Golf Course Road, Gurgaon',
-        'rating': 4.9,
-        'price': '₹6.8 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400',
-        'type': 'Penthouse',
-        'area': '4500 sq.ft',
-        'distance': '12.1 km',
-      },
-      {
-        'name': 'PG for Girls',
-        'location': 'HSR Layout, Bangalore',
-        'rating': 4.3,
-        'price': '₹12,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400',
-        'type': 'PG',
-        'area': 'Single Room',
-        'distance': '2.4 km',
-      },
-      {
-        'name': '4 BHK Independent House',
-        'location': 'Sector 50, Noida',
-        'rating': 4.5,
-        'price': '₹1.8 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1605146769289-440113cc3d00?w=400',
-        'type': 'House',
-        'area': '2800 sq.ft',
-        'distance': '6.7 km',
-      },
-      {
-        'name': 'Beachfront Apartment',
-        'location': 'Marine Drive, Mumbai',
-        'rating': 4.7,
-        'price': '₹5.5 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-        'type': 'Apartment',
-        'area': '2100 sq.ft',
-        'distance': '4.5 km',
-      },
-    ];
-
-    return allHouses;
-  }
-
-  List<Map<String, dynamic>> _getPlaceResults(String query) {
-    final allPlaces = [
-      {
-        'name': 'Manali',
-        'location': 'Himachal Pradesh',
-        'rating': 4.7,
-        'price': '₹8,500',
-        'image':
-            'https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=400',
-        'type': 'Hill Station',
-        'distance': '540 km',
-      },
-      {
-        'name': 'Goa Beaches',
-        'location': 'Goa',
-        'rating': 4.8,
-        'price': '₹12,000',
-        'image':
-            'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=400',
-        'type': 'Beach',
-        'distance': '590 km',
-      },
-      {
-        'name': 'Shimla',
-        'location': 'Himachal Pradesh',
-        'rating': 4.6,
-        'price': '₹6,500',
-        'image':
-            'https://images.unsplash.com/photo-1597074866923-dc0589150358?w=400',
-        'type': 'Hill Station',
-        'distance': '350 km',
-      },
-      {
-        'name': 'Taj Mahal',
-        'location': 'Agra, UP',
-        'rating': 4.9,
-        'price': '₹50',
-        'image':
-            'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400',
-        'type': 'Monument',
-        'distance': '230 km',
-      },
-      {
-        'name': 'Kerala Backwaters',
-        'location': 'Kerala',
-        'rating': 4.8,
-        'price': '₹15,000',
-        'image':
-            'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=400',
-        'type': 'Lake',
-        'distance': '2100 km',
-      },
-      {
-        'name': 'Jaipur City Palace',
-        'location': 'Rajasthan',
-        'rating': 4.7,
-        'price': '₹500',
-        'image':
-            'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=400',
-        'type': 'Palace',
-        'distance': '280 km',
-      },
-      {
-        'name': 'Rishikesh',
-        'location': 'Uttarakhand',
-        'rating': 4.6,
-        'price': '₹5,000',
-        'image':
-            'https://images.unsplash.com/photo-1592385862821-d7bfee21be83?w=400',
-        'type': 'Adventure',
-        'distance': '240 km',
-      },
-      {
-        'name': 'Ladakh',
-        'location': 'Jammu & Kashmir',
-        'rating': 4.9,
-        'price': '₹25,000',
-        'image':
-            'https://images.unsplash.com/photo-1626015365107-59f71df26e70?w=400',
-        'type': 'Mountain',
-        'distance': '1020 km',
-      },
-    ];
-
-    return allPlaces;
-  }
-
-  List<Map<String, dynamic>> _getNewsResults(String query) {
-    final allNews = [
-      {
-        'title': 'India Wins Historic Test Series Against Australia',
-        'source': 'Sports Today',
-        'category': 'Sports',
-        'time': '2 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400',
-        'description':
-            'Team India creates history by winning the Border-Gavaskar Trophy for the fifth consecutive time.',
-      },
-      {
-        'title': 'Stock Market Hits All-Time High',
-        'source': 'Economic Times',
-        'category': 'Business',
-        'time': '3 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400',
-        'description':
-            'Sensex crosses 80,000 mark for the first time as FII inflows continue.',
-      },
-      {
-        'title': 'New AI Chip Launched by Tech Giant',
-        'source': 'Tech Crunch',
-        'category': 'Technology',
-        'time': '4 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
-        'description':
-            'Revolutionary AI chip promises 10x faster processing for machine learning tasks.',
-      },
-      {
-        'title': 'Bollywood Star Announces New Film',
-        'source': 'Film Fare',
-        'category': 'Entertainment',
-        'time': '5 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400',
-        'description':
-            'Highly anticipated sequel to blockbuster franchise to release next year.',
-      },
-      {
-        'title': 'Government Launches New Digital Initiative',
-        'source': 'India Today',
-        'category': 'Politics',
-        'time': '6 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400',
-        'description':
-            'New scheme aims to provide digital services to rural areas across the country.',
-      },
-      {
-        'title': 'Heavy Rainfall Expected in Mumbai',
-        'source': 'Weather Channel',
-        'category': 'Weather',
-        'time': '1 hour ago',
-        'image':
-            'https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=400',
-        'description':
-            'IMD issues orange alert for Mumbai and surrounding areas for next 48 hours.',
-      },
-      {
-        'title': 'ISRO Plans New Moon Mission',
-        'source': 'Science Daily',
-        'category': 'Science',
-        'time': '7 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=400',
-        'description':
-            'Chandrayaan-4 mission announced with advanced rover and sample return capability.',
-      },
-      {
-        'title': 'Startup Raises \$100M in Funding',
-        'source': 'Startup News',
-        'category': 'Business',
-        'time': '8 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400',
-        'description':
-            'Indian fintech startup becomes unicorn with latest funding round.',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on category if specified
-    if (lowerQuery.contains('sports') ||
-        lowerQuery.contains('cricket') ||
-        lowerQuery.contains('football')) {
-      return allNews.where((n) => n['category'] == 'Sports').toList();
-    } else if (lowerQuery.contains('business') ||
-        lowerQuery.contains('stock') ||
-        lowerQuery.contains('market')) {
-      return allNews.where((n) => n['category'] == 'Business').toList();
-    } else if (lowerQuery.contains('tech') ||
-        lowerQuery.contains('technology')) {
-      return allNews
-          .where(
-            (n) => n['category'] == 'Technology' || n['category'] == 'Science',
-          )
-          .toList();
-    } else if (lowerQuery.contains('entertainment') ||
-        lowerQuery.contains('bollywood') ||
-        lowerQuery.contains('hollywood')) {
-      return allNews.where((n) => n['category'] == 'Entertainment').toList();
-    } else if (lowerQuery.contains('politics') ||
-        lowerQuery.contains('government')) {
-      return allNews.where((n) => n['category'] == 'Politics').toList();
-    } else if (lowerQuery.contains('weather')) {
-      return allNews.where((n) => n['category'] == 'Weather').toList();
-    }
-
-    return allNews;
-  }
-
-  List<Map<String, dynamic>> _getReelsResults(String query) {
-    // Sample video URLs (free stock videos)
-    final allReels = [
-      {
-        'title': 'Epic Dance Moves',
-        'creator': '@dance_king',
-        'views': '2.5M',
-        'likes': '150K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:30',
-        'category': 'Dance',
-      },
-      {
-        'title': 'Cooking Hack You Need',
-        'creator': '@foodie_chef',
-        'views': '1.8M',
-        'likes': '98K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:45',
-        'category': 'Food',
-      },
-      {
-        'title': 'Comedy Skit - Office Life',
-        'creator': '@funny_guy',
-        'views': '5.2M',
-        'likes': '320K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1527224857830-43a7acc85260?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:58',
-        'category': 'Comedy',
-      },
-      {
-        'title': 'Travel Vlog - Goa',
-        'creator': '@wanderlust',
-        'views': '890K',
-        'likes': '67K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '1:20',
-        'category': 'Travel',
-      },
-      {
-        'title': 'Fitness Motivation',
-        'creator': '@fit_life',
-        'views': '3.1M',
-        'likes': '210K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:35',
-        'category': 'Fitness',
-      },
-      {
-        'title': 'Cute Pet Moments',
-        'creator': '@pet_lover',
-        'views': '4.7M',
-        'likes': '450K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:22',
-        'category': 'Pets',
-      },
-      {
-        'title': 'Tech Review - New Phone',
-        'creator': '@tech_guru',
-        'view  umbnail':
-            'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:55',
-        'category': 'Tech',
-      },
-      {
-        'title': 'Fashion Tips 2024',
-        'creator': '@style_icon',
-        'views': '2.8M',
-        'likes': '185K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:40',
-        'category': 'Fashion',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on category if specified
-    if (lowerQuery.contains('dance') || lowerQuery.contains('music')) {
-      return allReels.where((r) => r['category'] == 'Dance').toList();
-    } else if (lowerQuery.contains('comedy') ||
-        lowerQuery.contains('funny') ||
-        lowerQuery.contains('meme')) {
-      return allReels.where((r) => r['category'] == 'Comedy').toList();
-    } else if (lowerQuery.contains('food') || lowerQuery.contains('cooking')) {
-      return allReels.where((r) => r['category'] == 'Food').toList();
-    } else if (lowerQuery.contains('travel')) {
-      return allReels.where((r) => r['category'] == 'Travel').toList();
-    } else if (lowerQuery.contains('fitness') || lowerQuery.contains('gym')) {
-      return allReels.where((r) => r['category'] == 'Fitness').toList();
-    } else if (lowerQuery.contains('pet') ||
-        lowerQuery.contains('dog') ||
-        lowerQuery.contains('cat')) {
-      return allReels.where((r) => r['category'] == 'Pets').toList();
-    } else if (lowerQuery.contains('tech')) {
-      return allReels.where((r) => r['category'] == 'Tech').toList();
-    } else if (lowerQuery.contains('fashion') || lowerQuery.contains('style')) {
-      return allReels.where((r) => r['category'] == 'Fashion').toList();
-    }
-
-    return allReels;
-  }
-
-  bool _shouldProcessForMatches(String message) {
-    final lowerMessage = message.toLowerCase();
-    return lowerMessage.contains('bike') ||
-        lowerMessage.contains('book') ||
-        lowerMessage.contains('room') ||
-        lowerMessage.contains('job') ||
-        lowerMessage.contains('sell') ||
-        lowerMessage.contains('buy') ||
-        lowerMessage.contains('rent') ||
-        lowerMessage.contains('hire') ||
-        lowerMessage.contains('find') ||
-        lowerMessage.contains('look');
-  }
-
-  // Mock voice results for fallback
-  final List<String> _mockVoiceResults = [
-    "I'm looking for a bicycle under 200 dollars",
-    "Need a room for rent near college campus",
-    "Want to buy second hand engineering books",
-    "Looking for part time job on weekends",
-    "Selling my old smartphone in good condition",
-    "Want to find a roommate near university",
-    "Looking to buy a used laptop for studies",
-  ];
 
   // Initialize speech recognition
   bool _isFinishingRecording = false;
@@ -1505,19 +501,17 @@ class HomeScreenState extends State<HomeScreen>
         );
       } catch (e) {
         debugPrint('Error starting speech: $e');
-        // Fall back to mock after delay
-        _recordingTimer = Timer(const Duration(seconds: 2), () {
-          if (mounted && _isRecording) {
-            _useMockVoiceResult();
-          }
+        // Return to idle — don't inject a fake query
+        setState(() {
+          _isRecording = false;
+          _isVoiceProcessing = false;
         });
       }
     } else {
-      // Speech not available, use mock after delay
-      _recordingTimer = Timer(const Duration(seconds: 2), () {
-        if (mounted && _isRecording) {
-          _useMockVoiceResult();
-        }
+      // Speech not available — return to idle
+      setState(() {
+        _isRecording = false;
+        _isVoiceProcessing = false;
       });
     }
   }
@@ -1531,31 +525,6 @@ class HomeScreenState extends State<HomeScreen>
     }
 
     _finishRecording();
-  }
-
-  void _useMockVoiceResult() {
-    _recordingTimer?.cancel();
-    _recordingTimer = null;
-
-    final randomResult =
-        _mockVoiceResults[DateTime.now().millisecondsSinceEpoch %
-            _mockVoiceResults.length];
-
-    setState(() {
-      _isRecording = false;
-      _isVoiceProcessing = false;
-      _conversation.add({
-        'text': randomResult,
-        'isUser': true,
-        'timestamp': DateTime.now(),
-      });
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
-
-    _processVoiceMessage(randomResult);
   }
 
   void _finishRecording() {
@@ -1605,12 +574,10 @@ class HomeScreenState extends State<HomeScreen>
       _isProcessing = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1000));
+    // Get real Gemini AI response
+    final aiResponse = await _getGeminiResponse(message);
 
     if (!mounted) return;
-
-    final aiResponse = _generateAIResponse(message);
-    final lowerMessage = message.toLowerCase();
 
     setState(() {
       _conversation.add({
@@ -1618,64 +585,6 @@ class HomeScreenState extends State<HomeScreen>
         'isUser': false,
         'timestamp': DateTime.now(),
       });
-
-      // Add results based on query type
-      if (_isFoodQuery(lowerMessage)) {
-        final foodResults = _getFoodResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'food_results',
-          'data': foodResults,
-        });
-      } else if (_isElectricQuery(lowerMessage)) {
-        final electricResults = _getElectricResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'electric_results',
-          'data': electricResults,
-        });
-      } else if (_isHouseQuery(lowerMessage)) {
-        final houseResults = _getHouseResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'house_results',
-          'data': houseResults,
-        });
-      } else if (_isPlaceQuery(lowerMessage)) {
-        final placeResults = _getPlaceResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'place_results',
-          'data': placeResults,
-        });
-      } else if (_isNewsQuery(lowerMessage)) {
-        final newsResults = _getNewsResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'news_results',
-          'data': newsResults,
-        });
-      } else if (_isReelsQuery(lowerMessage)) {
-        final reelsResults = _getReelsResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'reels_results',
-          'data': reelsResults,
-        });
-      }
-
       _isProcessing = false;
     });
 
@@ -1683,9 +592,8 @@ class HomeScreenState extends State<HomeScreen>
       _scrollToBottom();
     });
 
-    if (_shouldProcessForMatches(message)) {
-      await _processWithIntent(message);
-    }
+    // Always create post + find matches for every voice message
+    await _processWithIntent(message);
   }
 
   Future<void> _processWithIntent(String intent) async {
@@ -1704,34 +612,42 @@ class HomeScreenState extends State<HomeScreen>
         );
 
         for (final match in matches) {
-          final userProfile = match['userProfile'] ?? {};
+          final userProfile = match['userProfile'] as Map<String, dynamic>? ?? {};
           final userId = match['userId'];
-          final photoUrl = userProfile['photoUrl'];
-
+          // Check all common photo URL key variants
+          final photoUrl =
+              userProfile['photoUrl'] ??
+              userProfile['photoURL'] ??
+              userProfile['profileImageUrl'];
           if (userId != null && photoUrl != null) {
-            _photoCache.cachePhotoUrl(userId, photoUrl);
+            _photoCache.cachePhotoUrl(userId, photoUrl.toString());
           }
         }
 
         setState(() {
-          _matches = matches;
           _isProcessing = false;
-        });
-
-        if (_matches.isNotEmpty) {
-          setState(() {
+          if (matches.isNotEmpty) {
             _conversation.add({
               'text':
-                  'Found ${_matches.length} potential matches for you! Tap below to view them.',
+                  'Found ${matches.length} potential match${matches.length == 1 ? '' : 'es'} for you!',
+              'isUser': false,
+              'timestamp': DateTime.now(),
+              'type': 'match_results',
+              'data': matches,
+            });
+          } else {
+            _conversation.add({
+              'text':
+                  'No matches found yet. Try a more specific description or check back later!',
               'isUser': false,
               'timestamp': DateTime.now(),
             });
-          });
+          }
+        });
 
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToBottom();
-          });
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
 
         _loadUserIntents();
       } else {
@@ -1743,6 +659,19 @@ class HomeScreenState extends State<HomeScreen>
       setState(() {
         _isProcessing = false;
       });
+    }
+  }
+
+  Future<String> _getGeminiResponse(String userMessage) async {
+    try {
+      final prompt =
+          'You are an AI assistant for Supper, an intent-matching app where users post what they need or offer and get matched with others. '
+          'User says: "$userMessage". '
+          'Respond in 1-2 friendly sentences. Confirm you understood their intent and that you are searching for matches.';
+      return await _geminiService.generateContent(prompt) ??
+          'I understand: "$userMessage". Searching for matches now!';
+    } catch (_) {
+      return 'I understand you\'re looking for: "$userMessage". Let me find the best matches for you!';
     }
   }
 
@@ -1800,11 +729,7 @@ class HomeScreenState extends State<HomeScreen>
         child: Column(
           children: [
             Expanded(
-              child: _isProcessing
-                  ? _buildChatState(isDarkMode)
-                  : _matches.isNotEmpty
-                  ? _buildMatchesList(isDarkMode)
-                  : _buildChatState(isDarkMode),
+              child: _buildChatState(isDarkMode),
             ),
 
             // Bottom input section (always visible, recording happens inline)
@@ -2207,6 +1132,14 @@ class HomeScreenState extends State<HomeScreen>
     final text = message['text'] as String;
     final type = message['type'] as String?;
 
+    // Match results — render as vertical list of match cards inside the chat
+    if (type == 'match_results') {
+      final rawData = message['data'];
+      if (rawData == null) return const SizedBox.shrink();
+      final data = (rawData as List).cast<Map<String, dynamic>>();
+      return _buildMatchesInChat(data, isDarkMode);
+    }
+
     // Result card types - wrap with action row below
     if (type != null && type.endsWith('_results')) {
       final rawData = message['data'];
@@ -2495,9 +1428,8 @@ class HomeScreenState extends State<HomeScreen>
       _isProcessing = true;
     });
 
-    Future.delayed(const Duration(milliseconds: 800), () {
+    _getGeminiResponse(userMessage).then((newResponse) {
       if (!mounted) return;
-      final newResponse = _generateAIResponse(userMessage!);
       setState(() {
         _conversation.add({
           'text': newResponse,
@@ -2886,82 +1818,44 @@ class HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMatchesList(bool isDarkMode) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
-            border: Border(
-              bottom: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.people, color: Colors.green[600]),
-              const SizedBox(width: 8),
-              Text(
-                '${_matches.length} Matches Found',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _matches.clear();
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Text(
-                    'Clear',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _matches.length,
-            itemBuilder: (context, index) {
-              return _buildMatchCard(_matches[index], isDarkMode);
-            },
-          ),
-        ),
-      ],
+  Widget _buildMatchesInChat(
+    List<Map<String, dynamic>> matches,
+    bool isDarkMode,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: matches
+            .map((match) => _buildMatchCard(match, isDarkMode))
+            .toList(),
+      ),
     );
   }
 
   Widget _buildMatchCard(Map<String, dynamic> match, bool isDarkMode) {
-    final userProfile = match['userProfile'] ?? {};
+    final userProfile = match['userProfile'] as Map<String, dynamic>? ?? {};
     final matchScore = (match['matchScore'] ?? 0.0) * 100;
-    final userName = userProfile['name'] ?? 'Unknown User';
+    // Resolve name: top-level key first (set by _enrichMatchesWithProfiles),
+    // then fall back to profile fields.
+    final userName =
+        (match['userName'] as String?)?.isNotEmpty == true
+            ? match['userName'] as String
+            : (userProfile['name'] as String?)?.isNotEmpty == true
+            ? userProfile['name'] as String
+            : userProfile['displayName'] as String? ??
+                userProfile['phone'] as String? ??
+                'Unknown User';
     final userId = match['userId'];
 
     final cachedPhoto = userId != null
         ? _photoCache.getCachedPhotoUrl(userId)
         : null;
-    final photoUrl = cachedPhoto ?? userProfile['photoUrl'];
+    final photoUrl =
+        cachedPhoto ??
+        userProfile['photoUrl'] ??
+        userProfile['photoURL'] ??
+        userProfile['profileImageUrl'];
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -3163,31 +2057,73 @@ class HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
-              if (match['lookingFor'] != null &&
-                  match['lookingFor'].toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 14,
-                        color: Colors.green[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Matches your search',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w500,
+              // Action buttons: Chat + View Profile
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        final otherUser = UserProfile.fromMap(
+                          userProfile,
+                          match['userId'],
+                        );
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                EnhancedChatScreen(otherUser: otherUser),
                           ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('Chat'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).primaryColor,
+                        side: BorderSide(
+                          color: Theme.of(context).primaryColor,
                         ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        HapticFeedback.lightImpact();
+                        final nav = Navigator.of(context);
+                        final userDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(match['userId'])
+                            .get();
+                        if (!userDoc.exists) return;
+                        final profile = UserProfile.fromFirestore(userDoc);
+                        nav.push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProfileViewScreen(userProfile: profile),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.person_outline, size: 16),
+                      label: const Text('Profile'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -3361,38 +2297,8 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
   late AnimationController _shimmerController;
   late List<Animation<double>> _itemAnimations;
 
-  final List<Map<String, dynamic>> _chatHistory = [
-    {
-      'title': 'Looking for iPhone 13',
-      'time': 'Today',
-      'icon': Icons.phone_iphone,
-    },
-    {
-      'title': 'Best restaurants nearby',
-      'time': 'Today',
-      'icon': Icons.restaurant,
-    },
-    {
-      'title': 'Job search - Developer',
-      'time': 'Yesterday',
-      'icon': Icons.work_outline,
-    },
-    {
-      'title': 'Apartment for rent',
-      'time': 'Yesterday',
-      'icon': Icons.home_outlined,
-    },
-    {
-      'title': 'Grocery shopping list',
-      'time': 'Last 7 days',
-      'icon': Icons.shopping_cart_outlined,
-    },
-    {
-      'title': 'Travel plans',
-      'time': 'Last 7 days',
-      'icon': Icons.flight_outlined,
-    },
-  ];
+  List<Map<String, dynamic>> _realChatHistory = [];
+  bool _isLoadingHistory = false;
 
   @override
   void initState() {
@@ -3426,8 +2332,41 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
       );
     });
 
-    // Start animation
+    // Start animation and load real chat history
     _staggerController.forward();
+    _loadChatHistory();
+  }
+
+  Future<void> _loadChatHistory() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    if (mounted) setState(() => _isLoadingHistory = true);
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('chat_history')
+          .where('userId', isEqualTo: uid)
+          .orderBy('updatedAt', descending: true)
+          .limit(20)
+          .get();
+      if (mounted) {
+        setState(() {
+          _realChatHistory = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+          _isLoadingHistory = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  String _chatLabel(Map<String, dynamic> chat) {
+    return chat['title'] as String? ??
+        chat['firstMessage'] as String? ??
+        'Chat';
   }
 
   @override
@@ -3681,26 +2620,34 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
 
                   // Chat History List
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount:
-                          _chatHistory.length + 3, // +3 for section headers
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return _buildSectionHeader('Today');
-                        } else if (index <= 2) {
-                          return _buildChatItem(_chatHistory[index - 1]);
-                        } else if (index == 3) {
-                          return _buildSectionHeader('Yesterday');
-                        } else if (index <= 5) {
-                          return _buildChatItem(_chatHistory[index - 2]);
-                        } else if (index == 6) {
-                          return _buildSectionHeader('Last 7 days');
-                        } else {
-                          return _buildChatItem(_chatHistory[index - 3]);
-                        }
-                      },
-                    ),
+                    child: _isLoadingHistory
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white54,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : _realChatHistory.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No chat history yet',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.4),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                itemCount: _realChatHistory.length,
+                                itemBuilder: (context, index) {
+                                  return _buildChatItem(
+                                    _realChatHistory[index],
+                                  );
+                                },
+                              ),
                   ),
 
                   // Bottom section with user profile
@@ -3837,33 +2784,6 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 400),
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(-20 * (1 - value), 0),
-            child: child,
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(left: 14, top: 12, bottom: 8),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildChatItem(Map<String, dynamic> chat) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -3894,7 +2814,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                   return Transform.scale(scale: value, child: child);
                 },
                 child: Icon(
-                  chat['icon'] as IconData,
+                  Icons.chat_bubble_outline,
                   color: Colors.white.withValues(alpha: 0.7),
                   size: 20,
                 ),
@@ -3902,7 +2822,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  chat['title'] as String,
+                  _chatLabel(chat),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 14,

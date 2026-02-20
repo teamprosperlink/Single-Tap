@@ -360,21 +360,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   );
                   _handledCallIds.add(callId);
 
-                  // If status is 'ended' or 'missed' (caller cut before receiver answered), show missed notification
-                  if (status == 'ended' || status == 'missed') {
+                  // If status is 'ended' (caller cut before receiver answered), update to missed
+                  if (status == 'ended') {
                     debugPrint(
-                      '  First snapshot: Call $callId was $status by caller, showing missed notification',
+                      '  First snapshot: Call $callId was ended, marking as missed',
                     );
-
-                    // Only update to missed if it was 'ended'
-                    if (status == 'ended') {
-                      _firestore.collection('calls').doc(callId).update({
-                        'status': 'missed',
-                        'missedAt': FieldValue.serverTimestamp(),
-                      });
-                    }
-
-                    // Check if missed call message already exists before sending
+                    _firestore.collection('calls').doc(callId).update({
+                      'status': 'missed',
+                      'missedAt': FieldValue.serverTimestamp(),
+                    });
                     _sendMissedCallToChat(
                       callId: callId,
                       callerId: callerId,
@@ -384,6 +378,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       data['callerName'] as String? ?? 'Unknown',
                     );
                   }
+                  // 'missed' status = already processed previously, skip silently
                   continue;
                 }
 

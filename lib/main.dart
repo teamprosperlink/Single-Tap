@@ -547,12 +547,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // Get snapshot data safely
                 final snapshotData = snapshot.data();
                 if (snapshotData == null) {
-                  debugPrint('[DeviceSession]  Snapshot data is NULL, skipping');
+                  debugPrint(
+                    '[DeviceSession]  Snapshot data is NULL, skipping',
+                  );
                   return;
                 }
 
                 // DIAGNOSTIC: Log all snapshot data
-                debugPrint('[DeviceSession]  Full snapshot data: $snapshotData');
+                debugPrint(
+                  '[DeviceSession]  Full snapshot data: $snapshotData',
+                );
 
                 // Already performing logout - skip
                 if (_isPerformingLogout) {
@@ -631,7 +635,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 bool shouldLogout = false;
 
                 if (forceLogout == true) {
-                  if (forceLogoutTimestamp != null && _listenerStartTime != null) {
+                  if (forceLogoutTimestamp != null &&
+                      _listenerStartTime != null) {
                     // Only logout if the force logout signal was sent AFTER this listener started
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
                     final listenerTime = _listenerStartTime!;
@@ -642,11 +647,15 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                     );
                   } else if (_listenerStartTime == null) {
                     // No listener time - should not happen, skip logout
-                    debugPrint('[DeviceSession]  No listener start time, skipping forceLogout');
+                    debugPrint(
+                      '[DeviceSession]  No listener start time, skipping forceLogout',
+                    );
                     shouldLogout = false;
                   } else {
                     // No timestamp on forceLogout - stale flag from previous session, ignore it
-                    debugPrint('[DeviceSession]  forceLogout has no timestamp - stale flag, ignoring');
+                    debugPrint(
+                      '[DeviceSession]  forceLogout has no timestamp - stale flag, ignoring',
+                    );
                     shouldLogout = false;
                   }
                 }
@@ -710,9 +719,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _listenerReady = true;
       _isStartingListener =
           false; // CRITICAL: Reset flag to allow next listener start
-      debugPrint('[DeviceSession]  Listener ready - protection window now active');
+      debugPrint(
+        '[DeviceSession]  Listener ready - protection window now active',
+      );
     } catch (e, stackTrace) {
-      debugPrint('[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e');
+      debugPrint(
+        '[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e',
+      );
       debugPrint('[DeviceSession]  Stack trace: $stackTrace');
       _isStartingListener = false; // CRITICAL: Reset flag even on error
     }
@@ -795,7 +808,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
         // Give Flutter a chance to process the rebuild
         await Future.delayed(const Duration(milliseconds: 100));
-        debugPrint('[RemoteLogout] setState completed and Flutter processing done');
+        debugPrint(
+          '[RemoteLogout] setState completed and Flutter processing done',
+        );
 
         // CRITICAL: Double-check that Firebase signOut actually completed
         // Sometimes the stream doesn't update immediately
@@ -889,8 +904,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
             );
             return const OnboardingScreen();
           }
-          debugPrint('[BUILD] Showing loading screen');
-          return _buildLoadingScreen();
+          // User is already authenticated - show MainNavigationScreen directly
+          // instead of loading screen to prevent widget destruction/recreation cycle
+          debugPrint(
+            '[BUILD] Waiting but user exists - showing MainNavigationScreen directly',
+          );
+          return _buildMainScreenWithValidation();
         }
 
         if (snapshot.hasError) {
@@ -920,7 +939,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // Only start device session monitoring ONCE per user login
           // Starting on every build() causes race conditions and false logouts
-          if (_lastInitializedUserId != uid || _deviceSessionSubscription == null) {
+          if (_lastInitializedUserId != uid ||
+              _deviceSessionSubscription == null) {
             debugPrint(
               '[BUILD] Starting device session monitoring for NEW user or first time...',
             );
@@ -932,7 +952,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   await _startDeviceSessionMonitoring(uid);
                 }
               } catch (e) {
-                debugPrint('[BUILD] ERROR starting device session monitoring: $e');
+                debugPrint(
+                  '[BUILD] ERROR starting device session monitoring: $e',
+                );
               }
             });
           }
@@ -974,33 +996,6 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     return const MainNavigationScreen();
   }
 
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0f0f23),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f0f23)],
-          ),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.white),
-              SizedBox(height: 16),
-              Text(
-                'Loading...',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildErrorScreen(String error) {
     return Scaffold(

@@ -57,9 +57,6 @@ enum AppointmentStatus {
         return AppointmentStatus.completed;
       case 'cancelled':
         return AppointmentStatus.cancelled;
-      case 'noshow':
-      case 'no_show':
-        return AppointmentStatus.noShow;
       default:
         return AppointmentStatus.pending;
     }
@@ -435,7 +432,6 @@ class AppointmentFilters {
   static const String inProgress = 'In Progress';
   static const String completed = 'Completed';
   static const String cancelled = 'Cancelled';
-  static const String noShow = 'No Show';
 
   static const List<String> allFilters = [
     all,
@@ -444,7 +440,6 @@ class AppointmentFilters {
     inProgress,
     completed,
     cancelled,
-    noShow,
   ];
 
   static AppointmentStatus? getStatusFromFilter(String filter) {
@@ -459,8 +454,6 @@ class AppointmentFilters {
         return AppointmentStatus.completed;
       case cancelled:
         return AppointmentStatus.cancelled;
-      case noShow:
-        return AppointmentStatus.noShow;
       default:
         return null;
     }

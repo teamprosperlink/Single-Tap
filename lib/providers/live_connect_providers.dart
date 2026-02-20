@@ -186,15 +186,16 @@ class NearbyPeopleNotifier extends StateNotifier<NearbyPeopleState> {
     try {
       final query = FirebaseFirestore.instance
           .collection('users')
-          .where('uid', isNotEqualTo: currentUserId)
           .limit(_pageSize);
 
       final snapshot = await query.get();
-      final people = snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['uid'] = doc.id;
-        return data;
-      }).toList();
+      final people = snapshot.docs
+          .where((doc) => doc.id != currentUserId)
+          .map((doc) {
+            final data = doc.data();
+            data['uid'] = doc.id;
+            return data;
+          }).toList();
 
       state = state.copyWith(
         people: people,
@@ -221,16 +222,17 @@ class NearbyPeopleNotifier extends StateNotifier<NearbyPeopleState> {
     try {
       final query = FirebaseFirestore.instance
           .collection('users')
-          .where('uid', isNotEqualTo: currentUserId)
           .startAfterDocument(state.lastDocument!)
           .limit(_pageSize);
 
       final snapshot = await query.get();
-      final newPeople = snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['uid'] = doc.id;
-        return data;
-      }).toList();
+      final newPeople = snapshot.docs
+          .where((doc) => doc.id != currentUserId)
+          .map((doc) {
+            final data = doc.data();
+            data['uid'] = doc.id;
+            return data;
+          }).toList();
 
       state = state.copyWith(
         people: [...state.people, ...newPeople],

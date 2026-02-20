@@ -7,9 +7,7 @@ import '../../screens/profile/profile_view_screen.dart';
 // REMOVED: Call feature imports (feature deleted)
 // import '../services/simple_call_service.dart';
 import '../../models/user_profile.dart';
-import '../../res/utils/photo_url_helper.dart';
 import '../../res/config/app_text_styles.dart';
-import '../../res/utils/snackbar_helper.dart';
 // import '../models/call_model.dart';
 
 class MatchCardWithActions extends StatelessWidget {
@@ -55,23 +53,7 @@ class MatchCardWithActions extends StatelessWidget {
                   // Avatar
                   Hero(
                     tag: 'avatar_${match['userId']}',
-                    child: CircleAvatar(
-                      radius: 28,
-                      backgroundImage:
-                          PhotoUrlHelper.isValidUrl(
-                            match['userProfile']?['photoUrl'],
-                          )
-                          ? CachedNetworkImageProvider(
-                              match['userProfile']['photoUrl'],
-                            )
-                          : null,
-                      child:
-                          !PhotoUrlHelper.isValidUrl(
-                            match['userProfile']?['photoUrl'],
-                          )
-                          ? const Icon(Icons.person, size: 28)
-                          : null,
-                    ),
+                    child: _buildAvatar(match),
                   ),
                   const SizedBox(width: 12),
 
@@ -104,6 +86,36 @@ class MatchCardWithActions extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Match score badge
+                  if (match['matchScore'] != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getScoreColor(
+                          (match['matchScore'] as num).toDouble(),
+                        ).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _getScoreColor(
+                            (match['matchScore'] as num).toDouble(),
+                          ).withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Text(
+                        '${((match['matchScore'] as num).toDouble() * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _getScoreColor(
+                            (match['matchScore'] as num).toDouble(),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
 
@@ -144,17 +156,6 @@ class MatchCardWithActions extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
 
-                    // Call Button
-                    Expanded(
-                      child: _ActionButton(
-                        icon: Icons.call_outlined,
-                        label: 'Call',
-                        color: Colors.green,
-                        onTap: () => _startCall(context),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
                     // View Profile Button
                     Expanded(
                       child: _ActionButton(
@@ -174,7 +175,26 @@ class MatchCardWithActions extends StatelessWidget {
     );
   }
 
-  // ignore: unused_element
+  Widget _buildAvatar(Map<String, dynamic> match) {
+    final profile = match['userProfile'] as Map<String, dynamic>?;
+    final photoUrl =
+        match['userProfile']?['photoUrl'] ??
+        profile?['photoURL'] ??
+        profile?['profileImageUrl'];
+    final name = (match['userName'] as String? ?? 'U').trim();
+    final initials = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return CircleAvatar(
+      radius: 28,
+      backgroundImage: (photoUrl != null && photoUrl.toString().startsWith('http'))
+          ? CachedNetworkImageProvider(photoUrl.toString())
+          : null,
+      child: (photoUrl == null || !photoUrl.toString().startsWith('http'))
+          ? Text(initials, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+          : null,
+    );
+  }
+
   Color _getScoreColor(double score) {
     if (score >= 0.9) return Colors.green;
     if (score >= 0.8) return Colors.teal;
@@ -205,11 +225,6 @@ class MatchCardWithActions extends StatelessWidget {
         builder: (context) => EnhancedChatScreen(otherUser: receiver),
       ),
     );
-  }
-
-  Future<void> _startCall(BuildContext context) async {
-    // REMOVED: Call feature disabled
-    SnackBarHelper.showWarning(context, 'Call feature is currently unavailable');
   }
 
   Future<void> _viewProfile(BuildContext context) async {

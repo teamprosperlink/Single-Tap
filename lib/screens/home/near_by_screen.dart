@@ -565,38 +565,18 @@ class _NearByScreenState extends State<NearByScreen>
     final text = _getCombinedText(data);
 
     switch (_selectedCategory) {
-      case 'News':
-        return text.contains('news') ||
-            text.contains('breaking') ||
-            text.contains('update') ||
-            text.contains('report') ||
-            text.contains('headline') ||
-            text.contains('latest') ||
-            text.contains('announcement');
-
-      case 'Entertainment':
-        return text.contains('entertainment') ||
-            text.contains('movie') ||
-            text.contains('music') ||
-            text.contains('film') ||
-            text.contains('song') ||
-            text.contains('celebrity') ||
-            text.contains('show') ||
-            text.contains('concert') ||
-            text.contains('game') ||
-            text.contains('gaming');
-
-      case 'Technology':
-        return text.contains('technology') ||
-            text.contains('tech') ||
-            text.contains('software') ||
-            text.contains('app') ||
-            text.contains('computer') ||
-            text.contains('phone') ||
-            text.contains('ai') ||
-            text.contains('digital') ||
-            text.contains('gadget') ||
-            text.contains('device');
+      case 'Social':
+        return text.contains('social') ||
+            text.contains('meet') ||
+            text.contains('friend') ||
+            text.contains('event') ||
+            text.contains('community') ||
+            text.contains('connect') ||
+            text.contains('dating') ||
+            text.contains('networking') ||
+            text.contains('group') ||
+            text.contains('chat') ||
+            text.contains('people');
 
       case 'Jobs':
         return text.contains('job') ||
@@ -607,7 +587,9 @@ class _NearByScreenState extends State<NearByScreen>
             text.contains('employment') ||
             text.contains('recruit') ||
             text.contains('position') ||
-            text.contains('opening');
+            text.contains('opening') ||
+            text.contains('freelance') ||
+            text.contains('intern');
 
       case 'Products':
         return text.contains('product') ||
@@ -621,9 +603,31 @@ class _NearByScreenState extends State<NearByScreen>
             text.contains('offer') ||
             data['price'] != null;
 
+      case 'Businesses':
+        return text.contains('business') ||
+            text.contains('service') ||
+            text.contains('company') ||
+            text.contains('professional') ||
+            text.contains('agency') ||
+            text.contains('consultant') ||
+            text.contains('enterprise') ||
+            data['accountType'] == 'business';
+
       default:
         return true;
     }
+  }
+
+  String _currencySymbol(String code) {
+    const symbols = {
+      'INR': '₹',
+      'USD': '\$',
+      'EUR': '€',
+      'GBP': '£',
+      'AED': 'د.إ',
+      'SAR': '﷼',
+    };
+    return symbols[code] ?? code;
   }
 
   String _getCombinedText(Map<String, dynamic> data) {
@@ -885,6 +889,7 @@ class _NearByScreenState extends State<NearByScreen>
         ? images[0].toString()
         : null;
     final price = post['price'];
+    final currency = post['currency'] as String? ?? 'INR';
     final createdAt = post['createdAt'];
 
     // Check if we need to fetch user data
@@ -1053,7 +1058,7 @@ class _NearByScreenState extends State<NearByScreen>
               if (hasPrice) ...[
                 SizedBox(height: contentLevel >= 2 ? 8 : 6),
                 Text(
-                  '₹${price.toString()}',
+                  '${_currencySymbol(currency)}${price.toString()}',
                   style: TextStyle(
                     fontSize: contentLevel >= 2 ? 16 : 14,
                     fontWeight: FontWeight.w700,

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../../services/unified_post_service.dart';
 import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
@@ -355,18 +356,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         return;
       }
 
-      // Upload image if selected
+      // Upload image first if selected
       String? imageUrl;
       if (_selectedImage != null) {
         imageUrl = await _uploadImage();
       }
 
-      // Get user data
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final userData = userDoc.data() ?? {};
+      // Build the natural language prompt for AI analysis
+      final title = _titleController.text.trim();
+      final description = _descriptionController.text.trim();
+      final originalPrompt = description.isNotEmpty
+          ? '$title. $description'
+          : title;
 
       // Parse price
       double? price;
@@ -374,44 +375,29 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         price = double.tryParse(_priceController.text);
       }
 
-      // Get user name - fallback to phone number for phone login users
-      String userName = userData['name'] ?? userData['displayName'] ?? '';
-      if (userName.isEmpty || userName == 'User') {
-        userName = userData['phone'] ?? 'User';
+      // Create post via AI pipeline — generates intent analysis + embeddings
+      final result = await UnifiedPostService().createPost(
+        originalPrompt: originalPrompt,
+        price: price,
+        currency: _selectedCurrency,
+        images: imageUrl != null ? [imageUrl] : null,
+      );
+
+      if (result['success'] != true) {
+        throw Exception(result['message'] ?? 'Failed to create post');
       }
 
-      // Create post data
-      final postData = <String, dynamic>{
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'originalPrompt': _titleController.text.trim(),
-        'userId': currentUser.uid,
-        'userName': userName,
-        'userPhoto':
-            userData['photoUrl'] ??
-            userData['photoURL'] ??
-            userData['profileImageUrl'],
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+      // Update the post with extra fields not handled by UnifiedPostService
+      final postId = result['postId'] as String;
+      await _firestore.collection('posts').doc(postId).update({
         'allowCalls': _allowCalls,
-        'currency': _selectedCurrency,
         'hashtags': _hashtags,
-      };
-
-      if (imageUrl != null) {
-        postData['imageUrl'] = imageUrl;
-      }
-
-      if (price != null) {
-        postData['price'] = price;
-      }
-
-      await _firestore.collection('posts').add(postData);
+        'imageUrl': imageUrl, // also store as single field for NearByScreen
+      });
 
       if (mounted) {
         _showSnackBar('Post created successfully!', isError: false);
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
       }
     } catch (e) {
       debugPrint('Error creating post: $e');

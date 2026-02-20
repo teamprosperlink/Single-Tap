@@ -197,12 +197,31 @@ class PostModel {
         .map((word) => word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1))
         .join(' ');
   }
-  
-  /// Dynamic intent matching based on AI understanding (replaces hardcoded matchesIntent)
+
+  /// Dynamic intent matching based on AI understanding
   /// Returns true if this post could be a good match with another post
   bool matchesIntent(PostModel other) {
     final myActionType = actionType.toLowerCase();
     final otherActionType = other.actionType.toLowerCase();
+
+    // Exchange model hard incompatibility (free vs paid, equity vs cash-only)
+    final myExchange =
+        (intentAnalysis['exchange_model'] ?? 'unspecified').toString();
+    final otherExchange =
+        (other.intentAnalysis['exchange_model'] ?? 'unspecified').toString();
+    if ((myExchange == 'free' && otherExchange == 'paid') ||
+        (myExchange == 'paid' && otherExchange == 'free') ||
+        (myExchange == 'equity' && otherExchange == 'paid')) {
+      return false;
+    }
+
+    // Symmetric intents (gym partner, chess partner, travel buddy, study group, etc.)
+    // When BOTH posts are symmetric with the same action type, it's a valid match.
+    final mySymmetric = intentAnalysis['is_symmetric'] == true;
+    final otherSymmetric = other.intentAnalysis['is_symmetric'] == true;
+    if (mySymmetric && otherSymmetric && myActionType == otherActionType) {
+      return true;
+    }
 
     // Check for complementary action types
     if ((myActionType == 'offering' && otherActionType == 'seeking') ||
@@ -220,20 +239,23 @@ class PostModel {
       return true;
     }
 
-    // For symmetric intents (dating, friendship, meetup, etc.)
-    // Match if both have the same action type
+    // Neutral means Gemini couldn't determine intent — don't penalise; treat as potential match
+    if (myActionType == 'neutral' || otherActionType == 'neutral') {
+      return true;
+    }
+
+    // Legacy symmetric action types
     if (myActionType == otherActionType &&
         (myActionType == 'meetup' ||
             myActionType == 'dating' ||
             myActionType == 'friendship' ||
-            myActionType == 'connecting' ||
-            myActionType == 'neutral')) {
+            myActionType == 'connecting')) {
       return true;
     }
 
     return false;
   }
-  
+
   /// Dynamic price matching based on action types
   bool matchesPrice(PostModel other) {
     // If neither has price info, consider it a match
