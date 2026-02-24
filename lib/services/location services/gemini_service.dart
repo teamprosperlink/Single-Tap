@@ -31,7 +31,7 @@ class GeminiService {
     return await ApiErrorHandler.handleApiCall(
           () async {
             final content = Content.text(text);
-            final response = await _embeddingModel.embedContent(content);
+            final response = await _embeddingModel.embedContent(content, outputDimensionality: ApiConfig.embeddingDimension);
             return response.embedding.values;
           },
           fallback: () => _generateFallbackEmbedding(text),

@@ -11,7 +11,7 @@ class ApiConfig {
 
   /// Gemini model names
   static const String geminiFlashModel = 'gemini-2.5-flash';
-  static const String geminiEmbeddingModel = 'text-embedding-004';
+  static const String geminiEmbeddingModel = 'gemini-embedding-001';
 
   /// API endpoints
   static const String geminiApiBaseUrl =

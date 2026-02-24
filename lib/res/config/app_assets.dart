@@ -4,7 +4,7 @@ class AppAssets {
   AppAssets._(); // Private constructor to prevent instantiation
 
   //    LOCAL ASSET PATHS
-  static const String logoPath = 'assets/logo/Clogo.jpeg';
+  static const String logoPath = 'assets/logo/Logo.png';
   static const String searchRequirementImage =
       'assets/logo/searchRequirementData.jpeg';
   static const String searchAnnounceImage =

@@ -1,5 +1,4 @@
 import 'dart:ui' show ImageFilter;
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +7,7 @@ import '../../screens/chat/enhanced_chat_screen.dart';
 import '../../screens/profile/profile_view_screen.dart';
 import '../../services/firebase_provider.dart';
 import '../../services/voice_assistant_service.dart';
+import '../../widgets/other widgets/user_avatar.dart';
 import '../../widgets/voice_orb.dart';
 import '../../widgets/audio_visualizer.dart';
 import 'conversations_screen.dart';
@@ -418,19 +418,15 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
             ),
           ),
 
-          // Result cards
+          // Result cards (vertical, matching home screen layout)
           if (message.results != null && message.results!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: SizedBox(
-                height: 220,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: message.results!.length,
-                  itemBuilder: (context, index) {
-                    return _buildResultCard(message.results![index]);
-                  },
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: message.results!
+                    .map((match) => _buildResultCard(match))
+                    .toList(),
               ),
             ),
         ],
@@ -514,185 +510,306 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
-  Widget _buildResultCard(Map<String, dynamic> post) {
-    final userName = post['userName']?.toString() ?? '';
-    final userId = post['userId'] as String?;
-    final hasScore = post['score'] != null;
-    final distanceKm = post['distanceKm'] as double?;
-    final photoUrl = (post['userPhoto'] ?? post['userPhotoUrl'])?.toString() ?? '';
-    final initials = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+  /// Match card identical to home screen's _buildMatchCard
+  Widget _buildResultCard(Map<String, dynamic> match) {
+    final userProfile =
+        match['userProfile'] as Map<String, dynamic>? ?? {};
 
-    return Container(
-      width: 180,
-      margin: const EdgeInsets.only(right: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.15),
-            Colors.white.withValues(alpha: 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Profile photo + name row
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: const Color(0xFF8B5CF6),
-                backgroundImage: photoUrl.isNotEmpty
-                    ? CachedNetworkImageProvider(photoUrl)
-                    : null,
-                child: photoUrl.isEmpty
-                    ? Text(initials,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600))
-                    : null,
+    // Handle both key names: 'matchScore' (from processIntentAndMatch)
+    // and 'score' (from findMatchesForMe, getMatches, searchNearby)
+    final rawScore = match['matchScore'] ?? match['score'] ?? 0.0;
+    final matchScore =
+        (rawScore is double ? rawScore : (rawScore as num).toDouble()) * 100;
+
+    final userName =
+        (match['userName'] as String?)?.isNotEmpty == true
+            ? match['userName'] as String
+            : (userProfile['name'] as String?)?.isNotEmpty == true
+                ? userProfile['name'] as String
+                : userProfile['displayName'] as String? ??
+                    userProfile['phone'] as String? ??
+                    'Unknown User';
+    final userId = match['userId'] as String?;
+
+    final photoUrl = (userProfile['photoUrl'] ??
+            userProfile['photoURL'] ??
+            userProfile['profileImageUrl'] ??
+            match['userPhoto'] ??
+            '')
+        .toString();
+
+    final distanceKm = match['distanceKm'] as double?;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      elevation: 2,
+      color: Colors.grey.shade800,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () {
+          if (userId == null) return;
+          HapticFeedback.lightImpact();
+          if (userProfile.isNotEmpty) {
+            final otherUser = UserProfile.fromMap(userProfile, userId);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EnhancedChatScreen(otherUser: otherUser),
               ),
-              const SizedBox(width: 8),
-              Expanded(
+            );
+          } else {
+            _openOrCreateConversation(userId);
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Avatar + badge pills
+              Row(
+                children: [
+                  UserAvatar(
+                    profileImageUrl:
+                        photoUrl.isNotEmpty ? photoUrl : null,
+                    radius: 24,
+                    fallbackText: userName,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        // Name badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).primaryColor,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            userName.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        // Match % badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                size: 14,
+                                color: Colors.blue[600],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${matchScore.toStringAsFixed(0)}% match',
+                                style: TextStyle(
+                                  color: Colors.blue[600],
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // City badge
+                        if (userProfile['city'] != null &&
+                            userProfile['city'].toString().isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: Colors.green[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  userProfile['city'].toString(),
+                                  style: TextStyle(
+                                    color: Colors.green[600],
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        // Distance badge
+                        if (distanceKm != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.near_me,
+                                  size: 14,
+                                  color: Colors.orange[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${distanceKm.toStringAsFixed(1)} km',
+                                  style: TextStyle(
+                                    color: Colors.orange[600],
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Title / description box
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[850],
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      userName.isNotEmpty ? userName : 'User',
+                      'Posted:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      match['title'] ??
+                          match['description'] ??
+                          'Looking for match',
                       style: const TextStyle(
-                        color: Colors.white,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        fontSize: 12,
+                        color: Colors.white,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (distanceKm != null)
-                      Text(
-                        '$distanceKm km away',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 9,
+                    if (match['description'] != null &&
+                        match['description'] != match['title'])
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          match['description'],
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[400],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                   ],
                 ),
               ),
+              // Action buttons
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (userId == null) return;
+                        HapticFeedback.lightImpact();
+                        if (userProfile.isNotEmpty) {
+                          final otherUser =
+                              UserProfile.fromMap(userProfile, userId);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EnhancedChatScreen(otherUser: otherUser),
+                            ),
+                          );
+                        } else {
+                          _openOrCreateConversation(userId);
+                        }
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('Chat'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).primaryColor,
+                        side: BorderSide(
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (userId == null) return;
+                        HapticFeedback.lightImpact();
+                        _openProfile(userId);
+                      },
+                      icon: const Icon(Icons.person_outline, size: 16),
+                      label: const Text('Profile'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-
-          // Title
-          Text(
-            post['title']?.toString() ?? 'Post',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 3),
-
-          // Description
-          Expanded(
-            child: Text(
-              post['description']?.toString() ?? '',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 10,
-                height: 1.3,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-          // Match badge
-          if (hasScore)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${((post['score'] as double) * 100).toStringAsFixed(0)}% match',
-                  style: const TextStyle(
-                    color: Color(0xFF06B6D4),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-
-          // Action buttons
-          if (userId != null)
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => _openProfile(userId),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: const Text(
-                        'View Profile',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => _openOrCreateConversation(userId),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                        ),
-                      ),
-                      child: const Text(
-                        'Message',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
+        ),
       ),
     );
   }

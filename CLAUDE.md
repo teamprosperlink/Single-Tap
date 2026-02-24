@@ -23,7 +23,7 @@ _Update ONLY this section before each session:_
 
 **Supper** — Flutter AI-powered matching app. Users type natural language, Gemini AI understands intent, creates embeddings, and matches people semantically.
 
-**Stack:** Flutter 3.35.7 / Dart 3.9.2 / Firebase / Gemini AI / WebRTC (voice only)
+**Stack:** Flutter 3.35.7 / Dart 3.9.2 / Firebase / Gemini AI / WebRTC
 
 ## Key Commands
 
@@ -53,7 +53,6 @@ flutter clean && flutter pub get  # Full reset
 ## Critical Constraints
 
 - No hardcoded categories — AI determines intent dynamically
-- **Voice-only calling** — NO video calling features
 - Always use `limit()` on Firestore queries
 - Always use `FirebaseProvider` — never create new Firebase instances
 - Never use old collections (user_intents, intents, processed_intents)

@@ -682,7 +682,7 @@ Field rules:
             (sourceSymmetric && candidateSymmetric) ||
             sourceSide == 'neutral' ||
             candidateSide == 'neutral';
-        final hasEvidence = semSim >= 0.65 || kwScore > 0;
+        final hasEvidence = semSim >= 0.65 || (kwScore > 0 && semSim >= 0.55);
         final intentBonus =
             complementary && hasEvidence ? ApiConfig.matchIntentBonus : 0.0;
 
@@ -803,7 +803,7 @@ Field rules:
             (sourceSymmetric && candidateSymmetric) ||
             sourceSide == 'neutral' ||
             candidateSide == 'neutral';
-    final hasEvidence = semSim >= 0.50 || kwScore > 0;
+    final hasEvidence = semSim >= 0.65 || (kwScore > 0 && semSim >= 0.55);
     final intentBonus =
         complementary && hasEvidence ? ApiConfig.matchIntentBonus : 0.0;
 

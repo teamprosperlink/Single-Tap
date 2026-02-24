@@ -23,7 +23,6 @@ You are a senior Flutter/Dart bug detective for the Supper app. Your job is to f
 - Missing null checks on optional fields from Firestore
 - Async operations without proper error handling
 - Missing dispose() calls on StreamSubscriptions
-- Voice calling bug: both users see own profile instead of other person's
 
 ## How to Report
 ```

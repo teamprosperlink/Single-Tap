@@ -423,7 +423,6 @@ class HomeScreenState extends State<HomeScreen>
     }
   }
 
-
   // Initialize speech recognition
   bool _isFinishingRecording = false;
 
@@ -442,7 +441,8 @@ class HomeScreenState extends State<HomeScreen>
           debugPrint('Speech error: $error');
           if (mounted && _isRecording && !_isFinishingRecording) {
             final errorMsg = error.errorMsg;
-            if (errorMsg == 'error_no_match' || errorMsg == 'error_speech_timeout') {
+            if (errorMsg == 'error_no_match' ||
+                errorMsg == 'error_speech_timeout') {
               // No speech detected — return to idle, don't use mock
               _isFinishingRecording = true;
               _recordingTimer?.cancel();
@@ -612,7 +612,8 @@ class HomeScreenState extends State<HomeScreen>
         );
 
         for (final match in matches) {
-          final userProfile = match['userProfile'] as Map<String, dynamic>? ?? {};
+          final userProfile =
+              match['userProfile'] as Map<String, dynamic>? ?? {};
           final userId = match['userId'];
           // Check all common photo URL key variants
           final photoUrl =
@@ -720,17 +721,12 @@ class HomeScreenState extends State<HomeScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color.fromRGBO(64, 64, 64, 1),
-              Color.fromRGBO(0, 0, 0, 1),
-            ],
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
           ),
         ),
         child: Column(
           children: [
-            Expanded(
-              child: _buildChatState(isDarkMode),
-            ),
+            Expanded(child: _buildChatState(isDarkMode)),
 
             // Bottom input section (always visible, recording happens inline)
             _buildInputSection(isDarkMode),
@@ -760,9 +756,7 @@ class HomeScreenState extends State<HomeScreen>
               HapticFeedback.mediumImpact();
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const VoiceAssistantScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
               );
             },
             child: Container(
@@ -792,19 +786,26 @@ class HomeScreenState extends State<HomeScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('AI Voice Assistant',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13)),
-                        Text('Tap to search with your voice',
-                            style: TextStyle(
-                                color: Colors.white70, fontSize: 11)),
+                        Text(
+                          'AI Voice Assistant',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          'Tap to search with your voice',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right,
-                      color: Colors.white.withValues(alpha: 0.7), size: 18),
+                  Icon(
+                    Icons.chevron_right,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    size: 18,
+                  ),
                 ],
               ),
             ),
@@ -1156,10 +1157,7 @@ class HomeScreenState extends State<HomeScreen>
     }
 
     return Container(
-      margin: EdgeInsets.only(
-        top: isUser ? 12 : 1,
-        bottom: isUser ? 8 : 1,
-      ),
+      margin: EdgeInsets.only(top: isUser ? 12 : 1, bottom: isUser ? 8 : 1),
       child: Column(
         crossAxisAlignment: isUser
             ? CrossAxisAlignment.end
@@ -1179,7 +1177,7 @@ class HomeScreenState extends State<HomeScreen>
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     image: DecorationImage(
-                      image: AssetImage('assets/logo/Clogo.jpeg'),
+                      image: AssetImage('assets/logo/Logo.png'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -1331,10 +1329,8 @@ class HomeScreenState extends State<HomeScreen>
                                     if (isUser) ...[
                                       const SizedBox(height: 4),
                                       GestureDetector(
-                                        onTap: () => _toggleTts(
-                                          'user_$index',
-                                          text,
-                                        ),
+                                        onTap: () =>
+                                            _toggleTts('user_$index', text),
                                         child: Icon(
                                           _currentlyPlayingKey ==
                                                       'user_$index' &&
@@ -1615,10 +1611,8 @@ class HomeScreenState extends State<HomeScreen>
   void _showSeeAllProducts(List<Map<String, dynamic>> data, String category) {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) => SeeAllProductsScreen(
-          products: data,
-          category: category,
-        ),
+        builder: (_) =>
+            SeeAllProductsScreen(products: data, category: category),
       ),
     );
   }
@@ -1838,14 +1832,13 @@ class HomeScreenState extends State<HomeScreen>
     final matchScore = (match['matchScore'] ?? 0.0) * 100;
     // Resolve name: top-level key first (set by _enrichMatchesWithProfiles),
     // then fall back to profile fields.
-    final userName =
-        (match['userName'] as String?)?.isNotEmpty == true
-            ? match['userName'] as String
-            : (userProfile['name'] as String?)?.isNotEmpty == true
-            ? userProfile['name'] as String
-            : userProfile['displayName'] as String? ??
-                userProfile['phone'] as String? ??
-                'Unknown User';
+    final userName = (match['userName'] as String?)?.isNotEmpty == true
+        ? match['userName'] as String
+        : (userProfile['name'] as String?)?.isNotEmpty == true
+        ? userProfile['name'] as String
+        : userProfile['displayName'] as String? ??
+              userProfile['phone'] as String? ??
+              'Unknown User';
     final userId = match['userId'];
 
     final cachedPhoto = userId != null
@@ -2081,9 +2074,7 @@ class HomeScreenState extends State<HomeScreen>
                       label: const Text('Chat'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Theme.of(context).primaryColor,
-                        side: BorderSide(
-                          color: Theme.of(context).primaryColor,
-                        ),
+                        side: BorderSide(color: Theme.of(context).primaryColor),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -2628,26 +2619,22 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                             ),
                           )
                         : _realChatHistory.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No chat history yet',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.4),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                itemCount: _realChatHistory.length,
-                                itemBuilder: (context, index) {
-                                  return _buildChatItem(
-                                    _realChatHistory[index],
-                                  );
-                                },
+                        ? Center(
+                            child: Text(
+                              'No chat history yet',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontSize: 13,
                               ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: _realChatHistory.length,
+                            itemBuilder: (context, index) {
+                              return _buildChatItem(_realChatHistory[index]);
+                            },
+                          ),
                   ),
 
                   // Bottom section with user profile

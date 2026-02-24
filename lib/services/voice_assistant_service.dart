@@ -7,6 +7,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'firebase_provider.dart';
 import 'location services/gemini_service.dart';
 import 'unified_post_service.dart';
+import 'universal_intent_service.dart';
 import '../res/config/api_config.dart';
 
 enum VoiceAssistantState { idle, listening, processing, speaking }
@@ -568,47 +569,54 @@ INTENT RULES:
       case 'getUserProfile':
         if (uid == null) return {'error': 'Not authenticated'};
         final doc = await fs.collection('users').doc(uid).get();
-        return doc.data() ?? {'error': 'Profile not found'};
+        final profile = doc.data();
+        if (profile == null) return {'error': 'Profile not found'};
+        // Return only JSON-safe fields (Firestore Timestamps crash Gemini SDK)
+        return <String, dynamic>{
+          'name': profile['name'] ?? profile['displayName'] ?? '',
+          'phone': profile['phone'] ?? '',
+          'location': profile['location'] ?? '',
+          'city': profile['city'] ?? '',
+          'bio': profile['bio'] ?? '',
+        };
 
       // ── searchByEmbedding ─────────────────────────────────────────────────
+      // Delegates to UniversalIntentService.processIntentAndMatch() — the
+      // exact same flow the home screen uses (create post → full matching
+      // engine → enrich with user profiles).
       case 'searchByEmbedding':
         final text = args['text'] as String? ?? '';
         if (text.isEmpty) return {'error': 'text required'};
 
-        // Generate complementary search terms (mirrors UnifiedPostService)
-        // so "looking for plumber" → "plumber available, plumbing services..."
-        final searchText = await _buildSmartSearchText(text);
-        debugPrint('Voice searchByEmbedding: "$text" → search="$searchText"');
+        try {
+          debugPrint('Voice searchByEmbedding: "$text" → processIntentAndMatch');
+          final result =
+              await UniversalIntentService().processIntentAndMatch(text);
 
-        final queryEmb = await _gemini.generateEmbedding(searchText);
-        final snap = await fs
-            .collection('posts')
-            .where('isActive', isEqualTo: true)
-            .limit(ApiConfig.matchQueryLimit)
-            .get();
-
-        debugPrint('Voice search: ${snap.docs.length} active posts to scan');
-        final embScored = <Map<String, dynamic>>[];
-        for (final d in snap.docs) {
-          final data = d.data();
-          if (data['userId'] == uid) continue; // skip own posts
-          final emb = List<double>.from(data['embedding'] ?? []);
-          if (emb.isEmpty) continue;
-          final sim = _gemini.calculateSimilarity(queryEmb, emb);
-          if (sim >= ApiConfig.matchPreFilterThreshold) {
-            debugPrint('  "${data['title']}" sim=${sim.toStringAsFixed(3)}');
+          if (result['success'] == true) {
+            final matches = List<Map<String, dynamic>>.from(
+              result['matches'] ?? [],
+            );
+            debugPrint('Voice search: ${matches.length} matches found');
+            _lastResults = matches;
+            notifyListeners();
+            // Sanitize for Gemini: strip Firestore Timestamps & large nested objects
+            final sanitized = matches.map((m) {
+              return <String, dynamic>{
+                'userName': m['userName'] ?? 'User',
+                'title': m['title'] ?? '',
+                'description': m['description'] ?? '',
+                'location': m['location'] ?? '',
+                'matchScore': m['matchScore'] ?? m['score'] ?? 0,
+              };
+            }).toList();
+            return {'results': sanitized, 'count': sanitized.length};
           }
-          if (sim >= ApiConfig.matchFinalThreshold) {
-            embScored.add(_cleanPostData(data, id: d.id, score: sim));
-          }
+          return {'results': [], 'count': 0};
+        } catch (e) {
+          debugPrint('searchByEmbedding error: $e');
+          return {'results': [], 'count': 0};
         }
-        embScored.sort((a, b) =>
-            (b['score'] as double).compareTo(a['score'] as double));
-        final top = embScored.take(ApiConfig.matchMaxResults).toList();
-        debugPrint('Voice search: ${top.length} results above threshold');
-        _lastResults = top;
-        notifyListeners();
-        return {'results': top, 'count': top.length};
 
       // ── searchNearby ──────────────────────────────────────────────────────
       case 'searchNearby':
@@ -789,33 +797,6 @@ INTENT RULES:
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
-
-  /// Generate complementary search text for a voice query.
-  /// Mirrors what UnifiedPostService does with complementary_intents:
-  /// "looking for plumber" → "plumber available, plumbing services, pipe repair"
-  /// This dramatically improves match quality vs raw query embedding.
-  Future<String> _buildSmartSearchText(String query) async {
-    try {
-      final result = await _gemini.generateContent(
-        'User is searching for: "$query"\n'
-        'Generate a short complementary search phrase (max 20 words) that describes '
-        'posts matching this search. If seeking, describe who offers it. '
-        'If offering, describe who needs it.\n'
-        'Return ONLY the phrase, no explanation.\n'
-        'Examples:\n'
-        '"looking for plumber" → "plumber available plumbing services pipe repair"\n'
-        '"I am chef" → "need chef looking for cook hiring cooking services"\n'
-        '"water bottle" → "selling water bottle bottle for sale hydration"',
-      );
-      if (result != null && result.trim().isNotEmpty) {
-        // Combine complementary terms with original query for best embedding
-        return '${result.trim()} $query';
-      }
-    } catch (e) {
-      debugPrint('Smart search text generation failed: $e');
-    }
-    return query;
-  }
 
   /// Strip heavy fields (embedding, intentAnalysis, metadata) so Gemini
   /// gets a small, clean payload and UI result cards have all needed fields.

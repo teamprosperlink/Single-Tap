@@ -193,6 +193,7 @@ Return ONLY valid JSON (no markdown, no backticks):
 
       final response = await _embeddingModel.embedContent(
         Content.text(cleanedText),
+        outputDimensionality: ApiConfig.embeddingDimension,
       );
       final embedding = response.embedding.values;
 
