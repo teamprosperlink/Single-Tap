@@ -68,9 +68,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight + 50),
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.splashDark1,
-            border: const Border(bottom: BorderSide(color: Colors.white, width: 1)),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 1)),
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
@@ -121,9 +121,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.splashGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.splashGradient),
         child: SafeArea(
           child: TabBarView(
             controller: _tabController,
@@ -898,8 +896,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     );
   }
 
-
-
   Widget _buildLinkItem(MessageModel message, bool isDarkMode) {
     final urls = _extractUrls(message.text!);
 
@@ -955,7 +951,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                     children: [
                       Text(
                         urls.isNotEmpty ? urls.first : message.text!,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
                           decoration: TextDecoration.underline,
@@ -1035,7 +1031,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
     );
   }
 
-
   Widget _buildEmptyState(bool isDarkMode, String title, String subtitle) {
     return Center(
       child: Column(
@@ -1089,11 +1084,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
   }
 
   Widget _buildLoadingState(bool isDarkMode) {
-    return Center(
+    return const Center(
       child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation<Color>(
-          Colors.white70,
-        ),
+        valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
       ),
     );
   }

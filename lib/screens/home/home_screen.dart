@@ -1405,17 +1405,14 @@ class HomeScreenState extends State<HomeScreen>
   }
 
   bool _shouldProcessForMatches(String message) {
-    final lowerMessage = message.toLowerCase();
-    return lowerMessage.contains('bike') ||
-        lowerMessage.contains('book') ||
-        lowerMessage.contains('room') ||
-        lowerMessage.contains('job') ||
-        lowerMessage.contains('sell') ||
-        lowerMessage.contains('buy') ||
-        lowerMessage.contains('rent') ||
-        lowerMessage.contains('hire') ||
-        lowerMessage.contains('find') ||
-        lowerMessage.contains('look');
+    final trimmed = message.trim().toLowerCase();
+    if (trimmed.length < 3) return false;
+    const conversational = [
+      'hi', 'hello', 'hey', 'thanks', 'thank you',
+      'ok', 'okay', 'yes', 'no', 'bye', 'goodbye',
+    ];
+    if (conversational.contains(trimmed)) return false;
+    return true;
   }
 
   // Mock voice results for fallback
@@ -2867,7 +2864,7 @@ class HomeScreenState extends State<HomeScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => EnhancedChatScreen(otherUser: otherUser),
+              builder: (context) => EnhancedChatScreen(otherUser: otherUser, source: 'Networking'),
             ),
           );
         },

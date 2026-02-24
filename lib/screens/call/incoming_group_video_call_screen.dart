@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/safe_circle_avatar.dart';
+import '../../widgets/common widgets/safe_circle_avatar.dart';
 import 'group_video_call_screen.dart';
 
 /// Incoming Group Video Call Screen (SingleTap style)

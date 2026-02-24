@@ -58,7 +58,7 @@ class ConnectionService {
           .doc(senderId)
           .get();
       final senderData = senderDoc.data() ?? {};
-      final senderName = senderData['name'] ?? 'Someone';
+      final senderName = _resolveName(senderData, 'Someone');
 
       // Get receiver info
       final receiverDoc = await _firestore
@@ -66,7 +66,7 @@ class ConnectionService {
           .doc(receiverId)
           .get();
       final receiverData = receiverDoc.data() ?? {};
-      final receiverName = receiverData['name'] ?? 'Unknown';
+      final receiverName = _resolveName(receiverData, 'Unknown');
 
       // Create connection request
       final requestRef = await _firestore.collection('connection_requests').add(
@@ -74,15 +74,15 @@ class ConnectionService {
           'senderId': senderId,
           'senderName': senderName,
           'senderPhoto': senderData['photoUrl'],
-          'senderAge': senderData['age'],
-          'senderOccupation': senderData['occupation'],
+          'senderAge': senderData['age'] ?? _calcAgeFromDob(senderData['dateOfBirth']),
+          'senderOccupation': _resolveOccupation(senderData),
           'senderLatitude': senderData['latitude'],
           'senderLongitude': senderData['longitude'],
           'receiverId': receiverId,
           'receiverName': receiverName,
           'receiverPhoto': receiverData['photoUrl'],
-          'receiverAge': receiverData['age'],
-          'receiverOccupation': receiverData['occupation'],
+          'receiverAge': receiverData['age'] ?? _calcAgeFromDob(receiverData['dateOfBirth']),
+          'receiverOccupation': _resolveOccupation(receiverData),
           'receiverLatitude': receiverData['latitude'],
           'receiverLongitude': receiverData['longitude'],
           'message': message,
@@ -130,8 +130,12 @@ class ConnectionService {
       }
 
       final requestData = requestDoc.data()!;
-      final senderId = requestData['senderId'] as String;
-      final receiverId = requestData['receiverId'] as String;
+      final senderId = requestData['senderId'] as String?;
+      final receiverId = requestData['receiverId'] as String?;
+
+      if (senderId == null || receiverId == null) {
+        return {'success': false, 'message': 'Invalid request data'};
+      }
 
       // Verify current user is either sender or receiver
       if (receiverId != currentUserId && senderId != currentUserId) {
@@ -191,10 +195,10 @@ class ConnectionService {
       }
 
       final requestData = requestDoc.data()!;
-      final receiverId = requestData['receiverId'] as String;
+      final receiverId = requestData['receiverId'] as String?;
 
       // Verify current user is the receiver
-      if (receiverId != currentUserId) {
+      if (receiverId == null || receiverId != currentUserId) {
         return {'success': false, 'message': 'Unauthorized'};
       }
 
@@ -231,10 +235,10 @@ class ConnectionService {
       }
 
       final requestData = requestDoc.data()!;
-      final senderId = requestData['senderId'] as String;
+      final senderId = requestData['senderId'] as String?;
 
       // Verify current user is the sender
-      if (senderId != currentUserId) {
+      if (senderId == null || senderId != currentUserId) {
         return {'success': false, 'message': 'Unauthorized'};
       }
 
@@ -507,6 +511,63 @@ class ConnectionService {
       debugPrint(' Error checking request status: $e');
       return null;
     }
+  }
+
+  /// Resolve user display name from Firestore data, checking multiple fields
+  String _resolveName(Map<String, dynamic> data, String fallback) {
+    final name = data['name'] as String?;
+    if (name != null && name.isNotEmpty && name != 'User' && name != 'Unknown') {
+      return name;
+    }
+    final displayName = data['displayName'] as String?;
+    if (displayName != null && displayName.isNotEmpty && displayName != 'User' && displayName != 'Unknown') {
+      return displayName;
+    }
+    final phone = data['phone'] as String?;
+    if (phone != null && phone.isNotEmpty) {
+      return phone;
+    }
+    return fallback;
+  }
+
+  /// Calculate age from dateOfBirth if age field is null
+  int? _calcAgeFromDob(dynamic dob) {
+    if (dob == null) return null;
+    try {
+      final DateTime birthDate;
+      if (dob is Timestamp) {
+        birthDate = dob.toDate();
+      } else if (dob is String && dob.isNotEmpty) {
+        birthDate = DateTime.parse(dob);
+      } else {
+        return null;
+      }
+      final now = DateTime.now();
+      int age = now.year - birthDate.year;
+      if (now.month < birthDate.month ||
+          (now.month == birthDate.month && now.day < birthDate.day)) {
+        age--;
+      }
+      return age > 0 ? age : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Resolve occupation from multiple possible fields
+  String? _resolveOccupation(Map<String, dynamic> data) {
+    final occupation = data['occupation'] as String?;
+    if (occupation != null && occupation.isNotEmpty) return occupation;
+    final profession = data['profession'] as String?;
+    if (profession != null && profession.isNotEmpty) return profession;
+    final profProfile = data['professionalProfile'] as Map<String, dynamic>?;
+    if (profProfile != null) {
+      final category = profProfile['category'] as String?;
+      if (category != null && category.isNotEmpty) return category;
+    }
+    final subcat = data['networkingSubcategory'] as String?;
+    if (subcat != null && subcat.isNotEmpty) return subcat;
+    return null;
   }
 
   /// Send connection request notification to the RECEIVER

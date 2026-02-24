@@ -784,11 +784,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 // More options button (shows popup with select/delete)
                 TextButton.icon(
                   onPressed: _showCallOptionsPopup,
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.more_horiz,
                     color: AppColors.textSecondaryDark,
                   ),
-                  label: Text(
+                  label: const Text(
                     'More Options',
                     style: TextStyle(
                       color: AppColors.textSecondaryDark,

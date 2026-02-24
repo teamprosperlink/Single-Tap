@@ -108,7 +108,8 @@ class ExtendedUserProfile {
     // Parse activities from map - handle both String and Map formats
     List<Activity> activities = [];
     if (map['activities'] != null) {
-      final activitiesData = map['activities'] as List<dynamic>;
+      final rawActivities = map['activities'];
+      final activitiesData = rawActivities is List ? rawActivities : <dynamic>[];
       activities = activitiesData.map((item) {
         // Handle both String format (legacy) and Map format (new)
         if (item is String) {
@@ -262,9 +263,9 @@ class ExtendedUserProfile {
   String? get formattedDistance {
     if (distance == null) return null;
     if (distance! < 1) {
-      return '${(distance! * 1000).round()} m away';
+      return '${(distance! * 1000).round()} m';
     } else {
-      return '${distance!.toStringAsFixed(1)} km away';
+      return '${distance!.toStringAsFixed(1)} km';
     }
   }
 

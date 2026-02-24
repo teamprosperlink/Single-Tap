@@ -40,7 +40,9 @@ class ServicePricingTable extends StatelessWidget {
           itemCount: services.length,
           separatorBuilder: (_, _) => Divider(
             height: 1,
-            color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+            color: (isDarkMode ? Colors.white : Colors.black).withValues(
+              alpha: 0.1,
+            ),
           ),
           itemBuilder: (context, index) {
             final service = services[index];
@@ -64,14 +66,18 @@ class ServicePricingTable extends StatelessWidget {
             Icon(
               Icons.price_check_outlined,
               size: 48,
-              color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.3),
+              color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                alpha: 0.3,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               'No services available',
               style: TextStyle(
                 fontSize: 14,
-                color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.5),
+                color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                  alpha: 0.5,
+                ),
               ),
             ),
           ],
@@ -119,7 +125,8 @@ class _ServicePricingRow extends StatelessWidget {
                     service.description!,
                     style: TextStyle(
                       fontSize: 13,
-                      color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.6),
+                      color: (isDarkMode ? Colors.white : Colors.black)
+                          .withValues(alpha: 0.6),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -141,10 +148,10 @@ class _ServicePricingRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.access_time,
                     size: 12,
-                    color: const Color(0xFF42A5F5),
+                    color: Color(0xFF42A5F5),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -169,7 +176,9 @@ class _ServicePricingRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: isDarkMode ? const Color(0xFF00D67D) : const Color(0xFF00A85B),
+                  color: isDarkMode
+                      ? const Color(0xFF00D67D)
+                      : const Color(0xFF00A85B),
                 ),
               ),
               if (onBookTap != null) ...[
@@ -177,7 +186,10 @@ class _ServicePricingRow extends StatelessWidget {
                 GestureDetector(
                   onTap: onBookTap,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF00D67D),
                       borderRadius: BorderRadius.circular(6),
@@ -221,15 +233,20 @@ class RoomPricingCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            (isDarkMode ? const Color(0xFF2D2D44) : Colors.white).withValues(alpha: 0.9),
-            (isDarkMode ? const Color(0xFF1A1A2E) : Colors.grey[50]!).withValues(alpha: 0.9),
+            (isDarkMode ? const Color(0xFF2D2D44) : Colors.white).withValues(
+              alpha: 0.9,
+            ),
+            (isDarkMode ? const Color(0xFF1A1A2E) : Colors.grey[50]!)
+                .withValues(alpha: 0.9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+          color: (isDarkMode ? Colors.white : Colors.black).withValues(
+            alpha: 0.1,
+          ),
         ),
       ),
       child: Padding(
@@ -276,14 +293,17 @@ class RoomPricingCard extends StatelessWidget {
                             Icon(
                               Icons.people_outline,
                               size: 14,
-                              color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.6),
+                              color: (isDarkMode ? Colors.white : Colors.black)
+                                  .withValues(alpha: 0.6),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               'Up to ${room.capacity} guests',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.6),
+                                color:
+                                    (isDarkMode ? Colors.white : Colors.black)
+                                        .withValues(alpha: 0.6),
                               ),
                             ),
                           ],
@@ -297,9 +317,14 @@ class RoomPricingCard extends StatelessWidget {
                           runSpacing: 4,
                           children: room.amenities!.take(3).map((amenity) {
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF00D67D).withValues(alpha: 0.1),
+                                color: const Color(
+                                  0xFF00D67D,
+                                ).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -320,7 +345,9 @@ class RoomPricingCard extends StatelessWidget {
             const SizedBox(height: 12),
             Divider(
               height: 1,
-              color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+              color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                alpha: 0.1,
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -335,7 +362,8 @@ class RoomPricingCard extends StatelessWidget {
                       room.priceRange != null ? 'From' : 'Price',
                       style: TextStyle(
                         fontSize: 11,
-                        color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.6),
+                        color: (isDarkMode ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.6),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -344,14 +372,17 @@ class RoomPricingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: isDarkMode ? const Color(0xFF00D67D) : const Color(0xFF00A85B),
+                        color: isDarkMode
+                            ? const Color(0xFF00D67D)
+                            : const Color(0xFF00A85B),
                       ),
                     ),
                     Text(
                       'per night',
                       style: TextStyle(
                         fontSize: 11,
-                        color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.5),
+                        color: (isDarkMode ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.5),
                       ),
                     ),
                   ],
@@ -362,7 +393,10 @@ class RoomPricingCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00D67D),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -391,11 +425,7 @@ class RoomPricingCard extends StatelessWidget {
         color: const Color(0xFF00D67D).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(
-        Icons.hotel,
-        color: Color(0xFF00D67D),
-        size: 32,
-      ),
+      child: const Icon(Icons.hotel, color: Color(0xFF00D67D), size: 32),
     );
   }
 }
@@ -456,8 +486,14 @@ class PackagePricingTier extends StatelessWidget {
                             const Color(0xFF00D67D).withValues(alpha: 0.05),
                           ]
                         : [
-                            (isDarkMode ? const Color(0xFF2D2D44) : Colors.white).withValues(alpha: 0.9),
-                            (isDarkMode ? const Color(0xFF1A1A2E) : Colors.grey[50]!).withValues(alpha: 0.9),
+                            (isDarkMode
+                                    ? const Color(0xFF2D2D44)
+                                    : Colors.white)
+                                .withValues(alpha: 0.9),
+                            (isDarkMode
+                                    ? const Color(0xFF1A1A2E)
+                                    : Colors.grey[50]!)
+                                .withValues(alpha: 0.9),
                           ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -466,7 +502,9 @@ class PackagePricingTier extends StatelessWidget {
                   border: Border.all(
                     color: isPopular
                         ? const Color(0xFF00D67D).withValues(alpha: 0.4)
-                        : (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+                        : (isDarkMode ? Colors.white : Colors.black).withValues(
+                            alpha: 0.1,
+                          ),
                     width: isPopular ? 2 : 1,
                   ),
                 ),
@@ -478,7 +516,10 @@ class PackagePricingTier extends StatelessWidget {
                       // Popular Badge
                       if (isPopular)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF00D67D),
                             borderRadius: BorderRadius.circular(6),
@@ -515,7 +556,9 @@ class PackagePricingTier extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: isDarkMode ? const Color(0xFF00D67D) : const Color(0xFF00A85B),
+                              color: isDarkMode
+                                  ? const Color(0xFF00D67D)
+                                  : const Color(0xFF00A85B),
                             ),
                           ),
                           Text(
@@ -523,7 +566,9 @@ class PackagePricingTier extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
-                              color: isDarkMode ? const Color(0xFF00D67D) : const Color(0xFF00A85B),
+                              color: isDarkMode
+                                  ? const Color(0xFF00D67D)
+                                  : const Color(0xFF00A85B),
                             ),
                           ),
                         ],
@@ -534,7 +579,8 @@ class PackagePricingTier extends StatelessWidget {
                           package.pricingUnit!,
                           style: TextStyle(
                             fontSize: 12,
-                            color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.5),
+                            color: (isDarkMode ? Colors.white : Colors.black)
+                                .withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -562,7 +608,11 @@ class PackagePricingTier extends StatelessWidget {
                                       package.features[idx],
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.8),
+                                        color:
+                                            (isDarkMode
+                                                    ? Colors.white
+                                                    : Colors.black)
+                                                .withValues(alpha: 0.8),
                                       ),
                                     ),
                                   ),
@@ -583,8 +633,12 @@ class PackagePricingTier extends StatelessWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: isPopular
                                   ? const Color(0xFF00D67D)
-                                  : (isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey[200]),
-                              foregroundColor: isPopular ? Colors.white : const Color(0xFF00D67D),
+                                  : (isDarkMode
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Colors.grey[200]),
+                              foregroundColor: isPopular
+                                  ? Colors.white
+                                  : const Color(0xFF00D67D),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
@@ -620,14 +674,18 @@ class PackagePricingTier extends StatelessWidget {
             Icon(
               Icons.local_offer_outlined,
               size: 48,
-              color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.3),
+              color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                alpha: 0.3,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               'No packages available',
               style: TextStyle(
                 fontSize: 14,
-                color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.5),
+                color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                  alpha: 0.5,
+                ),
               ),
             ),
           ],

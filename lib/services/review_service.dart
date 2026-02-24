@@ -49,7 +49,7 @@ class ReviewService {
         categoryRatings: categoryRatings,
         reviewText: reviewText,
         images: images ?? [],
-        isVerifiedPurchase: false, // TODO: Check actual purchase history
+        isVerifiedPurchase: false,
       );
 
       // Add review

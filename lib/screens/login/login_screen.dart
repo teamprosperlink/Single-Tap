@@ -7,8 +7,8 @@ import '../../services/auth_service.dart' show AuthService;
 import '../../services/professional_service.dart';
 import '../../services/business_service.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/country_code_picker_sheet.dart';
-import '../../widgets/device_login_dialog.dart';
+import '../../widgets/common widgets/country_code_picker_sheet.dart';
+import '../../widgets/common widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
 import '../professional/professional_setup_screen.dart';
 import '../business/business_setup_screen.dart';
@@ -141,7 +141,6 @@ class _LoginScreenState extends State<LoginScreen>
     _fadeController.dispose();
     super.dispose();
   }
-
 
   void _toggleSignUpMode() {
     final wasSignUpMode = _isSignUpMode;

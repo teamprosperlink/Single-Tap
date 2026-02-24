@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/floating_particles.dart';
+import '../../widgets/common widgets/floating_particles.dart';
 import 'group_audio_call_screen.dart';
 
 class IncomingGroupAudioCallScreen extends StatefulWidget {

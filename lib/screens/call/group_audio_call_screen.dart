@@ -6,7 +6,7 @@ import '../../res/config/app_colors.dart';
 import '../../services/notification_service.dart';
 import '../../services/other services/group_voice_call_service.dart';
 import '../../services/floating_call_service.dart';
-import '../../widgets/floating_particles.dart';
+import '../../widgets/common widgets/floating_particles.dart';
 
 /// SingleTap-style Group Audio Call Screen
 /// Supports multiple participants with audio-only conference call

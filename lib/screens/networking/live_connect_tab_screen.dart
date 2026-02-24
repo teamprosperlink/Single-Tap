@@ -1851,7 +1851,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   ];
 
   // Tab categories for TabBar
-  final List<String> _tabCategories = ['Discover Connect', 'Smart Connect'];
+  final List<String> _tabCategories = ['Discover ', 'Smart '];
 
   @override
   void initState() {
@@ -1867,17 +1867,17 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         HapticFeedback.lightImpact();
         final selectedCategory = _tabCategories[_tabController.index];
         setState(() {
-          if (selectedCategory == 'Discover Connect') {
+          if (selectedCategory == 'Discover ') {
             _filterByInterests = false;
             _selectedInterests.clear();
             _locationFilter = 'Worldwide';
-          } else if (selectedCategory == 'Smart Connect') {
+          } else if (selectedCategory == 'Smart ') {
             _filterByInterests = false;
             _selectedInterests.clear();
-            _locationFilter = 'Smart Connect';
+            _locationFilter = 'Smart ';
           } else {
             _filterByInterests = true;
-            _locationFilter = 'Smart Connect';
+            _locationFilter = 'Smart ';
             _selectedInterests.removeWhere(
               (item) =>
                   ['Dating', 'Friendship', 'Business', 'Sports'].contains(item),
@@ -1894,7 +1894,10 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       _locationFilter = 'Near me';
     }
 
-    // No pre-loaded filters — filters only activate when user applies them
+    // Activate Smart networking filter if requested
+    if (widget.activateNetworkingFilter) {
+      _locationFilter = 'Smart ';
+    }
 
     // Initialize expanded state for all groups (all collapsed by default)
     for (var groupName in _connectionTypeGroups.keys) {
@@ -2211,6 +2214,13 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               if (otherUserCity == null || otherUserCity != userCity) {
                 continue; // Skip if not in same city
               }
+            }
+          } else if (_locationFilter == 'Smart ') {
+            // Smart mode: only show users who have a networking profile
+            final userNetCategory =
+                userData['networkingCategory'] as String?;
+            if (userNetCategory == null || userNetCategory.isEmpty) {
+              continue;
             }
           }
           // 'Worldwide' has no location filtering
@@ -2888,7 +2898,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                       child: Text(
                                                         _selectedSubcategory ??
                                                             'Select Subcategory',
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 14,
                                                         ),
@@ -2943,7 +2953,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             // Filter label
                                             Text(
                                               label,
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.white,
@@ -3318,19 +3328,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                   },
                                                 ),
                                               ),
-                                              Row(
+                                              const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment
                                                         .spaceBetween,
                                                 children: [
-                                                  const Text(
+                                                  Text(
                                                     '18',
                                                     style: TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
                                                   ),
-                                                  const Text(
+                                                  Text(
                                                     '60+',
                                                     style: TextStyle(
                                                       color: Colors.white70,
@@ -3495,19 +3505,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                   },
                                                 ),
                                               ),
-                                              Row(
+                                              const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment
                                                         .spaceBetween,
                                                 children: [
-                                                  const Text(
+                                                  Text(
                                                     '1 km',
                                                     style: TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
                                                   ),
-                                                  const Text(
+                                                  Text(
                                                     '500+ km',
                                                     style: TextStyle(
                                                       color: Colors.white70,
@@ -4164,9 +4174,12 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     if (!mounted) return;
 
     // Determine the status to display
+    // For dummy users, show 'sent' to prevent connecting with non-existent users
     final displayStatus = isConnected
         ? 'connected'
-        : connectionStatus; // 'sent', 'received', or null
+        : isDummyUser
+            ? 'sent'
+            : connectionStatus; // 'sent', 'received', or null
 
     try {
       Navigator.push(
@@ -4709,12 +4722,14 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
           heightPattern[(col + row) % heightPattern.length];
 
       if (card.isDummy || card.profile == null) {
-        final cardData = dummyCardData[card.dummyDataIndex % dummyCardData.length];
+        final cardData =
+            dummyCardData[card.dummyDataIndex % dummyCardData.length];
         final dummyAge = cardData['age'] as int;
         final dummyOccupation = cardData['occupation'] as String;
         final dummyCategory = cardData['category'] as String;
         final dummySubcategory = cardData['subcategory'] as String;
-        final dummyDistance = cardData['distance'] as double? ?? (index * 0.7) + 0.3;
+        final dummyDistance =
+            cardData['distance'] as double? ?? (index * 0.7) + 0.3;
         final dummyOnline = index % 3 == 0;
         final customPhoto = cardData['photo'] as String?;
         final dummyPhoto = customPhoto ?? _getDummyImageUrl(index);
@@ -4927,7 +4942,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 90),
+                  padding: const EdgeInsets.fromLTRB(8, 12, 16, 90),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: List.generate(columnCount, (colIndex) {

@@ -9,6 +9,10 @@ import '../../res/config/app_text_styles.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/other widgets/user_avatar.dart';
+import '../../models/user_profile.dart';
+import '../../services/notification_service.dart';
+import '../call/voice_call_screen.dart';
+import 'edit_post_screen.dart';
 
 class MyPostsScreen extends StatefulWidget {
   const MyPostsScreen({super.key});
@@ -31,7 +35,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadCurrentUserData();
   }
 
@@ -71,27 +75,29 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         preferredSize: const Size.fromHeight(kToolbarHeight + 48),
         child: Container(
           decoration: const BoxDecoration(
-            color: Color.fromRGBO(64, 64, 64, 1),
-            border: Border(bottom: BorderSide(color: Colors.white, width: 1)),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 18,
-                  color: Colors.white,
-                ),
-                onPressed: () => Navigator.pop(context),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+            leading: IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: Colors.white,
               ),
             ),
             title: Text(
-              'Posts',
+              'My Posts',
               style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
             ),
             centerTitle: true,
@@ -114,6 +120,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                   fontWeight: FontWeight.normal,
                 ),
                 tabs: const [
+                  Tab(text: 'My Post'),
                   Tab(text: 'Saved'),
                   Tab(text: 'Delete'),
                 ],
@@ -141,7 +148,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // _buildCreatedPostsTab(),
+                  _buildMyPostsTab(),
                   _buildSavedPostsTab(),
                   _buildDeletePostsTab(),
                 ],
@@ -151,6 +158,604 @@ class _MyPostsScreenState extends State<MyPostsScreen>
         ),
       ),
     );
+  }
+
+  // My Posts Tab - shows user's active posts with edit button
+  Widget _buildMyPostsTab() {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      return _buildEmptyState(
+        icon: Icons.article_outlined,
+        title: 'Not Logged In',
+        subtitle: 'Please login to see your posts',
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('posts')
+          .where('userId', isEqualTo: currentUserId)
+          .where('isActive', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('Error loading my posts: ${snapshot.error}');
+          return _buildEmptyState(
+            icon: Icons.error_outline,
+            title: 'Error Loading Posts',
+            subtitle: 'Please try again later',
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _buildEmptyState(
+            icon: Icons.article_outlined,
+            title: 'No Posts Yet',
+            subtitle: 'Create your first post to see it here',
+          );
+        }
+
+        final myPosts = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+          itemCount: myPosts.length,
+          itemBuilder: (context, index) {
+            final doc = myPosts[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final postWithUserData = Map<String, dynamic>.from(data);
+            postWithUserData['userName'] = _currentUserName.isNotEmpty
+                ? _currentUserName
+                : (data['userName'] ?? 'You');
+            postWithUserData['userPhoto'] =
+                _currentUserPhoto ?? data['userPhoto'];
+            return _buildMyPostCard(
+              postId: doc.id,
+              post: postWithUserData,
+              timestamp: data['createdAt'],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // My Post card with edit and delete buttons
+  Widget _buildMyPostCard({
+    required String postId,
+    required Map<String, dynamic> post,
+    dynamic timestamp,
+  }) {
+    final title = post['title'] ?? post['originalPrompt'] ?? 'No Title';
+    final rawDescription = post['description']?.toString() ?? '';
+    final description =
+        (rawDescription == title || rawDescription == post['originalPrompt'])
+        ? ''
+        : rawDescription;
+    final images = post['images'] as List<dynamic>? ?? [];
+    final rawImageUrl = post['imageUrl'];
+    final allImageUrls = <String>[];
+    if (rawImageUrl != null && rawImageUrl.toString().isNotEmpty) {
+      allImageUrls.add(rawImageUrl.toString());
+    }
+    for (final img in images) {
+      final url = img?.toString() ?? '';
+      if (url.isNotEmpty && !allImageUrls.contains(url)) {
+        allImageUrls.add(url);
+      }
+    }
+    if (allImageUrls.length > 10) {
+      allImageUrls.removeRange(10, allImageUrls.length);
+    }
+    final price = post['price'];
+    final userName = post['userName'] ?? 'User';
+    final userPhoto = post['userPhoto'];
+    final hashtags = (post['hashtags'] as List<dynamic>?)?.cast<String>() ?? [];
+
+    DateTime? time;
+    if (timestamp != null && timestamp is Timestamp) {
+      time = timestamp.toDate();
+    }
+
+    final bool hasImage = allImageUrls.isNotEmpty;
+    final bool hasDescription = description.isNotEmpty;
+    final bool hasPrice = price != null;
+
+    int contentLevel = 0;
+    if (hasImage) {
+      contentLevel = 3;
+    } else if (hasPrice && hasDescription) {
+      contentLevel = 2;
+    } else if (hasPrice || hasDescription) {
+      contentLevel = 1;
+    }
+
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(contentLevel >= 2 ? 18 : 14),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(cardPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with user info and edit/delete buttons
+            Row(
+              children: [
+                UserAvatar(
+                  profileImageUrl: PhotoUrlHelper.fixGooglePhotoUrl(userPhoto),
+                  radius: contentLevel >= 2 ? 18 : 14,
+                  fallbackText: userName,
+                ),
+                SizedBox(width: contentLevel >= 2 ? 10 : 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userName,
+                        style: AppTextStyles.caption.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: contentLevel >= 2 ? 13 : 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (time != null || post['isDonation'] == true)
+                        Row(
+                          children: [
+                            if (time != null)
+                              Text(
+                                timeago.format(time),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (time != null && post['isDonation'] == true)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  '•',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            if (post['isDonation'] == true)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.orange.withValues(alpha: 0.4),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Donation',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                // Call button (only if allowCalls is true)
+                if (post['allowCalls'] == true) ...[
+                  _buildIconOnlyButton(
+                    icon: Icons.call_rounded,
+                    color: Colors.white,
+                    onTap: () => _startCallToPostUser(post),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                // Edit button
+                _buildIconOnlyButton(
+                  icon: Icons.edit_outlined,
+                  color: Colors.white,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            EditPostScreen(postId: postId, postData: post),
+                      ),
+                    );
+                    if (result == true && mounted) {
+                      SnackBarHelper.showSuccess(context, 'Post updated');
+                    }
+                  },
+                ),
+                const SizedBox(width: 10),
+                // Soft delete button
+                _buildIconOnlyButton(
+                  icon: Icons.delete_outline_rounded,
+                  color: Colors.white,
+                  onTap: () => _showSoftDeleteConfirmation(postId),
+                ),
+              ],
+            ),
+
+            SizedBox(height: contentLevel >= 2 ? 8 : 6),
+
+            // Title
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                height: 1.4,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            // Description
+            if (hasDescription) ...[
+              const SizedBox(height: 6),
+              Text(
+                description,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: Colors.white70,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+
+            // Price
+            if (hasPrice) ...[
+              SizedBox(height: contentLevel >= 2 ? 8 : 6),
+              Text(
+                '₹${price.toString()}',
+                style: TextStyle(
+                  fontSize: contentLevel >= 2 ? 16 : 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.vibrantGreen,
+                ),
+              ),
+            ],
+
+            // Hashtags
+            if (hashtags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: hashtags.map((tag) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      '#$tag',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFFFD700),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+
+            // Post Images
+            _buildPostImageGrid(allImageUrls, screenHeight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Start voice call to the user who created the post
+  Future<void> _startCallToPostUser(Map<String, dynamic> post) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      SnackBarHelper.showError(context, 'Please login to make a call');
+      return;
+    }
+
+    final receiverId = post['userId'] as String?;
+    if (receiverId == null || receiverId.isEmpty) {
+      SnackBarHelper.showError(context, 'Unable to call this user');
+      return;
+    }
+
+    if (receiverId == currentUser.uid) {
+      SnackBarHelper.showError(context, 'You cannot call yourself');
+      return;
+    }
+
+    try {
+      // Check for existing active calls
+      final activeCallsQuery = await _firestore
+          .collection('calls')
+          .where('participants', arrayContains: currentUser.uid)
+          .where('status', whereIn: ['calling', 'ringing', 'connected'])
+          .limit(5)
+          .get();
+
+      if (activeCallsQuery.docs.isNotEmpty) {
+        bool hasActiveCall = false;
+        for (final doc in activeCallsQuery.docs) {
+          final data = doc.data();
+          final status = data['status'] as String?;
+          final timestamp = data['timestamp'] as Timestamp?;
+          final callAge = timestamp != null
+              ? DateTime.now().difference(timestamp.toDate()).inSeconds
+              : 9999;
+          final isStale = (status == 'calling' || status == 'ringing')
+              ? callAge > 60
+              : callAge > 120;
+          if (isStale) {
+            await _firestore.collection('calls').doc(doc.id).update({
+              'status': status == 'connected' ? 'ended' : 'missed',
+              'endedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            hasActiveCall = true;
+          }
+        }
+        if (hasActiveCall) {
+          if (mounted) {
+            SnackBarHelper.showError(
+              context,
+              'You already have an active call',
+            );
+          }
+          return;
+        }
+      }
+
+      // Get current user's profile
+      final currentUserDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final currentUserData = currentUserDoc.data() ?? {};
+      final callerName =
+          currentUserData['name'] ?? currentUser.displayName ?? 'User';
+      final callerPhoto =
+          currentUserData['photoUrl'] ?? currentUserData['profileImageUrl'];
+
+      // Get receiver's profile
+      final receiverDoc = await _firestore
+          .collection('users')
+          .doc(receiverId)
+          .get();
+
+      UserProfile receiverProfile;
+      if (receiverDoc.exists) {
+        receiverProfile = UserProfile.fromFirestore(receiverDoc);
+      } else {
+        receiverProfile = UserProfile(
+          uid: receiverId,
+          name: post['userName'] ?? 'User',
+          email: '',
+          profileImageUrl: post['userPhoto'],
+          createdAt: DateTime.now(),
+          lastSeen: DateTime.now(),
+        );
+      }
+
+      // Create call document
+      final callDoc = await _firestore.collection('calls').add({
+        'callerId': currentUser.uid,
+        'receiverId': receiverId,
+        'callerName': callerName,
+        'callerPhoto': callerPhoto,
+        'receiverName': receiverProfile.name,
+        'receiverPhoto': receiverProfile.profileImageUrl,
+        'participants': [currentUser.uid, receiverId],
+        'status': 'calling',
+        'type': 'audio',
+        'source': 'Nearby',
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Send notification to receiver
+      NotificationService().sendNotificationToUser(
+        userId: receiverId,
+        title: 'Incoming Call',
+        body: '$callerName is calling you',
+        type: 'call',
+        data: {
+          'callId': callDoc.id,
+          'callerId': currentUser.uid,
+          'callerName': callerName,
+          'callerPhoto': callerPhoto,
+        },
+      );
+
+      // Navigate to voice call screen
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VoiceCallScreen(
+              callId: callDoc.id,
+              otherUser: receiverProfile,
+              isOutgoing: true,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error starting call: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to start call');
+      }
+    }
+  }
+
+  // Show soft delete confirmation dialog
+  void _showSoftDeleteConfirmation(String postId) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(32, 32, 32, 1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Delete Post?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Are you sure you want to delete this post? It will be moved to the Delete tab.',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: const BorderSide(color: Colors.white24),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _softDeletePost(postId);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Soft delete - marks post as inactive (moves to Delete tab)
+  Future<void> _softDeletePost(String postId) async {
+    try {
+      await _firestore.collection('posts').doc(postId).update({
+        'isActive': false,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, 'Post moved to Delete tab');
+      }
+    } catch (e) {
+      debugPrint('Error soft deleting post: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, 'Failed to delete post');
+      }
+    }
   }
 
   // Saved Posts Tab
@@ -368,7 +973,6 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     // Limit to max 10 images
     if (allImageUrls.length > 10)
       allImageUrls.removeRange(10, allImageUrls.length);
-    final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -383,7 +987,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
       if (remainingDays < 0) remainingDays = 0;
     }
 
-    final bool hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final bool hasImage = allImageUrls.isNotEmpty;
     final bool hasDescription = description.isNotEmpty;
     final bool hasPrice = price != null;
 
@@ -397,7 +1001,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     }
 
     final screenHeight = MediaQuery.of(context).size.height;
-    final imageHeight = contentLevel == 3 ? screenHeight * 0.16 : 0.0;
+
     final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
 
     return Container(
@@ -444,20 +1048,58 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                           color: Colors.white,
                         ),
                       ),
-                      // Remaining days warning
-                      Text(
-                        remainingDays <= 7
-                            ? '   $remainingDays days left'
-                            : '$remainingDays days left',
-                        style: AppTextStyles.caption.copyWith(
-                          color: remainingDays <= 7
-                              ? AppColors.error
-                              : Colors.white70,
-                          fontSize: 10,
-                          fontWeight: remainingDays <= 7
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
+                      // Remaining days warning + Donation badge
+                      Row(
+                        children: [
+                          Text(
+                            remainingDays <= 7
+                                ? '   $remainingDays days left'
+                                : '$remainingDays days left',
+                            style: AppTextStyles.caption.copyWith(
+                              color: remainingDays <= 7
+                                  ? AppColors.error
+                                  : Colors.white70,
+                              fontSize: 10,
+                              fontWeight: remainingDays <= 7
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          if (post['isDonation'] == true) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Text(
+                                '•',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: Colors.orange.withValues(alpha: 0.4),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: const Text(
+                                'Donation',
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -553,170 +1195,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
             ],
 
             // Post Images
-            if (allImageUrls.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              // Main image
-              GestureDetector(
-                onTap: () => _openImageViewer(allImageUrls, 0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: allImageUrls[0],
-                    width: double.infinity,
-                    height: imageHeight,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: imageHeight,
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: imageHeight,
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: AppColors.textTertiaryDark,
-                        size: 32,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Additional images in grid
-              if (allImageUrls.length > 1) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    // 2nd image
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _openImageViewer(allImageUrls, 1),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: CachedNetworkImage(
-                            imageUrl: allImageUrls[1],
-                            height: screenHeight * 0.12,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              height: screenHeight * 0.12,
-                              decoration: BoxDecoration(
-                                color: AppColors.glassBackgroundDark(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              height: screenHeight * 0.12,
-                              decoration: BoxDecoration(
-                                color: AppColors.glassBackgroundDark(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.image_not_supported_outlined,
-                                color: AppColors.textTertiaryDark,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // 3rd image with overlay
-                    if (allImageUrls.length > 2) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _openImageViewer(allImageUrls, 2),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Stack(
-                              children: [
-                                CachedNetworkImage(
-                                  imageUrl: allImageUrls[2],
-                                  height: screenHeight * 0.12,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    height: screenHeight * 0.12,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.glassBackgroundDark(
-                                        alpha: 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        height: screenHeight * 0.12,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.glassBackgroundDark(
-                                            alpha: 0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.image_not_supported_outlined,
-                                          color: AppColors.textTertiaryDark,
-                                          size: 24,
-                                        ),
-                                      ),
-                                ),
-                                if (allImageUrls.length > 3)
-                                  Positioned.fill(
-                                    child: Container(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          '+${allImageUrls.length - 3}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ],
+            _buildPostImageGrid(allImageUrls, screenHeight),
           ],
         ),
       ),
@@ -751,7 +1230,6 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     // Limit to max 10 images
     if (allImageUrls.length > 10)
       allImageUrls.removeRange(10, allImageUrls.length);
-    final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -765,7 +1243,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
       time = timestamp.toDate();
     }
 
-    final bool hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final bool hasImage = allImageUrls.isNotEmpty;
     final bool hasDescription = description.isNotEmpty;
     final bool hasPrice = price != null;
 
@@ -780,7 +1258,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     }
 
     final screenHeight = MediaQuery.of(context).size.height;
-    final imageHeight = contentLevel == 3 ? screenHeight * 0.16 : 0.0;
+
     final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
 
     return Container(
@@ -827,13 +1305,52 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                           color: Colors.white,
                         ),
                       ),
-                      if (time != null)
-                        Text(
-                          timeago.format(time),
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
+                      if (time != null || post['isDonation'] == true)
+                        Row(
+                          children: [
+                            if (time != null)
+                              Text(
+                                timeago.format(time),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            if (time != null && post['isDonation'] == true)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  '•',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            if (post['isDonation'] == true)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.orange.withValues(alpha: 0.4),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Donation',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                     ],
                   ),
@@ -971,172 +1488,177 @@ class _MyPostsScreenState extends State<MyPostsScreen>
             ],
 
             // Post Images
-            if (allImageUrls.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              // Main image
-              GestureDetector(
+            _buildPostImageGrid(allImageUrls, screenHeight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Shared image grid builder for post cards
+  Widget _buildPostImageGrid(List<String> allImageUrls, double screenHeight) {
+    if (allImageUrls.isEmpty) return const SizedBox.shrink();
+
+    Widget imageContainer(Widget child) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(borderRadius: BorderRadius.circular(9), child: child),
+      );
+    }
+
+    Widget cachedImage(String url, {required double height, double? width}) {
+      return CachedNetworkImage(
+        imageUrl: url,
+        width: width ?? double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+        placeholder: (context, _) => Container(
+          height: height,
+          width: width,
+          decoration: BoxDecoration(
+            color: AppColors.glassBackgroundDark(alpha: 0.1),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          ),
+        ),
+        errorWidget: (context, _, __) => Container(
+          height: height,
+          width: width,
+          decoration: BoxDecoration(
+            color: AppColors.glassBackgroundDark(alpha: 0.1),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: AppColors.textTertiaryDark,
+            size: 24,
+          ),
+        ),
+      );
+    }
+
+    // Single image - full width
+    if (allImageUrls.length == 1) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: GestureDetector(
+          onTap: () => _openImageViewer(allImageUrls, 0),
+          child: imageContainer(
+            cachedImage(allImageUrls[0], height: screenHeight * 0.22),
+          ),
+        ),
+      );
+    }
+
+    // Two images - left big + right one
+    if (allImageUrls.length == 2) {
+      final totalHeight = screenHeight * 0.22;
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: GestureDetector(
                 onTap: () => _openImageViewer(allImageUrls, 0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: allImageUrls[0],
-                    width: double.infinity,
-                    height: imageHeight,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: imageHeight,
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: imageHeight,
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: AppColors.textTertiaryDark,
-                        size: 32,
-                      ),
+                child: imageContainer(
+                  cachedImage(allImageUrls[0], height: totalHeight),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: GestureDetector(
+                onTap: () => _openImageViewer(allImageUrls, 1),
+                child: imageContainer(
+                  cachedImage(allImageUrls[1], height: totalHeight),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3+ images - big left + two stacked right
+    final totalHeight = screenHeight * 0.28;
+    final smallHeight = (totalHeight - 8) / 2;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left big image
+          Expanded(
+            flex: 3,
+            child: GestureDetector(
+              onTap: () => _openImageViewer(allImageUrls, 0),
+              child: imageContainer(
+                cachedImage(allImageUrls[0], height: totalHeight),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Right stacked images
+          Expanded(
+            flex: 2,
+            child: Column(
+              children: [
+                // 2nd image (top right)
+                GestureDetector(
+                  onTap: () => _openImageViewer(allImageUrls, 1),
+                  child: imageContainer(
+                    cachedImage(allImageUrls[1], height: smallHeight),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // 3rd image (bottom right) with overlay if more
+                GestureDetector(
+                  onTap: () => _openImageViewer(allImageUrls, 2),
+                  child: imageContainer(
+                    Stack(
+                      children: [
+                        cachedImage(allImageUrls[2], height: smallHeight),
+                        if (allImageUrls.length > 3)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '+${allImageUrls.length - 3}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              // Additional images in grid
-              if (allImageUrls.length > 1) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    // 2nd image
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _openImageViewer(allImageUrls, 1),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: CachedNetworkImage(
-                            imageUrl: allImageUrls[1],
-                            height: screenHeight * 0.12,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              height: screenHeight * 0.12,
-                              decoration: BoxDecoration(
-                                color: AppColors.glassBackgroundDark(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              height: screenHeight * 0.12,
-                              decoration: BoxDecoration(
-                                color: AppColors.glassBackgroundDark(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.image_not_supported_outlined,
-                                color: AppColors.textTertiaryDark,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // 3rd image with overlay
-                    if (allImageUrls.length > 2) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _openImageViewer(allImageUrls, 2),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Stack(
-                              children: [
-                                CachedNetworkImage(
-                                  imageUrl: allImageUrls[2],
-                                  height: screenHeight * 0.12,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    height: screenHeight * 0.12,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.glassBackgroundDark(
-                                        alpha: 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        height: screenHeight * 0.12,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.glassBackgroundDark(
-                                            alpha: 0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.image_not_supported_outlined,
-                                          color: AppColors.textTertiaryDark,
-                                          size: 24,
-                                        ),
-                                      ),
-                                ),
-                                if (allImageUrls.length > 3)
-                                  Positioned.fill(
-                                    child: Container(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          '+${allImageUrls.length - 3}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
               ],
-            ],
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

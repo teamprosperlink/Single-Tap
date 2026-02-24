@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/call/group_video_call_screen.dart';
 import '../screens/call/incoming_group_video_call_screen.dart';
-import '../widgets/select_participants_dialog.dart';
+import '../widgets/common widgets/select_participants_dialog.dart';
 
 /// Helper functions for managing group video calls
 class GroupCallHelper {
@@ -66,6 +66,7 @@ class GroupCallHelper {
         'callerName': currentUserName,
         'callerPhotoUrl': currentUserPhotoUrl,
         'status': 'ringing',
+        'source': 'Group Call',
         'createdAt': FieldValue.serverTimestamp(),
         'maxParticipants': 8,
       });

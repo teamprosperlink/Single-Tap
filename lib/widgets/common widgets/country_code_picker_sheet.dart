@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import '../res/config/app_colors.dart';
-import '../res/config/app_assets.dart';
+import '../../res/config/app_colors.dart';
+import '../../res/config/app_assets.dart';
 
 class CountryCodePickerSheet extends StatefulWidget {
   final List<Map<String, String>> countryCodes;
@@ -75,9 +75,7 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
             ),
             // Dark overlay
             Positioned.fill(
-              child: Container(
-                color: AppColors.darkOverlay(alpha: 0.5),
-              ),
+              child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
             ),
             // Content with glassmorphism
             BackdropFilter(
@@ -142,8 +140,10 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                         child: TextField(
                           controller: _searchController,
                           onChanged: _filterCountries,
-                          style:
-                              const TextStyle(color: Colors.white, fontSize: 16),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                           cursorColor: Colors.white,
                           decoration: InputDecoration(
                             hintText: 'Search country or code...',
@@ -159,7 +159,9 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                                 ? IconButton(
                                     icon: Icon(
                                       Icons.clear,
-                                      color: Colors.white.withValues(alpha: 0.7),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.7,
+                                      ),
                                     ),
                                     onPressed: () {
                                       _searchController.clear();
@@ -186,8 +188,10 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                           ? const Center(
                               child: Text(
                                 'No countries found',
-                                style:
-                                    TextStyle(color: Colors.white54, fontSize: 16),
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 16,
+                                ),
                               ),
                             )
                           : ListView.builder(
@@ -195,7 +199,8 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                               itemBuilder: (context, index) {
                                 final country = _filteredCountries[index];
                                 final isSelected =
-                                    country['code'] == widget.selectedCountryCode;
+                                    country['code'] ==
+                                    widget.selectedCountryCode;
                                 return Container(
                                   margin: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -221,7 +226,9 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                                     ),
                                     title: Text(
                                       country['country']!,
-                                      style: const TextStyle(color: Colors.white),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
                                     ),
                                     trailing: Container(
                                       padding: const EdgeInsets.symmetric(
@@ -230,13 +237,21 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: isSelected
-                                            ? Colors.green.withValues(alpha: 0.3)
-                                            : Colors.white.withValues(alpha: 0.1),
+                                            ? Colors.green.withValues(
+                                                alpha: 0.3,
+                                              )
+                                            : Colors.white.withValues(
+                                                alpha: 0.1,
+                                              ),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                           color: isSelected
-                                              ? Colors.green.withValues(alpha: 0.5)
-                                              : Colors.white.withValues(alpha: 0.2),
+                                              ? Colors.green.withValues(
+                                                  alpha: 0.5,
+                                                )
+                                              : Colors.white.withValues(
+                                                  alpha: 0.2,
+                                                ),
                                         ),
                                       ),
                                       child: Text(

@@ -201,7 +201,8 @@ class PostValidator {
       errors.add('originalPrompt is required');
     }
 
-    if (data['embedding'] == null || (data['embedding'] as List).isEmpty) {
+    final embedding = data['embedding'];
+    if (embedding == null || embedding is! List || embedding.isEmpty) {
       errors.add('embedding is required');
     }
 

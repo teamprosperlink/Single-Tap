@@ -4,17 +4,18 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../models/conversation_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
-import '../../widgets/chat_common.dart';
-import '../../widgets/app_background.dart';
+import '../../widgets/chat widgets/chat_common.dart';
+import '../../widgets/common widgets/app_background.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../mixins/voice_search_mixin.dart';
-import '../chat/enhanced_chat_screen.dart';
-import '../chat/create_group_screen.dart';
-import '../chat/group_chat_screen.dart';
+import 'enhanced_chat_screen.dart';
+import 'create_group_screen.dart';
+import 'group_chat_screen.dart';
 import '../call/voice_call_screen.dart';
 import '../call/group_audio_call_screen.dart';
 import '../../services/notification_service.dart';
@@ -22,10 +23,7 @@ import '../../services/notification_service.dart';
 class ConversationsScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
-  const ConversationsScreen({
-    super.key,
-    this.onBack,
-  });
+  const ConversationsScreen({super.key, this.onBack});
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -65,6 +63,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     initSpeech(); // From VoiceSearchMixin
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
+    _migrateOldConversationSources();
   }
 
   /// Handle tab changes - start/stop listeners based on active tab
@@ -86,6 +85,142 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // Start call listeners when entering Calls tab (index 2)
     if (newIndex == 2 && previousIndex != 2) {
       _startCallsListeners();
+    }
+  }
+
+  /// One-time migration: tag old conversations with source (Networking/Nearby/Business/Call)
+  /// so users can see where each conversation originated from.
+  Future<void> _migrateOldConversationSources() async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('conversation_sources_migrated_v3') == true) return;
+
+      // Get all conversations for current user
+      final convSnapshot = await _firestore
+          .collection('conversations')
+          .where('participants', arrayContains: currentUserId)
+          .limit(100)
+          .get();
+
+      // Collect conversations that need source tagging
+      final toUpdate = <String, String>{};
+
+      for (final doc in convSnapshot.docs) {
+        final data = doc.data();
+        final metadata = data['metadata'] as Map<String, dynamic>?;
+        final existingSource = metadata?['source'] as String?;
+
+        // Skip if already has a meaningful source
+        if (existingSource != null &&
+            existingSource.isNotEmpty &&
+            existingSource.toLowerCase() != 'chat') {
+          continue;
+        }
+
+        // 1. Business chat → 'Business'
+        if (metadata?['isBusinessChat'] == true) {
+          toUpdate[doc.id] = 'Business';
+          continue;
+        }
+
+        // 2. Check if other user is a connection → 'Networking', else → 'Nearby'
+        final participants = List<String>.from(data['participants'] ?? []);
+        final isGroup = data['isGroup'] == true;
+
+        if (isGroup) {
+          // For groups, check if any non-current-user member is a connection
+          final otherMembers = participants
+              .where((id) => id != currentUserId)
+              .toList();
+          if (otherMembers.isNotEmpty) {
+            // Store first other member for connection check
+            toUpdate[doc.id] = otherMembers.first;
+          }
+        } else {
+          final otherUserId = participants.firstWhere(
+            (id) => id != currentUserId,
+            orElse: () => '',
+          );
+          if (otherUserId.isNotEmpty) {
+            toUpdate[doc.id] =
+                otherUserId; // temporarily store userId, will resolve below
+          }
+        }
+      }
+
+      if (toUpdate.isEmpty) {
+        await prefs.setBool('conversation_sources_migrated_v3', true);
+        return;
+      }
+
+      // Batch check connection_requests for all unresolved conversations
+      final otherUserIds = toUpdate.entries
+          .where((e) => e.value != 'Business' && e.value != 'Call')
+          .map((e) => e.value)
+          .toSet();
+
+      final connectedUserIds = <String>{};
+      if (otherUserIds.isNotEmpty) {
+        // Check sent connections
+        final sentSnapshot = await _firestore
+            .collection('connection_requests')
+            .where('senderId', isEqualTo: currentUserId)
+            .where('status', isEqualTo: 'accepted')
+            .limit(200)
+            .get();
+        for (final doc in sentSnapshot.docs) {
+          final receiverId = doc.data()['receiverId'] as String?;
+          if (receiverId != null) connectedUserIds.add(receiverId);
+        }
+
+        // Check received connections
+        final receivedSnapshot = await _firestore
+            .collection('connection_requests')
+            .where('receiverId', isEqualTo: currentUserId)
+            .where('status', isEqualTo: 'accepted')
+            .limit(200)
+            .get();
+        for (final doc in receivedSnapshot.docs) {
+          final senderId = doc.data()['senderId'] as String?;
+          if (senderId != null) connectedUserIds.add(senderId);
+        }
+      }
+
+      // Resolve: connected users → 'Networking', others → 'Nearby'
+      final resolvedUpdates = <String, String>{};
+      for (final entry in toUpdate.entries) {
+        if (entry.value == 'Business') {
+          resolvedUpdates[entry.key] = entry.value;
+        } else {
+          // entry.value is the otherUserId
+          resolvedUpdates[entry.key] = connectedUserIds.contains(entry.value)
+              ? 'Networking'
+              : 'Nearby';
+        }
+      }
+
+      // Batch write to Firestore
+      final batch = _firestore.batch();
+      for (final entry in resolvedUpdates.entries) {
+        batch.set(
+          _firestore.collection('conversations').doc(entry.key),
+          {
+            'metadata': {'source': entry.value},
+          },
+          SetOptions(merge: true),
+        );
+      }
+      await batch.commit();
+
+      await prefs.setBool('conversation_sources_migrated_v3', true);
+      debugPrint(
+        'ConversationSources: Migrated ${resolvedUpdates.length} conversations',
+      );
+    } catch (e) {
+      debugPrint('ConversationSources: Migration error: $e');
     }
   }
 
@@ -131,37 +266,50 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         .orderBy('timestamp', descending: true)
         .limit(30) // Reduced limit to save Firebase costs
         .snapshots()
-        .listen((snapshot) {
-      debugPrint('CallsTab: Individual calls received: ${snapshot.docs.length}');
-      if (mounted) {
-        setState(() {
-          _individualCalls = snapshot.docs;
-          _callsLoading = false;
-        });
-      }
-    }, onError: (e) {
-      debugPrint('CallsTab: Individual calls error: $e');
-      // Cancel original listener before creating fallback
-      _individualCallsSub?.cancel();
-      // Fallback: try without orderBy (in case index doesn't exist)
-      _individualCallsSub = _firestore
-          .collection('calls')
-          .where('participants', arrayContains: currentUserId)
-          .limit(50) // Add limit to reduce reads
-          .snapshots()
-          .listen((snapshot) {
-        debugPrint('CallsTab: Individual calls (fallback) received: ${snapshot.docs.length}');
-        if (mounted) {
-          setState(() {
-            _individualCalls = snapshot.docs;
-            _callsLoading = false;
-          });
-        }
-      }, onError: (e2) {
-        debugPrint('CallsTab: Individual calls fallback error: $e2');
-        if (mounted) setState(() => _callsLoading = false);
-      });
-    });
+        .listen(
+          (snapshot) {
+            debugPrint(
+              'CallsTab: Individual calls received: ${snapshot.docs.length}',
+            );
+            if (mounted) {
+              setState(() {
+                _individualCalls = snapshot.docs;
+                _callsLoading = false;
+              });
+            }
+          },
+          onError: (e) {
+            debugPrint('CallsTab: Individual calls error: $e');
+            if (!mounted) return;
+            // Cancel original listener before creating fallback
+            _individualCallsSub?.cancel();
+            // Fallback: try without orderBy (in case index doesn't exist)
+            _individualCallsSub = _firestore
+                .collection('calls')
+                .where('participants', arrayContains: currentUserId)
+                .limit(50) // Add limit to reduce reads
+                .snapshots()
+                .listen(
+                  (snapshot) {
+                    debugPrint(
+                      'CallsTab: Individual calls (fallback) received: ${snapshot.docs.length}',
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _individualCalls = snapshot.docs;
+                        _callsLoading = false;
+                      });
+                    }
+                  },
+                  onError: (e2) {
+                    debugPrint(
+                      'CallsTab: Individual calls fallback error: $e2',
+                    );
+                    if (mounted) setState(() => _callsLoading = false);
+                  },
+                );
+          },
+        );
 
     _groupCallsSub = _firestore
         .collection('group_calls')
@@ -169,37 +317,47 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         .orderBy('createdAt', descending: true)
         .limit(30) // Reduced limit to save Firebase costs
         .snapshots()
-        .listen((snapshot) {
-      debugPrint('CallsTab: Group calls received: ${snapshot.docs.length}');
-      if (mounted) {
-        setState(() {
-          _groupCalls = snapshot.docs;
-          _callsLoading = false;
-        });
-      }
-    }, onError: (e) {
-      debugPrint('CallsTab: Group calls error: $e');
-      // Cancel original listener before creating fallback
-      _groupCallsSub?.cancel();
-      // Fallback: try without orderBy (in case index doesn't exist)
-      _groupCallsSub = _firestore
-          .collection('group_calls')
-          .where('participants', arrayContains: currentUserId)
-          .limit(50) // Add limit to reduce reads
-          .snapshots()
-          .listen((snapshot) {
-        debugPrint('CallsTab: Group calls (fallback) received: ${snapshot.docs.length}');
-        if (mounted) {
-          setState(() {
-            _groupCalls = snapshot.docs;
-            _callsLoading = false;
-          });
-        }
-      }, onError: (e2) {
-        debugPrint('CallsTab: Group calls fallback error: $e2');
-        if (mounted) setState(() => _callsLoading = false);
-      });
-    });
+        .listen(
+          (snapshot) {
+            debugPrint(
+              'CallsTab: Group calls received: ${snapshot.docs.length}',
+            );
+            if (mounted) {
+              setState(() {
+                _groupCalls = snapshot.docs;
+                _callsLoading = false;
+              });
+            }
+          },
+          onError: (e) {
+            debugPrint('CallsTab: Group calls error: $e');
+            // Cancel original listener before creating fallback
+            _groupCallsSub?.cancel();
+            // Fallback: try without orderBy (in case index doesn't exist)
+            _groupCallsSub = _firestore
+                .collection('group_calls')
+                .where('participants', arrayContains: currentUserId)
+                .limit(50) // Add limit to reduce reads
+                .snapshots()
+                .listen(
+                  (snapshot) {
+                    debugPrint(
+                      'CallsTab: Group calls (fallback) received: ${snapshot.docs.length}',
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _groupCalls = snapshot.docs;
+                        _callsLoading = false;
+                      });
+                    }
+                  },
+                  onError: (e2) {
+                    debugPrint('CallsTab: Group calls fallback error: $e2');
+                    if (mounted) setState(() => _callsLoading = false);
+                  },
+                );
+          },
+        );
   }
 
   void _startVoiceSearch() {
@@ -306,10 +464,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ],
             ),
             border: const Border(
-              bottom: BorderSide(
-                color: Colors.white,
-                width: 0.5,
-              ),
+              bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
         ),
@@ -402,7 +557,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       ),
     );
   }
-
 
   Widget _buildSearchBar(bool isDarkMode) {
     return Container(
@@ -538,60 +692,61 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                         if (rawData != null) {
                           final data = rawData as Map<String, dynamic>;
                           final deletedBy = data['deletedBy'] as List<dynamic>?;
-                          if (deletedBy != null && deletedBy.contains(currentUserId)) {
+                          if (deletedBy != null &&
+                              deletedBy.contains(currentUserId)) {
                             continue; // Skip this conversation
                           }
                         }
                       }
 
-                  if (_searchQuery.isEmpty) {
-                    conversations.add(conv);
-                  } else {
-                    final displayName = conv.getDisplayName(currentUserId);
-                    if (displayName.toLowerCase().contains(_searchQuery)) {
-                      conversations.add(conv);
+                      if (_searchQuery.isEmpty) {
+                        conversations.add(conv);
+                      } else {
+                        final displayName = conv.getDisplayName(currentUserId);
+                        if (displayName.toLowerCase().contains(_searchQuery)) {
+                          conversations.add(conv);
+                        }
+                      }
+
+                      // Collect user IDs for prefetching (only for direct chats)
+                      if (!conv.isGroup) {
+                        final otherUserId = conv.getOtherParticipantId(
+                          currentUserId,
+                        );
+                        if (otherUserId.isNotEmpty &&
+                            !_userCache.containsKey(otherUserId)) {
+                          userIdsToPrefetch.add(otherUserId);
+                        }
+                      }
+                    } catch (e) {
+                      debugPrint('Error parsing conversation ${doc.id}: $e');
                     }
                   }
 
-                  // Collect user IDs for prefetching (only for direct chats)
-                  if (!conv.isGroup) {
-                    final otherUserId = conv.getOtherParticipantId(
-                      currentUserId,
-                    );
-                    if (otherUserId.isNotEmpty &&
-                        !_userCache.containsKey(otherUserId)) {
-                      userIdsToPrefetch.add(otherUserId);
-                    }
+                  // OPTIMIZATION: Prefetch all user data in parallel (non-blocking)
+                  if (userIdsToPrefetch.isNotEmpty) {
+                    _prefetchUsers(userIdsToPrefetch);
                   }
-                } catch (e) {
-                  debugPrint('Error parsing conversation ${doc.id}: $e');
-                }
-              }
 
-              // OPTIMIZATION: Prefetch all user data in parallel (non-blocking)
-              if (userIdsToPrefetch.isNotEmpty) {
-                _prefetchUsers(userIdsToPrefetch);
-              }
+                  // Sort by lastMessageTime (client-side to avoid index requirement)
+                  conversations.sort((a, b) {
+                    if (a.lastMessageTime == null) return 1;
+                    if (b.lastMessageTime == null) return -1;
+                    return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+                  });
 
-              // Sort by lastMessageTime (client-side to avoid index requirement)
-              conversations.sort((a, b) {
-                if (a.lastMessageTime == null) return 1;
-                if (b.lastMessageTime == null) return -1;
-                return b.lastMessageTime!.compareTo(a.lastMessageTime!);
-              });
+                  if (conversations.isEmpty) {
+                    return _buildEmptyState(isDarkMode, isGroup);
+                  }
 
-              if (conversations.isEmpty) {
-                return _buildEmptyState(isDarkMode, isGroup);
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.only(top: 8),
-                itemCount: conversations.length,
-                itemBuilder: (context, index) {
-                  final conversation = conversations[index];
-                  return _buildConversationTile(conversation, isDarkMode);
-                },
-              );
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(top: 8),
+                    itemCount: conversations.length,
+                    itemBuilder: (context, index) {
+                      final conversation = conversations[index];
+                      return _buildConversationTile(conversation, isDarkMode);
+                    },
+                  );
                 },
               ); // Close FutureBuilder
             },
@@ -657,7 +812,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         Expanded(
           child: Builder(
             builder: (context) {
-              if (_callsLoading && _individualCalls.isEmpty && _groupCalls.isEmpty) {
+              if (_callsLoading &&
+                  _individualCalls.isEmpty &&
+                  _groupCalls.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
@@ -688,10 +845,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 if (bRaw == null) return -1;
                 final aData = aRaw as Map<String, dynamic>;
                 final bData = bRaw as Map<String, dynamic>;
-                final aTime = aData['timestamp'] as Timestamp? ??
-                             aData['createdAt'] as Timestamp?;
-                final bTime = bData['timestamp'] as Timestamp? ??
-                             bData['createdAt'] as Timestamp?;
+                final aTime =
+                    aData['timestamp'] as Timestamp? ??
+                    aData['createdAt'] as Timestamp?;
+                final bTime =
+                    bData['timestamp'] as Timestamp? ??
+                    bData['createdAt'] as Timestamp?;
                 if (aTime == null && bTime == null) return 0;
                 if (aTime == null) return 1;
                 if (bTime == null) return -1;
@@ -702,7 +861,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               _prefetchUserDataForCalls(allCalls, currentUserId);
 
               // Filter by search
-              final filteredCalls = _filterCallsBySearch(allCalls, currentUserId);
+              final filteredCalls = _filterCallsBySearch(
+                allCalls,
+                currentUserId,
+              );
 
               if (filteredCalls.isEmpty) {
                 return _buildEmptyCallsState(isDarkMode);
@@ -869,7 +1031,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           final actualId = callId.substring(6);
           debugPrint('CallsTab: Deleting group call: $actualId');
 
-          final callDoc = await _firestore.collection('group_calls').doc(actualId).get();
+          final callDoc = await _firestore
+              .collection('group_calls')
+              .doc(actualId)
+              .get();
           if (callDoc.exists) {
             final data = callDoc.data();
             final systemMessageId = data?['systemMessageId'] as String?;
@@ -881,7 +1046,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   .collection('messages')
                   .doc(systemMessageId)
                   .delete();
-              debugPrint('CallsTab: Deleted group call system message: $systemMessageId');
+              debugPrint(
+                'CallsTab: Deleted group call system message: $systemMessageId',
+              );
             }
           }
           await _firestore.collection('group_calls').doc(actualId).delete();
@@ -889,12 +1056,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           // Individual call - delete message from chat
           debugPrint('CallsTab: Deleting individual call: $callId');
 
-          final callDoc = await _firestore.collection('calls').doc(callId).get();
+          final callDoc = await _firestore
+              .collection('calls')
+              .doc(callId)
+              .get();
           if (callDoc.exists) {
             final data = callDoc.data()!;
             final callerId = data['callerId'] as String? ?? '';
             final receiverId = data['receiverId'] as String? ?? '';
-            final otherUserId = callerId == currentUserId ? receiverId : callerId;
+            final otherUserId = callerId == currentUserId
+                ? receiverId
+                : callerId;
 
             if (otherUserId.isNotEmpty) {
               final convQuery = await _firestore
@@ -905,7 +1077,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 final convData = doc.data();
                 final isGroup = convData['isGroup'] as bool? ?? false;
                 if (isGroup) continue;
-                final participants = List<String>.from(convData['participants'] ?? []);
+                final participants = List<String>.from(
+                  convData['participants'] ?? [],
+                );
                 if (participants.contains(otherUserId)) {
                   await _firestore
                       .collection('conversations')
@@ -913,7 +1087,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       .collection('messages')
                       .doc('call_$callId')
                       .delete();
-                  debugPrint('CallsTab: Deleted call message from conversation ${doc.id}');
+                  debugPrint(
+                    'CallsTab: Deleted call message from conversation ${doc.id}',
+                  );
                   break;
                 }
               }
@@ -944,8 +1120,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
-  Future<void> _deleteSingleCall(String callId, {bool isGroupCall = false}) async {
-    debugPrint('CallsTab: Deleting single call: $callId, isGroup: $isGroupCall');
+  Future<void> _deleteSingleCall(
+    String callId, {
+    bool isGroupCall = false,
+  }) async {
+    debugPrint(
+      'CallsTab: Deleting single call: $callId, isGroup: $isGroupCall',
+    );
 
     // Immediately remove from local state for instant UI feedback
     setState(() {
@@ -959,7 +1140,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     try {
       if (isGroupCall) {
         // Read group call doc first to get linked message info
-        final callDoc = await _firestore.collection('group_calls').doc(callId).get();
+        final callDoc = await _firestore
+            .collection('group_calls')
+            .doc(callId)
+            .get();
         if (callDoc.exists) {
           final data = callDoc.data();
           final systemMessageId = data?['systemMessageId'] as String?;
@@ -972,7 +1156,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 .collection('messages')
                 .doc(systemMessageId)
                 .delete();
-            debugPrint('CallsTab: Deleted group call system message: $systemMessageId');
+            debugPrint(
+              'CallsTab: Deleted group call system message: $systemMessageId',
+            );
           }
         }
         await _firestore.collection('group_calls').doc(callId).delete();
@@ -996,7 +1182,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               final convData = doc.data();
               final isGroup = convData['isGroup'] as bool? ?? false;
               if (isGroup) continue;
-              final participants = List<String>.from(convData['participants'] ?? []);
+              final participants = List<String>.from(
+                convData['participants'] ?? [],
+              );
               if (participants.contains(otherUserId)) {
                 // Delete the call message (ID format: call_{callId})
                 await _firestore
@@ -1005,7 +1193,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     .collection('messages')
                     .doc('call_$callId')
                     .delete();
-                debugPrint('CallsTab: Deleted call message from conversation ${doc.id}');
+                debugPrint(
+                  'CallsTab: Deleted call message from conversation ${doc.id}',
+                );
                 break;
               }
             }
@@ -1180,7 +1370,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Delete Conversation'),
+            title: Row(
+              children: [
+                const Expanded(child: Text('Delete Conversation')),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context, false),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
             content: Text(
               count == 1
                   ? 'Are you sure you want to delete this conversation? All messages will be permanently deleted.'
@@ -1208,19 +1410,63 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Delete Call'),
+            backgroundColor: const Color(0xFF1a1a2e),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            title: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Delete Call',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context, false),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
             content: Text(
               count == 1
                   ? 'Are you sure you want to delete this call from history?'
                   : 'Are you sure you want to delete $count calls from history?',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
             ),
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-              TextButton(
+              OutlinedButton(
                 onPressed: () => Navigator.pop(context, true),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
                 child: const Text(
                   'Delete',
                   style: TextStyle(color: Colors.red),
@@ -1325,7 +1571,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final otherUserId = isOutgoing ? receiverId : callerId;
     final callStatus = callData['status'] ?? 'unknown';
     final callType = callData['type'] ?? 'voice';
-    final timestamp = callData['timestamp'] as Timestamp? ?? callData['createdAt'] as Timestamp?;
+    final timestamp =
+        callData['timestamp'] as Timestamp? ??
+        callData['createdAt'] as Timestamp?;
     final participants = List<String>.from(callData['participants'] ?? []);
     final groupId = callData['groupId'] as String?;
 
@@ -1344,10 +1592,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // For group calls, get the caller's profile photo
     final callerData = _userCache[callerId];
     final callerPhotoUrl = callerData?['photoUrl'];
-    final fixedCallerPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(callerPhotoUrl);
+    final fixedCallerPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(
+      callerPhotoUrl,
+    );
     String callerName = callerData?['name'] ?? callerData?['displayName'] ?? '';
     if (callerName.isEmpty) callerName = 'Unknown';
-    final callerInitial = callerName.isNotEmpty ? callerName[0].toUpperCase() : '?';
+    final callerInitial = callerName.isNotEmpty
+        ? callerName[0].toUpperCase()
+        : '?';
 
     // Check if it's a group call (more than 2 participants)
     final groupCallCheck = participants.length > 2;
@@ -1357,20 +1609,28 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final groupName = callData['groupName'] as String? ?? 'Group Call';
 
     // Get joined participants info (saved when call ends)
-    final joinedParticipants = List<String>.from(callData['joinedParticipants'] ?? []);
-    final joinedCount = callData['joinedCount'] as int? ?? joinedParticipants.length;
-    final totalMembers = callData['totalMembers'] as int? ?? participants.length;
+    final joinedParticipants = List<String>.from(
+      callData['joinedParticipants'] ?? [],
+    );
+    final joinedCount =
+        callData['joinedCount'] as int? ?? joinedParticipants.length;
+    final totalMembers =
+        callData['totalMembers'] as int? ?? participants.length;
 
     // Determine call status icon, color and label
     IconData statusIcon;
     Color statusColor;
     String statusLabel;
 
-    if (callStatus == 'missed' || callStatus == 'no_answer' || callStatus == 'timeout') {
+    if (callStatus == 'missed' ||
+        callStatus == 'no_answer' ||
+        callStatus == 'timeout') {
       statusIcon = Icons.call_missed;
       statusColor = Colors.red;
       statusLabel = 'Missed';
-    } else if (callStatus == 'declined' || callStatus == 'rejected' || callStatus == 'busy') {
+    } else if (callStatus == 'declined' ||
+        callStatus == 'rejected' ||
+        callStatus == 'busy') {
       statusIcon = Icons.call_missed_outgoing;
       statusColor = Colors.red;
       statusLabel = isOutgoing ? 'Declined' : 'Missed';
@@ -1391,10 +1651,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
+          color: Colors.white.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -1418,9 +1685,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 uniqueId: otherUserId,
               ),
         title: Text(
-          finalIsGroupCall
-              ? groupName
-              : formatDisplayName(displayName),
+          finalIsGroupCall ? groupName : formatDisplayName(displayName),
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 15,
@@ -1437,7 +1702,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     ? '$statusLabel • ${joinedCount > 0 ? '$joinedCount joined' : 'No one joined'} • $totalMembers members • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
                     : '$statusLabel • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}',
                 style: TextStyle(
-                  color: callStatus == 'missed' || callStatus == 'declined' || callStatus == 'rejected' || callStatus == 'no_answer' || callStatus == 'timeout' || callStatus == 'busy'
+                  color:
+                      callStatus == 'missed' ||
+                          callStatus == 'declined' ||
+                          callStatus == 'rejected' ||
+                          callStatus == 'no_answer' ||
+                          callStatus == 'timeout' ||
+                          callStatus == 'busy'
                       ? Colors.red.withValues(alpha: 0.8)
                       : (isDarkMode ? Colors.grey[500] : Colors.grey[600]),
                   fontSize: 12,
@@ -1446,26 +1717,28 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             ),
           ],
         ),
-        trailing: IconButton(
-          icon: Icon(
-            callType == 'video' ? Icons.videocam : Icons.call,
-            color: Theme.of(context).primaryColor,
-          ),
-          onPressed: () {
-            if (finalIsGroupCall && groupId != null) {
-              _initiateGroupCall(groupId, groupName, participants);
-            } else {
-              _initiateCall(otherUserId, callType == 'video');
-            }
-          },
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildCallTypeTag(
+              callData: callData,
+              isGroupCall: finalIsGroupCall,
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              icon: Icon(Icons.call, color: Theme.of(context).primaryColor),
+              constraints: const BoxConstraints(),
+              padding: EdgeInsets.zero,
+              onPressed: () {
+                if (finalIsGroupCall && groupId != null) {
+                  _initiateGroupCall(groupId, groupName, participants);
+                } else {
+                  _initiateCall(otherUserId, false);
+                }
+              },
+            ),
+          ],
         ),
-        onTap: () {
-          if (finalIsGroupCall && groupId != null) {
-            _initiateGroupCall(groupId, groupName, participants);
-          } else {
-            _initiateCall(otherUserId, false);
-          }
-        },
       ),
     );
   }
@@ -1632,6 +1905,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         'participants': [currentUserId, userId],
         'status': 'calling',
         'type': 'audio',
+        'source': 'Chat',
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -1727,16 +2001,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         msgText = durationSeconds > 0
             ? 'Voice call (${durationSeconds ~/ 60}:${(durationSeconds % 60).toString().padLeft(2, '0')})'
             : 'Voice call';
-      } else if (status == 'rejected' || status == 'declined' || status == 'busy') {
+      } else if (status == 'rejected' ||
+          status == 'declined' ||
+          status == 'busy') {
         msgType = 9; // missedCall
         msgText = 'Voice call declined';
-      } else if (status == 'missed' || status == 'timeout' || status == 'canceled' || status == 'no_answer') {
+      } else if (status == 'missed' ||
+          status == 'timeout' ||
+          status == 'canceled' ||
+          status == 'no_answer') {
         msgType = 9; // missedCall
         msgText = 'Missed voice call';
       } else {
         if (durationSeconds > 0) {
           msgType = 8; // voiceCall
-          msgText = 'Voice call (${durationSeconds ~/ 60}:${(durationSeconds % 60).toString().padLeft(2, '0')})';
+          msgText =
+              'Voice call (${durationSeconds ~/ 60}:${(durationSeconds % 60).toString().padLeft(2, '0')})';
         } else {
           msgType = 9; // missedCall
           msgText = 'Missed voice call';
@@ -1773,18 +2053,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           .collection('messages')
           .doc(messageId)
           .set({
-        'senderId': currentUserId,
-        'receiverId': otherUserId,
-        'chatId': conversationId,
-        'text': msgText,
-        'type': msgType,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 1, // MessageStatus.sent
-        'read': false,
-        'isRead': false,
-        'callId': callId,
-        'callDuration': durationSeconds,
-      }, SetOptions(merge: true));
+            'senderId': currentUserId,
+            'receiverId': otherUserId,
+            'chatId': conversationId,
+            'text': msgText,
+            'type': msgType,
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': 1, // MessageStatus.sent
+            'read': false,
+            'isRead': false,
+            'callId': callId,
+            'callDuration': durationSeconds,
+          }, SetOptions(merge: true));
 
       // Update last message in conversation
       await _firestore.collection('conversations').doc(conversationId).update({
@@ -1800,7 +2080,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   /// Initiate a group audio call from the Calls tab
-  void _initiateGroupCall(String groupId, String groupName, List<String> participants) async {
+  void _initiateGroupCall(
+    String groupId,
+    String groupName,
+    List<String> participants,
+  ) async {
     HapticFeedback.lightImpact();
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return;
@@ -1810,7 +2094,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       final oldGroupCalls = await _firestore
           .collection('group_calls')
           .where('participants', arrayContains: currentUserId)
-          .where('status', whereIn: ['calling', 'ringing', 'active', 'connected'])
+          .where(
+            'status',
+            whereIn: ['calling', 'ringing', 'active', 'connected'],
+          )
           .limit(5)
           .get();
 
@@ -1851,16 +2138,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       }
 
       // Get current user info
-      final currentUserDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final currentUserDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
       final currentUserName = currentUserDoc.data()?['name'] ?? 'Unknown';
       final currentUserPhoto = currentUserDoc.data()?['photoUrl'];
 
       // Get fresh group members from the conversation
-      final groupDoc = await _firestore.collection('conversations').doc(groupId).get();
+      final groupDoc = await _firestore
+          .collection('conversations')
+          .doc(groupId)
+          .get();
       if (!groupDoc.exists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Group not found'), backgroundColor: Colors.red),
+            const SnackBar(
+              content: Text('Group not found'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
         return;
@@ -1879,6 +2175,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         'participants': memberIds,
         'isVideo': false,
         'status': 'calling',
+        'source': 'Group Call',
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -1889,12 +2186,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
       for (final memberId in memberIds) {
         final isCurrentUser = memberId == currentUserId;
-        final memberDoc = await _firestore.collection('users').doc(memberId).get();
+        final memberDoc = await _firestore
+            .collection('users')
+            .doc(memberId)
+            .get();
         final memberName = memberDoc.data()?['name'] ?? 'Unknown';
         final memberPhoto = memberDoc.data()?['photoUrl'];
 
         batch.set(
-          _firestore.collection('group_calls').doc(callDoc.id).collection('participants').doc(memberId),
+          _firestore
+              .collection('group_calls')
+              .doc(callDoc.id)
+              .collection('participants')
+              .doc(memberId),
           {
             'userId': memberId,
             'name': memberName,
@@ -1918,16 +2222,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           .doc(groupId)
           .collection('messages')
           .add({
-        'text': 'Voice call',
-        'timestamp': Timestamp.now(),
-        'isSystemMessage': true,
-        'actionType': 'call',
-        'callId': callDoc.id,
-        'callerId': currentUserId,
-        'callerName': currentUserName,
-        'callDuration': 0,
-        'participantCount': 0,
-      });
+            'text': 'Voice call',
+            'timestamp': Timestamp.now(),
+            'isSystemMessage': true,
+            'actionType': 'call',
+            'callId': callDoc.id,
+            'callerId': currentUserId,
+            'callerName': currentUserName,
+            'callDuration': 0,
+            'participantCount': 0,
+          });
 
       // Update conversation's last message so it shows in chat list
       await _firestore.collection('conversations').doc(groupId).update({
@@ -1992,7 +2296,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     ConversationModel conversation,
     bool isDarkMode,
   ) {
-    final currentUserId = _auth.currentUser!.uid;
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return const SizedBox.shrink();
     final otherUserId = conversation.getOtherParticipantId(currentUserId);
 
     if (otherUserId.isEmpty && !conversation.isGroup) {
@@ -2069,14 +2374,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: isSelected
-            ? Colors.white.withValues(alpha: 0.15)
-            : Colors.white.withValues(alpha: 0.08),
+        gradient: LinearGradient(
+          colors: isSelected
+              ? [
+                  Colors.white.withValues(alpha: 0.3),
+                  Colors.white.withValues(alpha: 0.2),
+                ]
+              : [
+                  Colors.white.withValues(alpha: 0.25),
+                  Colors.white.withValues(alpha: 0.15),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.12),
+          color: Colors.white.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -2097,7 +2410,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             }
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
                 // Checkbox for selection mode
@@ -2115,40 +2428,33 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     ),
                   ),
                 // Avatar
-                Stack(
-                  children: [
-                    conversation.isGroup
-                        ? CircleAvatar(
-                            radius: 22,
-                            backgroundColor: Theme.of(
-                              context,
-                            ).primaryColor.withValues(alpha: 0.15),
-                            child: Icon(
-                              Icons.group,
-                              color: Theme.of(context).primaryColor,
-                              size: 26,
-                            ),
-                          )
-                        : _buildUserAvatar(
-                            photoUrl: fixedPhotoUrl,
-                            initial: initial,
-                            radius: 22,
-                            context: context,
-                            uniqueId: conversation.id,
-                          ),
-                    // Online indicator for direct chats
-                    if (!conversation.isGroup && otherUserId.isNotEmpty)
-                      _buildOnlineIndicator(otherUserId, isDarkMode),
-                  ],
-                ),
+                conversation.isGroup
+                    ? CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.15),
+                        child: Icon(
+                          Icons.group,
+                          color: Theme.of(context).primaryColor,
+                          size: 26,
+                        ),
+                      )
+                    : _buildUserAvatar(
+                        photoUrl: fixedPhotoUrl,
+                        initial: initial,
+                        radius: 24,
+                        context: context,
+                        uniqueId: conversation.id,
+                      ),
                 const SizedBox(width: 14),
                 // Content
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Row 1: Name + Source tag
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
                             child: Text(
@@ -2161,17 +2467,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (conversation.lastMessageTime != null)
-                            Text(
-                              timeago.format(conversation.lastMessageTime!),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.white,
-                              ),
-                            ),
+                          const SizedBox(width: 8),
+                          _buildSourceTag(conversation),
                         ],
                       ),
+                      const SizedBox(height: 3),
+                      // Row 2: Time
+                      if (conversation.lastMessageTime != null)
+                        Text(
+                          timeago.format(conversation.lastMessageTime!),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
+                        ),
                       const SizedBox(height: 4),
+                      // Row 3: Last message + unread count
                       Row(
                         children: [
                           // Message preview with voice message indicator
@@ -2183,7 +2494,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                               padding: EdgeInsets.only(right: 4),
                               child: Icon(
                                 Icons.mic,
-                                size: 16,
+                                size: 14,
                                 color: Colors.white,
                               ),
                             ),
@@ -2193,9 +2504,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                   ? 'Typing...'
                                   : conversation.lastMessage ??
                                         'Start a conversation',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.white,
+                                color: Colors.white.withValues(alpha: 0.6),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2205,7 +2516,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                               margin: const EdgeInsets.only(left: 8),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 4,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: Theme.of(context).primaryColor,
@@ -2235,6 +2546,230 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
+  /// Build source tag showing where the conversation originated from
+  Widget _buildSourceTag(ConversationModel conversation) {
+    String source;
+    IconData sourceIcon;
+    Color sourceColor;
+
+    // Use only metadata source — reflects which screen the conversation came from
+    final metaSource = conversation.metadata?['source'] as String?;
+    if (metaSource != null && metaSource.isNotEmpty) {
+      source = metaSource;
+    } else if (conversation.isBusinessChat) {
+      source = 'Business';
+    } else {
+      source = 'Chat';
+    }
+
+    // Set icon and color based on source
+    switch (source.toLowerCase()) {
+      case 'networking':
+        sourceIcon = Icons.hub_outlined;
+        sourceColor = const Color(0xFF3B82F6); // Blue
+        source = 'Networking';
+        break;
+      case 'nearby':
+        sourceIcon = Icons.near_me_outlined;
+        sourceColor = const Color(0xFF22C55E); // Green
+        source = 'Nearby';
+        break;
+      case 'business':
+        sourceIcon = Icons.business_outlined;
+        sourceColor = const Color(0xFFEAB308); // Yellow/Gold
+        source = 'Business';
+        break;
+      case 'chat':
+      default:
+        sourceIcon = Icons.chat_bubble_outline;
+        sourceColor = const Color(0xFF9CA3AF); // Grey
+        source = 'Chat';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: sourceColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: sourceColor.withValues(alpha: 0.3),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(sourceIcon, size: 11, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            source,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build call type tag for Calls tab (shows source: Nearby, Networking, Chat, Group Call, etc.)
+  Widget _buildCallTypeTag({
+    required Map<String, dynamic> callData,
+    required bool isGroupCall,
+  }) {
+    final String rawSource = callData['source'] as String? ?? '';
+    String label;
+    IconData icon;
+    Color tagColor;
+
+    if (isGroupCall) {
+      label = 'Group Call';
+      icon = Icons.groups_outlined;
+      tagColor = const Color(0xFF8B5CF6); // Purple
+    } else {
+      switch (rawSource.toLowerCase()) {
+        case 'nearby':
+          label = 'Nearby';
+          icon = Icons.near_me_outlined;
+          tagColor = const Color(0xFF22C55E); // Green
+        case 'networking':
+          label = 'Networking';
+          icon = Icons.hub_outlined;
+          tagColor = const Color(0xFF3B82F6); // Blue
+        case 'business':
+          label = 'Business';
+          icon = Icons.business_outlined;
+          tagColor = const Color(0xFFEAB308); // Yellow/Gold
+        case 'call history':
+          label = 'Call History';
+          icon = Icons.history;
+          tagColor = const Color(0xFFF97316); // Orange
+        default:
+          label = 'Chat';
+          icon = Icons.chat_bubble_outline;
+          tagColor = const Color(0xFF9CA3AF); // Grey
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: tagColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tagColor.withValues(alpha: 0.3), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build active status text (Online/Offline) for a user
+  Widget _buildActiveStatusText(String userId) {
+    // Check cache first
+    if (_userCache.containsKey(userId)) {
+      final userData = _userCache[userId]!;
+      final showOnlineStatus = userData['showOnlineStatus'] ?? true;
+      if (!showOnlineStatus) return const SizedBox.shrink();
+
+      bool isOnline = userData['isOnline'] ?? false;
+      if (isOnline) {
+        final lastSeen = userData['lastSeen'];
+        if (lastSeen != null && lastSeen is Timestamp) {
+          final difference = DateTime.now().difference(lastSeen.toDate());
+          if (difference.inMinutes > 5) isOnline = false;
+        } else {
+          isOnline = false;
+        }
+      }
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isOnline ? Icons.circle : Icons.circle_outlined,
+            size: 8,
+            color: isOnline ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            isOnline ? 'Active' : 'Offline',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isOnline
+                  ? const Color(0xFF22C55E)
+                  : const Color(0xFFEF4444),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Stream fallback for first load
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(userId).snapshots(),
+      builder: (context, snapshot) {
+        bool isOnline = false;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final userData = snapshot.data!.data() as Map<String, dynamic>;
+          _userCache[userId] = userData;
+          final showOnlineStatus = userData['showOnlineStatus'] ?? true;
+          if (showOnlineStatus) {
+            isOnline = userData['isOnline'] ?? false;
+            if (isOnline) {
+              final lastSeen = userData['lastSeen'];
+              if (lastSeen != null && lastSeen is Timestamp) {
+                final diff = DateTime.now().difference(lastSeen.toDate());
+                if (diff.inMinutes > 5) isOnline = false;
+              } else {
+                isOnline = false;
+              }
+            }
+          }
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isOnline ? Icons.circle : Icons.circle_outlined,
+              size: 8,
+              color: isOnline
+                  ? const Color(0xFF22C55E)
+                  : const Color(0xFFEF4444),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isOnline ? 'Active' : 'Offline',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isOnline
+                    ? const Color(0xFF22C55E)
+                    : const Color(0xFFEF4444),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   /// Build user avatar with proper error handling for profile photos
   Widget _buildUserAvatar({
@@ -2315,101 +2850,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  Widget _buildOnlineIndicator(String userId, bool isDarkMode) {
-    // Check cache first for quick render without stream
-    bool isOnlineFromCache = false;
-    if (_userCache.containsKey(userId)) {
-      final userData = _userCache[userId]!;
-      final showOnlineStatus = userData['showOnlineStatus'] ?? true;
-      if (showOnlineStatus) {
-        isOnlineFromCache = userData['isOnline'] ?? false;
-        if (isOnlineFromCache) {
-          final lastSeen = userData['lastSeen'];
-          if (lastSeen != null && lastSeen is Timestamp) {
-            final difference = DateTime.now().difference(lastSeen.toDate());
-            if (difference.inMinutes > 5) {
-              isOnlineFromCache = false;
-            }
-          } else {
-            isOnlineFromCache = false;
-          }
-        }
-      }
-    }
-
-    // Return cached result immediately if available
-    if (_userCache.containsKey(userId)) {
-      if (!isOnlineFromCache) return const SizedBox.shrink();
-      return Positioned(
-        right: 0,
-        bottom: 0,
-        child: Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(
-            color: Colors.green,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isDarkMode ? Colors.black : Colors.white,
-              width: 2,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Only use stream if not cached (first load)
-    return Positioned(
-      right: 0,
-      bottom: 0,
-      child: StreamBuilder<DocumentSnapshot>(
-        stream: _firestore.collection('users').doc(userId).snapshots(),
-        builder: (context, snapshot) {
-          bool isOnline = false;
-          if (snapshot.hasData && snapshot.data!.exists) {
-            final userData = snapshot.data!.data() as Map<String, dynamic>;
-            // Update cache
-            _userCache[userId] = userData;
-
-            final showOnlineStatus = userData['showOnlineStatus'] ?? true;
-
-            if (showOnlineStatus) {
-              isOnline = userData['isOnline'] ?? false;
-              if (isOnline) {
-                final lastSeen = userData['lastSeen'];
-                if (lastSeen != null && lastSeen is Timestamp) {
-                  final difference = DateTime.now().difference(
-                    lastSeen.toDate(),
-                  );
-                  if (difference.inMinutes > 5) {
-                    isOnline = false;
-                  }
-                } else {
-                  isOnline = false;
-                }
-              }
-            }
-          }
-
-          if (!isOnline) return const SizedBox.shrink();
-
-          return Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDarkMode ? Colors.black : Colors.white,
-                width: 2,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void _openConversation(
     ConversationModel conversation,
     String otherUserId,
@@ -2435,12 +2875,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       final otherUser = UserProfile.fromMap(cachedData, otherUserId);
 
       if (!mounted) return;
+      // Use the original source from metadata (Networking, Nearby, etc.)
+      final existingSource = conversation.metadata?['source'] as String?;
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => EnhancedChatScreen(
             otherUser: otherUser,
-            chatId: conversation.id, // Pass chatId to avoid another query
+            chatId: conversation.id,
+            source: existingSource,
           ),
         ),
       );
@@ -2462,12 +2905,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         final otherUser = UserProfile.fromMap(userData, otherUserId);
 
         if (!mounted) return;
+        // Use the original source from metadata (Networking, Nearby, etc.)
+        final existingSource = conversation.metadata?['source'] as String?;
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => EnhancedChatScreen(
               otherUser: otherUser,
-              chatId: conversation.id, // Pass chatId to avoid another query
+              chatId: conversation.id,
+              source: existingSource,
             ),
           ),
         );
@@ -2601,8 +3047,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       ),
     );
   }
-
-
 }
 
 class _NewMessageScreen extends StatefulWidget {
@@ -2621,10 +3065,18 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
   String _searchQuery = '';
 
   static const List<Color> _avatarColors = [
-    Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFEC4899),
-    Color(0xFFEF4444), Color(0xFFF97316), Color(0xFF22C55E),
-    Color(0xFF14B8A6), Color(0xFF06B6D4), Color(0xFF3B82F6),
-    Color(0xFFA855F7), Color(0xFFF43F5E), Color(0xFF10B981),
+    Color(0xFF6366F1),
+    Color(0xFF8B5CF6),
+    Color(0xFFEC4899),
+    Color(0xFFEF4444),
+    Color(0xFFF97316),
+    Color(0xFF22C55E),
+    Color(0xFF14B8A6),
+    Color(0xFF06B6D4),
+    Color(0xFF3B82F6),
+    Color(0xFFA855F7),
+    Color(0xFFF43F5E),
+    Color(0xFF10B981),
   ];
 
   Color _getAvatarColor(String id) {
@@ -2681,9 +3133,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                 Color.fromRGBO(50, 50, 50, 1),
               ],
             ),
-            border: Border(
-              bottom: BorderSide(color: Colors.white, width: 0.5),
-            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
       ),
@@ -2721,9 +3171,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
             ),
             const SizedBox(height: 8),
             // Contacts list
-            Expanded(
-              child: _buildContacts(),
-            ),
+            Expanded(child: _buildContacts()),
           ],
         ),
       ),
@@ -2759,17 +3207,26 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
 
         return FutureBuilder<List<DocumentSnapshot>>(
           future: Future.wait(
-            otherUserIds.map((id) => _firestore.collection('users').doc(id).get()),
+            otherUserIds.map(
+              (id) => _firestore.collection('users').doc(id).get(),
+            ),
           ),
           builder: (context, usersSnapshot) {
             if (usersSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
             if (!usersSnapshot.hasData) {
-              return const Center(child: Text('Error loading contacts', style: TextStyle(color: Colors.white)));
+              return const Center(
+                child: Text(
+                  'Error loading contacts',
+                  style: TextStyle(color: Colors.white),
+                ),
+              );
             }
 
-            var validUsers = usersSnapshot.data!.where((doc) => doc.exists).toList();
+            var validUsers = usersSnapshot.data!
+                .where((doc) => doc.exists)
+                .toList();
 
             // Filter by search
             if (_searchQuery.isNotEmpty) {
@@ -2783,7 +3240,9 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
             if (validUsers.isEmpty) {
               return Center(
                 child: Text(
-                  _searchQuery.isNotEmpty ? 'No results found' : 'No contacts yet',
+                  _searchQuery.isNotEmpty
+                      ? 'No results found'
+                      : 'No contacts yet',
                   style: TextStyle(color: Colors.grey[500], fontSize: 16),
                 ),
               );
@@ -2812,7 +3271,8 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
     final avatarColor = _getAvatarColor(userId);
 
     bool isOnline = false;
-    if ((userData['showOnlineStatus'] ?? true) && userData['isOnline'] == true) {
+    if ((userData['showOnlineStatus'] ?? true) &&
+        userData['isOnline'] == true) {
       final lastSeen = userData['lastSeen'];
       if (lastSeen is Timestamp) {
         isOnline = DateTime.now().difference(lastSeen.toDate()).inMinutes <= 5;
@@ -2822,9 +3282,19 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -2835,7 +3305,8 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => EnhancedChatScreen(otherUser: userProfile),
+                builder: (context) =>
+                    EnhancedChatScreen(otherUser: userProfile),
               ),
             );
           },
@@ -2848,19 +3319,30 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                     photoUrl != null && photoUrl.isNotEmpty
                         ? CircleAvatar(
                             radius: 22,
-                            backgroundImage: CachedNetworkImageProvider(photoUrl),
+                            backgroundImage: CachedNetworkImageProvider(
+                              photoUrl,
+                            ),
                             backgroundColor: avatarColor,
                           )
                         : CircleAvatar(
                             radius: 22,
                             backgroundColor: avatarColor,
-                            child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                     if (isOnline)
                       Positioned(
-                        right: 0, bottom: 0,
+                        right: 0,
+                        bottom: 0,
                         child: Container(
-                          width: 14, height: 14,
+                          width: 14,
+                          height: 14,
                           decoration: BoxDecoration(
                             color: Colors.green,
                             shape: BoxShape.circle,
@@ -2877,13 +3359,22 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                     children: [
                       Text(
                         formatDisplayName(name),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         isOnline ? 'Active now' : 'Tap to message',
-                        style: TextStyle(fontSize: 12, color: isOnline ? Colors.green : Colors.white.withValues(alpha: 0.7)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isOnline
+                              ? Colors.green
+                              : Colors.white.withValues(alpha: 0.7),
+                        ),
                       ),
                     ],
                   ),
@@ -2903,7 +3394,14 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
         children: [
           Icon(Icons.people_outline, size: 64, color: Colors.grey[700]),
           const SizedBox(height: 16),
-          const Text('No contacts yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+          const Text(
+            'No contacts yet',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),

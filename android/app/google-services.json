@@ -31,6 +31,14 @@
           }
         },
         {
+          "client_id": "1027499426345-jke49khj5on1jmddnt1abmbccloequqq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plink.supper",
+            "certificate_hash": "e7e92e8a1acd0b63b8fa218d2f43428e7b85bc9c"
+          }
+        },
+        {
           "client_id": "1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
-import '../../widgets/account_badges.dart';
+import '../../widgets/common widgets/account_badges.dart';
 import '../chat/enhanced_chat_screen.dart';
 
 class ProfileViewScreen extends StatefulWidget {

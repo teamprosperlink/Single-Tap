@@ -1103,6 +1103,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       // Camera Photo option
                       _buildPopupOption(
                         icon: Icons.camera_alt,
@@ -2015,6 +2030,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white70, size: 22),
+                ),
+              ),
               Text(
                 'Choose Chat Theme',
                 style: TextStyle(
@@ -2620,6 +2643,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       _buildMessageOption(
                         icon: Icons.reply,
                         label: 'Reply',
@@ -3108,6 +3146,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       _buildMessageOption(
                         icon: Icons.check_circle_outline,
                         label: 'Select',
@@ -5441,6 +5494,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       final timestamp = messageData?['timestamp'] as Timestamp?;
       final callId =
           messageData?['callId'] as String?; // Get call ID to check if active
+      final messageId = messageData?['id'] as String?;
+      final isSelected = messageId != null && _selectedMessageIds.contains(messageId);
 
       // Check if current user is the caller
       final isCallerCurrentUser = callerId == _currentUserId;
@@ -5479,18 +5534,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       }
 
       // SingleTap-style positioning: right for caller, left for others
-      return Padding(
-        padding: const EdgeInsets.only(
-          top: 6,
-          bottom: 6,
-          right: 16,
-          left: 16,
-        ), // Better spacing for call messages
-        child: Align(
-          alignment: isCallerCurrentUser
-              ? Alignment
-                    .centerRight // My call → RIGHT
-              : Alignment.centerLeft, // Others' call → LEFT
+      return GestureDetector(
+        onTap: _isMultiSelectMode && messageId != null
+            ? () => _toggleMessageSelection(messageId)
+            : null,
+        child: Container(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: 0.1)
+              : Colors.transparent,
+          padding: const EdgeInsets.only(
+            top: 6,
+            bottom: 6,
+            right: 16,
+            left: 16,
+          ), // Better spacing for call messages
           child: Row(
             mainAxisAlignment: isCallerCurrentUser
                 ? MainAxisAlignment
@@ -5498,6 +5555,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 : MainAxisAlignment.start, // Others' call → LEFT
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Selection checkbox
+              if (_isMultiSelectMode) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, right: 4, bottom: 4),
+                  child: Icon(
+                    isSelected ? Icons.check_circle : Icons.circle_outlined,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                    size: 24,
+                  ),
+                ),
+              ],
               // Profile circle for receiver
               if (!isCallerCurrentUser) ...[
                 Container(
@@ -5537,7 +5605,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   GestureDetector(
-                    onTap: () => _handleCallCardTap(callId, callDuration),
+                    onTap: _isMultiSelectMode && messageId != null
+                        ? () => _toggleMessageSelection(messageId)
+                        : () => _handleCallCardTap(callId, callDuration),
                     onLongPress: () => _showCallDeleteOptions(messageData),
                     child: Container(
                       constraints: BoxConstraints(
@@ -6814,6 +6884,14 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white70, size: 22),
+                ),
+              ),
               // Audio Player UI - SingleTap style
               Container(
                 decoration: BoxDecoration(

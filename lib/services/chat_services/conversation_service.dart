@@ -26,8 +26,10 @@ class ConversationService {
         return false;
       }
 
-      final data = doc.data()!;
-      final participants = data['participants'] as List<dynamic>?;
+      final data = doc.data();
+      if (data == null) return false;
+      final rawParticipants = data['participants'];
+      final participants = rawParticipants is List ? rawParticipants : null;
 
       // Extract expected user IDs from conversation ID
       final expectedUserIds = conversationId.split('_');
@@ -47,7 +49,7 @@ class ConversationService {
         needsFix = true;
       } else {
         // Check if both expected users are in the array
-        final participantsList = participants.cast<String>();
+        final participantsList = participants.whereType<String>().toList();
         for (final userId in expectedUserIds) {
           if (!participantsList.contains(userId)) {
             // debugPrint('ConversationService: VALIDATION - Missing user $userId in participants array');
@@ -80,17 +82,17 @@ class ConversationService {
   }
 
   // Get or create conversation between current user and another user
-  Future<String> getOrCreateConversation(UserProfile otherUser) async {
+  Future<String> getOrCreateConversation(
+    UserProfile otherUser, {
+    String? source,
+  }) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      // debugPrint('ConversationService: ERROR - No authenticated user');
       throw Exception('No authenticated user');
     }
 
     // Generate consistent conversation ID
     final conversationId = generateConversationId(currentUserId, otherUser.uid);
-    // debugPrint('ConversationService: Getting or creating conversation: $conversationId');
-    // debugPrint('ConversationService: Current user: $currentUserId, Other user: ${otherUser.uid}');
 
     try {
       // First, try to get existing conversation
@@ -100,22 +102,37 @@ class ConversationService {
           .get();
 
       if (conversationDoc.exists) {
-        // Return immediately for faster loading
-        // Run validation in background (non-blocking)
+        // Run validation and source update in background (non-blocking)
         Future.microtask(() async {
-          await _validateAndFixParticipants(conversationId);
-          await _updateParticipantInfo(conversationId, currentUserId, otherUser);
+          try {
+            await _validateAndFixParticipants(conversationId);
+            await _updateParticipantInfo(conversationId, currentUserId, otherUser);
+            // Update source metadata if provided (skip 'Chat' - it's not meaningful)
+            if (source != null && source.isNotEmpty && source.toLowerCase() != 'chat') {
+              final existingData = conversationDoc.data();
+              final existingSource = (existingData?['metadata'] as Map<String, dynamic>?)?['source'];
+              if (existingSource == null || existingSource.toString().isEmpty || existingSource.toString().toLowerCase() == 'chat') {
+                await _firestore.collection('conversations').doc(conversationId).set({
+                  'metadata': {'source': source},
+                }, SetOptions(merge: true));
+              }
+            }
+          } catch (e) {
+            // Silent fail for background update
+          }
         });
         return conversationId;
       }
 
-      // debugPrint('ConversationService: Conversation does not exist, creating new one: $conversationId');
       // Conversation doesn't exist, create it
-      await _createConversation(conversationId, currentUserId, otherUser);
-      // debugPrint('ConversationService: Conversation created successfully: $conversationId');
+      await _createConversation(
+        conversationId,
+        currentUserId,
+        otherUser,
+        source: source,
+      );
       return conversationId;
     } catch (e) {
-      // debugPrint('ConversationService: ERROR creating/getting conversation: $e');
       rethrow;
     }
   }
@@ -124,8 +141,9 @@ class ConversationService {
   Future<void> _createConversation(
     String conversationId,
     String currentUserId,
-    UserProfile otherUser,
-  ) async {
+    UserProfile otherUser, {
+    String? source,
+  }) async {
     // debugPrint('ConversationService: Creating conversation document...');
 
     // VALIDATION: Ensure user IDs are valid and different
@@ -193,6 +211,7 @@ class ConversationService {
       },
       'isArchived': false,
       'isMuted': false,
+      if (source != null && source.toLowerCase() != 'chat') 'metadata': {'source': source},
     };
 
     try {
@@ -698,6 +717,7 @@ class ConversationService {
         'businessLogo': business.logo,
         'businessSenderId': currentUserId,
         'businessOwnerId': business.userId,
+        'source': 'Business',
       },
     };
 

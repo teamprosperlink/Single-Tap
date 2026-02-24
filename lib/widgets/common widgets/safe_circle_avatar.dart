@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../res/utils/photo_url_helper.dart';
+import '../../res/utils/photo_url_helper.dart';
 
 /// A CircleAvatar that safely handles network images with proper error handling.
 /// Shows user's initial letter when image fails to load or is not available.
@@ -40,9 +40,14 @@ class _SafeCircleAvatarState extends State<SafeCircleAvatar> {
   @override
   Widget build(BuildContext context) {
     final fixedUrl = PhotoUrlHelper.fixGooglePhotoUrl(widget.photoUrl);
-    final initial = (widget.name?.isNotEmpty == true) ? widget.name![0].toUpperCase() : '?';
-    final colors = widget.gradientColors ?? _getDefaultGradient(widget.name ?? '');
-    final bgColor = widget.backgroundColor ?? Theme.of(context).primaryColor.withValues(alpha: 0.1);
+    final initial = (widget.name?.isNotEmpty == true)
+        ? widget.name![0].toUpperCase()
+        : '?';
+    final colors =
+        widget.gradientColors ?? _getDefaultGradient(widget.name ?? '');
+    final bgColor =
+        widget.backgroundColor ??
+        Theme.of(context).primaryColor.withValues(alpha: 0.1);
 
     // Build fallback widget with initial
     Widget buildInitialWidget() {

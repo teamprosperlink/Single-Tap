@@ -13,10 +13,14 @@ class BusinessProfileComponents {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+        color: (isDarkMode ? Colors.white : Colors.black).withValues(
+          alpha: 0.1,
+        ),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: (isDarkMode ? Colors.white : Colors.black).withValues(alpha: 0.1),
+          color: (isDarkMode ? Colors.white : Colors.black).withValues(
+            alpha: 0.1,
+          ),
         ),
       ),
       child: child,
@@ -128,7 +132,7 @@ class BusinessProfileComponents {
               ),
               child: Text(
                 '$count',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primaryGreen,
@@ -142,7 +146,10 @@ class BusinessProfileComponents {
               onPressed: onAction,
               child: Text(
                 actionLabel,
-                style: TextStyle(color: AppTheme.primaryGreen, fontSize: 13),
+                style: const TextStyle(
+                  color: AppTheme.primaryGreen,
+                  fontSize: 13,
+                ),
               ),
             ),
         ],
@@ -156,11 +163,14 @@ class BusinessProfileComponents {
     required IconData icon,
     LinearGradient? gradient,
   }) {
-    final grad = gradient ??
-        LinearGradient(colors: [
-          AppTheme.primaryGreen,
-          AppTheme.primaryGreen.withValues(alpha: 0.7),
-        ]);
+    final grad =
+        gradient ??
+        LinearGradient(
+          colors: [
+            AppTheme.primaryGreen,
+            AppTheme.primaryGreen.withValues(alpha: 0.7),
+          ],
+        );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(

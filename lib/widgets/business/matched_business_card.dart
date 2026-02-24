@@ -82,7 +82,9 @@ class MatchedBusinessCard extends StatelessWidget {
                       business.tagline ?? business.subType ?? '',
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDarkMode ? AppColors.textPrimaryDark54 : Colors.grey[600],
+                        color: isDarkMode
+                            ? AppColors.textPrimaryDark54
+                            : Colors.grey[600],
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -125,8 +127,10 @@ class MatchedBusinessCard extends StatelessWidget {
               CachedNetworkImage(
                 imageUrl: business.coverImage!,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => _buildCoverPlaceholder(isDarkMode),
-                errorWidget: (context, url, error) => _buildCoverPlaceholder(isDarkMode),
+                placeholder: (context, url) =>
+                    _buildCoverPlaceholder(isDarkMode),
+                errorWidget: (context, url, error) =>
+                    _buildCoverPlaceholder(isDarkMode),
               )
             else
               _buildCoverPlaceholder(isDarkMode),
@@ -148,11 +152,7 @@ class MatchedBusinessCard extends StatelessWidget {
             ),
 
             // Match percentage badge (top right)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _buildMatchBadge(),
-            ),
+            Positioned(top: 12, right: 12, child: _buildMatchBadge()),
 
             // Category badge (top left)
             Positioned(
@@ -192,7 +192,7 @@ class MatchedBusinessCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.access_time,
                                   size: 12,
                                   color: AppColors.textPrimaryDark,
@@ -403,7 +403,11 @@ class MatchedBusinessCard extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.verified, size: 12, color: AppColors.textPrimaryDark),
+                Icon(
+                  Icons.verified,
+                  size: 12,
+                  color: AppColors.textPrimaryDark,
+                ),
                 SizedBox(width: 2),
                 Text(
                   'Verified',
@@ -440,7 +444,9 @@ class MatchedBusinessCard extends StatelessWidget {
                 ' (${business.reviewCount})',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDarkMode ? AppColors.textPrimaryDark54 : Colors.grey[600],
+                  color: isDarkMode
+                      ? AppColors.textPrimaryDark54
+                      : Colors.grey[600],
                 ),
               ),
             ],
@@ -455,41 +461,43 @@ class MatchedBusinessCard extends StatelessWidget {
 
     // Distance
     if (distance != null) {
-      highlights.add(_HighlightChip(
-        icon: Icons.location_on,
-        text: distance! < 1
-            ? '${(distance! * 1000).toStringAsFixed(0)}m away'
-            : '${distance!.toStringAsFixed(1)}km away',
-        color: AppColors.iosBlue,
-        isDarkMode: isDarkMode,
-      ));
+      highlights.add(
+        _HighlightChip(
+          icon: Icons.location_on,
+          text: distance! < 1
+              ? '${(distance! * 1000).toStringAsFixed(0)}m away'
+              : '${distance!.toStringAsFixed(1)}km away',
+          color: AppColors.iosBlue,
+          isDarkMode: isDarkMode,
+        ),
+      );
     }
 
     // Price range
     if (priceRange != null) {
-      highlights.add(_HighlightChip(
-        icon: Icons.currency_rupee,
-        text: priceRange!,
-        color: AppTheme.primaryGreen,
-        isDarkMode: isDarkMode,
-      ));
+      highlights.add(
+        _HighlightChip(
+          icon: Icons.currency_rupee,
+          text: priceRange!,
+          color: AppTheme.primaryGreen,
+          isDarkMode: isDarkMode,
+        ),
+      );
     }
 
     // Address (city only for privacy)
     if (business.address != null && business.address!.city != null) {
-      highlights.add(_HighlightChip(
-        icon: Icons.place,
-        text: business.address!.city!,
-        color: AppColors.purpleAccent,
-        isDarkMode: isDarkMode,
-      ));
+      highlights.add(
+        _HighlightChip(
+          icon: Icons.place,
+          text: business.address!.city!,
+          color: AppColors.purpleAccent,
+          isDarkMode: isDarkMode,
+        ),
+      );
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: highlights,
-    );
+    return Wrap(spacing: 8, runSpacing: 8, children: highlights);
   }
 
   Widget _buildPopularItems(bool isDarkMode) {
@@ -546,9 +554,13 @@ class MatchedBusinessCard extends StatelessWidget {
           icon: const Icon(Icons.phone_outlined, size: 18),
           label: const Text('Call'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: isDarkMode ? AppColors.textPrimaryDark70 : Colors.grey[700],
+            foregroundColor: isDarkMode
+                ? AppColors.textPrimaryDark70
+                : Colors.grey[700],
             side: BorderSide(
-              color: isDarkMode ? AppColors.textPrimaryDark24 : Colors.grey[300]!,
+              color: isDarkMode
+                  ? AppColors.textPrimaryDark24
+                  : Colors.grey[300]!,
             ),
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             shape: RoundedRectangleBorder(
@@ -566,7 +578,9 @@ class MatchedBusinessCard extends StatelessWidget {
             color: isDarkMode ? AppColors.textPrimaryDark54 : Colors.grey[600],
           ),
           style: IconButton.styleFrom(
-            backgroundColor: isDarkMode ? AppColors.textPrimaryDark10 : Colors.grey[100],
+            backgroundColor: isDarkMode
+                ? AppColors.textPrimaryDark10
+                : Colors.grey[100],
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             ),
@@ -618,7 +632,9 @@ class _HighlightChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDarkMode ? AppColors.textPrimaryDark70 : Colors.grey[700],
+              color: isDarkMode
+                  ? AppColors.textPrimaryDark70
+                  : Colors.grey[700],
             ),
           ),
         ],
@@ -647,13 +663,14 @@ class MatchedBusinessCardCompact extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: onTap ??
+      onTap:
+          onTap ??
           () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BusinessProfileScreen(businessId: business.id),
-                ),
-              ),
+            context,
+            MaterialPageRoute(
+              builder: (_) => BusinessProfileScreen(businessId: business.id),
+            ),
+          ),
       child: Container(
         decoration: BoxDecoration(
           color: AppTheme.cardColor(isDarkMode),
@@ -671,8 +688,9 @@ class MatchedBusinessCardCompact extends StatelessWidget {
           children: [
             // Image with match badge
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: AspectRatio(
                 aspectRatio: 1.2,
                 child: Stack(
@@ -687,15 +705,21 @@ class MatchedBusinessCardCompact extends StatelessWidget {
                         ),
                         errorWidget: (context, url, error) => Container(
                           color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-                          child: const Icon(Icons.storefront,
-                              size: 32, color: AppColors.textPrimaryDark54),
+                          child: const Icon(
+                            Icons.storefront,
+                            size: 32,
+                            color: AppColors.textPrimaryDark54,
+                          ),
                         ),
                       )
                     else
                       Container(
                         color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-                        child: const Icon(Icons.storefront,
-                            size: 32, color: AppColors.textPrimaryDark54),
+                        child: const Icon(
+                          Icons.storefront,
+                          size: 32,
+                          color: AppColors.textPrimaryDark54,
+                        ),
                       ),
 
                     // Match badge
@@ -704,12 +728,16 @@ class MatchedBusinessCardCompact extends StatelessWidget {
                       right: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: matchPercentage >= 80
                               ? AppTheme.primaryGreen
                               : AppColors.iosBlue,
-                          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusSmall,
+                          ),
                         ),
                         child: Text(
                           '${matchPercentage.toStringAsFixed(0)}%',
@@ -741,7 +769,9 @@ class MatchedBusinessCardCompact extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: isDarkMode ? AppColors.textPrimaryDark : Colors.black87,
+                            color: isDarkMode
+                                ? AppColors.textPrimaryDark
+                                : Colors.black87,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -761,13 +791,19 @@ class MatchedBusinessCardCompact extends StatelessWidget {
                   // Rating and distance
                   Row(
                     children: [
-                      const Icon(Icons.star, size: 12, color: AppTheme.warningOrange),
+                      const Icon(
+                        Icons.star,
+                        size: 12,
+                        color: AppTheme.warningOrange,
+                      ),
                       const SizedBox(width: 2),
                       Text(
                         business.formattedRating,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDarkMode ? AppColors.textPrimaryDark70 : Colors.grey[600],
+                          color: isDarkMode
+                              ? AppColors.textPrimaryDark70
+                              : Colors.grey[600],
                         ),
                       ),
                       if (distance != null) ...[
@@ -775,14 +811,17 @@ class MatchedBusinessCardCompact extends StatelessWidget {
                         Icon(
                           Icons.location_on,
                           size: 12,
-                          color: isDarkMode ? AppColors.textPrimaryDark54 : Colors.grey[500],
+                          color: isDarkMode
+                              ? AppColors.textPrimaryDark54
+                              : Colors.grey[500],
                         ),
                         Text(
                           '${distance!.toStringAsFixed(1)}km',
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode ? AppColors.textPrimaryDark54 : Colors.grey[500],
+                            color: isDarkMode
+                                ? AppColors.textPrimaryDark54
+                                : Colors.grey[500],
                           ),
                         ),
                       ],

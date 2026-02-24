@@ -13,7 +13,7 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:supper/screens/login/onboarding_screen.dart';
 
-import 'firebase_options.dart';
+import 'widgets/common widgets/firebase_options.dart';
 import 'screens/login/splash_screen.dart';
 import 'screens/home/main_navigation_screen.dart';
 import 'screens/call/voice_call_screen.dart';
@@ -362,14 +362,21 @@ class MyApp extends ConsumerWidget {
       home: const SplashScreen(),
       onGenerateRoute: (settings) {
         if (settings.name == '/voice-call') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => VoiceCallScreen(
-              callId: args['callId'] as String,
-              otherUser: args['otherUser'] as UserProfile,
-              isOutgoing: args['isOutgoing'] as bool,
-            ),
-          );
+          final args = settings.arguments;
+          if (args is Map<String, dynamic>) {
+            final callId = args['callId'];
+            final otherUser = args['otherUser'];
+            final isOutgoing = args['isOutgoing'];
+            if (callId is String && otherUser is UserProfile && isOutgoing is bool) {
+              return MaterialPageRoute(
+                builder: (context) => VoiceCallScreen(
+                  callId: callId,
+                  otherUser: otherUser,
+                  isOutgoing: isOutgoing,
+                ),
+              );
+            }
+          }
         }
         return null;
       },
@@ -490,6 +497,53 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         return;
       }
 
+      // CRITICAL FIX: Verify and fix Firestore state BEFORE starting listener
+      // This prevents false logouts from stale forceLogout flags or token mismatches
+      // that could happen if _saveDeviceSession failed silently during login
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data()!;
+          final serverToken = data['activeDeviceToken'] as String?;
+          final forceLogout = data['forceLogout'];
+
+          Map<String, dynamic> fixes = {};
+
+          // Fix token mismatch - our token should be the active one
+          if (serverToken != localToken) {
+            print(
+              '[DeviceSession] FIX: Token mismatch detected. Server: ${serverToken?.substring(0, min(8, serverToken.length)) ?? "NULL"}, Local: ${localToken.substring(0, min(8, localToken.length))}',
+            );
+            fixes['activeDeviceToken'] = localToken;
+          }
+
+          // Clear stale forceLogout flag
+          if (forceLogout == true) {
+            print('[DeviceSession] FIX: Clearing stale forceLogout flag');
+            fixes['forceLogout'] = false;
+            fixes['forceLogoutTime'] = FieldValue.delete();
+          }
+
+          if (fixes.isNotEmpty) {
+            fixes['lastSessionUpdate'] = FieldValue.serverTimestamp();
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .set(fixes, SetOptions(merge: true));
+            print('[DeviceSession] FIX: Firestore state corrected before monitoring');
+            // Wait for the write to propagate
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
+        }
+      } catch (e) {
+        print('[DeviceSession] Warning: Could not verify Firestore state: $e');
+        // Non-fatal - continue with monitoring
+      }
+
       print('[DeviceSession]  Starting real-time listener');
       print('[DeviceSession]  User: ${userId.substring(0, 8)}...');
       print(
@@ -503,7 +557,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _deviceSessionSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .snapshots(includeMetadataChanges: true)
+          .snapshots()
           .listen(
             (snapshot) async {
               try {
@@ -571,12 +625,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // We MUST check forceLogout and token deletion even during protection window
                 // because legitimate logout signals need to be processed immediately
 
-                if (secondsSinceListenerStart < 5) {
+                if (secondsSinceListenerStart < 8) {
                   print(
-                    '[DeviceSession]  PROTECTION WINDOW (${(5 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining)',
+                    '[DeviceSession]  PROTECTION WINDOW (${(8 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining)',
                   );
                   // Skip ALL checks during protection window to prevent false logouts
-                  // Only process explicit forceLogout with valid timestamp after this window
+                  // Increased to 8s to account for slow Firestore writes and network latency
                   return;
                 } else {
                   print(
@@ -628,26 +682,30 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                       '[DeviceSession]  forceLogout detected but activeToken matches local - this is OUR OWN signal, skipping',
                     );
                     shouldLogout = false;
+                  } else if (activeToken != null && activeToken != localToken) {
+                    // forceLogout is true AND the active token belongs to ANOTHER device
+                    // This is the most reliable signal - no clock skew issues
+                    print(
+                      '[DeviceSession]  forceLogout=true AND token belongs to another device - logging out',
+                    );
+                    shouldLogout = true;
                   } else if (forceLogoutTimestamp != null &&
                       _listenerStartTime != null) {
-                    // Only logout if the force logout signal was sent AFTER this listener started
+                    // Fallback: Use timestamp comparison with 30s tolerance for clock skew
+                    // Server timestamps and local DateTime.now() can differ significantly
                     final forceLogoutTime = forceLogoutTimestamp.toDate();
-                    final listenerTime = _listenerStartTime!;
+                    final listenerTime = _listenerStartTime!.subtract(
+                      const Duration(seconds: 30), // Clock skew tolerance
+                    );
                     final isNewSignal = forceLogoutTime.isAfter(listenerTime);
                     shouldLogout = isNewSignal;
                     print(
-                      '[DeviceSession]  forceLogout timestamp: $forceLogoutTime, listener started: $listenerTime, isNew: $isNewSignal',
+                      '[DeviceSession]  forceLogout timestamp: $forceLogoutTime, listener started: $_listenerStartTime, isNew: $isNewSignal (with 30s skew tolerance)',
                     );
-                  } else if (_listenerStartTime == null) {
-                    // No listener time - should not happen, skip logout
-                    print(
-                      '[DeviceSession]  No listener start time, skipping forceLogout',
-                    );
-                    shouldLogout = false;
                   } else {
-                    // No timestamp on forceLogout - stale flag from previous session, ignore it
+                    // No reliable way to determine if this is a new signal - ignore it
                     print(
-                      '[DeviceSession]  forceLogout has no timestamp - stale flag, ignoring',
+                      '[DeviceSession]  forceLogout has no reliable signal - stale flag, ignoring',
                     );
                     shouldLogout = false;
                   }
@@ -668,32 +726,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   );
                 }
 
-                // PRIORITY 2: Check token empty (fallback detection)
-                final serverToken = activeToken;
-                final serverTokenValid = (serverToken?.isNotEmpty ?? false);
-                final localTokenValid = localToken.isNotEmpty;
-
-                if (!serverTokenValid && localTokenValid) {
-                  // CRITICAL: Token might be temporarily cleared during logoutFromOtherDevices STEP 0
-                  // Wait for the next snapshot to confirm before logging out
-                  print('[DeviceSession]  TOKEN CLEARED ON SERVER - waiting for confirmation...');
-                  return;
-                }
-
-                // PRIORITY 3: Token mismatch (device has changed)
-                // Protection window (5s) already passed if we reach here
-                if (serverTokenValid &&
-                    localTokenValid &&
-                    serverToken != localToken) {
-                  print(
-                    '[DeviceSession]  TOKEN MISMATCH - server: ${serverToken!.substring(0, 8)}... vs local: ${localToken.substring(0, 8)}...',
-                  );
-                  if (mounted && !_isPerformingLogout) {
-                    _isPerformingLogout = true;
-                    await _performRemoteLogout('Another device logged in');
-                  }
-                  return;
-                }
+                // Token mismatch and token empty checks removed - too aggressive, caused false logouts
+                // Only forceLogout flag (PRIORITY 1 above) is reliable enough for remote logout
               } catch (e) {
                 print('[DeviceSession]  Error in listener callback: $e');
               }

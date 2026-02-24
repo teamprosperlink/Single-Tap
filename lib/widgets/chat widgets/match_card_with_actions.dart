@@ -194,7 +194,7 @@ class MatchCardWithActions extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EnhancedChatScreen(otherUser: receiver),
+        builder: (context) => EnhancedChatScreen(otherUser: receiver, source: 'Networking'),
       ),
     );
   }

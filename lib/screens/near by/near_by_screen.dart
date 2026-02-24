@@ -20,6 +20,7 @@ import '../../res/utils/snackbar_helper.dart';
 import 'near_by_posts _screen.dart';
 
 import 'edit_post_screen.dart';
+import 'create_post_screen.dart';
 
 class NearByScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -78,6 +79,7 @@ class _NearByScreenState extends State<NearByScreen>
     {'name': 'Service', 'icon': Icons.computer_rounded},
     {'name': 'Jobs', 'icon': Icons.work_rounded},
     {'name': 'Products', 'icon': Icons.shopping_bag_rounded},
+    {'name': 'Donation', 'icon': Icons.volunteer_activism_rounded},
   ];
 
   @override
@@ -530,6 +532,11 @@ class _NearByScreenState extends State<NearByScreen>
       // Filter out inactive posts
       if (data['isActive'] == false) return false;
 
+      // Donation posts should ONLY appear in the Donation tab
+      if (_selectedCategory != 'Donation' && data['isDonation'] == true) {
+        return false;
+      }
+
       // Category filter
       if (_selectedCategory != 'All') {
         if (!_matchesCategory(data)) return false;
@@ -612,6 +619,9 @@ class _NearByScreenState extends State<NearByScreen>
             text.contains('offer') ||
             data['price'] != null;
 
+      case 'Donation':
+        return data['isDonation'] == true;
+
       default:
         return true;
     }
@@ -684,22 +694,30 @@ class _NearByScreenState extends State<NearByScreen>
         ),
         actions: [
           // More options icon with circular container
-          IconButton(
-            onPressed: () {
+          GestureDetector(
+            onTap: () {
               HapticFeedback.lightImpact();
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const MyPostsScreen()),
               );
             },
-            icon: const Icon(
-              Icons.more_vert_rounded,
-              color: Colors.white,
-              size: 18,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 0.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.more_vert_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
-            iconSize: 18,
-            padding: const EdgeInsets.all(6),
-            constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 8),
         ],
@@ -730,7 +748,10 @@ class _NearByScreenState extends State<NearByScreen>
                 fontSize: 13,
                 fontWeight: FontWeight.normal,
               ),
-              isScrollable: false,
+              isScrollable: true,
+              tabAlignment: TabAlignment.center,
+              padding: EdgeInsets.zero,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 20),
               tabs: _categories.map((category) {
                 return Tab(text: category['name'] as String);
               }).toList(),
@@ -818,17 +839,23 @@ class _NearByScreenState extends State<NearByScreen>
               ],
             ),
 
-            // // Floating Action Button - Create Post
-            // Positioned(
-            //   bottom: 20,
-            //   right: 20,
-            //   child: FloatingActionButton(
-            //     onPressed: _showCreatePostDialog,
-            //     backgroundColor: AppColors.iosBlue,
-            //     shape: const CircleBorder(),
-            //     child: const Icon(Icons.add, color: Colors.white, size: 28),
-            //   ),
-            // ),
+            // Floating Action Button - Create Post
+            Positioned(
+              bottom: 75,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CreatePostScreen()),
+                  ).then((_) => _subscribeToFeedPosts());
+                },
+                backgroundColor: AppColors.iosBlue,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+              ),
+            ),
           ],
         ),
       ),
@@ -989,13 +1016,56 @@ class _NearByScreenState extends State<NearByScreen>
                             color: Colors.white,
                           ),
                         ),
-                        if (time != null)
-                          Text(
-                            timeago.format(time),
-                            style: AppTextStyles.caption.copyWith(
-                              color: Colors.white70,
-                              fontSize: 10,
-                            ),
+                        if (time != null || post['isDonation'] == true)
+                          Row(
+                            children: [
+                              if (time != null)
+                                Text(
+                                  timeago.format(time),
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: Colors.white70,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              if (time != null && post['isDonation'] == true)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Text(
+                                    '•',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: Colors.white38,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              if (post['isDonation'] == true)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.orange.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Donation',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                       ],
                     ),
@@ -1636,6 +1706,7 @@ class _NearByScreenState extends State<NearByScreen>
         'participants': [currentUser.uid, postUserId],
         'type': 'voice',
         'status': 'calling',
+        'source': 'Nearby',
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -1867,7 +1938,8 @@ class _NearByScreenState extends State<NearByScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => EnhancedChatScreen(otherUser: userProfile),
+          builder: (_) =>
+              EnhancedChatScreen(otherUser: userProfile, source: 'Nearby'),
         ),
       );
     } catch (e) {

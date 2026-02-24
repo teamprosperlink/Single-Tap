@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_profile.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/floating_particles.dart';
+import '../../widgets/common widgets/floating_particles.dart';
 import '../../services/other services/voice_call_service.dart';
 import '../../services/floating_call_service.dart';
 
@@ -461,7 +461,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         _voiceCallService.leaveCall();
       } catch (_) {}
     } else {
-      debugPrint('VoiceCallScreen: Disposing - keeping call active (minimized)');
+      debugPrint(
+        'VoiceCallScreen: Disposing - keeping call active (minimized)',
+      );
     }
     super.dispose();
   }
@@ -511,32 +513,45 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         .doc(callId)
         .snapshots()
         .listen((snapshot) {
-      if (!FloatingCallService().isShowing || FloatingCallService().callId != callId) {
-        statusListener?.cancel();
-        return;
-      }
-      final status = snapshot.data()?['status'] as String?;
-      if (status == 'ended' || status == 'missed' || status == 'declined') {
-        debugPrint('FloatingCall: Call $status by other user - auto-ending');
-        statusListener?.cancel();
-        FloatingCallService().hide();
-        _voiceCallService.leaveCall();
-      }
-    });
+          if (!FloatingCallService().isShowing ||
+              FloatingCallService().callId != callId) {
+            statusListener?.cancel();
+            return;
+          }
+          final status = snapshot.data()?['status'] as String?;
+          if (status == 'ended' || status == 'missed' || status == 'declined') {
+            debugPrint(
+              'FloatingCall: Call $status by other user - auto-ending',
+            );
+            statusListener?.cancel();
+            FloatingCallService().hide();
+            _voiceCallService.leaveCall();
+          }
+        });
 
     // If call not yet connected, start 39-sec missed call timer for 1-to-1 calls
     if (_callStatus == 'calling' || _callStatus == 'ringing') {
       Timer(const Duration(seconds: _callTimeoutSeconds), () async {
-        if (!FloatingCallService().isShowing || FloatingCallService().callId != callId) return;
+        if (!FloatingCallService().isShowing ||
+            FloatingCallService().callId != callId)
+          return;
         try {
-          final doc = await FirebaseFirestore.instance.collection('calls').doc(callId).get();
+          final doc = await FirebaseFirestore.instance
+              .collection('calls')
+              .doc(callId)
+              .get();
           final status = doc.data()?['status'] as String?;
           if (status == 'calling' || status == 'ringing') {
-            debugPrint('FloatingCall: 39s timeout - marking 1-to-1 call as missed');
-            await FirebaseFirestore.instance.collection('calls').doc(callId).update({
-              'status': 'missed',
-              'missedAt': FieldValue.serverTimestamp(),
-            });
+            debugPrint(
+              'FloatingCall: 39s timeout - marking 1-to-1 call as missed',
+            );
+            await FirebaseFirestore.instance
+                .collection('calls')
+                .doc(callId)
+                .update({
+                  'status': 'missed',
+                  'missedAt': FieldValue.serverTimestamp(),
+                });
             // Listener above will auto-hide overlay and leave call
           }
         } catch (e) {
@@ -638,21 +653,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
             ],
           ),
           child: ClipOval(
-            child: widget.otherUser.photoUrl != null &&
+            child:
+                widget.otherUser.photoUrl != null &&
                     widget.otherUser.photoUrl!.isNotEmpty
                 ? CachedNetworkImage(
                     imageUrl: widget.otherUser.photoUrl!,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
-                    ),
-                    errorWidget: (context, url, error) => const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
-                    ),
+                    placeholder: (context, url) =>
+                        const Icon(Icons.person, size: 40, color: Colors.white),
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.person, size: 40, color: Colors.white),
                   )
                 : const Icon(Icons.person, size: 40, color: Colors.white),
           ),

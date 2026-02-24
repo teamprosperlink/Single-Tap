@@ -24,10 +24,8 @@ class SendInquirySheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SendInquirySheet(
-        professionalId: professionalId,
-        service: service,
-      ),
+      builder: (context) =>
+          SendInquirySheet(professionalId: professionalId, service: service),
     );
   }
 
@@ -109,9 +107,9 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.9,
           ),
-          decoration: BoxDecoration(
-            color: const Color.fromRGBO(32, 32, 32, 0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: const BoxDecoration(
+            color: Color.fromRGBO(32, 32, 32, 0.95),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -260,10 +258,14 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00D67D).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFF00D67D,
+                            ).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: const Color(0xFF00D67D).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF00D67D,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
                           child: Column(
@@ -375,7 +377,9 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
         color: isDarkMode ? Colors.white38 : Colors.grey[400],
       ),
       filled: true,
-      fillColor: isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
+      fillColor: isDarkMode
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.grey[100],
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -388,10 +392,7 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFF00D67D),
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: Color(0xFF00D67D), width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -417,7 +418,9 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
+        color: isDarkMode
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDarkMode ? Colors.white12 : Colors.grey[300]!,
@@ -434,14 +437,9 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
           ),
           isExpanded: true,
           dropdownColor: const Color.fromRGBO(32, 32, 32, 1),
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
           items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(item),
-            );
+            return DropdownMenuItem(value: item, child: Text(item));
           }).toList(),
           onChanged: onChanged,
         ),
@@ -455,11 +453,7 @@ class _SendInquirySheetState extends State<SendInquirySheet> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.check_circle,
-            size: 14,
-            color: Color(0xFF00D67D),
-          ),
+          const Icon(Icons.check_circle, size: 14, color: Color(0xFF00D67D)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

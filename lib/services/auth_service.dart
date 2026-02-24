@@ -12,14 +12,14 @@ import '../res/utils/photo_url_helper.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Properly initialize GoogleSignIn with Firebase scopes
-    clientId:
-        '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
+    // clientId is only needed for iOS/web - Android uses google-services.json
+    // Setting clientId on Android causes DEVELOPER_ERROR (ApiException: 10)
+    clientId: Platform.isAndroid
+        ? null
+        : '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
     scopes: [
       'email',
       'profile',
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email',
     ],
   );
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
@@ -34,9 +34,10 @@ class AuthService {
 
   /// Get auth state changes stream - properly broadcasts to all listeners
   Stream<User?> get authStateChanges {
-    // Use userChanges() which is more reliable for logout detection
-    // It emits on both auth state changes AND ID token changes
-    return _auth.userChanges();
+    // Use authStateChanges() - only fires on actual sign in/sign out events
+    // Previously used userChanges() which also fires on token refresh (every hour)
+    // and profile updates, causing unnecessary rebuilds and false logouts
+    return _auth.authStateChanges();
   }
 
   /// Direct access to Firebase auth for emergency sign-out
@@ -1096,18 +1097,28 @@ class AuthService {
   }
 
   /// Save device session to Firestore after successful login
+  /// Uses set with merge for robustness - works even if document fields are restricted
   Future<void> _saveDeviceSession(String uid, String deviceToken) async {
     try {
       final deviceInfo = await _getDeviceInfo();
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      // Use set with merge instead of update - more robust against security rule issues
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'activeDeviceToken': deviceToken,
         'deviceInfo': deviceInfo,
         'forceLogout':
             false, // CRITICAL: Clear any stale logout flag from previous logout
-        'forceLogoutTime': FieldValue.delete(), // Remove old timestamp
         'lastSessionUpdate': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
+
+      // Delete forceLogoutTime separately (FieldValue.delete() works better with update)
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'forceLogoutTime': FieldValue.delete(),
+        });
+      } catch (_) {
+        // Non-critical - forceLogoutTime deletion is best-effort
+      }
     } catch (e) {
       // Log but don't fail - device session is non-critical for login
       print('[AuthService] Error saving device session: $e');

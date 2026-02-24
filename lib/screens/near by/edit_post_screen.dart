@@ -7,7 +7,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/snackbar_helper.dart';
@@ -37,18 +36,18 @@ class _EditPostScreenState extends State<EditPostScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _hashtagController = TextEditingController();
 
-  File? _selectedImage;
-  String? _existingImageUrl;
-  bool _isLoading = false;
-  bool _allowCalls = true;
-  String _selectedCurrency = 'INR';
-  List<String> _hashtags = [];
-
   // Speech to text
   final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _isListening = false;
   bool _speechEnabled = false;
-  String _fullSpeechText = '';
+  TextEditingController? _activeController;
+
+  final List<File> _selectedImages = [];
+  final List<String> _existingImageUrls = [];
+  bool _isLoading = false;
+  bool _allowCalls = true;
+  bool _isDonation = false;
+  String _selectedCurrency = 'INR';
+  List<String> _hashtags = [];
 
   final List<Map<String, String>> _currencies = [
     {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
@@ -71,10 +70,23 @@ class _EditPostScreenState extends State<EditPostScreen> {
     _titleController.text = post['title'] ?? '';
     _descriptionController.text = post['description'] ?? '';
     _priceController.text = post['price']?.toString() ?? '';
-    _existingImageUrl = post['imageUrl'];
     _allowCalls = post['allowCalls'] ?? true;
+    _isDonation = post['isDonation'] ?? false;
     _selectedCurrency = post['currency'] ?? 'INR';
     _hashtags = List<String>.from(post['hashtags'] ?? []);
+
+    // Load existing images
+    final images = post['images'] as List<dynamic>? ?? [];
+    final rawImageUrl = post['imageUrl'];
+    if (rawImageUrl != null && rawImageUrl.toString().isNotEmpty) {
+      _existingImageUrls.add(rawImageUrl.toString());
+    }
+    for (final img in images) {
+      final url = img?.toString() ?? '';
+      if (url.isNotEmpty && !_existingImageUrls.contains(url)) {
+        _existingImageUrls.add(url);
+      }
+    }
   }
 
   @override
@@ -87,65 +99,51 @@ class _EditPostScreenState extends State<EditPostScreen> {
     super.dispose();
   }
 
-  // Initialize speech recognition
   Future<void> _initSpeech() async {
     try {
-      _speechEnabled = await _speech.initialize(
-        onStatus: (status) {
-          debugPrint('Speech status: $status');
-          if (status == 'done' || status == 'notListening') {
-            if (mounted) {
-              setState(() {
-                _isListening = false;
-              });
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('Speech error: $error');
-          if (mounted) {
-            setState(() {
-              _isListening = false;
-            });
-            _showSnackBar('Speech recognition error', isError: true);
-          }
-        },
-      );
-      if (mounted) {
-        setState(() {});
-      }
+      _speechEnabled = await _speech.initialize();
+      if (mounted) setState(() {});
     } catch (e) {
       debugPrint('Error initializing speech: $e');
     }
   }
 
-  // Start listening for full voice input
-  Future<void> _startVoiceInput() async {
-    if (!_speechEnabled) {
-      _showSnackBar('Speech recognition not available', isError: true);
+  Future<void> _toggleMic(TextEditingController controller) async {
+    if (_activeController == controller) {
+      _speech.stop();
+      setState(() => _activeController = null);
       return;
     }
 
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _isListening = true;
-      _fullSpeechText = '';
-    });
+    if (!_speechEnabled) {
+      try {
+        _speechEnabled = await _speech.initialize();
+      } catch (_) {}
+    }
 
-    await _speech.listen(
+    if (!_speechEnabled) {
+      if (mounted) {
+        _showSnackBar('Mic permission denied or not supported', isError: true);
+      }
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+    _speech.stop();
+    setState(() => _activeController = controller);
+    _speech.listen(
       onResult: (result) {
         if (mounted && result.recognizedWords.isNotEmpty) {
           setState(() {
-            _fullSpeechText = result.recognizedWords;
+            controller.text = result.recognizedWords;
           });
-          // Parse when speech is final
           if (result.finalResult) {
-            _parseVoiceInput(_fullSpeechText);
+            setState(() => _activeController = null);
           }
         }
       },
-      listenFor: const Duration(seconds: 60),
-      pauseFor: const Duration(seconds: 4),
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 3),
       localeId: 'en_IN',
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
@@ -154,130 +152,11 @@ class _EditPostScreenState extends State<EditPostScreen> {
     );
   }
 
-  // Stop listening and parse
-  Future<void> _stopVoiceInput() async {
-    HapticFeedback.lightImpact();
-    await _speech.stop();
-    if (_fullSpeechText.isNotEmpty) {
-      _parseVoiceInput(_fullSpeechText);
-    }
-    setState(() {
-      _isListening = false;
-    });
-  }
-
-  // Parse voice input into fields
-  void _parseVoiceInput(String text) {
-    if (text.isEmpty) return;
-
-    String lowerText = text.toLowerCase();
-    String remainingText = text;
-
-    // Extract price
-    final pricePatterns = [
-      RegExp(
-        r'(?:price|cost|amount|rupees|rs|₹|inr|\$|dollar|usd)\s*[:\s]*(\d+(?:\.\d{1,2})?)',
-        caseSensitive: false,
-      ),
-      RegExp(
-        r'(\d+(?:\.\d{1,2})?)\s*(?:rupees|rs|₹|inr|dollar|\$|usd)',
-        caseSensitive: false,
-      ),
-      RegExp(r'for\s+(\d+(?:\.\d{1,2})?)', caseSensitive: false),
-    ];
-
-    for (final pattern in pricePatterns) {
-      final priceMatch = pattern.firstMatch(lowerText);
-      if (priceMatch != null) {
-        final priceValue = priceMatch.group(1);
-        if (priceValue != null) {
-          _priceController.text = priceValue;
-          remainingText = remainingText
-              .replaceFirst(priceMatch.group(0)!, '')
-              .trim();
-          break;
-        }
-      }
-    }
-
-    // Extract hashtags
-    final hashtagPattern = RegExp(r'#(\w+)', caseSensitive: false);
-    final hashtagMatches = hashtagPattern.allMatches(remainingText);
-    for (final match in hashtagMatches) {
-      final tag = match.group(1);
-      if (tag != null &&
-          !_hashtags.contains('#$tag') &&
-          _hashtags.length < 10) {
-        _hashtags.add('#$tag');
-      }
-      remainingText = remainingText.replaceFirst(match.group(0)!, '').trim();
-    }
-
-    // Check for "hashtag" keyword
-    final hashtagKeywordPattern = RegExp(
-      r'hashtag[s]?\s+(\w+(?:\s+\w+)*)',
-      caseSensitive: false,
-    );
-    final keywordMatch = hashtagKeywordPattern.firstMatch(remainingText);
-    if (keywordMatch != null) {
-      final hashtagWords = keywordMatch.group(1)?.split(RegExp(r'\s+'));
-      if (hashtagWords != null) {
-        for (final word in hashtagWords) {
-          if (word.isNotEmpty &&
-              !_hashtags.contains('#$word') &&
-              _hashtags.length < 10) {
-            _hashtags.add('#$word');
-          }
-        }
-      }
-      remainingText = remainingText
-          .replaceFirst(keywordMatch.group(0)!, '')
-          .trim();
-    }
-
-    // Clean up remaining text
-    remainingText = remainingText
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .replaceAll(RegExp(r'[,\.]+\s*$'), '')
-        .trim();
-
-    // Split into title and description
-    if (remainingText.isNotEmpty) {
-      final sentenceEnd = RegExp(r'[.!?]').firstMatch(remainingText);
-      String title;
-      String description = '';
-
-      if (sentenceEnd != null && sentenceEnd.start < 80) {
-        title = remainingText.substring(0, sentenceEnd.start + 1).trim();
-        description = remainingText.substring(sentenceEnd.start + 1).trim();
-      } else if (remainingText.length <= 60) {
-        title = remainingText;
-      } else {
-        int breakPoint = 60;
-        for (int i = 59; i > 20; i--) {
-          if (remainingText[i] == ' ') {
-            breakPoint = i;
-            break;
-          }
-        }
-        title = remainingText.substring(0, breakPoint).trim();
-        description = remainingText.substring(breakPoint).trim();
-      }
-
-      _titleController.text = title;
-      if (description.isNotEmpty) {
-        _descriptionController.text = description;
-      }
-    }
-
-    setState(() {});
-
-    if (_titleController.text.isNotEmpty) {
-      _showSnackBar('Voice input parsed successfully!', isError: false);
-    }
-  }
-
   Future<void> _pickImageFromCamera() async {
+    if (_selectedImages.length + _existingImageUrls.length >= 3) {
+      _showSnackBar('Maximum 3 images allowed', isError: true);
+      return;
+    }
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -287,8 +166,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
       );
       if (image != null && mounted) {
         setState(() {
-          _selectedImage = File(image.path);
-          _existingImageUrl = null;
+          _selectedImages.add(File(image.path));
         });
       }
     } catch (e) {
@@ -297,6 +175,10 @@ class _EditPostScreenState extends State<EditPostScreen> {
   }
 
   Future<void> _pickImageFromGallery() async {
+    if (_selectedImages.length + _existingImageUrls.length >= 3) {
+      _showSnackBar('Maximum 3 images allowed', isError: true);
+      return;
+    }
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -306,8 +188,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
       );
       if (image != null && mounted) {
         setState(() {
-          _selectedImage = File(image.path);
-          _existingImageUrl = null;
+          _selectedImages.add(File(image.path));
         });
       }
     } catch (e) {
@@ -319,7 +200,6 @@ class _EditPostScreenState extends State<EditPostScreen> {
     final tag = _hashtagController.text.trim();
     if (tag.isEmpty) return;
 
-    // Max 10 hashtags allowed
     if (_hashtags.length >= 10) {
       _showSnackBar('Maximum 10 hashtags allowed', isError: true);
       return;
@@ -339,34 +219,40 @@ class _EditPostScreenState extends State<EditPostScreen> {
     });
   }
 
-  void _removeImage() {
-    setState(() {
-      _selectedImage = null;
-      _existingImageUrl = null;
-    });
-  }
+  Future<List<String>> _uploadNewImages() async {
+    if (_selectedImages.isEmpty) return [];
 
-  Future<String?> _uploadImage() async {
-    if (_selectedImage == null) return _existingImageUrl;
-
+    final List<String> urls = [];
     try {
       final userId = _auth.currentUser?.uid;
-      if (userId == null) return null;
+      if (userId == null) return [];
 
-      final fileName = 'post_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = _storage.ref().child('posts/$userId/$fileName');
-
-      await ref.putFile(_selectedImage!);
-      return await ref.getDownloadURL();
+      for (int i = 0; i < _selectedImages.length; i++) {
+        final fileName = 'post_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final ref = _storage.ref().child('posts/$userId/$fileName');
+        await ref.putFile(_selectedImages[i]);
+        final url = await ref.getDownloadURL();
+        urls.add(url);
+      }
     } catch (e) {
-      debugPrint('Error uploading image: $e');
-      return null;
+      debugPrint('Error uploading images: $e');
     }
+    return urls;
   }
 
   Future<void> _updatePost() async {
     if (_titleController.text.trim().isEmpty) {
       _showSnackBar('Please enter a title', isError: true);
+      return;
+    }
+
+    if (_descriptionController.text.trim().isEmpty) {
+      _showSnackBar('Please enter a description', isError: true);
+      return;
+    }
+
+    if (_selectedImages.isEmpty && _existingImageUrls.isEmpty) {
+      _showSnackBar('Please add at least one image', isError: true);
       return;
     }
 
@@ -381,13 +267,9 @@ class _EditPostScreenState extends State<EditPostScreen> {
         return;
       }
 
-      // Upload new image if selected
-      String? imageUrl;
-      if (_selectedImage != null) {
-        imageUrl = await _uploadImage();
-      } else {
-        imageUrl = _existingImageUrl;
-      }
+      // Upload new images
+      final newImageUrls = await _uploadNewImages();
+      final allImageUrls = [..._existingImageUrls, ...newImageUrls];
 
       // Parse price
       double? price;
@@ -402,14 +284,17 @@ class _EditPostScreenState extends State<EditPostScreen> {
         'originalPrompt': _titleController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
         'allowCalls': _allowCalls,
+        'isDonation': _isDonation,
         'currency': _selectedCurrency,
         'hashtags': _hashtags,
       };
 
-      if (imageUrl != null) {
-        postData['imageUrl'] = imageUrl;
+      if (allImageUrls.isNotEmpty) {
+        postData['imageUrl'] = allImageUrls.first;
+        postData['images'] = allImageUrls;
       } else {
         postData['imageUrl'] = FieldValue.delete();
+        postData['images'] = FieldValue.delete();
       }
 
       if (price != null) {
@@ -422,7 +307,7 @@ class _EditPostScreenState extends State<EditPostScreen> {
 
       if (mounted) {
         _showSnackBar('Post updated successfully!', isError: false);
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
       }
     } catch (e) {
       debugPrint('Error updating post: $e');
@@ -450,110 +335,114 @@ class _EditPostScreenState extends State<EditPostScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // Background Image
-          Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
           ),
+        ),
+        child: Stack(
+          children: [
+            // Main content
+            SafeArea(
+              child: Column(
+                children: [
+                  // Header
+                  _buildHeader(),
 
-          // Dark overlay
-          Positioned.fill(child: Container(color: AppColors.darkOverlay())),
+                  // Form
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title Field
+                          _buildLabeledField(
+                            label: 'Title',
+                            controller: _titleController,
+                            maxLength: 30,
+                            child: _buildGlassTextField(
+                              controller: _titleController,
+                              hintText: 'What are you posting?',
+                              prefixIcon: Icons.title_rounded,
+                              maxLines: 1,
+                              maxLength: 30,
+                              showMic: true,
+                            ),
+                          ),
 
-          // Main content
-          SafeArea(
-            child: Column(
-              children: [
-                // Header
-                _buildHeader(),
+                          const SizedBox(height: 16),
 
-                // Divider line
-                Container(
-                  height: 0.5,
-                  color: Colors.white.withValues(alpha: 0.2),
-                ),
+                          // Description Field
+                          _buildLabeledField(
+                            label: 'Description',
+                            controller: _descriptionController,
+                            maxLength: 250,
+                            child: _buildGlassTextField(
+                              controller: _descriptionController,
+                              hintText: 'Add more details...',
+                              prefixIcon: Icons.description_outlined,
+                              maxLines: 1,
+                              maxLength: 250,
+                              showMic: true,
+                            ),
+                          ),
 
-                // Form
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Voice Input Button - Single mic for all fields
-                        _buildVoiceInputSection(),
+                          const SizedBox(height: 20),
 
-                        const SizedBox(height: 20),
+                          // Photo Upload Section
+                          _buildPhotoSection(),
 
-                        // Title Field
-                        _buildGlassTextField(
-                          controller: _titleController,
-                          hintText: 'What are you posting?',
-                          prefixIcon: Icons.title_rounded,
-                          maxLines: 1,
-                        ),
+                          const SizedBox(height: 20),
 
-                        const SizedBox(height: 16),
+                          // Donation Toggle
+                          _buildDonationToggle(),
 
-                        // Description Field
-                        _buildGlassTextField(
-                          controller: _descriptionController,
-                          hintText: 'Add more details...',
-                          prefixIcon: Icons.description_outlined,
-                          maxLines: 4,
-                        ),
+                          const SizedBox(height: 12),
 
-                        const SizedBox(height: 20),
+                          // Currency and Price Row (hidden when donation)
+                          if (!_isDonation) ...[
+                            _buildPriceSection(),
+                            const SizedBox(height: 20),
+                          ],
 
-                        // Photo Upload Section
-                        _buildPhotoSection(),
+                          // Allow Calls Toggle
+                          _buildCallToggle(),
 
-                        const SizedBox(height: 20),
+                          const SizedBox(height: 20),
 
-                        // Currency and Price Row
-                        _buildPriceSection(),
+                          // Hashtags Section
+                          _buildHashtagSection(),
 
-                        const SizedBox(height: 20),
+                          const SizedBox(height: 32),
 
-                        // Allow Calls Toggle
-                        _buildCallToggle(),
+                          // Update Button
+                          _buildUpdateButton(),
 
-                        const SizedBox(height: 20),
-
-                        // Hashtags Section
-                        _buildHashtagSection(),
-
-                        const SizedBox(height: 32),
-
-                        // Update Button
-                        _buildUpdateButton(),
-
-                        const SizedBox(height: 20),
-                      ],
+                          const SizedBox(height: 20),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Loading overlay
-          if (_isLoading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
+                ],
               ),
             ),
-        ],
+
+            // Loading overlay
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -561,15 +450,37 @@ class _EditPostScreenState extends State<EditPostScreen> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(40, 40, 40, 1),
+            Color.fromRGBO(64, 64, 64, 1),
+          ],
+        ),
+        border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+      ),
       child: Row(
         children: [
           // Back button
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 18,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 0.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
           ),
 
@@ -593,104 +504,45 @@ class _EditPostScreenState extends State<EditPostScreen> {
     );
   }
 
-  // Voice Input Section - Single mic button for all fields
-  Widget _buildVoiceInputSection() {
-    return GestureDetector(
-      onTap: () {
-        if (_isListening) {
-          _stopVoiceInput();
-        } else {
-          _startVoiceInput();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppColors.buttonBorderRadius),
-          color: _isListening
-              ? AppColors.error.withValues(alpha: 0.4)
-              : AppColors.buttonBackground(),
-          border: Border.all(
-            color: _isListening
-                ? AppColors.error.withValues(alpha: 0.5)
-                : AppColors.buttonBorder(),
-            width: 1,
-          ),
-        ),
-        child: Row(
+  Widget _buildLabeledField({
+    required String label,
+    required TextEditingController controller,
+    required int maxLength,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Mic Icon on left
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _isListening ? AppColors.error : AppColors.iosBlue,
-              ),
-              child: Icon(
-                _isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                color: Colors.white,
-                size: 24,
+            Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
               ),
             ),
-
-            const SizedBox(width: 16),
-
-            // Text instructions on right
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        _isListening ? 'Listening...' : 'Tap to speak',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      // Recording indicator
-                      if (_isListening) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.error,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.6),
-                                blurRadius: 6,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
+            ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) {
+                return Text(
+                  '${controller.text.length}/$maxLength',
+                  style: TextStyle(
+                    color: controller.text.length >= maxLength
+                        ? Colors.red
+                        : Colors.grey[400],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isListening
-                        ? (_fullSpeechText.isNotEmpty
-                              ? _fullSpeechText
-                              : 'Say title, description, price, hashtags...')
-                        : 'Speak everything at once - title, price, hashtags',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 12,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        child,
+      ],
     );
   }
 
@@ -699,105 +551,276 @@ class _EditPostScreenState extends State<EditPostScreen> {
     required String hintText,
     required IconData prefixIcon,
     int maxLines = 1,
+    int? maxLength,
     TextInputType? keyboardType,
     String? prefixText,
+    bool showMic = false,
   }) {
+    final bool isListening = _activeController == controller;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        cursorColor: Colors.white,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
-          ),
-          prefixIcon: Icon(prefixIcon, color: Colors.grey[400], size: 22),
-          prefixText: prefixText,
-          prefixStyle: const TextStyle(color: Colors.white, fontSize: 16),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 16,
-            horizontal: 16,
-          ),
-          isDense: true,
-          filled: true,
-          fillColor: Colors.transparent,
+          color: isListening
+              ? Colors.red.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.3),
+          width: 1,
         ),
       ),
+      child: isListening
+          // Wave recording UI
+          ? GestureDetector(
+              onTap: () => _toggleMic(controller),
+              child: Container(
+                height: maxLines == 1 ? 50 : 80,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    // Recording indicator dot
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Audio wave bars
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: List.generate(10, (index) {
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 3,
+                          height:
+                              6.0 +
+                              (index % 3 == 0
+                                  ? 18.0
+                                  : (index % 2 == 0 ? 12.0 : 8.0)),
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(width: 12),
+                    // Listening text
+                    Expanded(
+                      child: Text(
+                        controller.text.isNotEmpty
+                            ? controller.text
+                            : 'Listening...',
+                        style: TextStyle(
+                          color: controller.text.isNotEmpty
+                              ? Colors.white
+                              : Colors.grey[400],
+                          fontSize: 13,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Stop icon
+                    const Icon(Icons.stop_rounded, color: Colors.red, size: 24),
+                  ],
+                ),
+              ),
+            )
+          // Normal text field
+          : TextField(
+              controller: controller,
+              maxLines: maxLines,
+              maxLength: maxLength,
+              buildCounter: maxLength != null
+                  ? (
+                      context, {
+                      required currentLength,
+                      required isFocused,
+                      required maxLength,
+                    }) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12, top: 4),
+                        child: Text(
+                          '$currentLength/$maxLength',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 11,
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
+              keyboardType: keyboardType,
+              cursorColor: Colors.white,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+              ),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+                prefixIcon: Icon(prefixIcon, color: Colors.grey[400], size: 22),
+                suffixIcon: showMic
+                    ? GestureDetector(
+                        onTap: () => _toggleMic(controller),
+                        child: Icon(
+                          Icons.mic_rounded,
+                          color: Colors.grey[400],
+                          size: 22,
+                        ),
+                      )
+                    : null,
+                prefixText: prefixText,
+                prefixStyle: const TextStyle(color: Colors.white, fontSize: 16),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
+                counterText: '',
+                isDense: true,
+                filled: true,
+                fillColor: Colors.transparent,
+              ),
+            ),
     );
   }
 
   Widget _buildPhotoSection() {
+    final totalImages = _existingImageUrls.length + _selectedImages.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Photo',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Add Photo',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              '$totalImages/3',
+              style: TextStyle(
+                color: totalImages >= 3 ? Colors.red : Colors.grey[400],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
-        // Show existing image, new selected image, or upload buttons
-        if (_selectedImage != null)
-          _buildImagePreview(
-            child: Image.file(
-              _selectedImage!,
-              width: double.infinity,
-              height: 200,
-              fit: BoxFit.cover,
+        // Existing + new images preview
+        if (totalImages > 0) ...[
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: totalImages,
+              itemBuilder: (context, index) {
+                final isExisting = index < _existingImageUrls.length;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: isExisting
+                            ? CachedNetworkImage(
+                                imageUrl: _existingImageUrls[index],
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  width: 100,
+                                  height: 100,
+                                  color: Colors.grey[800],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: 100,
+                                  height: 100,
+                                  color: Colors.grey[800],
+                                  child: const Icon(
+                                    Icons.error,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Image.file(
+                                _selectedImages[index - _existingImageUrls.length],
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              if (isExisting) {
+                                _existingImageUrls.removeAt(index);
+                              } else {
+                                _selectedImages.removeAt(
+                                  index - _existingImageUrls.length,
+                                );
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          )
-        else if (_existingImageUrl != null && _existingImageUrl!.isNotEmpty)
-          _buildImagePreview(
-            child: CachedNetworkImage(
-              imageUrl: _existingImageUrl!,
-              width: double.infinity,
-              height: 200,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                height: 200,
-                color: Colors.grey[800],
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-              ),
-              errorWidget: (context, url, error) => Container(
-                height: 200,
-                color: Colors.grey[800],
-                child: const Icon(Icons.error, color: Colors.white),
-              ),
-            ),
-          )
-        else
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Upload buttons (show when less than 3 images)
+        if (totalImages < 3)
           Row(
             children: [
               Expanded(
@@ -821,92 +844,6 @@ class _EditPostScreenState extends State<EditPostScreen> {
     );
   }
 
-  Widget _buildImagePreview({required Widget child}) {
-    return Stack(
-      children: [
-        ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: GestureDetector(
-            onTap: _removeImage,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.close, color: Colors.white, size: 20),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 8,
-          right: 8,
-          child: GestureDetector(
-            onTap: () {
-              // Show options to change image
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                builder: (context) => Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: const BoxDecoration(
-                    color: AppColors.backgroundDark,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(
-                          Icons.camera_alt,
-                          color: Colors.white,
-                        ),
-                        title: const Text(
-                          'Take Photo',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _pickImageFromCamera();
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(
-                          Icons.photo_library,
-                          color: Colors.white,
-                        ),
-                        title: const Text(
-                          'Choose from Gallery',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _pickImageFromGallery();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: AppColors.iosBlue,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.edit, color: Colors.white, size: 20),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPhotoButton({
     required IconData icon,
     required String label,
@@ -920,19 +857,19 @@ class _EditPostScreenState extends State<EditPostScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.3),
-            width: 1.5,
+            width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
         ),
         child: Column(
           children: [
@@ -972,19 +909,19 @@ class _EditPostScreenState extends State<EditPostScreen> {
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.3),
-                  width: 1.5,
+                  width: 1,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ],
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
@@ -1028,11 +965,18 @@ class _EditPostScreenState extends State<EditPostScreen> {
                 height: 52,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.25),
+                      Colors.white.withValues(alpha: 0.15),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.3),
-                    width: 1.5,
+                    width: 1,
                   ),
                 ),
                 child: Center(
@@ -1081,11 +1025,18 @@ class _EditPostScreenState extends State<EditPostScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.3),
-          width: 1.5,
+          width: 1,
         ),
       ),
       child: Row(
@@ -1131,6 +1082,68 @@ class _EditPostScreenState extends State<EditPostScreen> {
     );
   }
 
+  Widget _buildDonationToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _isDonation
+                  ? Colors.orange.withValues(alpha: 0.2)
+                  : Colors.grey.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.volunteer_activism_rounded,
+              color: _isDonation ? Colors.orange : Colors.grey,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Donation',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Switch(
+            value: _isDonation,
+            onChanged: (value) {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _isDonation = value;
+                if (value) _priceController.clear();
+              });
+            },
+            activeThumbColor: Colors.orange,
+            activeTrackColor: Colors.orange.withValues(alpha: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHashtagSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,19 +1160,19 @@ class _EditPostScreenState extends State<EditPostScreen> {
         // Hashtag input
         Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.25),
+                Colors.white.withValues(alpha: 0.15),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             border: Border.all(
               color: Colors.white.withValues(alpha: 0.3),
-              width: 1.5,
+              width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ],
           ),
           child: Row(
             children: [
@@ -1203,13 +1216,9 @@ class _EditPostScreenState extends State<EditPostScreen> {
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.buttonBackground(),
+                  decoration: const BoxDecoration(
+                    color: AppColors.iosBlue,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.buttonBorder(),
-                      width: 1,
-                    ),
                   ),
                   child: const Icon(
                     Icons.add_rounded,
@@ -1235,10 +1244,18 @@ class _EditPostScreenState extends State<EditPostScreen> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.25),
+                      Colors.white.withValues(alpha: 0.15),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
                   ),
                 ),
                 child: Row(
@@ -1278,9 +1295,8 @@ class _EditPostScreenState extends State<EditPostScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: AppColors.buttonBackground(),
-          borderRadius: BorderRadius.circular(AppColors.buttonBorderRadius),
-          border: Border.all(color: AppColors.buttonBorder(), width: 1),
+          color: AppColors.iosBlue,
+          borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
           child: Text(

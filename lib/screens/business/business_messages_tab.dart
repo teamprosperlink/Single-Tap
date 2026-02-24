@@ -13,17 +13,14 @@ import '../../res/utils/photo_url_helper.dart';
 import '../../res/config/app_assets.dart';
 import '../../res/config/app_colors.dart';
 import '../../services/chat_services/conversation_service.dart';
-import '../../widgets/chat_common.dart';
+import '../../widgets/chat widgets/chat_common.dart';
 import '../chat/enhanced_chat_screen.dart';
 
 /// Business Messages Tab - Shows all messages for a business profile (for bottom nav)
 class BusinessMessagesTab extends StatefulWidget {
   final BusinessModel business;
 
-  const BusinessMessagesTab({
-    super.key,
-    required this.business,
-  });
+  const BusinessMessagesTab({super.key, required this.business});
 
   @override
   State<BusinessMessagesTab> createState() => _BusinessMessagesTabState();
@@ -48,16 +45,11 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
       children: [
         // Background Image
         Positioned.fill(
-          child: Image.asset(
-            AppAssets.homeBackgroundImage,
-            fit: BoxFit.cover,
-          ),
+          child: Image.asset(AppAssets.homeBackgroundImage, fit: BoxFit.cover),
         ),
 
         // Dark overlay
-        Positioned.fill(
-          child: Container(color: AppColors.darkOverlay()),
-        ),
+        Positioned.fill(child: Container(color: AppColors.darkOverlay())),
 
         // Main content
         SafeArea(
@@ -76,9 +68,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
               _buildSearchBar(),
 
               // Conversations list
-              Expanded(
-                child: _buildConversationsList(),
-              ),
+              Expanded(child: _buildConversationsList()),
 
               // Bottom padding for nav bar
               const SizedBox(height: 80),
@@ -155,11 +145,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.verified,
-                  color: Color(0xFF00D67D),
-                  size: 14,
-                ),
+                Icon(Icons.verified, color: Color(0xFF00D67D), size: 14),
                 SizedBox(width: 4),
                 Text(
                   'Business',
@@ -210,16 +196,11 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 16),
               decoration: InputDecoration(
                 hintText: 'Search by name or @username',
                 hintStyle: TextStyle(
@@ -261,9 +242,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFF00D67D),
-            ),
+            child: CircularProgressIndicator(color: Color(0xFF00D67D)),
           );
         }
 
@@ -370,7 +349,10 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
           username = _userCache[otherUserId]?['username'] as String?;
         } else {
           try {
-            final userDoc = await _firestore.collection('users').doc(otherUserId).get();
+            final userDoc = await _firestore
+                .collection('users')
+                .doc(otherUserId)
+                .get();
             if (userDoc.exists) {
               _userCache[otherUserId] = userDoc.data()!;
               username = userDoc.data()?['username'] as String?;
@@ -380,7 +362,8 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
 
         // Check if matches search
         if (name.contains(_searchQuery) ||
-            (username != null && username.toLowerCase().contains(searchQueryClean))) {
+            (username != null &&
+                username.toLowerCase().contains(searchQueryClean))) {
           seenUserIds.add(otherUserId);
           results.add({
             'type': 'conversation',
@@ -420,11 +403,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
           seenUserIds.add(doc.id);
           final userData = doc.data();
           _userCache[doc.id] = userData;
-          results.add({
-            'type': 'user',
-            'data': userData,
-            'userId': doc.id,
-          });
+          results.add({'type': 'user', 'data': userData, 'userId': doc.id});
         }
       }
     } catch (e) {
@@ -442,15 +421,12 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
             .get();
 
         for (var doc in usernameQuery.docs) {
-          if (doc.id != widget.business.userId && !seenUserIds.contains(doc.id)) {
+          if (doc.id != widget.business.userId &&
+              !seenUserIds.contains(doc.id)) {
             seenUserIds.add(doc.id);
             final userData = doc.data();
             _userCache[doc.id] = userData;
-            results.add({
-              'type': 'user',
-              'data': userData,
-              'userId': doc.id,
-            });
+            results.add({'type': 'user', 'data': userData, 'userId': doc.id});
           }
         }
       } catch (e) {
@@ -479,9 +455,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Material(
               color: Colors.transparent,
@@ -553,20 +527,22 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
           otherUser: userProfile,
           isBusinessChat: true,
           business: widget.business,
+          source: 'Business',
         ),
       ),
     );
   }
 
   Widget _buildConversationTile(ConversationModel conversation) {
-    final otherUserId =
-        conversation.getOtherParticipantId(widget.business.userId);
-    final displayName = conversation.participantNames[otherUserId] ?? 'Customer';
+    final otherUserId = conversation.getOtherParticipantId(
+      widget.business.userId,
+    );
+    final displayName =
+        conversation.participantNames[otherUserId] ?? 'Customer';
     final displayPhoto = conversation.participantPhotos[otherUserId];
     final unreadCount = conversation.getUnreadCount(widget.business.userId);
     final fixedPhotoUrl = PhotoUrlHelper.fixGooglePhotoUrl(displayPhoto);
-    final initial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C';
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'C';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -578,9 +554,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Material(
               color: Colors.transparent,
@@ -622,7 +596,9 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
                                 ),
                                 if (conversation.lastMessageTime != null)
                                   Text(
-                                    timeago.format(conversation.lastMessageTime!),
+                                    timeago.format(
+                                      conversation.lastMessageTime!,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: unreadCount > 0
@@ -641,7 +617,9 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
                                         'Start a conversation',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.white.withValues(alpha: 0.6),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.6,
+                                      ),
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -712,10 +690,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
       return Container(
         width: 48,
         height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: avatarColor,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: avatarColor),
         child: Center(
           child: Text(
             initial,
@@ -754,11 +729,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 80,
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
+          Icon(icon, size: 80, color: Colors.white.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text(
             title,
@@ -805,6 +776,7 @@ class _BusinessMessagesTabState extends State<BusinessMessagesTab> {
           chatId: conversation.id,
           isBusinessChat: true,
           business: widget.business,
+          source: 'Business',
         ),
       ),
     );

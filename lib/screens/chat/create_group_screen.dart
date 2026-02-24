@@ -98,7 +98,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Container(
@@ -111,6 +110,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
+            scrolledUnderElevation: 0,
             leading: IconButton(
               icon: const Icon(
                 Icons.arrow_back_ios_new,
@@ -157,6 +157,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           gradient: AppColors.splashGradient,
         ),
         child: SafeArea(
+          bottom: false,
           child: Column(
         children: [
           // Group name + Search in one row
@@ -280,86 +281,107 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     final photoUrl = userData['photoUrl'];
                     final isSelected = _selectedUserIds.contains(userId);
 
-                    return ListTile(
-                      leading: Stack(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: CircleAvatar(
-                              radius: 24,
-                              backgroundImage: PhotoUrlHelper.isValidUrl(photoUrl)
-                                  ? CachedNetworkImageProvider(photoUrl)
-                                  : null,
-                              backgroundColor: Colors.white.withValues(alpha: 0.1),
-                              child: !PhotoUrlHelper.isValidUrl(photoUrl)
-                                  ? Text(
-                                      name[0].toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          if (isSelected)
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.check,
-                                  size: 12,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      title: Text(
-                        name,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: isSelected ? 0.3 : 0.25),
+                            Colors.white.withValues(alpha: isSelected ? 0.2 : 0.15),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 1,
                         ),
                       ),
-                      trailing: isSelected
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Colors.white,
-                            )
-                          : Icon(
-                              Icons.circle_outlined,
-                              color: Colors.white.withValues(alpha: 0.3),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        leading: Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: PhotoUrlHelper.isValidUrl(photoUrl)
+                                    ? CachedNetworkImageProvider(photoUrl)
+                                    : null,
+                                backgroundColor: Colors.white.withValues(alpha: 0.1),
+                                child: !PhotoUrlHelper.isValidUrl(photoUrl)
+                                    ? Text(
+                                        name[0].toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    : null,
+                              ),
                             ),
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() {
-                          if (isSelected) {
-                            _selectedUserIds.remove(userId);
-                          } else {
-                            _selectedUserIds.add(userId);
-                          }
-                        });
-                      },
+                            if (isSelected)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.black,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.check,
+                                    size: 12,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        title: Text(
+                          name,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                              )
+                            : Icon(
+                                Icons.circle_outlined,
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            if (isSelected) {
+                              _selectedUserIds.remove(userId);
+                            } else {
+                              _selectedUserIds.add(userId);
+                            }
+                          });
+                        },
+                      ),
                     );
                   },
                 );

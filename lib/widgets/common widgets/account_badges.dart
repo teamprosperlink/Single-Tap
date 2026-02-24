@@ -1,25 +1,17 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import '../models/user_profile.dart';
+import '../../models/user_profile.dart';
 
 /// Verified badge - blue checkmark for verified accounts
 class VerifiedBadge extends StatelessWidget {
   final double size;
   final bool showBackground;
 
-  const VerifiedBadge({
-    super.key,
-    this.size = 16,
-    this.showBackground = false,
-  });
+  const VerifiedBadge({super.key, this.size = 16, this.showBackground = false});
 
   @override
   Widget build(BuildContext context) {
-    final icon = Icon(
-      Icons.verified,
-      size: size,
-      color: Colors.blue,
-    );
+    final icon = Icon(Icons.verified, size: size, color: Colors.blue);
 
     if (!showBackground) return icon;
 
@@ -84,10 +76,7 @@ class ProfessionalBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: showLabel ? 8 : 4,
-        vertical: 4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: showLabel ? 8 : 4, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -175,10 +164,7 @@ class BusinessBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: showLabel ? 8 : 4,
-        vertical: 4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: showLabel ? 8 : 4, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -194,11 +180,7 @@ class BusinessBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.business,
-            size: size,
-            color: const Color(0xFFFF9800),
-          ),
+          Icon(Icons.business, size: size, color: const Color(0xFFFF9800)),
           if (showLabel) ...[
             const SizedBox(width: 4),
             Text(
@@ -230,25 +212,16 @@ class PendingVerificationBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: showLabel ? 8 : 4,
-        vertical: 4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: showLabel ? 8 : 4, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.amber.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Colors.amber.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.pending,
-            size: size,
-            color: Colors.amber[700],
-          ),
+          Icon(Icons.pending, size: size, color: Colors.amber[700]),
           if (showLabel) ...[
             const SizedBox(width: 4),
             Text(
@@ -360,11 +333,7 @@ class UsernameBadge extends StatelessWidget {
               color: const Color(0xFF9C27B0),
             )
           else if (accountType == AccountType.business)
-            Icon(
-              Icons.business,
-              size: size,
-              color: const Color(0xFFFF9800),
-            ),
+            Icon(Icons.business, size: size, color: const Color(0xFFFF9800)),
           if (isVerified) ...[
             const SizedBox(width: 2),
             VerifiedBadge(size: size * 0.9),
@@ -428,9 +397,7 @@ class AccountTypeCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: primaryColor.withValues(alpha: 0.3),
-            ),
+            border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -466,10 +433,7 @@ class AccountTypeCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     if (isPending) ...[
                       const SizedBox(height: 8),
@@ -507,10 +471,7 @@ class AccountTypeCard extends StatelessWidget {
                 ),
               ),
               if (onUpgrade != null && accountType == AccountType.personal)
-                TextButton(
-                  onPressed: onUpgrade,
-                  child: const Text('Upgrade'),
-                ),
+                TextButton(onPressed: onUpgrade, child: const Text('Upgrade')),
             ],
           ),
         ),

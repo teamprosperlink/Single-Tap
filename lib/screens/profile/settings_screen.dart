@@ -11,7 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../res/config/app_colors.dart';
-import '../../widgets/app_background.dart';
+import '../../widgets/common widgets/app_background.dart';
 import '../../services/auth_service.dart';
 import '../performance_debug_screen.dart';
 import '../login/choose_account_type_screen.dart';
@@ -21,7 +21,7 @@ import 'terms_of_service_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'safety_tips_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../widgets/coming_soon_widget.dart';
+import '../../widgets/common widgets/coming_soon_widget.dart';
 import 'personalization_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -120,7 +120,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.pop(context);
                     // Open drawer after returning
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                      MainNavigationScreen.scaffoldKey.currentState
+                          ?.openEndDrawer();
                     });
                   },
                 ),
@@ -144,325 +145,329 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         showParticles: true,
         overlayOpacity: 0.7,
         child: ListView(
-            padding: const EdgeInsets.only(
-              top: kToolbarHeight + 40,
-              left: 16,
-              right: 16,
-              bottom: 16,
-            ),
-            children: [
-              // Account Section
-              _buildSectionHeader(
-                icon: CupertinoIcons.person_circle_fill,
-                title: 'Account',
-                color: AppColors.iosBlue,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 8),
-              _buildIndividualSwitchItem(
-                icon: Icons.visibility_outlined,
-                title: 'Discoverable on Live Connect',
-                subtitle: 'Allow others to find you in nearby people',
-                value: _discoveryModeEnabled,
-                onChanged: (value) {
-                  setState(() => _discoveryModeEnabled = value);
-                  _updatePreference('discoveryModeEnabled', value);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        value
-                            ? 'You are now discoverable on Live Connect'
-                            : 'You are now hidden from Live Connect searches',
-                      ),
-                      backgroundColor: value ? Colors.green : Colors.orange,
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.security_outlined,
-                title: 'Privacy',
-                subtitle: 'Manage your privacy settings',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PersonalizationScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.lock_outline,
-                title: 'Security',
-                subtitle: 'Password and authentication',
-                onTap: () {
-                  _showSecurityOptions(context);
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.block_outlined,
-                title: 'Blocked Users',
-                subtitle: 'Manage blocked accounts',
-                onTap: () {
-                  _showBlockedUsers(context);
-                },
-              ),
-
-              const SizedBox(height: 10),
-
-              // Notifications Section
-              _buildSectionHeader(
-                icon: CupertinoIcons.bell_fill,
-                title: 'Notifications',
-                color: AppColors.iosOrange,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 8),
-              _buildIndividualSwitchItem(
-                icon: Icons.message_outlined,
-                title: 'Message Notifications',
-                subtitle: 'New messages from matches',
-                value: _messageNotifications,
-                onChanged: (value) {
-                  setState(() => _messageNotifications = value);
-                  _updatePreference('messageNotifications', value);
-                },
-              ),
-              _buildIndividualSwitchItem(
-                icon: Icons.favorite_outline,
-                title: 'Match Notifications',
-                subtitle: 'Someone matched with you',
-                value: _matchNotifications,
-                onChanged: (value) {
-                  setState(() => _matchNotifications = value);
-                  _updatePreference('matchNotifications', value);
-                },
-              ),
-              _buildIndividualSwitchItem(
-                icon: Icons.people_outline,
-                title: 'Connection Requests',
-                subtitle: 'New connection requests',
-                value: _connectionRequestNotifications,
-                onChanged: (value) {
-                  setState(() => _connectionRequestNotifications = value);
-                  _updatePreference('connectionRequestNotifications', value);
-                },
-              ),
-              _buildIndividualSwitchItem(
-                icon: Icons.campaign_outlined,
-                title: 'Promotional',
-                subtitle: 'Updates and offers',
-                value: _promotionalNotifications,
-                onChanged: (value) {
-                  setState(() => _promotionalNotifications = value);
-                  _updatePreference('promotionalNotifications', value);
-                },
-              ),
-
-              const SizedBox(height: 10),
-
-              // App Settings Section
-              _buildSectionHeader(
-                icon: CupertinoIcons.gear_solid,
-                title: 'App Settings',
-                color: AppColors.iosGreen,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 8),
-              _buildIndividualItem(
-                icon: Icons.location_on_outlined,
-                title: 'Location',
-                subtitle: 'Manage location settings',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LocationSettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.storage_outlined,
-                title: 'Storage & Data',
-                subtitle: 'Network usage and storage',
-                onTap: () {
-                  _showStorageOptions(context);
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.cleaning_services_outlined,
-                title: 'Clear Cache',
-                subtitle: 'Free up storage space',
-                onTap: () {
-                  _showClearCacheDialog(context);
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.speed_outlined,
-                title: 'Performance Debug',
-                subtitle: 'Monitor app performance',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PerformanceDebugScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 10),
-
-              // Coming Soon Section
-              _buildSectionHeader(
-                icon: CupertinoIcons.sparkles,
-                title: 'Coming Soon',
-                color: AppColors.iosPink,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 8),
-              _buildComingSoonItem(
-                icon: Icons.workspace_premium,
-                title: 'Premium',
-                subtitle: 'Unlock exclusive features',
-                colors: [Colors.amber, Colors.orange],
-                onTap: () {
-                  showComingSoonDialog(
-                    context,
-                    featureName: 'Premium Subscription',
-                    description: 'Unlock unlimited matches, priority visibility, advanced filters, and ad-free experience.',
-                    icon: Icons.workspace_premium,
-                    color: Colors.amber,
-                  );
-                },
-              ),
-              _buildComingSoonItem(
-                icon: Icons.event,
-                title: 'Events',
-                subtitle: 'Discover local events',
-                colors: [Colors.purple, Colors.pink],
-                onTap: () {
-                  showComingSoonDialog(
-                    context,
-                    featureName: 'Events',
-                    description: 'Create and discover local events, meetups, and gatherings in your area.',
-                    icon: Icons.event,
-                    color: Colors.purple,
-                  );
-                },
-              ),
-              _buildComingSoonItem(
-                icon: Icons.groups,
-                title: 'Groups',
-                subtitle: 'Join interest-based groups',
-                colors: [Colors.blue, Colors.cyan],
-                onTap: () {
-                  showComingSoonDialog(
-                    context,
-                    featureName: 'Groups',
-                    description: 'Create and join interest-based groups to connect with like-minded people.',
-                    icon: Icons.groups,
-                    color: Colors.blue,
-                  );
-                },
-              ),
-              _buildComingSoonItem(
-                icon: Icons.auto_stories,
-                title: 'Stories',
-                subtitle: 'Share your moments',
-                colors: [Colors.green, Colors.teal],
-                onTap: () {
-                  showComingSoonDialog(
-                    context,
-                    featureName: 'Stories',
-                    description: 'Share photos and videos that disappear after 24 hours with your connections.',
-                    icon: Icons.auto_stories,
-                    color: Colors.green,
-                  );
-                },
-              ),
-
-              const SizedBox(height: 10),
-
-              // Support Section
-              _buildSectionHeader(
-                icon: CupertinoIcons.question_circle_fill,
-                title: 'Support',
-                color: AppColors.iosTeal,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 8),
-              _buildIndividualItem(
-                icon: Icons.shield_outlined,
-                title: 'Safety Tips',
-                subtitle: 'Stay safe while connecting',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SafetyTipsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.info_outline,
-                title: 'About',
-                subtitle: 'Version 1.0.0',
-                onTap: () {
-                  _showAboutDialog(context);
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.description_outlined,
-                title: 'Terms of Service',
-                subtitle: 'Read our terms of service',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TermsOfServiceScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Policy',
-                subtitle: 'Read our privacy policy',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PrivacyPolicyScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.feedback_outlined,
-                title: 'Send Feedback',
-                subtitle: 'Help us improve the app',
-                onTap: () {
-                  _showFeedbackDialog(context);
-                },
-              ),
-              _buildIndividualItem(
-                icon: Icons.bug_report_outlined,
-                title: 'Report a Problem',
-                subtitle: 'Let us know if something isn\'t working',
-                onTap: () {
-                  _showReportProblemDialog(context);
-                },
-              ),
-
-              const SizedBox(height: 40),
-            ],
+          padding: const EdgeInsets.only(
+            top: kToolbarHeight + 40,
+            left: 16,
+            right: 16,
+            bottom: 16,
           ),
+          children: [
+            // Account Section
+            _buildSectionHeader(
+              icon: CupertinoIcons.person_circle_fill,
+              title: 'Account',
+              color: AppColors.iosBlue,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildIndividualSwitchItem(
+              icon: Icons.visibility_outlined,
+              title: 'Discoverable on Live Connect',
+              subtitle: 'Allow others to find you in nearby people',
+              value: _discoveryModeEnabled,
+              onChanged: (value) {
+                setState(() => _discoveryModeEnabled = value);
+                _updatePreference('discoveryModeEnabled', value);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      value
+                          ? 'You are now discoverable on Live Connect'
+                          : 'You are now hidden from Live Connect searches',
+                    ),
+                    backgroundColor: value ? Colors.green : Colors.orange,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.security_outlined,
+              title: 'Privacy',
+              subtitle: 'Manage your privacy settings',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PersonalizationScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.lock_outline,
+              title: 'Security',
+              subtitle: 'Password and authentication',
+              onTap: () {
+                _showSecurityOptions(context);
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.block_outlined,
+              title: 'Blocked Users',
+              subtitle: 'Manage blocked accounts',
+              onTap: () {
+                _showBlockedUsers(context);
+              },
+            ),
+
+            const SizedBox(height: 10),
+
+            // Notifications Section
+            _buildSectionHeader(
+              icon: CupertinoIcons.bell_fill,
+              title: 'Notifications',
+              color: AppColors.iosOrange,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildIndividualSwitchItem(
+              icon: Icons.message_outlined,
+              title: 'Message Notifications',
+              subtitle: 'New messages from matches',
+              value: _messageNotifications,
+              onChanged: (value) {
+                setState(() => _messageNotifications = value);
+                _updatePreference('messageNotifications', value);
+              },
+            ),
+            _buildIndividualSwitchItem(
+              icon: Icons.favorite_outline,
+              title: 'Match Notifications',
+              subtitle: 'Someone matched with you',
+              value: _matchNotifications,
+              onChanged: (value) {
+                setState(() => _matchNotifications = value);
+                _updatePreference('matchNotifications', value);
+              },
+            ),
+            _buildIndividualSwitchItem(
+              icon: Icons.people_outline,
+              title: 'Connection Requests',
+              subtitle: 'New connection requests',
+              value: _connectionRequestNotifications,
+              onChanged: (value) {
+                setState(() => _connectionRequestNotifications = value);
+                _updatePreference('connectionRequestNotifications', value);
+              },
+            ),
+            _buildIndividualSwitchItem(
+              icon: Icons.campaign_outlined,
+              title: 'Promotional',
+              subtitle: 'Updates and offers',
+              value: _promotionalNotifications,
+              onChanged: (value) {
+                setState(() => _promotionalNotifications = value);
+                _updatePreference('promotionalNotifications', value);
+              },
+            ),
+
+            const SizedBox(height: 10),
+
+            // App Settings Section
+            _buildSectionHeader(
+              icon: CupertinoIcons.gear_solid,
+              title: 'App Settings',
+              color: AppColors.iosGreen,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildIndividualItem(
+              icon: Icons.location_on_outlined,
+              title: 'Location',
+              subtitle: 'Manage location settings',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LocationSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.storage_outlined,
+              title: 'Storage & Data',
+              subtitle: 'Network usage and storage',
+              onTap: () {
+                _showStorageOptions(context);
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.cleaning_services_outlined,
+              title: 'Clear Cache',
+              subtitle: 'Free up storage space',
+              onTap: () {
+                _showClearCacheDialog(context);
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.speed_outlined,
+              title: 'Performance Debug',
+              subtitle: 'Monitor app performance',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceDebugScreen(),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 10),
+
+            // Coming Soon Section
+            _buildSectionHeader(
+              icon: CupertinoIcons.sparkles,
+              title: 'Coming Soon',
+              color: AppColors.iosPink,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildComingSoonItem(
+              icon: Icons.workspace_premium,
+              title: 'Premium',
+              subtitle: 'Unlock exclusive features',
+              colors: [Colors.amber, Colors.orange],
+              onTap: () {
+                showComingSoonDialog(
+                  context,
+                  featureName: 'Premium Subscription',
+                  description:
+                      'Unlock unlimited matches, priority visibility, advanced filters, and ad-free experience.',
+                  icon: Icons.workspace_premium,
+                  color: Colors.amber,
+                );
+              },
+            ),
+            _buildComingSoonItem(
+              icon: Icons.event,
+              title: 'Events',
+              subtitle: 'Discover local events',
+              colors: [Colors.purple, Colors.pink],
+              onTap: () {
+                showComingSoonDialog(
+                  context,
+                  featureName: 'Events',
+                  description:
+                      'Create and discover local events, meetups, and gatherings in your area.',
+                  icon: Icons.event,
+                  color: Colors.purple,
+                );
+              },
+            ),
+            _buildComingSoonItem(
+              icon: Icons.groups,
+              title: 'Groups',
+              subtitle: 'Join interest-based groups',
+              colors: [Colors.blue, Colors.cyan],
+              onTap: () {
+                showComingSoonDialog(
+                  context,
+                  featureName: 'Groups',
+                  description:
+                      'Create and join interest-based groups to connect with like-minded people.',
+                  icon: Icons.groups,
+                  color: Colors.blue,
+                );
+              },
+            ),
+            _buildComingSoonItem(
+              icon: Icons.auto_stories,
+              title: 'Stories',
+              subtitle: 'Share your moments',
+              colors: [Colors.green, Colors.teal],
+              onTap: () {
+                showComingSoonDialog(
+                  context,
+                  featureName: 'Stories',
+                  description:
+                      'Share photos and videos that disappear after 24 hours with your connections.',
+                  icon: Icons.auto_stories,
+                  color: Colors.green,
+                );
+              },
+            ),
+
+            const SizedBox(height: 10),
+
+            // Support Section
+            _buildSectionHeader(
+              icon: CupertinoIcons.question_circle_fill,
+              title: 'Support',
+              color: AppColors.iosTeal,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildIndividualItem(
+              icon: Icons.shield_outlined,
+              title: 'Safety Tips',
+              subtitle: 'Stay safe while connecting',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SafetyTipsScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.info_outline,
+              title: 'About',
+              subtitle: 'Version 1.0.0',
+              onTap: () {
+                _showAboutDialog(context);
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.description_outlined,
+              title: 'Terms of Service',
+              subtitle: 'Read our terms of service',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TermsOfServiceScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
+              subtitle: 'Read our privacy policy',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PrivacyPolicyScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.feedback_outlined,
+              title: 'Send Feedback',
+              subtitle: 'Help us improve the app',
+              onTap: () {
+                _showFeedbackDialog(context);
+              },
+            ),
+            _buildIndividualItem(
+              icon: Icons.bug_report_outlined,
+              title: 'Report a Problem',
+              subtitle: 'Let us know if something isn\'t working',
+              onTap: () {
+                _showReportProblemDialog(context);
+              },
+            ),
+
+            const SizedBox(height: 40),
+          ],
         ),
+      ),
     );
   }
 
@@ -508,9 +513,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: ListTile(
         leading: Container(
@@ -521,9 +524,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           child: Icon(icon, color: Colors.white, size: 20),
         ),
-        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
-        trailing: trailing ?? Icon(CupertinoIcons.chevron_forward, color: Colors.white.withValues(alpha: 0.5)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 14,
+          ),
+        ),
+        trailing:
+            trailing ??
+            Icon(
+              CupertinoIcons.chevron_forward,
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
         onTap: onTap,
       ),
     );
@@ -541,9 +562,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: SwitchListTile(
         secondary: Container(
@@ -554,8 +573,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           child: Icon(icon, color: Colors.white, size: 20),
         ),
-        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 14,
+          ),
+        ),
         value: value,
         onChanged: onChanged,
       ),
@@ -574,9 +606,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: ListTile(
         leading: Container(
@@ -587,15 +617,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           child: Icon(icon, color: Colors.white, size: 20),
         ),
-        title: Text(title, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 14,
+          ),
+        ),
         trailing: _buildComingSoonBadge(),
         onTap: onTap,
       ),
     );
   }
-
-
 
   // Blocked Users
   void _showBlockedUsers(BuildContext context) {
@@ -826,9 +867,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 SizedBox(width: 12),
-                Expanded(
-                  child: Text('Device has been logged out remotely'),
-                ),
+                Expanded(child: Text('Device has been logged out remotely')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -870,8 +909,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 }
 
-                final userData =
-                    snapshot.data?.data() as Map<String, dynamic>?;
+                final userData = snapshot.data?.data() as Map<String, dynamic>?;
                 if (userData == null) {
                   return const Text('Unable to load device information');
                 }
@@ -883,7 +921,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 final localToken = localTokenSnapshot.data;
 
                 // Determine if this is the current device
-                final isCurrentDevice = activeDeviceToken != null &&
+                final isCurrentDevice =
+                    activeDeviceToken != null &&
                     localToken != null &&
                     activeDeviceToken == localToken;
 
@@ -891,8 +930,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     deviceInfo['deviceName'] as String? ?? 'This Device';
                 final deviceModel =
                     deviceInfo['deviceModel'] as String? ?? 'Unknown Model';
-                final platform =
-                    deviceInfo['platform'] as String? ?? 'Unknown';
+                final platform = deviceInfo['platform'] as String? ?? 'Unknown';
                 final osVersion =
                     deviceInfo['osVersion'] as String? ?? 'Unknown';
 
@@ -930,8 +968,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       deviceName,
@@ -1535,7 +1572,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.purple.withValues(alpha: 0.8), Colors.blue.withValues(alpha: 0.8)],
+          colors: [
+            Colors.purple.withValues(alpha: 0.8),
+            Colors.blue.withValues(alpha: 0.8),
+          ],
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -1564,11 +1604,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               height: 50,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.purple.withValues(alpha: 0.6), Colors.blue.withValues(alpha: 0.6)],
+                  colors: [
+                    Colors.purple.withValues(alpha: 0.6),
+                    Colors.blue.withValues(alpha: 0.6),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.restaurant, color: Colors.white, size: 28),
+              child: const Icon(
+                Icons.restaurant,
+                color: Colors.white,
+                size: 28,
+              ),
             ),
             const SizedBox(width: 12),
             const Column(
@@ -1584,10 +1631,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 Text(
                   'Version 1.0.0',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
@@ -1608,7 +1652,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(Icons.copyright, size: 16, color: Colors.white.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.copyright,
+                  size: 16,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '2024 SingleTap Inc. All rights reserved.',

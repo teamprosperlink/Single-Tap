@@ -73,11 +73,7 @@ Future<void> showComingSoonDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          Icon(
-            Icons.schedule,
-            color: Colors.orange,
-            size: 28,
-          ),
+          const Icon(Icons.schedule, color: Colors.orange, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -110,7 +106,11 @@ Future<void> showComingSoonDialog(
               ),
               child: Row(
                 children: [
-                  Icon(Icons.calendar_today, size: 18, color: Colors.orange.shade700),
+                  Icon(
+                    Icons.calendar_today,
+                    size: 18,
+                    color: Colors.orange.shade700,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Estimated Release: ${featureInfo.estimatedRelease}',
@@ -197,11 +197,7 @@ class FeatureLockedCard extends StatelessWidget {
   final String featureName;
   final VoidCallback? onTap;
 
-  const FeatureLockedCard({
-    super.key,
-    required this.featureName,
-    this.onTap,
-  });
+  const FeatureLockedCard({super.key, required this.featureName, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -501,7 +497,11 @@ Future<void> showComingSoonBottomSheet(BuildContext context) async {
                       color: Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.upcoming, color: Colors.orange.shade700, size: 28),
+                    child: Icon(
+                      Icons.upcoming,
+                      color: Colors.orange.shade700,
+                      size: 28,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -517,10 +517,7 @@ Future<void> showComingSoonBottomSheet(BuildContext context) async {
                         ),
                         Text(
                           'Features we\'re working on',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -541,7 +538,9 @@ Future<void> showComingSoonBottomSheet(BuildContext context) async {
                 children: [
                   // Group by category
                   for (final category in FeatureCategory.values) ...[
-                    if (FeatureFlags.getFeaturesByCategory(category).isNotEmpty) ...[
+                    if (FeatureFlags.getFeaturesByCategory(
+                      category,
+                    ).isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.only(top: 16, bottom: 8),
                         child: Text(
@@ -553,11 +552,12 @@ Future<void> showComingSoonBottomSheet(BuildContext context) async {
                           ),
                         ),
                       ),
-                      ...FeatureFlags.getFeaturesByCategory(category)
-                          .map((entry) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: FeatureLockedCard(featureName: entry.key),
-                              )),
+                      ...FeatureFlags.getFeaturesByCategory(category).map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: FeatureLockedCard(featureName: entry.key),
+                        ),
+                      ),
                     ],
                   ],
                 ],

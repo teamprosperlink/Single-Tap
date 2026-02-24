@@ -229,7 +229,6 @@ class _ProfileWithHistoryScreenState
           // Load active status preference
           _showOnlineStatus = userData?['showOnlineStatus'] ?? true;
         });
-
       }
 
       // Load search history
@@ -276,6 +275,75 @@ class _ProfileWithHistoryScreenState
         });
       }
     }
+  }
+
+  void _showAccountTypeDialog() {
+    final current = _userProfile?['accountType']?.toString().toLowerCase() ?? 'personal';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2A2A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.white24, width: 0.5),
+        ),
+        title: const Text(
+          'Account Type',
+          style: TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildAccountTypeOption(ctx, 'personal', 'Personal', Icons.person, current),
+            const SizedBox(height: 8),
+            _buildAccountTypeOption(ctx, 'business', 'Business', Icons.business, current),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountTypeOption(BuildContext ctx, String value, String label, IconData icon, String current) {
+    final isSelected = current == value;
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(ctx);
+        if (current == value) return;
+        final uid = _auth.currentUser?.uid;
+        if (uid == null) return;
+        await _firestore.collection('users').doc(uid).update({'accountType': value});
+        _loadUserData();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF007AFF) : Colors.white24,
+            width: isSelected ? 1.5 : 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? const Color(0xFF007AFF) : Colors.white70, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? Colors.white : Colors.white70,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: Color(0xFF007AFF), size: 22),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _updateOnlineStatusPreference(bool value) async {
@@ -397,10 +465,7 @@ class _ProfileWithHistoryScreenState
               decoration: const BoxDecoration(
                 color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white,
-                    width: 1,
-                  ),
+                  bottom: BorderSide(color: Colors.white, width: 1),
                 ),
               ),
               child: AppBar(
@@ -414,7 +479,8 @@ class _ProfileWithHistoryScreenState
                     Navigator.pop(context);
                     // Open drawer after returning
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                      MainNavigationScreen.scaffoldKey.currentState
+                          ?.openEndDrawer();
                     });
                   },
                 ),
@@ -677,9 +743,7 @@ class _ProfileWithHistoryScreenState
                                       ? AppColors.iosGreen.withValues(
                                           alpha: 0.2,
                                         )
-                                      : Colors.white.withValues(
-                                          alpha: 0.15,
-                                        ),
+                                      : Colors.white.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -732,13 +796,13 @@ class _ProfileWithHistoryScreenState
                               ),
                             ),
                             child: ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               leading: Container(
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(
-                                    alpha: 0.15,
-                                  ),
+                                  color: Colors.white.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
@@ -764,15 +828,14 @@ class _ProfileWithHistoryScreenState
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ProfileEditScreen(),
+                                    builder: (_) => const ProfileEditScreen(),
                                   ),
                                 );
                               },
                             ),
                           ),
 
-                          // Account Type Card (non-interactive)
+                          // Account Type Card (read-only, set during signup)
                           IgnorePointer(
                             child: Container(
                               width: double.infinity,
@@ -798,12 +861,20 @@ class _ProfileWithHistoryScreenState
                                           ?.toString()
                                           .toLowerCase() ??
                                       'personal';
-                                  final isBusiness =
-                                      accountType == 'business';
+                                  final String typeLabel;
+                                  final IconData typeIcon;
+                                  switch (accountType) {
+                                    case 'business':
+                                      typeLabel = 'Business';
+                                      typeIcon = Icons.business;
+                                    default:
+                                      typeLabel = 'Personal';
+                                      typeIcon = Icons.person;
+                                  }
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
-                                      vertical: 14,
+                                      vertical: 8,
                                     ),
                                     child: Row(
                                       children: [
@@ -819,9 +890,7 @@ class _ProfileWithHistoryScreenState
                                             ),
                                           ),
                                           child: Icon(
-                                            isBusiness
-                                                ? Icons.business
-                                                : Icons.person,
+                                            typeIcon,
                                             color: Colors.white,
                                             size: 20,
                                           ),
@@ -831,7 +900,9 @@ class _ProfileWithHistoryScreenState
                                           child: Text(
                                             'Account Type',
                                             style: TextStyle(
-                                              color: Colors.white.withValues(alpha: 0.9),
+                                              color: Colors.white.withValues(
+                                                alpha: 0.9,
+                                              ),
                                               fontSize: 15,
                                               fontWeight: FontWeight.w500,
                                             ),
@@ -851,9 +922,11 @@ class _ProfileWithHistoryScreenState
                                             ),
                                           ),
                                           child: Text(
-                                            isBusiness ? 'Business' : 'Personal',
+                                            typeLabel,
                                             style: TextStyle(
-                                              color: Colors.white.withValues(alpha: 0.7),
+                                              color: Colors.white.withValues(
+                                                alpha: 0.7,
+                                              ),
                                               fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                             ),
@@ -886,13 +959,13 @@ class _ProfileWithHistoryScreenState
                               ),
                             ),
                             child: ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               leading: Container(
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(
-                                    alpha: 0.15,
-                                  ),
+                                  color: Colors.white.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
@@ -907,13 +980,6 @@ class _ProfileWithHistoryScreenState
                                   color: Colors.white.withValues(alpha: 0.9),
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              subtitle: Text(
-                                'Share SingleTap with friends',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 14,
                                 ),
                               ),
                               trailing: Icon(
@@ -949,13 +1015,13 @@ class _ProfileWithHistoryScreenState
                               ),
                             ),
                             child: ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               leading: Container(
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(
-                                    alpha: 0.15,
-                                  ),
+                                  color: Colors.white.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
@@ -987,7 +1053,6 @@ class _ProfileWithHistoryScreenState
                               },
                             ),
                           ),
-
                         ],
                       ),
                     ),

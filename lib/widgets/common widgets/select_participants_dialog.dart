@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/user_profile.dart';
+import '../../models/user_profile.dart';
 import 'safe_circle_avatar.dart';
 
 /// Dialog to select participants for group video call (SingleTap style)

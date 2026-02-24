@@ -102,6 +102,22 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
       error: AppColors.iosPink,
     ),
     scaffoldBackgroundColor: const Color(0xFFF5F5F7),
+    dialogTheme: DialogThemeData(
+      backgroundColor: const Color(0xFF1a1a2e),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+      ),
+      titleTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+      ),
+      contentTextStyle: TextStyle(
+        color: Colors.white.withValues(alpha: 0.8),
+        fontSize: 14,
+      ),
+    ),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.black,
@@ -136,10 +152,13 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.iosBlue,
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         textStyle: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w400,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
           letterSpacing: -0.5,
         ),
       ),
@@ -277,6 +296,22 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
       error: Color(0xFFFF453A),
     ),
     scaffoldBackgroundColor: const Color(0xFF000000),
+    dialogTheme: DialogThemeData(
+      backgroundColor: const Color(0xFF1a1a2e),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+      ),
+      titleTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+      ),
+      contentTextStyle: TextStyle(
+        color: Colors.white.withValues(alpha: 0.8),
+        fontSize: 14,
+      ),
+    ),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
@@ -311,10 +346,13 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFF0A84FF),
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         textStyle: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w400,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
           letterSpacing: -0.5,
         ),
       ),

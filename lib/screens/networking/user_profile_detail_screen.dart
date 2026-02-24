@@ -2,6 +2,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/extended_user_profile.dart';
 import '../../models/user_profile.dart';
 import '../../res/config/app_text_styles.dart';
@@ -38,10 +39,14 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   late AnimationController _fadeController;
   late AnimationController _shimmerController;
   bool _showAppBarTitle = false;
+  late ExtendedUserProfile _user;
+  bool _isLoadingProfile = true;
+  bool _requestSentLocally = false;
 
   @override
   void initState() {
     super.initState();
+    _user = widget.user;
     _scrollController = ScrollController()..addListener(_onScroll);
     _fadeController = AnimationController(
       vsync: this,
@@ -51,6 +56,33 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     )..repeat();
+    _fetchFullProfile();
+  }
+
+  Future<void> _fetchFullProfile() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user.uid)
+          .get();
+      if (doc.exists && doc.data() != null && mounted) {
+        final fetched = ExtendedUserProfile.fromMap(
+          doc.data()!,
+          widget.user.uid,
+        );
+        // Preserve the distance passed from the previous screen
+        fetched.distance = widget.user.distance ?? fetched.distance;
+        setState(() {
+          _user = fetched;
+          _isLoadingProfile = false;
+        });
+      } else {
+        if (mounted) setState(() => _isLoadingProfile = false);
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      if (mounted) setState(() => _isLoadingProfile = false);
+    }
   }
 
   @override
@@ -76,7 +108,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final user = widget.user;
+    final user = _user;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -121,8 +153,38 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
               color: Colors.white,
             ),
           ),
+          actions: [
+            if (widget.connectionStatus == 'connected')
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: TextButton(
+                  onPressed: () => _showDisconnectDialog(context),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                  ),
+                  child: const Text(
+                    'Disconnect',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-        bottomNavigationBar: _buildBottomActions(context, user),
+        bottomNavigationBar: _isLoadingProfile
+            ? const SizedBox.shrink()
+            : _buildBottomActions(context, user),
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -313,15 +375,11 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
   Widget _buildPlaceholderAvatar(ExtendedUserProfile user) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF6366F1),
-            const Color(0xFF8B5CF6),
-            const Color(0xFFA855F7),
-          ],
+          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFA855F7)],
         ),
       ),
       child: Center(
@@ -412,30 +470,12 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
         ],
         const SizedBox(height: 6),
 
-        // Location + distance row
-        Row(
-          children: [
-            const Icon(Icons.location_on, color: Colors.white, size: 16),
-            const SizedBox(width: 4),
-            Text(
-              user.displayLocation,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-            ),
-            if (user.formattedDistance != null) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 4,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
+        // Distance row
+        if (user.formattedDistance != null)
+          Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.white, size: 16),
+              const SizedBox(width: 4),
               Text(
                 user.formattedDistance!,
                 style: TextStyle(
@@ -445,8 +485,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                 ),
               ),
             ],
-          ],
-        ),
+          ),
       ],
     );
   }
@@ -1549,7 +1588,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
   Widget _buildBottomActions(BuildContext context, ExtendedUserProfile user) {
     final isConnected = widget.connectionStatus == 'connected';
-    final isRequestSent = widget.connectionStatus == 'sent';
+    final isRequestSent =
+        widget.connectionStatus == 'sent' || _requestSentLocally;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return ClipRRect(
@@ -1576,20 +1616,22 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                       HapticFeedback.mediumImpact();
                       if (widget.onConnect != null) {
                         await widget.onConnect!();
-                        if (mounted) Navigator.pop(context);
+                        if (mounted) {
+                          setState(() => _requestSentLocally = true);
+                        }
                       } else {
                         // Send connection request directly
                         final result = await ConnectionService()
-                            .sendConnectionRequest(receiverId: widget.user.uid);
+                            .sendConnectionRequest(receiverId: _user.uid);
                         if (!mounted) return;
                         if (result['success'] == true) {
+                          setState(() => _requestSentLocally = true);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Connection request sent!'),
                               backgroundColor: Colors.green,
                             ),
                           );
-                          Navigator.pop(context);
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -1680,7 +1722,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                   ),
                 ),
 
-              // State 3: Connected → Show Message button only
+              // State 3: Connected → Show Message button only (Disconnect is in AppBar)
               if (isConnected)
                 Expanded(
                   child: GestureDetector(
@@ -1730,6 +1772,87 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     );
   }
 
+  void _showDisconnectDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.white24, width: 1),
+        ),
+        title: const Text(
+          'Disconnect',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to disconnect from ${_user.name}? You will need to send a new connection request to reconnect.',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final result = await ConnectionService().removeConnection(
+                _user.uid,
+              );
+              if (!mounted) return;
+              if (result['success'] == true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Disconnected successfully'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(result['message'] ?? 'Failed to disconnect'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            child: const Text(
+              'Disconnect',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openChat(ExtendedUserProfile user) {
     final userProfile = UserProfile(
       uid: user.uid,
@@ -1747,7 +1870,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EnhancedChatScreen(otherUser: userProfile),
+        builder: (context) =>
+            EnhancedChatScreen(otherUser: userProfile, source: 'Networking'),
       ),
     );
   }

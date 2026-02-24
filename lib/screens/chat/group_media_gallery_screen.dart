@@ -96,9 +96,9 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight + 50),
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.splashDark1,
-            border: const Border(bottom: BorderSide(color: Colors.white, width: 1)),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 1)),
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
@@ -149,9 +149,7 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.splashGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.splashGradient),
         child: SafeArea(
           child: TabBarView(
             controller: _tabController,
@@ -1044,11 +1042,7 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 1),
             ),
-            child: Icon(
-              icon,
-              size: 60,
-              color: Colors.white30,
-            ),
+            child: Icon(icon, size: 60, color: Colors.white30),
           ),
           const SizedBox(height: 24),
           Text(
@@ -1064,10 +1058,7 @@ class _GroupMediaGalleryScreenState extends State<GroupMediaGalleryScreen>
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
               subtitle,
-              style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white60, fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ),

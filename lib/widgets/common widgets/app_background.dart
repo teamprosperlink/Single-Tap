@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../res/config/app_colors.dart';
+import '../../res/config/app_colors.dart';
 import 'floating_particles.dart';
 
 /// A reusable background widget that matches the home screen's beautiful background.
@@ -29,15 +29,15 @@ class AppBackground extends StatelessWidget {
         // Gradient Background
         Positioned.fill(
           child: Container(
-            decoration: const BoxDecoration(
-              gradient: AppColors.splashGradient,
-            ),
+            decoration: const BoxDecoration(gradient: AppColors.splashGradient),
           ),
         ),
 
         // Floating particles (optional)
         if (showParticles)
-          Positioned.fill(child: FloatingParticles(particleCount: particleCount)),
+          Positioned.fill(
+            child: FloatingParticles(particleCount: particleCount),
+          ),
 
         // Main content
         child,

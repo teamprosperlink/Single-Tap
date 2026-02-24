@@ -13,14 +13,16 @@ class PhotoViewerDialog extends StatefulWidget {
     this.title = 'Photo',
   });
 
-  static Future<void> show(BuildContext context, String imageUrl, {String? title}) {
+  static Future<void> show(
+    BuildContext context,
+    String imageUrl, {
+    String? title,
+  }) {
     return showDialog(
       context: context,
       barrierColor: Colors.black87,
-      builder: (context) => PhotoViewerDialog(
-        imageUrl: imageUrl,
-        title: title ?? 'Photo',
-      ),
+      builder: (context) =>
+          PhotoViewerDialog(imageUrl: imageUrl, title: title ?? 'Photo'),
     );
   }
 
@@ -29,7 +31,8 @@ class PhotoViewerDialog extends StatefulWidget {
 }
 
 class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
-  final TransformationController _transformationController = TransformationController();
+  final TransformationController _transformationController =
+      TransformationController();
 
   @override
   void dispose() {
@@ -130,7 +133,7 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                     errorWidget: (context, url, error) => Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.error_outline,
                           color: Colors.red,
                           size: 48,
@@ -161,7 +164,8 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                   IconButton(
                     icon: const Icon(Icons.zoom_out, color: Colors.grey),
                     onPressed: () {
-                      final currentScale = _transformationController.value.getMaxScaleOnAxis();
+                      final currentScale = _transformationController.value
+                          .getMaxScaleOnAxis();
                       if (currentScale > 0.5) {
                         _transformationController.value = Matrix4.identity()
                           ..scale(currentScale - 0.5);
@@ -176,14 +180,17 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                     icon: const Icon(Icons.refresh, size: 20),
                     label: const Text('Reset Zoom'),
                     style: TextButton.styleFrom(
-                      foregroundColor: isDarkMode ? Colors.white70 : Colors.black54,
+                      foregroundColor: isDarkMode
+                          ? Colors.white70
+                          : Colors.black54,
                     ),
                   ),
                   const SizedBox(width: 16),
                   IconButton(
                     icon: const Icon(Icons.zoom_in, color: Colors.grey),
                     onPressed: () {
-                      final currentScale = _transformationController.value.getMaxScaleOnAxis();
+                      final currentScale = _transformationController.value
+                          .getMaxScaleOnAxis();
                       if (currentScale < 4.0) {
                         _transformationController.value = Matrix4.identity()
                           ..scale(currentScale + 0.5);

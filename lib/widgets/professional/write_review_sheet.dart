@@ -70,15 +70,17 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
 
   Future<void> _submitReview() async {
     if (_reviewController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write your review')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please write your review')));
       return;
     }
 
     if (_reviewController.text.trim().length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Review is too short (min 10 characters)')),
+        const SnackBar(
+          content: Text('Review is too short (min 10 characters)'),
+        ),
       );
       return;
     }
@@ -133,9 +135,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.85,
           ),
-          decoration: BoxDecoration(
-            color: const Color.fromRGBO(32, 32, 32, 0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: const BoxDecoration(
+            color: Color.fromRGBO(32, 32, 32, 0.95),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -219,10 +221,7 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                       Expanded(
                         child: Text(
                           'You have already reviewed this professional. Your new review will replace the existing one.',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: Colors.orange, fontSize: 13),
                         ),
                       ),
                     ],
@@ -269,7 +268,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                           hintText:
                               'Share your experience with this professional...',
                           hintStyle: TextStyle(
-                            color: isDarkMode ? Colors.white38 : Colors.grey[400],
+                            color: isDarkMode
+                                ? Colors.white38
+                                : Colors.grey[400],
                           ),
                           filled: true,
                           fillColor: isDarkMode
@@ -282,8 +283,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(
-                              color:
-                                  isDarkMode ? Colors.white12 : Colors.grey[300]!,
+                              color: isDarkMode
+                                  ? Colors.white12
+                                  : Colors.grey[300]!,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
@@ -294,7 +296,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
                             ),
                           ),
                           counterStyle: TextStyle(
-                            color: isDarkMode ? Colors.white38 : Colors.grey[500],
+                            color: isDarkMode
+                                ? Colors.white38
+                                : Colors.grey[500],
                           ),
                         ),
                       ),
@@ -406,7 +410,9 @@ class _WriteReviewSheetState extends State<WriteReviewSheet> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
+        color: isDarkMode
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.grey[100],
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

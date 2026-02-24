@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 class LinkPreviewDialog extends StatelessWidget {
   final String url;
   final String? messageText;
@@ -67,9 +66,7 @@ class LinkPreviewDialog extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         decoration: BoxDecoration(
@@ -163,7 +160,7 @@ class LinkPreviewDialog extends StatelessWidget {
                   Expanded(
                     child: Text(
                       url,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 13,
                       ),
@@ -215,7 +212,9 @@ class LinkPreviewDialog extends StatelessWidget {
                       icon: const Icon(Icons.copy, size: 18),
                       label: const Text('Copy'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDarkMode ? Colors.white70 : Colors.black87,
+                        foregroundColor: isDarkMode
+                            ? Colors.white70
+                            : Colors.black87,
                         side: BorderSide(
                           color: isDarkMode ? Colors.white30 : Colors.black26,
                         ),

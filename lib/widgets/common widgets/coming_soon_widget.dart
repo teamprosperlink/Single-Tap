@@ -23,15 +23,11 @@ class ComingSoonWidget extends StatelessWidget {
     final color = primaryColor ?? Colors.purple;
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF1a1a2e),
-            const Color(0xFF16213e),
-            const Color(0xFF0f0f23),
-          ],
+          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f0f23)],
         ),
       ),
       child: SafeArea(
@@ -47,17 +43,17 @@ class ComingSoonWidget extends StatelessWidget {
                   duration: const Duration(milliseconds: 1500),
                   curve: Curves.elasticOut,
                   builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: child,
-                    );
+                    return Transform.scale(scale: value, child: child);
                   },
                   child: Container(
                     width: 120,
                     height: 120,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [color.withValues(alpha: 0.3), color.withValues(alpha: 0.1)],
+                        colors: [
+                          color.withValues(alpha: 0.3),
+                          color.withValues(alpha: 0.1),
+                        ],
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
@@ -68,11 +64,7 @@ class ComingSoonWidget extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Icon(
-                      icon,
-                      size: 60,
-                      color: color,
-                    ),
+                    child: Icon(icon, size: 60, color: color),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -82,9 +74,9 @@ class ComingSoonWidget extends StatelessWidget {
                   shaderCallback: (bounds) => LinearGradient(
                     colors: [color, Colors.blue],
                   ).createShader(bounds),
-                  child: Text(
+                  child: const Text(
                     'Coming Soon',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -107,7 +99,8 @@ class ComingSoonWidget extends StatelessWidget {
 
                 // Description
                 Text(
-                  description ?? 'We\'re working hard to bring you this exciting new feature. Stay tuned for updates!',
+                  description ??
+                      'We\'re working hard to bring you this exciting new feature. Stay tuned for updates!',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white.withValues(alpha: 0.7),
@@ -208,10 +201,7 @@ class _GlassButton extends StatelessWidget {
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: color.withValues(alpha: 0.3),
-                width: 1,
-              ),
+              border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -259,7 +249,10 @@ void showComingSoonDialog(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [primaryColor.withValues(alpha: 0.6), Colors.blue.withValues(alpha: 0.6)],
+                colors: [
+                  primaryColor.withValues(alpha: 0.6),
+                  Colors.blue.withValues(alpha: 0.6),
+                ],
               ),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -269,7 +262,10 @@ void showComingSoonDialog(
           const Expanded(
             child: Text(
               'Coming Soon',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -280,12 +276,19 @@ void showComingSoonDialog(
         children: [
           Text(
             '$featureName is currently under development.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 16,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
-            description ?? 'We are working hard to bring you this feature. Stay tuned for updates!',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
+            description ??
+                'We are working hard to bring you this feature. Stay tuned for updates!',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -323,10 +326,7 @@ class ComingSoonScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          featureName,
-          style: const TextStyle(color: Colors.white),
-        ),
+        title: Text(featureName, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: ComingSoonWidget(

@@ -152,7 +152,9 @@ class EnhancedItemCard extends StatelessWidget {
                       color: AppTheme.secondaryText(isDarkMode),
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.radiusMedium,
+                      ),
                     ),
                     itemBuilder: (context) => [
                       if (onToggleAvailability != null)
@@ -177,7 +179,7 @@ class EnhancedItemCard extends StatelessWidget {
                           ),
                         ),
                       if (onEdit != null)
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: 'edit',
                           child: Row(
                             children: [
@@ -186,13 +188,13 @@ class EnhancedItemCard extends StatelessWidget {
                                 size: AppTheme.iconMedium,
                                 color: AppTheme.infoBlue,
                               ),
-                              const SizedBox(width: 12),
-                              const Text('Edit'),
+                              SizedBox(width: 12),
+                              Text('Edit'),
                             ],
                           ),
                         ),
                       if (onDelete != null)
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: 'delete',
                           child: Row(
                             children: [
@@ -201,8 +203,8 @@ class EnhancedItemCard extends StatelessWidget {
                                 size: AppTheme.iconMedium,
                                 color: AppTheme.errorRed,
                               ),
-                              const SizedBox(width: 12),
-                              const Text('Delete'),
+                              SizedBox(width: 12),
+                              Text('Delete'),
                             ],
                           ),
                         ),
@@ -239,10 +241,7 @@ class EnhancedItemCard extends StatelessWidget {
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         image: imageUrl != null
-            ? DecorationImage(
-                image: NetworkImage(imageUrl!),
-                fit: BoxFit.cover,
-              )
+            ? DecorationImage(image: NetworkImage(imageUrl!), fit: BoxFit.cover)
             : null,
       ),
       child: imageUrl == null
@@ -363,7 +362,10 @@ class EnhancedFilterBar extends StatelessWidget {
                 if (option.count != null) ...[
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? Colors.white.withValues(alpha: 0.3)
@@ -497,9 +499,7 @@ class EnhancedCategoryTabs extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected
-                ? Colors.white
-                : AppTheme.darkText(isDarkMode),
+            color: isSelected ? Colors.white : AppTheme.darkText(isDarkMode),
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             fontSize: AppTheme.fontMedium,
           ),
@@ -514,9 +514,5 @@ class CategoryTab {
   final String name;
   final Color? color;
 
-  CategoryTab({
-    required this.id,
-    required this.name,
-    this.color,
-  });
+  CategoryTab({required this.id, required this.name, this.color});
 }

@@ -36,8 +36,7 @@ import '../call/voice_call_screen.dart';
 // import '../call/video_call_screen.dart'; // Video calling disabled
 import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
-import '../../widgets/chat_common.dart';
-import '../home/main_navigation_screen.dart';
+import '../../widgets/chat widgets/chat_common.dart';
 import 'media_gallery_screen.dart';
 import 'photo_viewer_dialog.dart';
 
@@ -47,6 +46,8 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
   final String? chatId; // Optional chatId from Live Connect
   final bool isBusinessChat; // Whether this is a business conversation
   final BusinessModel? business; // Business info if it's a business chat
+  final String?
+  source; // Where conversation originated: Nearby, Networking, Chat, Call
 
   const EnhancedChatScreen({
     super.key,
@@ -55,6 +56,7 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
     this.chatId, // Accept chatId from Live Connect
     this.isBusinessChat = false,
     this.business,
+    this.source,
   });
 
   @override
@@ -316,6 +318,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       final snapshot = await query.get();
 
+      if (!mounted) return;
+
       if (snapshot.docs.isEmpty) {
         setState(() {
           _hasMoreMessages = false;
@@ -332,6 +336,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       });
     } catch (e) {
       debugPrint('Error loading more messages: $e');
+      if (!mounted) return;
       setState(() {
         _isLoadingMore = false;
       });
@@ -344,7 +349,40 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // Otherwise, use ConversationService to get or create conversation
       final conversationId =
           widget.chatId ??
-          await _conversationService.getOrCreateConversation(widget.otherUser);
+          await _conversationService.getOrCreateConversation(
+            widget.otherUser,
+            source: widget.source,
+          );
+
+      // If chatId was provided, update source metadata in background if needed
+      // This ensures existing conversations get tagged with correct source
+      if (widget.chatId != null) {
+        final effectiveSource =
+            widget.source ?? (widget.isBusinessChat ? 'Business' : null);
+        if (effectiveSource != null &&
+            effectiveSource.isNotEmpty &&
+            effectiveSource.toLowerCase() != 'chat') {
+          _firestore.collection('conversations').doc(conversationId).get().then(
+            (doc) {
+              if (doc.exists) {
+                final existingSource =
+                    (doc.data()?['metadata']
+                        as Map<String, dynamic>?)?['source'];
+                if (existingSource == null ||
+                    existingSource.toString().isEmpty ||
+                    existingSource.toString().toLowerCase() == 'chat') {
+                  _firestore
+                      .collection('conversations')
+                      .doc(conversationId)
+                      .set({
+                        'metadata': {'source': effectiveSource},
+                      }, SetOptions(merge: true));
+                }
+              }
+            },
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -607,14 +645,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           if (_isSearching) {
             _toggleSearch();
           } else {
-            // Navigate to messages screen (conversations screen)
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) =>
-                    const MainNavigationScreen(initialIndex: 1),
-              ),
-              (route) => false,
-            );
+            Navigator.of(context).pop();
           }
         },
       ),
@@ -3228,7 +3259,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       NotificationService().sendNotificationToUser(
         userId: widget.otherUser.uid,
-        title: 'New Message from $currentUserName',
+        title: currentUserName,
         body: text,
         type: 'message',
         data: {'conversationId': _conversationId},
@@ -3343,6 +3374,21 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       // Reply option
                       _buildPopupOption(
                         icon: Icons.reply,
@@ -3937,123 +3983,152 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     showDialog(
       context: context,
-      barrierColor: Colors.black54,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: Colors.white.withValues(alpha: 0.15),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Call icon (voice only)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.call_rounded,
-                      color: Colors.green,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Call ${widget.otherUser.name}?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Start a voice call',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Buttons row
-                  Row(
-                    children: [
-                      // Cancel button
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.white.withValues(alpha: 0.1),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Call button (voice only)
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            _startAudioCall();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.green,
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.call, color: Colors.white, size: 18),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Call',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {},
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(32, 32, 32, 1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
-                ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 8, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Call icon
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.call_rounded,
+                          color: Colors.green,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Call ${widget.otherUser.name}?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Start a voice call',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Buttons row
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            // Cancel button
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => Navigator.pop(context),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Call button
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _startAudioCall();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.green,
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.call, color: Colors.white, size: 18),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Call',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -4064,161 +4139,104 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     showDialog(
       context: context,
-      barrierColor: Colors.black54,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: Colors.white.withValues(alpha: 0.15),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Delete icon
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.call_end_rounded,
-                      color: Colors.redAccent,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Call Options',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Delete and Select buttons in a row
-                  Row(
-                    children: [
-                      // Delete button
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            _showDeleteCallOptions(message, isMyMessage);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.red.withValues(alpha: 0.2),
-                              border: Border.all(
-                                color: Colors.red.withValues(alpha: 0.5),
-                                width: 1,
-                              ),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Delete',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // Select button
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            _enterMessageSelectionMode(message);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.blue.withValues(alpha: 0.2),
-                              border: Border.all(
-                                color: Colors.blue.withValues(alpha: 0.5),
-                                width: 1,
-                              ),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.checklist,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Select',
-                                  style: TextStyle(
-                                    color: Colors.blue,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) {
+        return GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {},
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(32, 32, 32, 1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Cancel button
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: const Center(
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 8, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      _buildCallOptionItem(
+                        icon: Icons.check_circle_outline,
+                        label: 'Select',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _enterMessageSelectionMode(message);
+                        },
+                      ),
+                      _buildCallOptionItem(
+                        icon: Icons.delete,
+                        label: 'Delete',
+                        isDestructive: true,
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showDeleteCallOptions(message, isMyMessage);
+                        },
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCallOptionItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isDestructive ? Colors.red : Colors.white,
+                size: 24,
+              ),
+              const SizedBox(width: 20),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isDestructive ? Colors.red : Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -4241,7 +4259,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                color: Colors.white.withValues(alpha: 0.15),
+                color: const Color(0xFF1a1a2e),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.3),
                   width: 1,
@@ -4250,6 +4268,21 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Close button
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 0),
+                        child: Icon(
+                          Icons.close,
+                          color: Colors.white70,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
                   // Red circle icon
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -4618,6 +4651,21 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       // Camera Photo option
                       _buildPopupOption(
                         icon: Icons.camera_alt,
@@ -5300,7 +5348,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       NotificationService()
           .sendNotificationToUser(
             userId: widget.otherUser.uid,
-            title: 'New Video from $currentUserName',
+            title: currentUserName,
             body: '🎥 Video',
             type: 'message',
             data: {'conversationId': conversationId},
@@ -5437,7 +5485,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       NotificationService()
           .sendNotificationToUser(
             userId: widget.otherUser.uid,
-            title: 'New Photo from $currentUserName',
+            title: currentUserName,
             body: '📷 Photo',
             type: 'message',
             data: {'conversationId': conversationId},
@@ -6748,6 +6796,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       ], // Required for Calls tab query
       'status': 'calling',
       'type': 'audio',
+      'source': widget.source ?? 'Chat',
       'timestamp': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -7900,6 +7949,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ),
               const Text(
                 'Choose Chat Theme',
                 style: TextStyle(
@@ -7938,7 +7999,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.clear_rounded, color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.clear_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'None (Default)',
@@ -7950,7 +8015,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       ),
                       if (_selectedTheme == 'default') ...[
                         const SizedBox(width: 8),
-                        Icon(Icons.check_circle, color: Colors.white, size: 20),
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ],
                     ],
                   ),
@@ -8080,6 +8149,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -8629,6 +8710,18 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -10849,6 +10942,18 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ),
+              ),
               // Audio Player UI - SingleTap style
               Container(
                 decoration: BoxDecoration(

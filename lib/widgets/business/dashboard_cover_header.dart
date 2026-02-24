@@ -28,9 +28,7 @@ class DashboardCoverHeader extends StatelessWidget {
       height: 180,
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -55,11 +53,7 @@ class DashboardCoverHeader extends StatelessWidget {
 
           // Edit cover button (top-right)
           if (onEditCover != null)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _buildEditButton(),
-            ),
+            Positioned(top: 12, right: 12, child: _buildEditButton()),
 
           // Business info at bottom
           Positioned(
@@ -91,10 +85,7 @@ class DashboardCoverHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            categoryColor,
-            categoryColor.withValues(alpha: 0.7),
-          ],
+          colors: [categoryColor, categoryColor.withValues(alpha: 0.7)],
         ),
       ),
       child: Center(
@@ -119,7 +110,7 @@ class DashboardCoverHeader extends StatelessWidget {
           color: AppColors.blackAlpha(alpha: 0.4),
           shape: BoxShape.circle,
         ),
-        child: Icon(
+        child: const Icon(
           Icons.camera_alt_outlined,
           color: AppColors.textPrimaryDark,
           size: 20,
@@ -185,7 +176,7 @@ class DashboardCoverHeader extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           categoryLabel,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textPrimaryDark,
                             fontWeight: FontWeight.w600,
@@ -205,7 +196,7 @@ class DashboardCoverHeader extends StatelessWidget {
                         color: AppColors.success,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
@@ -213,7 +204,7 @@ class DashboardCoverHeader extends StatelessWidget {
                             size: 12,
                             color: AppColors.textPrimaryDark,
                           ),
-                          const SizedBox(width: 2),
+                          SizedBox(width: 2),
                           Text(
                             'Verified',
                             style: TextStyle(

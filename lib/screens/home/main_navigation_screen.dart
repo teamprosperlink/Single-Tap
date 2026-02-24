@@ -12,11 +12,13 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 
 // Screens used in navigation
 import 'home_screen.dart';
-import 'live_connect_tab_screen.dart';
-import 'user_profile_detail_screen.dart';
+import '../networking/live_connect_tab_screen.dart';
+import '../networking/user_profile_detail_screen.dart';
 import '../near by/near_by_screen.dart';
-import 'conversations_screen.dart';
-import 'pending_requests_screen.dart';
+import '../chat/conversations_screen.dart';
+import '../networking/pending_requests_screen.dart';
+import '../networking/my_networking_profile_screen.dart';
+import '../networking/create_networking_profile_screen.dart';
 import '../../models/extended_user_profile.dart';
 
 // Professional & Business screens
@@ -34,7 +36,11 @@ import '../../services/connection_service.dart';
 import '../../models/message_model.dart';
 
 // widgets
-import '../../widgets/app_drawer.dart';
+import '../../widgets/common widgets/app_drawer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../res/utils/photo_url_helper.dart';
+import '../../models/user_profile.dart';
+import '../chat/enhanced_chat_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int? initialIndex;
@@ -64,6 +70,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   // GlobalKeys to access LiveConnectTabScreen state for filter dialog
   final GlobalKey<LiveConnectTabScreenState> _discoverConnectKey = GlobalKey();
   final GlobalKey<LiveConnectTabScreenState> _smartConnectKey = GlobalKey();
+
+  // Horizontal scroll controller for My Network mosaic grid
+  final ScrollController _myNetworkScrollController = ScrollController();
 
   // Stream subscription for cleanup
   StreamSubscription<QuerySnapshot>? _unreadSubscription;
@@ -277,6 +286,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _networkingTabController.dispose();
+    _myNetworkScrollController.dispose();
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
     super.dispose();
@@ -915,10 +925,405 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       const earthRadius = 6371.0;
       final dLat = (lat2 - lat1) * pi / 180;
       final dLon = (lon2 - lon1) * pi / 180;
-      final a = sin(dLat / 2) * sin(dLat / 2) +
-          cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
-          sin(dLon / 2) * sin(dLon / 2);
+      final a =
+          sin(dLat / 2) * sin(dLat / 2) +
+          cos(lat1 * pi / 180) *
+              cos(lat2 * pi / 180) *
+              sin(dLon / 2) *
+              sin(dLon / 2);
       return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a));
+    }
+
+    List<Color> getAvatarGradient(String name) {
+      final hash = name.hashCode % 5;
+      switch (hash) {
+        case 0:
+          return [const Color(0xFFFF6B9D), const Color(0xFFC7365F)];
+        case 1:
+          return [const Color(0xFF4A90E2), const Color(0xFF2E5BFF)];
+        case 2:
+          return [const Color(0xFFFF6B35), const Color(0xFFFF4E00)];
+        case 3:
+          return [const Color(0xFF9B59B6), const Color(0xFF6C3483)];
+        default:
+          return [const Color(0xFF00D67D), const Color(0xFF00A85E)];
+      }
+    }
+
+    Widget buildNetworkMosaicCard({
+      required String userName,
+      required String? imageUrl,
+      required double height,
+      required VoidCallback onTap,
+      VoidCallback? onMessage,
+      bool isCenter = false,
+      int? age,
+      String? profession,
+      double? distance,
+      String? timeAgo,
+      bool isOnline = false,
+      String? networkingCategory,
+    }) {
+      final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+      final gradientColors = getAvatarGradient(userName);
+      final firstName = userName.split(' ').first;
+
+      final bgGradient = BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      );
+
+      final placeholderWidget = Container(
+        decoration: bgGradient,
+        child: Center(
+          child: Text(
+            userInitial,
+            style: const TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+
+      final bool isAssetImage =
+          imageUrl != null && imageUrl.startsWith('assets/');
+      final bool isGooglePhoto =
+          imageUrl != null && imageUrl.contains('googleusercontent.com');
+      Widget imageWidget;
+      if (isAssetImage) {
+        imageWidget = SizedBox.expand(
+          child: Image.asset(
+            imageUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => placeholderWidget,
+          ),
+        );
+      } else if (imageUrl != null && imageUrl.isNotEmpty) {
+        imageWidget = CachedNetworkImage(
+          imageUrl: imageUrl,
+          placeholder: (context, url) => placeholderWidget,
+          errorWidget: (context, url, error) {
+            if (error.toString().contains('429')) {
+              PhotoUrlHelper.markAsRateLimited(url);
+            }
+            return placeholderWidget;
+          },
+          imageBuilder: (context, imageProvider) {
+            final child = SizedBox.expand(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade800,
+                  image:
+                      DecorationImage(image: imageProvider, fit: BoxFit.cover),
+                ),
+              ),
+            );
+            if (isGooglePhoto) {
+              return ClipRect(
+                  child: Transform.scale(scale: 1.5, child: child));
+            }
+            return child;
+          },
+        );
+      } else {
+        imageWidget = placeholderWidget;
+      }
+
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.25),
+              width: 1.5,
+            ),
+            boxShadow: [
+              if (isCenter)
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  spreadRadius: 1,
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18.5),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Image — grayscale for non-center cards
+                Positioned.fill(
+                  child: ColorFiltered(
+                    colorFilter: isCenter
+                        ? const ColorFilter.mode(
+                            Colors.transparent,
+                            BlendMode.multiply,
+                          )
+                        : const ColorFilter.mode(
+                            Colors.grey,
+                            BlendMode.saturation,
+                          ),
+                    child: imageWidget,
+                  ),
+                ),
+
+                // Networking category badge top-left
+                if (networkingCategory != null &&
+                    networkingCategory.isNotEmpty)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            networkingCategory,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Time ago badge top-right
+                if (timeAgo != null && timeAgo.isNotEmpty)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            timeAgo,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Glassmorphism info card at bottom
+                Positioned(
+                  left: 4,
+                  right: 4,
+                  bottom: 4,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Name + age + online dot
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    age != null
+                                        ? '$firstName, $age'
+                                        : firstName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: isOnline
+                                        ? const Color(0xFF00E676)
+                                        : Colors.grey.shade500,
+                                    shape: BoxShape.circle,
+                                    boxShadow: isOnline
+                                        ? [
+                                            BoxShadow(
+                                              color: const Color(0xFF00E676)
+                                                  .withValues(alpha: 0.6),
+                                              blurRadius: 4,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Profession
+                            if (profession != null && profession.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  profession,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            // Distance
+                            if (distance != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on,
+                                      size: 10,
+                                      color: Colors.white
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      distance < 1
+                                          ? '${(distance * 1000).toInt()} m'
+                                          : '${distance.toStringAsFixed(1)} km',
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.6),
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            // Message button
+                            if (onMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: GestureDetector(
+                                  onTap: onMessage,
+                                  child: Container(
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF007AFF),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Center(
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.chat_bubble_rounded,
+                                            size: 11,
+                                            color: Colors.white,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Message',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Subtle top-right shine for color cards
+                if (isCenter)
+                  Positioned(
+                    top: -20,
+                    right: -20,
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.15),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     Widget buildRequestCard({
@@ -941,7 +1346,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
       // Calculate distance string
       String? distanceStr;
-      if (myLat != null && myLng != null && otherLat != null && otherLng != null) {
+      if (myLat != null &&
+          myLng != null &&
+          otherLat != null &&
+          otherLng != null) {
         final km = calcDistance(myLat, myLng, otherLat, otherLng);
         if (km < 1) {
           distanceStr = '${(km * 1000).round()} m';
@@ -972,11 +1380,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           photo,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            color: const Color(0xFF016CFF).withValues(alpha: 0.3),
+                            color: const Color(
+                              0xFF016CFF,
+                            ).withValues(alpha: 0.3),
                             child: Center(
                               child: Text(
                                 initial,
-                                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: const TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -988,7 +1402,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       child: Center(
                         child: Text(
                           initial,
-                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: const TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -1067,14 +1485,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           behavior: HitTestBehavior.opaque,
                           onTap: () async {
                             HapticFeedback.mediumImpact();
-                            debugPrint('Confirm tapped: requestId=$requestId, isSent=$isSent, userId=$userId');
-                            final result = await connectionService.acceptConnectionRequest(requestId);
+                            debugPrint(
+                              'Confirm tapped: requestId=$requestId, isSent=$isSent, userId=$userId',
+                            );
+                            final result = await connectionService
+                                .acceptConnectionRequest(requestId);
                             debugPrint('Accept result: $result');
                             if (!context.mounted) return;
                             if (result['success'] == true) {
                               // Update Discover & Smart Connect tabs
-                              _discoverConnectKey.currentState?.updateConnectionCache(userId, true);
-                              _smartConnectKey.currentState?.updateConnectionCache(userId, true);
+                              _discoverConnectKey.currentState
+                                  ?.updateConnectionCache(userId, true);
+                              _smartConnectKey.currentState
+                                  ?.updateConnectionCache(userId, true);
                               // Navigate to profile detail with chat button
                               Navigator.push(
                                 context,
@@ -1084,7 +1507,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                       uid: userId,
                                       name: name,
                                       photoUrl: photo,
-                                      age: age is int ? age : int.tryParse('$age'),
+                                      age: age is int
+                                          ? age
+                                          : int.tryParse('$age'),
                                       occupation: occupation,
                                       latitude: otherLat,
                                       longitude: otherLng,
@@ -1127,9 +1552,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           onTap: () async {
                             HapticFeedback.lightImpact();
                             if (isSent) {
-                              await connectionService.cancelConnectionRequest(requestId);
+                              await connectionService.cancelConnectionRequest(
+                                requestId,
+                              );
                             } else {
-                              await connectionService.rejectConnectionRequest(requestId);
+                              await connectionService.rejectConnectionRequest(
+                                requestId,
+                              );
                             }
                           },
                           child: Container(
@@ -1137,7 +1566,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2),
+                              ),
                             ),
                             child: const Center(
                               child: Text(
@@ -1162,205 +1593,35 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       );
     }
 
-    // Connection card — for accepted/confirmed connections
-    Widget buildConnectionCard({
-      required BuildContext context,
-      required String userId,
-      required String name,
-      required String? photo,
-      required dynamic age,
-      required String? occupation,
-      required double? otherLat,
-      required double? otherLng,
-      required double? myLat,
-      required double? myLng,
-      required String timeAgo,
-    }) {
-      final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-      String? distanceStr;
-      if (myLat != null && myLng != null && otherLat != null && otherLng != null) {
-        final km = calcDistance(myLat, myLng, otherLat, otherLng);
-        if (km < 1) {
-          distanceStr = '${(km * 1000).round()} m';
-        } else {
-          distanceStr = '${km.toStringAsFixed(1)} km';
-        }
-      }
-
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => UserProfileDetailScreen(
-                user: ExtendedUserProfile(
-                  uid: userId,
-                  name: name,
-                  photoUrl: photo,
-                  age: age is int ? age : int.tryParse('$age'),
-                  occupation: occupation,
-                  latitude: otherLat,
-                  longitude: otherLng,
-                ),
-                connectionStatus: 'connected',
-              ),
-            ),
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                height: 100,
-                width: double.infinity,
-                child: photo != null && photo.isNotEmpty
-                    ? ClipRect(
-                        child: Transform.scale(
-                          scale: 1.35,
-                          child: Image.network(
-                            photo,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: const Color(0xFF016CFF).withValues(alpha: 0.3),
-                              child: Center(
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color: const Color(0xFF016CFF).withValues(alpha: 0.3),
-                        child: Center(
-                          child: Text(
-                            initial,
-                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 5, 8, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (timeAgo.isNotEmpty)
-                          Text(
-                            timeAgo,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.white.withValues(alpha: 0.35),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (occupation != null && occupation.isNotEmpty)
-                      Text(
-                        occupation,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.45),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (age != null)
-                          Text(
-                            '$age yrs',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ),
-                        if (distanceStr != null)
-                          Text(
-                            distanceStr,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // Single "Message" button
-                    Container(
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF016CFF),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat_bubble_rounded, size: 13, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Message',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // My Network tab — shows confirmed/accepted connections
+    // My Network tab — shows confirmed/accepted connections (5-column mosaic)
     Widget buildMyNetworkTab() {
       final connectionService = ConnectionService();
       final currentUid = _auth.currentUser?.uid;
 
+      const int columnCount = 5;
+      const double cardWidth = 145.0;
+      const double spacing = 8.0;
+      const List<double> heightPattern = [180, 240, 200, 260, 210];
+
+      String? resolveName(Map<String, dynamic> data) {
+        final name = data['name'] as String?;
+        if (name != null && name.isNotEmpty && name != 'User' && name != 'Unknown') return name;
+        final displayName = data['displayName'] as String?;
+        if (displayName != null && displayName.isNotEmpty && displayName != 'User' && displayName != 'Unknown') return displayName;
+        final phone = data['phone'] as String?;
+        if (phone != null && phone.isNotEmpty) return phone;
+        return null;
+      }
+
       return FutureBuilder<DocumentSnapshot>(
-        future: currentUid != null ? _firestore.collection('users').doc(currentUid).get() : null,
+        future: currentUid != null
+            ? _firestore.collection('users').doc(currentUid).get()
+            : null,
         builder: (context, mySnap) {
           final myData = mySnap.data?.data() as Map<String, dynamic>?;
           final myLat = (myData?['latitude'] as num?)?.toDouble();
           final myLng = (myData?['longitude'] as num?)?.toDouble();
 
-          // Two nested StreamBuilders: accepted as receiver + accepted as sender
           return StreamBuilder<List<Map<String, dynamic>>>(
             stream: connectionService.getAcceptedAsReceiverStream(),
             builder: (context, receiverSnap) {
@@ -1369,13 +1630,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 builder: (context, senderSnap) {
                   if (receiverSnap.connectionState == ConnectionState.waiting &&
                       senderSnap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Colors.white));
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
                   }
 
                   if (receiverSnap.hasError || senderSnap.hasError) {
-                    final error = (receiverSnap.error ?? senderSnap.error).toString();
+                    final error = (receiverSnap.error ?? senderSnap.error)
+                        .toString();
                     return Center(
-                      child: Text('Error: $error', style: TextStyle(color: Colors.red.shade300, fontSize: 14)),
+                      child: Text(
+                        'Error: $error',
+                        style: TextStyle(
+                          color: Colors.red.shade300,
+                          fontSize: 14,
+                        ),
+                      ),
                     );
                   }
 
@@ -1383,10 +1653,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   final asSender = senderSnap.data ?? [];
                   final connections = [...asReceiver, ...asSender];
 
-                  // Sort by updatedAt descending (most recently accepted first)
                   connections.sort((a, b) {
-                    final aTime = a['updatedAt'] as Timestamp? ?? a['createdAt'] as Timestamp?;
-                    final bTime = b['updatedAt'] as Timestamp? ?? b['createdAt'] as Timestamp?;
+                    final aTime =
+                        a['updatedAt'] as Timestamp? ??
+                        a['createdAt'] as Timestamp?;
+                    final bTime =
+                        b['updatedAt'] as Timestamp? ??
+                        b['createdAt'] as Timestamp?;
                     if (aTime == null || bTime == null) return 0;
                     return bTime.compareTo(aTime);
                   });
@@ -1424,90 +1697,240 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     );
                   }
 
-                  return MasonryGridView.count(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    itemCount: connections.length,
-                    itemBuilder: (context, index) {
-                      final conn = connections[index];
-                      final updatedAt = conn['updatedAt'] as Timestamp? ?? conn['createdAt'] as Timestamp?;
-                      final timeAgo = updatedAt != null ? formatTimeAgo(updatedAt.toDate()) : '';
+                  // Build 5-column mosaic
+                  final List<List<int>> columns = List.generate(
+                    columnCount,
+                    (_) => [],
+                  );
+                  for (int i = 0; i < connections.length; i++) {
+                    columns[i % columnCount].add(i);
+                  }
 
-                      // Determine the OTHER user's ID
-                      final senderId = conn['senderId'] as String;
-                      final receiverId = conn['receiverId'] as String;
-                      final otherUserId = senderId == currentUid ? receiverId : senderId;
+                  bool isColorCard(int index) => index % 3 == 0;
 
-                      // Get stored profile info for the other user
-                      final storedName = senderId == currentUid
-                          ? conn['receiverName'] as String?
-                          : conn['senderName'] as String?;
-                      final storedPhoto = senderId == currentUid
-                          ? conn['receiverPhoto'] as String?
-                          : conn['senderPhoto'] as String?;
-                      final storedAge = senderId == currentUid
-                          ? conn['receiverAge']
-                          : conn['senderAge'];
-                      final storedOccupation = senderId == currentUid
-                          ? conn['receiverOccupation'] as String?
-                          : conn['senderOccupation'] as String?;
-                      final storedLat = senderId == currentUid
-                          ? (conn['receiverLatitude'] as num?)?.toDouble()
-                          : (conn['senderLatitude'] as num?)?.toDouble();
-                      final storedLng = senderId == currentUid
-                          ? (conn['receiverLongitude'] as num?)?.toDouble()
-                          : (conn['senderLongitude'] as num?)?.toDouble();
+                  Widget buildCardAt(int index) {
+                    final conn = connections[index];
+                    final updatedAt =
+                        conn['updatedAt'] as Timestamp? ??
+                        conn['createdAt'] as Timestamp?;
+                    final timeAgo = updatedAt != null
+                        ? formatTimeAgo(updatedAt.toDate())
+                        : '';
 
-                      final needsFetch = storedName == null || storedName.isEmpty || storedName.length > 30;
+                    final senderId = conn['senderId'] as String;
+                    final receiverId = conn['receiverId'] as String;
+                    final otherUserId = senderId == currentUid
+                        ? receiverId
+                        : senderId;
 
-                      if (needsFetch) {
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: _firestore.collection('users').doc(otherUserId).get(),
-                          builder: (context, userSnap) {
-                            if (userSnap.connectionState == ConnectionState.waiting) {
-                              return Container(
-                                height: 160,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(16),
+                    final storedName = senderId == currentUid
+                        ? conn['receiverName'] as String?
+                        : conn['senderName'] as String?;
+                    final storedPhoto = senderId == currentUid
+                        ? conn['receiverPhoto'] as String?
+                        : conn['senderPhoto'] as String?;
+                    final storedAge = senderId == currentUid
+                        ? conn['receiverAge']
+                        : conn['senderAge'];
+                    final storedOccupation = senderId == currentUid
+                        ? conn['receiverOccupation'] as String?
+                        : conn['senderOccupation'] as String?;
+                    final storedLat = senderId == currentUid
+                        ? (conn['receiverLatitude'] as num?)?.toDouble()
+                        : (conn['senderLatitude'] as num?)?.toDouble();
+                    final storedLng = senderId == currentUid
+                        ? (conn['receiverLongitude'] as num?)?.toDouble()
+                        : (conn['senderLongitude'] as num?)?.toDouble();
+
+                    final int col = index % columnCount;
+                    final int row = index ~/ columnCount;
+                    final double cardHeight =
+                        heightPattern[(col + row) % heightPattern.length];
+
+                    // Calculate stored distance for fallback
+                    double? storedDist;
+                    if (myLat != null && myLng != null &&
+                        storedLat != null && storedLng != null) {
+                      storedDist = calcDistance(myLat, myLng, storedLat, storedLng);
+                    }
+                    final storedAgeInt = storedAge is int
+                        ? storedAge
+                        : int.tryParse('${storedAge ?? ''}');
+
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: _firestore
+                          .collection('users')
+                          .doc(otherUserId)
+                          .get(),
+                      builder: (context, userSnap) {
+                        if (userSnap.connectionState ==
+                            ConnectionState.waiting) {
+                          final fallbackPhoto = storedPhoto != null
+                              ? PhotoUrlHelper.fixGooglePhotoUrl(storedPhoto)
+                              : null;
+                          return buildNetworkMosaicCard(
+                            userName: storedName ?? 'Loading...',
+                            imageUrl: fallbackPhoto,
+                            height: cardHeight,
+                            isCenter: isColorCard(index),
+                            onTap: () {},
+                            age: storedAgeInt,
+                            profession: storedOccupation,
+                            distance: storedDist,
+                            timeAgo: timeAgo,
+                          );
+                        }
+                        final userData =
+                            userSnap.data?.data() as Map<String, dynamic>? ??
+                            {};
+                        final name = resolveName(userData) ??
+                            storedName ?? 'Unknown';
+                        final photo =
+                            userData['photoUrl'] as String? ?? storedPhoto;
+                        final fetchedAge = userData['age'] ?? storedAge;
+                        final occupation =
+                            userData['occupation'] as String? ??
+                            storedOccupation;
+                        final userLat =
+                            (userData['latitude'] as num?)?.toDouble() ??
+                            storedLat;
+                        final userLng =
+                            (userData['longitude'] as num?)?.toDouble() ??
+                            storedLng;
+                        final isOnline =
+                            userData['isOnline'] as bool? ?? false;
+                        final networkingCat =
+                            userData['networkingCategory'] as String?;
+
+                        double? fetchedDist;
+                        if (myLat != null && myLng != null &&
+                            userLat != null && userLng != null) {
+                          fetchedDist = calcDistance(
+                            myLat, myLng, userLat, userLng,
+                          );
+                        }
+
+                        final fixedPhoto = photo != null
+                            ? PhotoUrlHelper.fixGooglePhotoUrl(photo)
+                            : null;
+
+                        return buildNetworkMosaicCard(
+                          userName: name,
+                          imageUrl: fixedPhoto,
+                          height: cardHeight,
+                          isCenter: isColorCard(index),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileDetailScreen(
+                                  user: ExtendedUserProfile(
+                                    uid: otherUserId,
+                                    name: name,
+                                    photoUrl: fixedPhoto,
+                                    age: fetchedAge is int
+                                        ? fetchedAge
+                                        : int.tryParse('${fetchedAge ?? ''}'),
+                                    occupation: occupation,
+                                    latitude: userLat,
+                                    longitude: userLng,
+                                    distance: fetchedDist,
+                                  ),
+                                  connectionStatus: 'connected',
                                 ),
-                                child: const Center(child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2)),
-                              );
-                            }
-                            final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
-                            return buildConnectionCard(
-                              context: context,
-                              userId: otherUserId,
-                              name: userData['name'] as String? ?? 'Unknown',
-                              photo: userData['photoUrl'] as String?,
-                              age: userData['age'],
-                              occupation: userData['occupation'] as String?,
-                              otherLat: (userData['latitude'] as num?)?.toDouble(),
-                              otherLng: (userData['longitude'] as num?)?.toDouble(),
-                              myLat: myLat,
-                              myLng: myLng,
-                              timeAgo: timeAgo,
+                              ),
                             );
                           },
+                          onMessage: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EnhancedChatScreen(
+                                  otherUser: UserProfile(
+                                    uid: otherUserId,
+                                    name: name,
+                                    email: '',
+                                    profileImageUrl: fixedPhoto,
+                                    location: '',
+                                    latitude: userLat,
+                                    longitude: userLng,
+                                    createdAt: DateTime.now(),
+                                    lastSeen: DateTime.now(),
+                                    isOnline: isOnline,
+                                  ),
+                                  source: 'Networking',
+                                ),
+                              ),
+                            );
+                          },
+                          age: fetchedAge is int
+                              ? fetchedAge
+                              : int.tryParse('${fetchedAge ?? ''}'),
+                          profession: occupation,
+                          distance: fetchedDist,
+                          timeAgo: timeAgo,
+                          isOnline: isOnline,
+                          networkingCategory: networkingCat,
                         );
-                      }
+                      },
+                    );
+                  }
 
-                      return buildConnectionCard(
-                        context: context,
-                        userId: otherUserId,
-                        name: storedName,
-                        photo: storedPhoto,
-                        age: storedAge,
-                        occupation: storedOccupation,
-                        otherLat: storedLat,
-                        otherLng: storedLng,
-                        myLat: myLat,
-                        myLng: myLng,
-                        timeAgo: timeAgo,
-                      );
-                    },
+                  // Scroll to center only when content is wider than screen
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_myNetworkScrollController.hasClients &&
+                        _myNetworkScrollController.position.pixels == 0) {
+                      final totalWidth =
+                          (cardWidth + spacing) * columnCount - spacing + 24;
+                      final screenWidth = MediaQuery.of(context).size.width;
+                      final centerOffset = (totalWidth - screenWidth) / 2;
+                      if (centerOffset > 0) {
+                        _myNetworkScrollController.jumpTo(centerOffset);
+                      }
+                    }
+                  });
+
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    child: SingleChildScrollView(
+                      controller: _myNetworkScrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 12, 16, 90),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: List.generate(columnCount, (colIndex) {
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: colIndex < columnCount - 1
+                                    ? spacing
+                                    : 0,
+                              ),
+                              child: SizedBox(
+                                width: cardWidth,
+                                child: Column(
+                                  children: columns[colIndex].map((
+                                    cardIndex,
+                                  ) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: spacing,
+                                      ),
+                                      child: buildCardAt(cardIndex),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
                   );
                 },
               );
@@ -1523,210 +1946,256 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       final currentUid = _auth.currentUser?.uid;
       // First fetch current user's location for distance calculation
       return FutureBuilder<DocumentSnapshot>(
-        future: currentUid != null ? _firestore.collection('users').doc(currentUid).get() : null,
+        future: currentUid != null
+            ? _firestore.collection('users').doc(currentUid).get()
+            : null,
         builder: (context, mySnap) {
           final myData = mySnap.data?.data() as Map<String, dynamic>?;
           final myLat = (myData?['latitude'] as num?)?.toDouble();
           final myLng = (myData?['longitude'] as num?)?.toDouble();
 
-      // Use two nested StreamBuilders for reliable real-time updates
-      return StreamBuilder<List<Map<String, dynamic>>>(
-        stream: connectionService.getPendingRequestsStream(),
-        builder: (context, receivedSnapshot) {
+          // Use two nested StreamBuilders for reliable real-time updates
           return StreamBuilder<List<Map<String, dynamic>>>(
-            stream: connectionService.getSentRequestsStream(),
-            builder: (context, sentSnapshot) {
-              if (receivedSnapshot.connectionState == ConnectionState.waiting &&
-                  sentSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Colors.white));
-              }
+            stream: connectionService.getPendingRequestsStream(),
+            builder: (context, receivedSnapshot) {
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                stream: connectionService.getSentRequestsStream(),
+                builder: (context, sentSnapshot) {
+                  if (receivedSnapshot.connectionState ==
+                          ConnectionState.waiting &&
+                      sentSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
+                  }
 
-              // Show errors
-              if (receivedSnapshot.hasError || sentSnapshot.hasError) {
-                final error = (receivedSnapshot.error ?? sentSnapshot.error).toString();
-                debugPrint('Requests tab error: $error');
-                if (error.contains('index') || error.contains('FAILED_PRECONDITION')) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
+                  // Show errors
+                  if (receivedSnapshot.hasError || sentSnapshot.hasError) {
+                    final error = (receivedSnapshot.error ?? sentSnapshot.error)
+                        .toString();
+                    debugPrint('Requests tab error: $error');
+                    if (error.contains('index') ||
+                        error.contains('FAILED_PRECONDITION')) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.build_rounded,
+                                size: 60,
+                                color: Colors.orange.withValues(alpha: 0.6),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Firestore index required',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Check console logs for the index creation link.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    return Center(
+                      child: Text(
+                        'Error: $error',
+                        style: TextStyle(
+                          color: Colors.red.shade300,
+                          fontSize: 14,
+                        ),
+                      ),
+                    );
+                  }
+
+                  // Combine both lists
+                  final received = receivedSnapshot.data ?? [];
+                  final sent = sentSnapshot.data ?? [];
+                  final requests = [...received, ...sent];
+                  // Sort by createdAt descending
+                  requests.sort((a, b) {
+                    final aTime = a['createdAt'] as Timestamp?;
+                    final bTime = b['createdAt'] as Timestamp?;
+                    if (aTime == null || bTime == null) return 0;
+                    return bTime.compareTo(aTime);
+                  });
+
+                  if (requests.isEmpty) {
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.build_rounded, size: 60, color: Colors.orange.withValues(alpha: 0.6)),
+                          Icon(
+                            Icons.person_add_disabled_rounded,
+                            size: 72,
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'Firestore index required',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
+                          Text(
+                            'No pending requests',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Check console logs for the index creation link.',
+                            'When someone sends you a connect request,\nit will appear here',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.5)),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withValues(alpha: 0.35),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  );
-                }
-                return Center(
-                  child: Text('Error: $error', style: TextStyle(color: Colors.red.shade300, fontSize: 14)),
-                );
-              }
-
-              // Combine both lists
-              final received = receivedSnapshot.data ?? [];
-              final sent = sentSnapshot.data ?? [];
-              final requests = [...received, ...sent];
-              // Sort by createdAt descending
-              requests.sort((a, b) {
-                final aTime = a['createdAt'] as Timestamp?;
-                final bTime = b['createdAt'] as Timestamp?;
-                if (aTime == null || bTime == null) return 0;
-                return bTime.compareTo(aTime);
-              });
-
-          if (requests.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.person_add_disabled_rounded,
-                    size: 72,
-                    color: Colors.white.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No pending requests',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'When someone sends you a connect request,\nit will appear here',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withValues(alpha: 0.35),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return MasonryGridView.count(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            itemCount: requests.length,
-            itemBuilder: (context, index) {
-              final request = requests[index];
-              final isSent = request['requestType'] == 'sent';
-              final requestId = request['id'] as String;
-              final createdAt = request['createdAt'] as Timestamp?;
-              final timeAgo = createdAt != null
-                  ? formatTimeAgo(createdAt.toDate())
-                  : '';
-
-              // Get the other user's ID to fetch their profile
-              final otherUserId = isSent
-                  ? request['receiverId'] as String
-                  : request['senderId'] as String;
-
-              // Check if we already have name/photo from the request doc
-              final storedName = isSent
-                  ? request['receiverName'] as String?
-                  : request['senderName'] as String?;
-              final storedPhoto = isSent
-                  ? request['receiverPhoto'] as String?
-                  : request['senderPhoto'] as String?;
-              final storedAge = isSent
-                  ? request['receiverAge']
-                  : request['senderAge'];
-              final storedOccupation = isSent
-                  ? request['receiverOccupation'] as String?
-                  : request['senderOccupation'] as String?;
-              final storedLat = isSent
-                  ? (request['receiverLatitude'] as num?)?.toDouble()
-                  : (request['senderLatitude'] as num?)?.toDouble();
-              final storedLng = isSent
-                  ? (request['receiverLongitude'] as num?)?.toDouble()
-                  : (request['senderLongitude'] as num?)?.toDouble();
-
-              // If name looks like a UID (no stored name), fetch from Firestore
-              final needsFetch = storedName == null || storedName.isEmpty || storedName.length > 30;
-
-              if (needsFetch) {
-                // Fetch user profile for old requests that don't have stored info
-                return FutureBuilder<DocumentSnapshot>(
-                  future: _firestore.collection('users').doc(otherUserId).get(),
-                  builder: (context, userSnap) {
-                    if (userSnap.connectionState == ConnectionState.waiting) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Center(child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2)),
-                      );
-                    }
-                    final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
-                    final name = userData['name'] as String? ?? 'Unknown';
-                    final photo = userData['photoUrl'] as String?;
-                    final age = userData['age'];
-                    final occupation = userData['occupation'] as String?;
-                    final userLat = (userData['latitude'] as num?)?.toDouble();
-                    final userLng = (userData['longitude'] as num?)?.toDouble();
-                    return buildRequestCard(
-                      context: context,
-                      userId: otherUserId,
-                      name: name,
-                      photo: photo,
-                      age: age,
-                      occupation: occupation,
-                      otherLat: userLat,
-                      otherLng: userLng,
-                      myLat: myLat,
-                      myLng: myLng,
-                      timeAgo: timeAgo,
-                      isSent: isSent,
-                      requestId: requestId,
-                      connectionService: connectionService,
                     );
-                  },
-                );
-              }
+                  }
 
-              return buildRequestCard(
-                context: context,
-                userId: otherUserId,
-                name: storedName,
-                photo: storedPhoto,
-                age: storedAge,
-                occupation: storedOccupation,
-                otherLat: storedLat,
-                otherLng: storedLng,
-                myLat: myLat,
-                myLng: myLng,
-                timeAgo: timeAgo,
-                isSent: isSent,
-                requestId: requestId,
-                connectionService: connectionService,
-              );
-            },
-          );
-        },  // inner StreamBuilder builder
-          );  // inner StreamBuilder
-        },  // outer StreamBuilder builder
-      );  // outer StreamBuilder
-        },  // FutureBuilder builder
-      );  // FutureBuilder
+                  return MasonryGridView.count(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    itemCount: requests.length,
+                    itemBuilder: (context, index) {
+                      final request = requests[index];
+                      final isSent = request['requestType'] == 'sent';
+                      final requestId = request['id'] as String;
+                      final createdAt = request['createdAt'] as Timestamp?;
+                      final timeAgo = createdAt != null
+                          ? formatTimeAgo(createdAt.toDate())
+                          : '';
+
+                      // Get the other user's ID to fetch their profile
+                      final otherUserId = isSent
+                          ? request['receiverId'] as String
+                          : request['senderId'] as String;
+
+                      // Check if we already have name/photo from the request doc
+                      final storedName = isSent
+                          ? request['receiverName'] as String?
+                          : request['senderName'] as String?;
+                      final storedPhoto = isSent
+                          ? request['receiverPhoto'] as String?
+                          : request['senderPhoto'] as String?;
+                      final storedAge = isSent
+                          ? request['receiverAge']
+                          : request['senderAge'];
+                      final storedOccupation = isSent
+                          ? request['receiverOccupation'] as String?
+                          : request['senderOccupation'] as String?;
+                      final storedLat = isSent
+                          ? (request['receiverLatitude'] as num?)?.toDouble()
+                          : (request['senderLatitude'] as num?)?.toDouble();
+                      final storedLng = isSent
+                          ? (request['receiverLongitude'] as num?)?.toDouble()
+                          : (request['senderLongitude'] as num?)?.toDouble();
+
+                      // If name looks like a UID (no stored name), fetch from Firestore
+                      final needsFetch =
+                          storedName == null ||
+                          storedName.isEmpty ||
+                          storedName.length > 30;
+
+                      if (needsFetch) {
+                        // Fetch user profile for old requests that don't have stored info
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: _firestore
+                              .collection('users')
+                              .doc(otherUserId)
+                              .get(),
+                          builder: (context, userSnap) {
+                            if (userSnap.connectionState ==
+                                ConnectionState.waiting) {
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white38,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            }
+                            final userData =
+                                userSnap.data?.data()
+                                    as Map<String, dynamic>? ??
+                                {};
+                            final name =
+                                userData['name'] as String? ?? 'Unknown';
+                            final photo = userData['photoUrl'] as String?;
+                            final age = userData['age'];
+                            final occupation =
+                                userData['occupation'] as String?;
+                            final userLat = (userData['latitude'] as num?)
+                                ?.toDouble();
+                            final userLng = (userData['longitude'] as num?)
+                                ?.toDouble();
+                            return buildRequestCard(
+                              context: context,
+                              userId: otherUserId,
+                              name: name,
+                              photo: photo,
+                              age: age,
+                              occupation: occupation,
+                              otherLat: userLat,
+                              otherLng: userLng,
+                              myLat: myLat,
+                              myLng: myLng,
+                              timeAgo: timeAgo,
+                              isSent: isSent,
+                              requestId: requestId,
+                              connectionService: connectionService,
+                            );
+                          },
+                        );
+                      }
+
+                      return buildRequestCard(
+                        context: context,
+                        userId: otherUserId,
+                        name: storedName,
+                        photo: storedPhoto,
+                        age: storedAge,
+                        occupation: storedOccupation,
+                        otherLat: storedLat,
+                        otherLng: storedLng,
+                        myLat: myLat,
+                        myLng: myLng,
+                        timeAgo: timeAgo,
+                        isSent: isSent,
+                        requestId: requestId,
+                        connectionService: connectionService,
+                      );
+                    },
+                  );
+                }, // inner StreamBuilder builder
+              ); // inner StreamBuilder
+            }, // outer StreamBuilder builder
+          ); // outer StreamBuilder
+        }, // FutureBuilder builder
+      ); // FutureBuilder
     }
 
     // Create bottom navigation bar widget with gradient like AppBar
@@ -1736,11 +2205,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Color.fromRGBO(40, 40, 40, 1),
+                  Color.fromRGBO(64, 64, 64, 1),
+                ],
               ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border(top: BorderSide(color: Colors.white, width: 0.5)),
             ),
             child: SafeArea(
               top: false,
@@ -1803,6 +2278,66 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           shadowColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
+          leadingWidth: 56,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MyNetworkingProfileScreen(),
+                  ),
+                );
+              },
+              child: Center(
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                  child: ClipOval(
+                    child: Builder(
+                      builder: (context) {
+                        final user = _auth.currentUser;
+                        final photoUrl = user?.photoURL;
+                        if (photoUrl != null && photoUrl.isNotEmpty) {
+                          return CachedNetworkImage(
+                            imageUrl: photoUrl,
+                            width: 34,
+                            height: 34,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Icon(
+                              Icons.person_rounded,
+                              size: 18,
+                              color: Colors.white54,
+                            ),
+                            errorWidget: (context, url, error) => const Icon(
+                              Icons.person_rounded,
+                              size: 18,
+                              color: Colors.white54,
+                            ),
+                          );
+                        }
+                        return const Icon(
+                          Icons.person_rounded,
+                          size: 18,
+                          color: Colors.white54,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           title: const Text(
             'Networking',
             style: TextStyle(
@@ -1817,66 +2352,69 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               stream: ConnectionService().getPendingRequestsCountStream(),
               builder: (context, snapshot) {
                 final count = snapshot.data ?? 0;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PendingRequestsScreen(),
-                      ),
-                    );
-                  },
-                  child: SizedBox(
-                    width: 44,
-                    height: 36,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.person_add_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PendingRequestsScreen(),
                         ),
-                        if (count > 0)
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: Colors.redAccent,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                count > 9 ? '9+' : '$count',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
+                      );
+                    },
+                    child: SizedBox(
+                      width: 44,
+                      height: 36,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
                               ),
                             ),
+                            child: const Icon(
+                              Icons.person_add_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
-                      ],
+                          if (count > 0)
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.redAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  count > 9 ? '9+' : '$count',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -1908,7 +2446,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       ),
                     ),
                     child: const Icon(
-                      Icons.tune_rounded,
+                      Icons.filter_list_rounded,
                       color: Colors.white,
                       size: 20,
                     ),
@@ -1943,10 +2481,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   fontSize: 15,
                   fontWeight: FontWeight.normal,
                 ),
-                tabs: [
-                  const Tab(text: 'Discover Connect'),
-                  const Tab(text: 'Smart Connect'),
-                  const Tab(text: 'My Network'),
+                tabs: const [
+                  Tab(text: 'Discover '),
+                  Tab(text: 'Smart '),
+                  Tab(text: 'My Network'),
                 ],
               ),
             ),
@@ -1967,31 +2505,54 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             ),
           ),
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(0, 0, 0, 1),
-              ],
+        body: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(64, 64, 64, 1),
+                    Color.fromRGBO(0, 0, 0, 1),
+                  ],
+                ),
+              ),
+              child: TabBarView(
+                controller: _networkingTabController,
+                children: [
+                  LiveConnectTabScreen(
+                    key: _discoverConnectKey,
+                    activateNetworkingFilter: false,
+                  ),
+                  LiveConnectTabScreen(
+                    key: _smartConnectKey,
+                    activateNetworkingFilter: true,
+                  ),
+                  buildMyNetworkTab(),
+                ],
+              ),
             ),
-          ),
-          child: TabBarView(
-            controller: _networkingTabController,
-            children: [
-              LiveConnectTabScreen(
-                key: _discoverConnectKey,
-                activateNetworkingFilter: false,
+            // Floating Action Button - Create Networking Profile
+            Positioned(
+              bottom: 75,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CreateNetworkingProfileScreen(),
+                    ),
+                  );
+                },
+                backgroundColor: const Color(0xFF007AFF),
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
               ),
-              LiveConnectTabScreen(
-                key: _smartConnectKey,
-                activateNetworkingFilter: true,
-              ),
-              buildMyNetworkTab(),
-            ],
-          ),
+            ),
+          ],
         ),
         bottomNavigationBar: buildBottomNavBar(),
       );

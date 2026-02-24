@@ -92,9 +92,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             final isDarkMode = Theme.of(context).brightness == Brightness.dark;
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(32, 32, 32, 1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(32, 32, 32, 1),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -102,11 +102,24 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        const Icon(Icons.favorite_rounded, color: Color(0xFFFF6B6B), size: 20),
+                        const Icon(
+                          Icons.favorite_rounded,
+                          color: Color(0xFFFF6B6B),
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        const Text('All Interests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'All Interests',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const Spacer(),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
                       ],
                     ),
                   ),
@@ -117,7 +130,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                         spacing: 8,
                         runSpacing: 8,
                         children: widget.availableInterests.map((interest) {
-                          final isSelected = _selectedInterests.contains(interest);
+                          final isSelected = _selectedInterests.contains(
+                            interest,
+                          );
                           return GestureDetector(
                             onTap: () {
                               setDialogState(() {
@@ -130,15 +145,31 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                               setState(() {});
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFFFF6B6B).withValues(alpha: 0.2) : Colors.grey[850],
+                                color: isSelected
+                                    ? const Color(
+                                        0xFFFF6B6B,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.grey[850],
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: isSelected ? const Color(0xFFFF6B6B) : Colors.grey[700]!),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFFF6B6B)
+                                      : Colors.grey[700]!,
+                                ),
                               ),
                               child: Text(
                                 interest,
-                                style: TextStyle(fontSize: 13, color: isSelected ? const Color(0xFFFF6B6B) : Colors.grey[400]),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? const Color(0xFFFF6B6B)
+                                      : Colors.grey[400],
+                                ),
                               ),
                             ),
                           );
@@ -156,7 +187,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
   }
 
   void _showAllConnectionTypesDialog() {
-    final allTypes = widget.connectionTypeGroups.values.expand((e) => e).toList();
+    final allTypes = widget.connectionTypeGroups.values
+        .expand((e) => e)
+        .toList();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -167,9 +200,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             final isDarkMode = Theme.of(context).brightness == Brightness.dark;
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(32, 32, 32, 1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(32, 32, 32, 1),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -177,11 +210,24 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        const Icon(Icons.connect_without_contact_rounded, color: Color(0xFF9C27B0), size: 20),
+                        const Icon(
+                          Icons.connect_without_contact_rounded,
+                          color: Color(0xFF9C27B0),
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        const Text('All Connection Types', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'All Connection Types',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const Spacer(),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
                       ],
                     ),
                   ),
@@ -192,7 +238,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                         spacing: 8,
                         runSpacing: 8,
                         children: allTypes.map((type) {
-                          final isSelected = _selectedConnectionTypes.contains(type);
+                          final isSelected = _selectedConnectionTypes.contains(
+                            type,
+                          );
                           return GestureDetector(
                             onTap: () {
                               setDialogState(() {
@@ -205,13 +253,32 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                               setState(() {});
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF9C27B0).withValues(alpha: 0.2) : Colors.grey[850],
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: isSelected ? const Color(0xFF9C27B0) : Colors.grey[700]!),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                              child: Text(type, style: TextStyle(fontSize: 13, color: isSelected ? const Color(0xFF9C27B0) : Colors.grey[400])),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(
+                                        0xFF9C27B0,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.grey[850],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF9C27B0)
+                                      : Colors.grey[700]!,
+                                ),
+                              ),
+                              child: Text(
+                                type,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? const Color(0xFF9C27B0)
+                                      : Colors.grey[400],
+                                ),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -228,7 +295,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
   }
 
   void _showAllActivitiesDialog() {
-    final allActivities = widget.activityGroups.values.expand((e) => e).toList();
+    final allActivities = widget.activityGroups.values
+        .expand((e) => e)
+        .toList();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -239,9 +308,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             final isDarkMode = Theme.of(context).brightness == Brightness.dark;
             return Container(
               height: MediaQuery.of(context).size.height * 0.7,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(32, 32, 32, 1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              decoration: const BoxDecoration(
+                color: Color.fromRGBO(32, 32, 32, 1),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -249,11 +318,24 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        const Icon(Icons.sports_tennis_rounded, color: Color(0xFFFF9800), size: 20),
+                        const Icon(
+                          Icons.sports_tennis_rounded,
+                          color: Color(0xFFFF9800),
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        const Text('All Activities', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'All Activities',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const Spacer(),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
                       ],
                     ),
                   ),
@@ -264,7 +346,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                         spacing: 8,
                         runSpacing: 8,
                         children: allActivities.map((activity) {
-                          final isSelected = _selectedActivities.contains(activity);
+                          final isSelected = _selectedActivities.contains(
+                            activity,
+                          );
                           return GestureDetector(
                             onTap: () {
                               setDialogState(() {
@@ -277,13 +361,32 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                               setState(() {});
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFFFF9800).withValues(alpha: 0.2) : Colors.grey[850],
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: isSelected ? const Color(0xFFFF9800) : Colors.grey[700]!),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                              child: Text(activity, style: TextStyle(fontSize: 13, color: isSelected ? const Color(0xFFFF9800) : Colors.grey[400])),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(
+                                        0xFFFF9800,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.grey[850],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFFF9800)
+                                      : Colors.grey[700]!,
+                                ),
+                              ),
+                              child: Text(
+                                activity,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? const Color(0xFFFF9800)
+                                      : Colors.grey[400],
+                                ),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -319,13 +422,26 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
             padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.tune_rounded, color: Color(0xFF00D67D), size: 20),
+                const Icon(
+                  Icons.tune_rounded,
+                  color: Color(0xFF00D67D),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
-                Text('Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textColor)),
+                Text(
+                  'Filters',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () {
@@ -338,7 +454,10 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                       _distanceFilter = 50;
                     });
                   },
-                  child: Text('Reset', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                  child: Text(
+                    'Reset',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -358,7 +477,11 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // === LOCATION SECTION ===
-                  _buildSectionHeader('Location', Icons.location_on_rounded, const Color(0xFF00D67D)),
+                  _buildSectionHeader(
+                    'Location',
+                    Icons.location_on_rounded,
+                    const Color(0xFF00D67D),
+                  ),
                   const SizedBox(height: 12),
 
                   // Location buttons
@@ -367,11 +490,14 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                       final isSelected = _locationFilter == filter;
                       return Expanded(
                         child: Padding(
-                          padding: EdgeInsets.only(right: filter != 'Worldwide' ? 8 : 0),
+                          padding: EdgeInsets.only(
+                            right: filter != 'Worldwide' ? 8 : 0,
+                          ),
                           child: GestureDetector(
                             onTap: () async {
                               if (filter == 'Near me') {
-                                final hasPermission = await widget.checkLocationPermission();
+                                final hasPermission = await widget
+                                    .checkLocationPermission();
                                 if (!hasPermission) return;
                               }
                               setState(() => _locationFilter = filter);
@@ -379,17 +505,27 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF00D67D) : Colors.transparent,
+                                color: isSelected
+                                    ? const Color(0xFF00D67D)
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: isSelected ? const Color(0xFF00D67D) : Colors.grey[700]!),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF00D67D)
+                                      : Colors.grey[700]!,
+                                ),
                               ),
                               child: Center(
                                 child: Text(
                                   filter,
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                    color: isSelected ? Colors.white : subtextColor,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : subtextColor,
                                   ),
                                 ),
                               ),
@@ -406,16 +542,28 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Distance', style: TextStyle(fontSize: 13, color: subtextColor)),
+                        Text(
+                          'Distance',
+                          style: TextStyle(fontSize: 13, color: subtextColor),
+                        ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00D67D).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFF00D67D,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             '${_distanceFilter.round()} km',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF00D67D)),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF00D67D),
+                            ),
                           ),
                         ),
                       ],
@@ -425,16 +573,21 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                         activeTrackColor: const Color(0xFF00D67D),
                         inactiveTrackColor: Colors.grey[800],
                         thumbColor: const Color(0xFF00D67D),
-                        overlayColor: const Color(0xFF00D67D).withValues(alpha: 0.2),
+                        overlayColor: const Color(
+                          0xFF00D67D,
+                        ).withValues(alpha: 0.2),
                         trackHeight: 3,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 8,
+                        ),
                       ),
                       child: Slider(
                         value: _distanceFilter,
                         min: 1,
                         max: 500,
                         divisions: 499,
-                        onChanged: (value) => setState(() => _distanceFilter = value),
+                        onChanged: (value) =>
+                            setState(() => _distanceFilter = value),
                       ),
                     ),
                   ],
@@ -442,14 +595,22 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   const SizedBox(height: 20),
 
                   // === GENDER SECTION ===
-                  _buildSectionHeader('Gender', Icons.people_rounded, const Color(0xFF4A90E2)),
+                  _buildSectionHeader(
+                    'Gender',
+                    Icons.people_rounded,
+                    const Color(0xFF4A90E2),
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: widget.availableGenders.map((gender) {
                       final isSelected = _selectedGenders.contains(gender);
                       return Expanded(
                         child: Padding(
-                          padding: EdgeInsets.only(right: gender != widget.availableGenders.last ? 8 : 0),
+                          padding: EdgeInsets.only(
+                            right: gender != widget.availableGenders.last
+                                ? 8
+                                : 0,
+                          ),
                           child: GestureDetector(
                             onTap: () {
                               setState(() {
@@ -463,20 +624,30 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF4A90E2).withValues(alpha: 0.2) : Colors.transparent,
+                                color: isSelected
+                                    ? const Color(
+                                        0xFF4A90E2,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF4A90E2) : Colors.grey[700]!,
+                                  color: isSelected
+                                      ? const Color(0xFF4A90E2)
+                                      : Colors.grey[700]!,
                                   width: isSelected ? 2 : 1,
                                 ),
                               ),
                               child: Column(
                                 children: [
                                   Icon(
-                                    gender == 'Male' ? Icons.male_rounded
-                                        : gender == 'Female' ? Icons.female_rounded
+                                    gender == 'Male'
+                                        ? Icons.male_rounded
+                                        : gender == 'Female'
+                                        ? Icons.female_rounded
                                         : Icons.transgender_rounded,
-                                    color: isSelected ? const Color(0xFF4A90E2) : subtextColor,
+                                    color: isSelected
+                                        ? const Color(0xFF4A90E2)
+                                        : subtextColor,
                                     size: 22,
                                   ),
                                   const SizedBox(height: 4),
@@ -484,8 +655,12 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                                     gender,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                      color: isSelected ? const Color(0xFF4A90E2) : subtextColor,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                      color: isSelected
+                                          ? const Color(0xFF4A90E2)
+                                          : subtextColor,
                                     ),
                                   ),
                                 ],
@@ -502,18 +677,31 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   // === INTERESTS SECTION ===
                   Row(
                     children: [
-                      _buildSectionHeader('Interests', Icons.favorite_rounded, const Color(0xFFFF6B6B)),
+                      _buildSectionHeader(
+                        'Interests',
+                        Icons.favorite_rounded,
+                        const Color(0xFFFF6B6B),
+                      ),
                       const Spacer(),
                       if (_selectedInterests.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B6B).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFFFF6B6B,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${_selectedInterests.length}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFF6B6B)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFFF6B6B),
+                            ),
                           ),
                         ),
                     ],
@@ -522,7 +710,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: widget.availableInterests.take(12).map((interest) {
+                    children: widget.availableInterests.take(12).map((
+                      interest,
+                    ) {
                       final isSelected = _selectedInterests.contains(interest);
                       return GestureDetector(
                         onTap: () {
@@ -535,12 +725,19 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFFF6B6B).withValues(alpha: 0.2) : Colors.grey[850],
+                            color: isSelected
+                                ? const Color(0xFFFF6B6B).withValues(alpha: 0.2)
+                                : Colors.grey[850],
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: isSelected ? const Color(0xFFFF6B6B) : Colors.grey[700]!,
+                              color: isSelected
+                                  ? const Color(0xFFFF6B6B)
+                                  : Colors.grey[700]!,
                               width: isSelected ? 1.5 : 1,
                             ),
                           ),
@@ -548,8 +745,12 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                             interest,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? const Color(0xFFFF6B6B) : subtextColor,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? const Color(0xFFFF6B6B)
+                                  : subtextColor,
                             ),
                           ),
                         ),
@@ -563,7 +764,11 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                         onTap: _showAllInterestsDialog,
                         child: Text(
                           'Show all ${widget.availableInterests.length} interests →',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFFFF6B6B), fontWeight: FontWeight.w500),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFFF6B6B),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
@@ -573,18 +778,31 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   // === CONNECTION TYPES ===
                   Row(
                     children: [
-                      _buildSectionHeader('Looking for', Icons.connect_without_contact_rounded, const Color(0xFF9C27B0)),
+                      _buildSectionHeader(
+                        'Looking for',
+                        Icons.connect_without_contact_rounded,
+                        const Color(0xFF9C27B0),
+                      ),
                       const Spacer(),
                       if (_selectedConnectionTypes.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFF9C27B0,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${_selectedConnectionTypes.length}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF9C27B0)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF9C27B0),
+                            ),
                           ),
                         ),
                     ],
@@ -593,39 +811,62 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: ['Dating', 'Friendship', 'Networking', 'Career Advice', 'Mentorship', 'Travel Buddy'].map((type) {
-                      final isSelected = _selectedConnectionTypes.contains(type);
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedConnectionTypes.remove(type);
-                            } else {
-                              _selectedConnectionTypes.add(type);
-                            }
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF9C27B0).withValues(alpha: 0.2) : Colors.grey[850],
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFF9C27B0) : Colors.grey[700]!,
-                              width: isSelected ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Text(
+                    children:
+                        [
+                          'Dating',
+                          'Friendship',
+                          'Networking',
+                          'Career Advice',
+                          'Mentorship',
+                          'Travel Buddy',
+                        ].map((type) {
+                          final isSelected = _selectedConnectionTypes.contains(
                             type,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? const Color(0xFF9C27B0) : subtextColor,
+                          );
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedConnectionTypes.remove(type);
+                                } else {
+                                  _selectedConnectionTypes.add(type);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(
+                                        0xFF9C27B0,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.grey[850],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF9C27B0)
+                                      : Colors.grey[700]!,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Text(
+                                type,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? const Color(0xFF9C27B0)
+                                      : subtextColor,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                          );
+                        }).toList(),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -633,7 +874,11 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                       onTap: _showAllConnectionTypesDialog,
                       child: const Text(
                         'Show more options →',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF9C27B0), fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF9C27B0),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -643,18 +888,31 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   // === ACTIVITIES ===
                   Row(
                     children: [
-                      _buildSectionHeader('Activities', Icons.sports_tennis_rounded, const Color(0xFFFF9800)),
+                      _buildSectionHeader(
+                        'Activities',
+                        Icons.sports_tennis_rounded,
+                        const Color(0xFFFF9800),
+                      ),
                       const Spacer(),
                       if (_selectedActivities.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF9800).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFFFF9800,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${_selectedActivities.length}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFF9800)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFFF9800),
+                            ),
                           ),
                         ),
                     ],
@@ -663,39 +921,62 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: ['Sports', 'Gaming', 'Music', 'Movies', 'Fitness', 'Travel'].map((activity) {
-                      final isSelected = _selectedActivities.contains(activity);
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedActivities.remove(activity);
-                            } else {
-                              _selectedActivities.add(activity);
-                            }
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFFF9800).withValues(alpha: 0.2) : Colors.grey[850],
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFFFF9800) : Colors.grey[700]!,
-                              width: isSelected ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Text(
+                    children:
+                        [
+                          'Sports',
+                          'Gaming',
+                          'Music',
+                          'Movies',
+                          'Fitness',
+                          'Travel',
+                        ].map((activity) {
+                          final isSelected = _selectedActivities.contains(
                             activity,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? const Color(0xFFFF9800) : subtextColor,
+                          );
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedActivities.remove(activity);
+                                } else {
+                                  _selectedActivities.add(activity);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(
+                                        0xFFFF9800,
+                                      ).withValues(alpha: 0.2)
+                                    : Colors.grey[850],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFFF9800)
+                                      : Colors.grey[700]!,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Text(
+                                activity,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? const Color(0xFFFF9800)
+                                      : subtextColor,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                          );
+                        }).toList(),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -703,7 +984,11 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                       onTap: _showAllActivitiesDialog,
                       child: const Text(
                         'Show more activities →',
-                        style: TextStyle(fontSize: 12, color: Color(0xFFFF9800), fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFFF9800),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -738,7 +1023,9 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     widget.selectedInterests.clear();
                     widget.selectedInterests.addAll(_selectedInterests);
                     widget.selectedConnectionTypes.clear();
-                    widget.selectedConnectionTypes.addAll(_selectedConnectionTypes);
+                    widget.selectedConnectionTypes.addAll(
+                      _selectedConnectionTypes,
+                    );
                     widget.selectedActivities.clear();
                     widget.selectedActivities.addAll(_selectedActivities);
 
@@ -752,12 +1039,19 @@ class _ModernFilterSheetState extends State<ModernFilterSheet> {
                     backgroundColor: const Color(0xFF00D67D),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 0,
                   ),
                   child: Text(
-                    _getActiveFiltersCount() > 0 ? 'Apply ${_getActiveFiltersCount()} Filters' : 'Show All Results',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    _getActiveFiltersCount() > 0
+                        ? 'Apply ${_getActiveFiltersCount()} Filters'
+                        : 'Show All Results',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

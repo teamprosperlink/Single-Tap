@@ -587,7 +587,7 @@ class _ActionButton extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EnhancedChatScreen(otherUser: otherUser),
+        builder: (_) => EnhancedChatScreen(otherUser: otherUser, source: 'Business'),
       ),
     );
   }

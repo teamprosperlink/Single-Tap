@@ -224,7 +224,7 @@ class NotificationService {
               });
 
           // Navigate INSTANTLY with minimal data - GroupAudioCallScreen will fetch details
-          navigatorKey.currentState!.push(
+          navigatorKey.currentState?.push(
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) {
                 return GroupAudioCallScreen(
@@ -327,7 +327,7 @@ class NotificationService {
               '  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
             );
             // Use pushReplacement to avoid underlying page refresh
-            navigatorKey.currentState!.pushReplacement(
+            navigatorKey.currentState?.pushReplacement(
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) {
                   return VoiceCallScreen(
@@ -652,11 +652,12 @@ class NotificationService {
     try {
       _fcmToken = await _fcm.getToken();
 
-      if (_fcmToken != null && _auth.currentUser != null) {
+      final uid = _auth.currentUser?.uid;
+      if (_fcmToken != null && uid != null) {
         // Add a small delay to ensure Firestore auth is ready
         await Future.delayed(const Duration(milliseconds: 500));
 
-        await _firestore.collection('users').doc(_auth.currentUser!.uid).update(
+        await _firestore.collection('users').doc(uid).update(
           {
             'fcmToken': _fcmToken,
             'lastTokenUpdate': FieldValue.serverTimestamp(),
@@ -671,10 +672,11 @@ class NotificationService {
     _fcm.onTokenRefresh.listen((newToken) async {
       try {
         _fcmToken = newToken;
-        if (_auth.currentUser != null) {
+        final uid = _auth.currentUser?.uid;
+        if (uid != null) {
           await _firestore
               .collection('users')
-              .doc(_auth.currentUser!.uid)
+              .doc(uid)
               .update({
                 'fcmToken': newToken,
                 'lastTokenUpdate': FieldValue.serverTimestamp(),
@@ -1060,11 +1062,10 @@ class NotificationService {
       // Fetch all participants for the incoming call screen
       debugPrint('    Fetching participants for group call...');
       final participantsData = <Map<String, dynamic>>[];
-      final participants =
+      final rawParticipants =
           (await _firestore.collection('group_calls').doc(callId).get())
-                  .data()?['participants']
-              as List? ??
-          [];
+                  .data()?['participants'];
+      final participants = rawParticipants is List ? rawParticipants : [];
 
       for (final participantId in participants) {
         try {
@@ -1270,7 +1271,8 @@ class NotificationService {
                 final callerName = callData['callerName'] as String?;
                 final groupId = callData['groupId'] as String?;
                 final groupName = callData['groupName'] as String?;
-                final participants = callData['participants'] as List?;
+                final rawParts = callData['participants'];
+                final participants = rawParts is List ? rawParts : null;
                 final status = callData['status'] as String?;
 
                 debugPrint(
@@ -1370,7 +1372,8 @@ class NotificationService {
       );
       for (var doc in allCalls.docs) {
         final status = doc['status'];
-        final participants = doc['participants'] as List?;
+        final rawP = doc['participants'];
+        final participants = rawP is List ? rawP : null;
         debugPrint(
           '    - Doc ${doc.id}: status=$status, participants=$participants',
         );

@@ -4,20 +4,21 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../screens/profile/downloads_screen.dart';
-import '../screens/profile/library_screen.dart';
-import '../screens/profile/settings_screen.dart';
-import '../screens/profile/help_center_screen.dart';
-import '../screens/profile/upgrade_plan_screen.dart';
-import '../screens/profile/personalization_screen.dart';
-import '../screens/home/profile_with_history_screen.dart';
-import '../services/auth_service.dart';
-import '../services/notification_service.dart' show navigatorKey;
-import '../screens/login/onboarding_screen.dart';
+import '../../screens/profile/downloads_screen.dart';
+import '../../screens/home/notifications_screen.dart';
+import '../../screens/profile/library_screen.dart';
+import '../../screens/profile/settings_screen.dart';
+import '../../screens/profile/help_center_screen.dart';
+import '../../screens/profile/upgrade_plan_screen.dart';
+import '../../screens/profile/personalization_screen.dart';
+import '../../screens/home/profile_with_history_screen.dart';
+import '../../services/auth_service.dart';
+import '../../services/notification_service.dart' show navigatorKey;
+import '../../screens/login/onboarding_screen.dart';
 import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
-import '../screens/product/my_orders_screen.dart';
-import '../screens/home/main_navigation_screen.dart';
+import '../../screens/product/my_orders_screen.dart';
+import '../../screens/home/main_navigation_screen.dart';
 
 /// SingleTap-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
@@ -251,6 +252,33 @@ class AppDrawerState extends State<AppDrawer> {
                       },
                     ),
 
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('notifications')
+                          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                          .where('read', isEqualTo: false)
+                          .snapshots(),
+                      builder: (context, snap) {
+                        final unreadCount = snap.data?.docs.length ?? 0;
+                        return _buildFeatureCard(
+                          icon: Icons.notifications_outlined,
+                          label: 'Notification',
+                          color: Colors.amber,
+                          badge: unreadCount > 0 ? unreadCount : null,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationsScreen(),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+
                     _buildFeatureCard(
                       icon: Icons.receipt_long_outlined,
                       label: 'My Orders',
@@ -412,6 +440,7 @@ class AppDrawerState extends State<AppDrawer> {
     required String label,
     required Color color,
     required VoidCallback onTap,
+    int? badge,
   }) {
     return GestureDetector(
       onTap: () {
@@ -458,6 +487,24 @@ class AppDrawerState extends State<AppDrawer> {
                 fontWeight: FontWeight.w500,
               ),
             ),
+            if (badge != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge > 99 ? '99+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const Spacer(),
             Icon(
               Icons.chevron_right,
@@ -1149,13 +1196,13 @@ class AppDrawerState extends State<AppDrawer> {
   Widget _buildProfileMenuCard(User? user) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
+            Color.fromRGBO(50, 50, 50, 1),
+            Color.fromRGBO(25, 25, 25, 1),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
