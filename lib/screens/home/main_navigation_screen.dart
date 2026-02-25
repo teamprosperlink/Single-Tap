@@ -14,8 +14,7 @@ import 'live_connect_tab_screen.dart';
 import 'near_by_screen.dart';
 import 'conversations_screen.dart';
 
-// Professional & Business screens
-import '../professional/professional_dashboard_screen.dart';
+// Business screens
 import '../business/simple/business_hub_screen.dart';
 
 // Call screens - Now using CallKit instead of IncomingCallScreen widget
@@ -831,7 +830,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               for (var doc in snap.docs) {
                 final data = doc.data();
                 if (data.containsKey('unreadCount')) {
-                  total += ((data['unreadCount']?[user.uid] ?? 0) as num).toInt();
+                  total += ((data['unreadCount']?[user.uid] ?? 0) as num)
+                      .toInt();
                 }
               }
               // Unread count updated
@@ -847,23 +847,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         );
   }
 
-  Widget _buildScreen() {
-    switch (_currentIndex) {
-      case 5:
-        return const ProfessionalDashboardScreen();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
-    // For Business and Professional screens, show without TabBar
-    if (_currentIndex == 5) {
-      return Scaffold(body: _buildScreen());
-    }
 
     // For Chat, Networking, and Nearby - show them fullscreen without the main TabBar
     // But still keep the bottom navigation for easy switching between screens
@@ -914,16 +900,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       isActive: _currentIndex == 4,
                     ),
                     _buildNavItem(
-                      icon: Icons.storefront,
-                      label: 'Business',
-                      index: 3,
-                      isActive: _currentIndex == 3,
-                    ),
-                    _buildNavItem(
                       icon: Icons.business_center,
                       label: 'Networking',
                       index: 2,
                       isActive: _currentIndex == 2,
+                    ),
+                    _buildNavItem(
+                      icon: Icons.storefront,
+                      label: 'Business',
+                      index: 3,
+                      isActive: _currentIndex == 3,
                     ),
                   ],
                 ),
@@ -954,7 +940,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       return Scaffold(
         extendBody: true,
         backgroundColor: Colors.transparent,
-        body: const BusinessHubScreen(),
+        body: const _BusinessTabRouter(),
         bottomNavigationBar: buildBottomNavBar(),
       );
     }
@@ -1147,6 +1133,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         ),
       ),
     );
+  }
+}
+
+// Business tab — shows the integrated BusinessHubScreen
+class _BusinessTabRouter extends StatelessWidget {
+  const _BusinessTabRouter();
+
+  @override
+  Widget build(BuildContext context) {
+    return const BusinessHubScreen();
   }
 }
 

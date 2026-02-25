@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auth_service.dart' show AuthService;
-import '../../services/professional_service.dart';
 // Old BusinessService removed
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
 import '../../widgets/country_code_picker_sheet.dart';
 import '../../widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
-import '../professional/professional_setup_screen.dart';
 // Old BusinessSetupScreen removed — business setup now via profile edit toggle
 import 'forgot_password_screen.dart';
 
@@ -517,23 +515,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     try {
-      // Check for Professional account
-      if (accountType.contains('professional')) {
-        final professionalService = ProfessionalService();
-        final isSetupComplete = await professionalService
-            .isProfessionalSetupComplete();
-
-        if (!isSetupComplete) {
-          if (!mounted) return;
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const ProfessionalSetupScreen()),
-            (route) => false,
-          );
-          return;
-        }
-      }
-
-      // Business accounts now use the same main navigation
       // Default: go to main navigation with account type
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
