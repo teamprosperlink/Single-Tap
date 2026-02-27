@@ -1,4 +1,4 @@
-rules_version = '1';
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -49,10 +49,17 @@ service cloud.firestore {
       // Only the user can create their own profile
       allow create: if isOwner(userId);
 
-      // Owner can update, OR anyone (including unauthenticated) can update device-related fields only
+      // Owner can update (but cannot self-activate to business/professional or set verification),
+      // OR anyone (including unauthenticated) can update device-related fields only
       // (This is needed for WhatsApp-style single device login: logout mechanism)
       // When Device B is signed out after collision, it needs to write the logout signal
-      allow update: if isOwner(userId) ||
+      allow update: if (isOwner(userId) &&
+                       // Block self-setting verification status (must be done by admin/Cloud Function)
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verification']) &&
+                       // If changing accountType/accountStatus, status must be pendingVerification (not active)
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'accountStatus']) ||
+                        request.resource.data.accountStatus == 'pendingVerification' ||
+                        request.resource.data.accountType == 'personal')) ||
                        // Allow updating ONLY device fields (even unauthenticated)
                        // This enables Device B to send logout signal after being signed out
                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -95,6 +102,23 @@ service cloud.firestore {
           request.resource.data.userId == request.auth.uid;
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
+      }
+
+      // Profile views subcollection (who viewed this business profile)
+      match /profileViews/{viewId} {
+        allow read: if isOwner(userId);
+        allow create: if isAuthenticated();
+        allow update, delete: if false;
+      }
+
+      // Saved posts subcollection
+      match /saved_posts/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Hidden conversations subcollection
+      match /hiddenConversations/{conversationId} {
+        allow read, write: if isOwner(userId);
       }
     }
 
@@ -187,10 +211,11 @@ service cloud.firestore {
     // CALLS COLLECTION (Voice Calls)
     // ============================================================
     match /calls/{callId} {
-      // Caller and receiver can read the call
+      // Caller, receiver, or participant can read the call
       allow read: if isAuthenticated() &&
         (resource.data.callerId == request.auth.uid ||
-         resource.data.receiverId == request.auth.uid);
+         resource.data.receiverId == request.auth.uid ||
+         (resource.data.participants != null && request.auth.uid in resource.data.participants));
 
       // Authenticated users can create calls (must be the caller)
       allow create: if isAuthenticated() &&
@@ -299,19 +324,54 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // BOOKINGS COLLECTION
+    // ============================================================
+    match /bookings/{bookingId} {
+      // Customer and business owner can read their bookings
+      allow read: if isAuthenticated() &&
+        (resource.data.customerId == request.auth.uid ||
+         resource.data.businessOwnerId == request.auth.uid);
+
+      // Customer can create a booking
+      allow create: if isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid;
+
+      // Customer or business owner can update status-related fields only
+      // Immutable fields (customerId, businessOwnerId, serviceId, servicePrice) are protected
+      allow update: if isAuthenticated() &&
+        (resource.data.customerId == request.auth.uid ||
+         resource.data.businessOwnerId == request.auth.uid) &&
+        request.resource.data.customerId == resource.data.customerId &&
+        request.resource.data.businessOwnerId == resource.data.businessOwnerId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'cancelReason', 'notes'
+        ]);
+
+      // Bookings are not deletable
+      allow delete: if false;
+    }
+
+    // ============================================================
     // BUSINESS REVIEWS COLLECTION
     // ============================================================
     match /business_reviews/{reviewId} {
       // Anyone authenticated can read reviews
       allow read: if isAuthenticated();
 
-      // Users can create reviews
+      // Users can create reviews (with validated fields)
       allow create: if isAuthenticated() &&
-        request.resource.data.reviewerId == request.auth.uid;
+        request.resource.data.reviewerId == request.auth.uid &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        request.resource.data.isVerifiedPurchase == false &&
+        request.resource.data.isVisible == true &&
+        request.resource.data.isFlagged == false;
 
-      // Reviewer can update
+      // Reviewer can update their own review, OR owner can add response only
       allow update: if isAuthenticated() &&
-        resource.data.reviewerId == request.auth.uid;
+        (resource.data.reviewerId == request.auth.uid ||
+         (resource.data.professionalId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['professionalResponse', 'responseDate'])));
 
       // Reviewer can delete
       allow delete: if isAuthenticated() &&
@@ -445,14 +505,24 @@ service cloud.firestore {
     // ============================================================
     // NOTIFICATIONS COLLECTION
     // ============================================================
-    match /notifications/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if isAuthenticated();
+    // Supports two document structures:
+    //   1. Subcollection: notifications/{userId}/items/{notificationId}
+    //   2. Flat collection: notifications/{notificationId} with a userId field
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() &&
+        (notificationId == request.auth.uid ||
+         (resource != null && resource.data.userId == request.auth.uid));
 
-      match /items/{notificationId} {
-        allow read: if isOwner(userId);
+      // Only the notification owner can update/delete their notifications
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() &&
+        (notificationId == request.auth.uid ||
+         (resource != null && resource.data.userId == request.auth.uid));
+
+      match /items/{itemId} {
+        allow read: if isAuthenticated() && notificationId == request.auth.uid;
         allow create: if isAuthenticated();
-        allow update, delete: if isOwner(userId);
+        allow update, delete: if isAuthenticated() && notificationId == request.auth.uid;
       }
     }
 
