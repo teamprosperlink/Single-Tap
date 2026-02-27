@@ -81,6 +81,9 @@ class UniversalIntentService {
             userProfile?['phone'] ??
             'User';
 
+        final isBusinessPost =
+            match.metadata['isBusinessPost'] == true;
+
         enrichedMatches.add({
           'id': match.id,
           'userId': match.userId,
@@ -97,6 +100,10 @@ class UniversalIntentService {
           'matchScore': match.similarityScore ?? 0.0,
           'userProfile': userProfile,
           'createdAt': match.createdAt,
+          'isBusinessPost': isBusinessPost,
+          if (isBusinessPost)
+            'businessName':
+                match.metadata['businessName'] ?? match.userName ?? '',
         });
       }
     }

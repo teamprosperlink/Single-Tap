@@ -268,6 +268,12 @@ class BusinessProfile {
   final int catalogViews;
   final int enquiryCount;
   final DateTime? businessEnabledAt;
+  final String? coverImageUrl;
+  final bool isLive;
+  final double averageRating;
+  final int totalReviews;
+  final Map<String, String>? socialLinks;
+  final List<String> businessTypes; // products, services, bookings, events
 
   BusinessProfile({
     this.businessName,
@@ -282,6 +288,12 @@ class BusinessProfile {
     this.catalogViews = 0,
     this.enquiryCount = 0,
     this.businessEnabledAt,
+    this.coverImageUrl,
+    this.isLive = false,
+    this.averageRating = 0.0,
+    this.totalReviews = 0,
+    this.socialLinks,
+    this.businessTypes = const [],
   });
 
   bool get isCurrentlyOpen => hours?.isCurrentlyOpen ?? false;
@@ -305,6 +317,14 @@ class BusinessProfile {
       businessEnabledAt: map['businessEnabledAt'] != null
           ? (map['businessEnabledAt'] as Timestamp).toDate()
           : null,
+      coverImageUrl: map['coverImageUrl'],
+      isLive: map['isLive'] ?? false,
+      averageRating: (map['averageRating'] ?? 0).toDouble(),
+      totalReviews: map['totalReviews'] ?? 0,
+      socialLinks: map['socialLinks'] != null
+          ? Map<String, String>.from(map['socialLinks'])
+          : null,
+      businessTypes: List<String>.from(map['businessTypes'] ?? []),
     );
   }
 
@@ -324,6 +344,12 @@ class BusinessProfile {
       'businessEnabledAt': businessEnabledAt != null
           ? Timestamp.fromDate(businessEnabledAt!)
           : null,
+      'coverImageUrl': coverImageUrl,
+      'isLive': isLive,
+      'averageRating': averageRating,
+      'totalReviews': totalReviews,
+      'socialLinks': socialLinks,
+      'businessTypes': businessTypes,
     };
   }
 
@@ -340,6 +366,12 @@ class BusinessProfile {
     int? catalogViews,
     int? enquiryCount,
     DateTime? businessEnabledAt,
+    String? coverImageUrl,
+    bool? isLive,
+    double? averageRating,
+    int? totalReviews,
+    Map<String, String>? socialLinks,
+    List<String>? businessTypes,
   }) {
     return BusinessProfile(
       businessName: businessName ?? this.businessName,
@@ -354,6 +386,12 @@ class BusinessProfile {
       catalogViews: catalogViews ?? this.catalogViews,
       enquiryCount: enquiryCount ?? this.enquiryCount,
       businessEnabledAt: businessEnabledAt ?? this.businessEnabledAt,
+      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
+      isLive: isLive ?? this.isLive,
+      averageRating: averageRating ?? this.averageRating,
+      totalReviews: totalReviews ?? this.totalReviews,
+      socialLinks: socialLinks ?? this.socialLinks,
+      businessTypes: businessTypes ?? this.businessTypes,
     );
   }
 }

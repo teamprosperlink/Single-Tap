@@ -5,8 +5,13 @@ enum CatalogItemType {
   service;
 
   static CatalogItemType fromString(String? value) {
-    if (value == 'service') return CatalogItemType.service;
-    return CatalogItemType.product;
+    switch (value) {
+      case 'service':
+      case 'booking': // legacy: booking items become services
+        return CatalogItemType.service;
+      default:
+        return CatalogItemType.product;
+    }
   }
 }
 
@@ -23,6 +28,10 @@ class CatalogItem {
   final int viewCount;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? category;
+  final bool isFeatured;
+  final int? duration; // minutes, for service-type items
+  final List<String> tags;
 
   CatalogItem({
     required this.id,
@@ -37,6 +46,10 @@ class CatalogItem {
     this.viewCount = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.category,
+    this.isFeatured = false,
+    this.duration,
+    this.tags = const [],
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -73,6 +86,10 @@ class CatalogItem {
       updatedAt: map['updatedAt'] != null
           ? (map['updatedAt'] as Timestamp).toDate()
           : DateTime.now(),
+      category: map['category'],
+      isFeatured: map['isFeatured'] ?? false,
+      duration: map['duration'],
+      tags: List<String>.from(map['tags'] ?? []),
     );
   }
 
@@ -89,6 +106,10 @@ class CatalogItem {
       'viewCount': viewCount,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'category': category,
+      'isFeatured': isFeatured,
+      'duration': duration,
+      'tags': tags,
     };
   }
 
@@ -105,6 +126,10 @@ class CatalogItem {
     int? viewCount,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? category,
+    bool? isFeatured,
+    int? duration,
+    List<String>? tags,
   }) {
     return CatalogItem(
       id: id ?? this.id,
@@ -119,6 +144,10 @@ class CatalogItem {
       viewCount: viewCount ?? this.viewCount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      category: category ?? this.category,
+      isFeatured: isFeatured ?? this.isFeatured,
+      duration: duration ?? this.duration,
+      tags: tags ?? this.tags,
     );
   }
 }

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/catalog_item.dart';
+import 'unified_post_service.dart';
 
 class CatalogService {
   static final CatalogService _instance = CatalogService._internal();
@@ -44,7 +46,15 @@ class CatalogService {
         .limit(maxItems)
         .snapshots()
         .map((snap) =>
-            snap.docs.map((doc) => CatalogItem.fromFirestore(doc)).toList());
+            snap.docs.map((doc) => CatalogItem.fromFirestore(doc)).toList())
+        .transform(StreamTransformer<List<CatalogItem>,
+            List<CatalogItem>>.fromHandlers(
+          handleData: (data, sink) => sink.add(data),
+          handleError: (error, stackTrace, sink) {
+            debugPrint('Error streaming catalog: $error');
+            sink.add(<CatalogItem>[]);
+          },
+        ));
   }
 
   Future<List<CatalogItem>> getAvailableItems(String userId, {int limit = 50}) async {
@@ -79,12 +89,21 @@ class CatalogService {
   Future<String?> addItem(CatalogItem item) async {
     if (_currentUserId == null) return null;
     try {
-      final count = await _catalogRef(item.userId).count().get();
-      if ((count.count ?? 0) >= maxItems) {
-        debugPrint('Catalog limit reached ($maxItems items)');
-        return null;
+      // Check item limit — don't block add if count query fails
+      try {
+        final count = await _catalogRef(item.userId).count().get();
+        if ((count.count ?? 0) >= maxItems) {
+          debugPrint('Catalog limit reached ($maxItems items)');
+          return null;
+        }
+      } catch (e) {
+        debugPrint('Count check failed (proceeding with add): $e');
       }
       final docRef = await _catalogRef(item.userId).add(item.toMap());
+
+      // Re-sync business post so new catalog item is matchable
+      UnifiedPostService().syncBusinessPost(item.userId);
+
       return docRef.id;
     } catch (e) {
       debugPrint('Error adding catalog item: $e');
@@ -122,6 +141,10 @@ class CatalogService {
         }
       }
       await _catalogRef(userId).doc(itemId).delete();
+
+      // Re-sync business post after catalog change
+      UnifiedPostService().syncBusinessPost(userId);
+
       return true;
     } catch (e) {
       debugPrint('Error deleting catalog item: $e');
@@ -149,6 +172,23 @@ class CatalogService {
       return await uploadTask.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading catalog image: $e');
+      return null;
+    }
+  }
+
+  Future<String?> uploadCoverImage(File imageFile, String userId) async {
+    try {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+      final ref =
+          _storage.ref().child('business_covers/$userId/$fileName');
+      final uploadTask = await ref.putFile(
+        imageFile,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      return await uploadTask.ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Error uploading cover image: $e');
       return null;
     }
   }
@@ -182,6 +222,34 @@ class CatalogService {
     } catch (e) {
       debugPrint('Error getting item count: $e');
       return 0;
+    }
+  }
+
+  // ── Profile View Logging ──
+
+  Future<void> logProfileView({
+    required String profileOwnerId,
+    required String viewerId,
+    required String viewerName,
+    String? viewerPhotoUrl,
+  }) async {
+    // Don't log self-views
+    if (profileOwnerId == viewerId) return;
+    try {
+      await _firestore
+          .collection('users')
+          .doc(profileOwnerId)
+          .collection('profileViews')
+          .add({
+        'viewerId': viewerId,
+        'viewerName': viewerName,
+        'viewerPhotoUrl': viewerPhotoUrl,
+        'viewedAt': FieldValue.serverTimestamp(),
+      });
+      // Also increment the counter
+      await incrementBusinessStat(profileOwnerId, 'profileViews');
+    } catch (e) {
+      debugPrint('Error logging profile view: $e');
     }
   }
 }

@@ -524,6 +524,139 @@ Field rules:
     return 'neutral';
   }
 
+  // ── Business profile → searchable post ──────────────────────────────────
+
+  /// Create or update a searchable post from a business profile + catalog.
+  /// Uses a deterministic doc ID (`business_{userId}`) so re-syncs overwrite.
+  Future<void> syncBusinessPost(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data();
+      if (userData == null) return;
+      if (userData['accountType'] != 'business') return;
+
+      final bp = userData['businessProfile'] as Map<String, dynamic>?;
+      if (bp == null) return;
+
+      final businessName = bp['businessName'] as String? ?? '';
+      if (businessName.isEmpty) return;
+
+      final description = bp['description'] as String? ?? '';
+      final softLabel = bp['softLabel'] as String? ?? '';
+      final address = bp['address'] as String? ?? '';
+
+      // Get available catalog items
+      final catalogSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('catalog')
+          .where('isAvailable', isEqualTo: true)
+          .limit(50)
+          .get();
+
+      final catalogNames = <String>[];
+      for (final doc in catalogSnap.docs) {
+        final data = doc.data();
+        final name = data['name'] as String? ?? '';
+        if (name.isNotEmpty) catalogNames.add(name);
+      }
+      final catalogSummary = catalogNames.join(', ');
+
+      // Build rich text for embedding
+      final embeddingParts = <String>[businessName];
+      if (softLabel.isNotEmpty) embeddingParts.add(softLabel);
+      if (description.isNotEmpty) embeddingParts.add(description);
+      if (catalogSummary.isNotEmpty) {
+        embeddingParts.add('Services and Products: $catalogSummary');
+      }
+      final promptText = embeddingParts.join('. ');
+
+      final embeddingText = _createTextForEmbedding(
+        title: businessName,
+        description: '$description $catalogSummary',
+        location: userData['location'] ?? address,
+        domain: 'services',
+        actionType: 'offering',
+      );
+
+      final embedding = await _geminiService.generateEmbedding(embeddingText);
+      final keywords = _extractKeywords(
+        '$businessName $softLabel $description $catalogSummary',
+      );
+
+      final userPhoto = userData['photoUrl'] ??
+          userData['photoURL'] ??
+          userData['profileImageUrl'];
+
+      // Title shown in "Posted:" section — use label or catalog, not the
+      // business name (business name already shows in the name badge).
+      final postTitle = softLabel.isNotEmpty
+          ? softLabel
+          : catalogSummary.isNotEmpty
+              ? 'Offering: $catalogSummary'
+              : businessName;
+
+      final postDescription = description.isNotEmpty
+          ? description
+          : catalogSummary.isNotEmpty
+              ? catalogSummary
+              : 'Business services';
+
+      final postData = {
+        'userId': userId,
+        'originalPrompt': promptText,
+        'title': postTitle,
+        'description': postDescription,
+        'intentAnalysis': {
+          'primary_intent': 'Business offering $softLabel services/products',
+          'action_type': 'offering',
+          'domain': 'services',
+          'service_type': 'in_person',
+          'is_symmetric': false,
+          'exchange_model': 'paid',
+          'complementary_intents': [
+            'looking for $softLabel',
+            'need $softLabel services',
+            if (catalogNames.isNotEmpty) 'looking for ${catalogNames.first}',
+          ],
+          'search_keywords': keywords,
+        },
+        'embedding': embedding,
+        'keywords': keywords,
+        'metadata': {
+          'createdBy': 'BusinessProfileSync',
+          'version': '1.0',
+          'isBusinessPost': true,
+          'businessName': businessName,
+          'softLabel': softLabel,
+          'catalogItemCount': catalogSnap.docs.length,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt': null,
+        'isActive': bp['isLive'] ?? true,
+        'location': userData['location'] ?? address,
+        'latitude': userData['latitude'],
+        'longitude': userData['longitude'],
+        'viewCount': 0,
+        'matchedUserIds': [],
+        'clarificationAnswers': {},
+        'userName': businessName,
+        'userPhoto': userPhoto,
+      };
+
+      await _firestore
+          .collection('posts')
+          .doc('business_$userId')
+          .set(postData);
+
+      debugPrint(
+        ' Business post synced for $businessName (${catalogNames.length} catalog items)',
+      );
+    } catch (e) {
+      debugPrint('Error syncing business post: $e');
+    }
+  }
+
   // ── Find matches ─────────────────────────────────────────────────────────
 
   /// Find matching posts — dual-signal approach:

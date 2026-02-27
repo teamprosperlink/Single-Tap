@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_profile.dart';
+import 'unified_post_service.dart';
 
 /// Service for managing account types and related features
 class AccountTypeService {
@@ -110,6 +111,10 @@ class AccountTypeService {
       await _firestore.collection('users').doc(user.uid).update({
         'businessProfile': profile.toMap(),
       });
+
+      // Re-sync searchable post with updated business info
+      UnifiedPostService().syncBusinessPost(user.uid);
+
       return true;
     } catch (e) {
       debugPrint('Error updating business profile: $e');
@@ -125,9 +130,13 @@ class AccountTypeService {
     try {
       await _firestore.collection('users').doc(user.uid).update({
         'accountType': AccountType.business.name,
-        'accountStatus': 'active',
+        'accountStatus': 'pendingVerification',
         'businessProfile': profile.toMap(),
       });
+
+      // Create searchable post so this business appears in match results
+      UnifiedPostService().syncBusinessPost(user.uid);
+
       return true;
     } catch (e) {
       debugPrint('Error enabling business mode: $e');
@@ -168,6 +177,21 @@ class AccountTypeService {
       debugPrint('Error updating business fields: $e');
       return false;
     }
+  }
+
+  /// Update cover image URL
+  Future<bool> updateCoverImage(String coverImageUrl) async {
+    return updateBusinessFields({'coverImageUrl': coverImageUrl});
+  }
+
+  /// Update social links
+  Future<bool> updateSocialLinks(Map<String, String> links) async {
+    return updateBusinessFields({'socialLinks': links});
+  }
+
+  /// Toggle business live status
+  Future<bool> toggleLiveStatus(bool isLive) async {
+    return updateBusinessFields({'isLive': isLive});
   }
 
   /// Check if a feature is available for an account type
