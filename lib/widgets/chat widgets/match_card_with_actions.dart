@@ -21,6 +21,13 @@ class MatchCardWithActions extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Business post detection (set by syncBusinessPost via enrichment)
+    final isBusinessPost = match['isBusinessPost'] == true;
+    final businessName = match['businessName'] as String?;
+    final displayName = isBusinessPost && businessName != null && businessName.isNotEmpty
+        ? businessName
+        : (match['userName'] ?? 'User');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: isDark ? 8 : 4,
@@ -62,11 +69,25 @@ class MatchCardWithActions extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          match['userName'] ?? 'User',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            if (isBusinessPost)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(Icons.storefront,
+                                    size: 16, color: Color(0xFFFF9800)),
+                              ),
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                         if (match['location'] != null)
                           Row(

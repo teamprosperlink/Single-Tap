@@ -1841,6 +1841,13 @@ class HomeScreenState extends State<HomeScreen>
               'Unknown User';
     final userId = match['userId'];
 
+    // Business post detection (set by syncBusinessPost via enrichment)
+    final isBusinessPost = match['isBusinessPost'] == true;
+    final businessName = match['businessName'] as String?;
+    final displayName = isBusinessPost && businessName != null && businessName.isNotEmpty
+        ? businessName
+        : userName;
+
     final cachedPhoto = userId != null
         ? _photoCache.getCachedPhotoUrl(userId)
         : null;
@@ -1893,16 +1900,27 @@ class HomeScreenState extends State<HomeScreen>
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor,
+                            color: isBusinessPost
+                                ? const Color(0xFFFF9800)
+                                : Theme.of(context).primaryColor,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(
-                            userName.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isBusinessPost) ...[
+                                const Icon(Icons.storefront, size: 13, color: Colors.white),
+                                const SizedBox(width: 5),
+                              ],
+                              Text(
+                                displayName.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         Container(

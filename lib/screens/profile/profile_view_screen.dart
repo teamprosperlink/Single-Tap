@@ -13,6 +13,8 @@ import '../../models/catalog_item.dart';
 import '../../services/catalog_service.dart';
 import '../business/simple/catalog_item_detail.dart';
 import '../chat/enhanced_chat_screen.dart';
+import '../business/simple/write_review_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileViewScreen extends StatefulWidget {
   final UserProfile userProfile;
@@ -28,10 +30,36 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
 
+  bool get _isOwnProfile =>
+      FirebaseAuth.instance.currentUser?.uid == widget.userProfile.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.userProfile.isBusiness && !_isOwnProfile) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        CatalogService().logProfileView(
+          profileOwnerId: widget.userProfile.uid,
+          viewerId: currentUser.uid,
+          viewerName: currentUser.displayName ?? 'Someone',
+          viewerPhotoUrl: currentUser.photoURL,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
       body: SafeArea(
         child: Stack(
           children: [
@@ -40,8 +68,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                 children: [
                   _buildImageSection(),
                   _buildProfileInfo(),
-                  if (widget.userProfile.isBusiness) _buildBusinessInfo(),
-                  _buildPostDetails(),
+                  if (widget.post != null) _buildPostDetails(),
                   if (widget.userProfile.isBusiness) _buildCatalogSection(),
                   const SizedBox(height: 100),
                 ],
@@ -374,112 +401,277 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
   }
 
   Widget _buildProfileInfo() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark ? Colors.white70 : Colors.grey.shade700;
+    final bp = widget.userProfile.isBusiness
+        ? widget.userProfile.businessProfile
+        : null;
+
     return Container(
-      padding: const EdgeInsets.all(20),
-      color: Colors.white,
+      color: cardBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
+          // ── Personal info ──
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        widget.userProfile.name,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.userProfile.name,
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          UsernameBadge(
+                            accountType: widget.userProfile.accountType,
+                            verificationStatus:
+                                widget.userProfile.verification.status,
+                            size: 20,
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    UsernameBadge(
-                      accountType: widget.userProfile.accountType,
-                      verificationStatus:
-                          widget.userProfile.verification.status,
-                      size: 20,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          // Account type badge row
-          if (widget.userProfile.accountType != AccountType.personal) ...[
-            const SizedBox(height: 12),
-            AccountTypeBadge(
-              accountType: widget.userProfile.accountType,
-              verificationStatus: widget.userProfile.verification.status,
-              showLabel: true,
-              size: 18,
-            ),
-          ],
-          const SizedBox(height: 8),
-          if (widget.userProfile.location != null)
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 20, color: Colors.grey),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    widget.userProfile.location!,
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
+                if (widget.userProfile.accountType !=
+                    AccountType.personal) ...[
+                  const SizedBox(height: 12),
+                  AccountTypeBadge(
+                    accountType: widget.userProfile.accountType,
+                    verificationStatus:
+                        widget.userProfile.verification.status,
+                    showLabel: true,
+                    size: 18,
                   ),
-                ),
+                ],
+                const SizedBox(height: 8),
+                if (widget.userProfile.location != null)
+                  Row(
+                    children: [
+                      Icon(Icons.location_on,
+                          size: 20, color: subtitleColor),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          widget.userProfile.location!,
+                          style:
+                              TextStyle(fontSize: 16, color: subtitleColor),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                if (widget.post != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.post!.title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
               ],
             ),
-          const SizedBox(height: 16),
-          if (widget.post != null)
-            Text(
-              widget.post!.title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+
+          // ── Business info (integrated) ──
+          if (bp != null) ...[
+            Divider(
+              color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
+              height: 1,
             ),
+
+            // Cover image
+            if (bp.coverImageUrl != null)
+              ClipRRect(
+                child: SizedBox(
+                  height: 160,
+                  width: double.infinity,
+                  child: CachedNetworkImage(
+                    imageUrl: bp.coverImageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [const Color(0xFF1a1a2e), const Color(0xFF0f3460)]
+                              : [const Color(0xFF667eea), const Color(0xFF764ba2)],
+                        ),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [const Color(0xFF1a1a2e), const Color(0xFF0f3460)]
+                              : [const Color(0xFF667eea), const Color(0xFF764ba2)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Business name
+                  if (bp.businessName != null &&
+                      bp.businessName!.isNotEmpty) ...[
+                    Text(
+                      bp.businessName!,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Open/Closed + Category label pills
+                  Row(
+                    children: [
+                      if (bp.hours != null)
+                        _statusPill(bp.isCurrentlyOpen),
+                      if (bp.softLabel != null) ...[
+                        const SizedBox(width: 8),
+                        _labelPill(bp.softLabel!),
+                      ],
+                    ],
+                  ),
+
+                  // Description
+                  if (bp.description != null &&
+                      bp.description!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      bp.description!,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: subtitleColor,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+
+                  // Contact action row
+                  if (bp.contactPhone != null ||
+                      bp.contactEmail != null ||
+                      bp.website != null) ...[
+                    const SizedBox(height: 16),
+                    _buildContactActionRow(bp, isDark),
+                  ],
+
+                  // Address
+                  if (bp.address != null && bp.address!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _tappableRow(
+                      Icons.location_on_outlined,
+                      bp.address!,
+                      isDark,
+                      onTap: () {
+                        final encoded = Uri.encodeComponent(bp.address!);
+                        launchUrl(
+                          Uri.parse(
+                              'https://maps.google.com/?q=$encoded'),
+                          mode: LaunchMode.externalApplication,
+                        );
+                      },
+                    ),
+                  ],
+
+                  // Today's hours
+                  if (bp.hours != null) ...[
+                    const SizedBox(height: 4),
+                    _tappableRow(
+                      Icons.access_time,
+                      'Today: ${bp.hours!.todayHours}',
+                      isDark,
+                    ),
+                  ],
+
+                  // Social links
+                  if (bp.socialLinks != null &&
+                      bp.socialLinks!.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _buildSocialLinksRow(bp.socialLinks!, isDark),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildPostDetails() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark ? Colors.white70 : Colors.grey.shade700;
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(20),
-      color: Colors.white,
+      color: cardBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'About',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
           ),
           const SizedBox(height: 12),
           if (widget.post != null)
             Text(
               widget.post!.description,
-              style: const TextStyle(fontSize: 16, height: 1.5),
+              style: TextStyle(
+                  fontSize: 16, height: 1.5, color: subtitleColor),
             ),
           if (widget.post?.price != null) ...[
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: isDark
+                    ? const Color(0xFF22C55E).withValues(alpha: 0.12)
+                    : Colors.green.shade50,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Price', style: TextStyle(fontSize: 16)),
+                  Text('Price',
+                      style: TextStyle(fontSize: 16, color: textColor)),
                   Text(
                     '${widget.post!.currency ?? '\$'}${widget.post!.price!.toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                      color: Color(0xFF22C55E),
                     ),
                   ),
                 ],
@@ -488,9 +680,10 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
           ],
           if (widget.post?.metadata != null) ...[
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Additional Details',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 12),
             ...widget.post!.metadata.entries.map(
@@ -500,14 +693,15 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                   children: [
                     Text(
                       '${entry.key}: ',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
+                        color: textColor,
                       ),
                     ),
                     Text(
                       entry.value.toString(),
-                      style: const TextStyle(fontSize: 15),
+                      style: TextStyle(fontSize: 15, color: subtitleColor),
                     ),
                   ],
                 ),
@@ -519,98 +713,220 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     );
   }
 
-  Widget _buildBusinessInfo() {
-    final bp = widget.userProfile.businessProfile;
-    if (bp == null) return const SizedBox.shrink();
-
+  Widget _statusPill(bool isOpen) {
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(20),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Open/Closed + Label
-          Row(
-            children: [
-              if (bp.hours != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: bp.isCurrentlyOpen
-                        ? const Color(0xFF22C55E).withValues(alpha: 0.15)
-                        : Colors.red.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    bp.isCurrentlyOpen ? 'Open Now' : 'Closed',
-                    style: TextStyle(
-                      color: bp.isCurrentlyOpen ? const Color(0xFF22C55E) : Colors.red,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              if (bp.softLabel != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    bp.softLabel!,
-                    style: const TextStyle(
-                      color: Color(0xFF3B82F6),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          // Description
-          if (bp.description != null && bp.description!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              bp.description!,
-              style: TextStyle(fontSize: 15, color: Colors.grey.shade700, height: 1.4),
-            ),
-          ],
-          // Contact info
-          if (bp.contactPhone != null || bp.contactEmail != null || bp.website != null) ...[
-            const SizedBox(height: 16),
-            if (bp.contactPhone != null)
-              _contactRow(Icons.phone_outlined, bp.contactPhone!),
-            if (bp.contactEmail != null)
-              _contactRow(Icons.email_outlined, bp.contactEmail!),
-            if (bp.website != null)
-              _contactRow(Icons.language, bp.website!),
-          ],
-          // Hours
-          if (bp.hours != null) ...[
-            const SizedBox(height: 12),
-            _contactRow(Icons.access_time, 'Today: ${bp.hours!.todayHours}'),
-          ],
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isOpen
+            ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+            : Colors.red.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        isOpen ? 'Open Now' : 'Closed',
+        style: TextStyle(
+          color: isOpen ? const Color(0xFF22C55E) : Colors.red,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
 
-  Widget _contactRow(IconData icon, String text) {
+  Widget _labelPill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF3B82F6),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactActionRow(BusinessProfile bp, bool isDark) {
+    Widget actionBtn(
+        IconData icon, String label, Color color, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final btns = <Widget>[];
+    if (bp.contactPhone != null) {
+      btns.add(actionBtn(
+        Icons.phone_outlined,
+        'Call',
+        const Color(0xFF22C55E),
+        () => launchUrl(Uri.parse('tel:${bp.contactPhone}')),
+      ));
+    }
+    if (bp.contactEmail != null) {
+      btns.add(actionBtn(
+        Icons.email_outlined,
+        'Email',
+        const Color(0xFF3B82F6),
+        () => launchUrl(Uri.parse('mailto:${bp.contactEmail}')),
+      ));
+    }
+    if (bp.website != null) {
+      final url = bp.website!.startsWith('http')
+          ? bp.website!
+          : 'https://${bp.website}';
+      btns.add(actionBtn(
+        Icons.language,
+        'Website',
+        const Color(0xFF8B5CF6),
+        () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      ));
+    }
+    if (btns.isEmpty) return const SizedBox.shrink();
+
+    // When only 1 button, don't let it stretch full width
+    if (btns.length == 1) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(width: 120, child: btns[0]),
+      );
+    }
+
+    return Row(
+      children: [
+        for (int i = 0; i < btns.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: btns[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _tappableRow(IconData icon, String text, bool isDark,
+      {VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.grey.shade500),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
-          ),
-        ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isDark ? Colors.white54 : Colors.grey.shade500,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  decoration:
+                      onTap != null ? TextDecoration.underline : null,
+                ),
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                Icons.open_in_new,
+                size: 14,
+                color: isDark ? Colors.white38 : Colors.grey.shade400,
+              ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildSocialLinksRow(Map<String, String> socialLinks, bool isDark) {
+    const iconMap = {
+      'instagram': Icons.camera_alt_outlined,
+      'facebook': Icons.facebook_outlined,
+      'twitter': Icons.alternate_email,
+      'linkedin': Icons.work_outline,
+      'youtube': Icons.play_circle_outline,
+    };
+    const colorMap = {
+      'instagram': Color(0xFFE1306C),
+      'facebook': Color(0xFF1877F2),
+      'twitter': Color(0xFF1DA1F2),
+      'linkedin': Color(0xFF0A66C2),
+      'youtube': Color(0xFFFF0000),
+    };
+
+    final available =
+        socialLinks.entries.where((e) => e.value.isNotEmpty).toList();
+    if (available.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Follow',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white54 : Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: available.map((e) {
+            final icon = iconMap[e.key] ?? Icons.link;
+            final color = colorMap[e.key] ?? Colors.grey;
+            final url =
+                e.value.startsWith('http') ? e.value : 'https://${e.value}';
+            return Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+                onTap: () => launchUrl(
+                  Uri.parse(url),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: color.withValues(alpha: 0.35)),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -621,10 +937,14 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
         final items = snapshot.data ?? [];
         if (items.isEmpty) return const SizedBox.shrink();
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+        final textColor = isDark ? Colors.white : Colors.black;
+
         return Container(
           margin: const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.symmetric(vertical: 20),
-          color: Colors.white,
+          color: cardBg,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -633,15 +953,16 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Catalog',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor),
                     ),
                     if (items.length >= 6)
                       TextButton(
-                        onPressed: () {
-                          // Could navigate to full catalog view
-                        },
+                        onPressed: _showAllCatalogItems,
                         child: const Text('See All',
                             style: TextStyle(color: Color(0xFF3B82F6))),
                       ),
@@ -699,6 +1020,9 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
   }
 
   Widget _buildBottomActions() {
+    if (_isOwnProfile) return const SizedBox.shrink();
+    final isBusiness = widget.userProfile.isBusiness;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Positioned(
       bottom: 0,
       left: 0,
@@ -706,7 +1030,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),
@@ -715,20 +1039,89 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
             ),
           ],
         ),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _startChat,
-            icon: const Icon(Icons.chat_bubble),
-            label: const Text('Start Chat'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
+        child: isBusiness
+            ? Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _startChat,
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Chat'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark
+                            ? const Color(0xFF2C2C2E)
+                            : null,
+                        foregroundColor: isDark ? Colors.white : null,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        final bp = widget.userProfile.businessProfile;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WriteReviewScreen(
+                              businessUserId: widget.userProfile.uid,
+                              businessName: bp?.businessName ??
+                                  widget.userProfile.name,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.star_outline_rounded, size: 18),
+                      label: const Text('Review'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _enquire,
+                      icon: const Icon(Icons.storefront_outlined, size: 18),
+                      label: const Text('Enquire'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF22C55E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _startChat,
+                  icon: const Icon(Icons.chat_bubble),
+                  label: const Text('Start Chat'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -870,6 +1263,37 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     Share.share(shareText, subject: 'Check out $name on Supper!');
   }
 
+  void _enquire() {
+    final bp = widget.userProfile.businessProfile;
+    final name = (bp?.businessName?.isNotEmpty == true)
+        ? bp!.businessName!
+        : widget.userProfile.name;
+    final message = 'Hi! I\'m interested in your services at $name';
+    CatalogService()
+        .incrementBusinessStat(widget.userProfile.uid, 'enquiryCount');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EnhancedChatScreen(
+          otherUser: widget.userProfile,
+          initialMessage: message,
+        ),
+      ),
+    );
+  }
+
+  void _showAllCatalogItems() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AllCatalogSheet(
+        userId: widget.userProfile.uid,
+        businessUser: widget.userProfile,
+      ),
+    );
+  }
+
   void _reportUser() {
     showDialog(
       context: context,
@@ -998,6 +1422,126 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
             child: const Text('Block', style: TextStyle(color: Colors.red)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AllCatalogSheet extends StatelessWidget {
+  final String userId;
+  final UserProfile businessUser;
+
+  const _AllCatalogSheet({required this.userId, required this.businessUser});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+              child: Row(
+                children: [
+                  Text(
+                    businessUser.businessProfile?.businessName ?? 'Catalog',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close,
+                        color: isDark ? Colors.white : Colors.black),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<CatalogItem>>(
+                future: CatalogService().getAvailableItems(userId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final items = snapshot.data ?? [];
+                  if (items.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No items available',
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : Colors.grey,
+                        ),
+                      ),
+                    );
+                  }
+                  return GridView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.72,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return CatalogCardWidget(
+                        item: item,
+                        onTap: () {
+                          CatalogItemDetail.show(
+                            context,
+                            item: item,
+                            businessUser: businessUser,
+                            onEnquire: () {
+                              // Capture navigator before pops to avoid stale context
+                              final nav = Navigator.of(context);
+                              nav.pop(); // close CatalogItemDetail
+                              nav.pop(); // close _AllCatalogSheet
+                              CatalogService().incrementBusinessStat(
+                                  businessUser.uid, 'enquiryCount');
+                              nav.push(
+                                MaterialPageRoute(
+                                  builder: (_) => EnhancedChatScreen(
+                                    otherUser: businessUser,
+                                    initialMessage:
+                                        'Hi! I\'m interested in your ${item.name} (${item.formattedPrice})',
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

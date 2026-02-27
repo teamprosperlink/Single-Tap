@@ -16,6 +16,12 @@ import '../profile/profile_edit_screen.dart';
 import '../business/simple/catalog_management_screen.dart';
 import '../business/simple/business_info_edit.dart';
 import '../../models/user_profile.dart';
+import '../../models/catalog_item.dart';
+import '../../services/catalog_service.dart';
+import '../../widgets/catalog_card_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../business/simple/business_hours_edit.dart';
+import '../business/simple/business_hub_screen.dart';
 import 'main_navigation_screen.dart';
 
 class ProfileWithHistoryScreen extends ConsumerStatefulWidget {
@@ -775,137 +781,9 @@ class _ProfileWithHistoryScreenState
                             ),
                           ),
 
-                          // Business Cards (only for business accounts)
-                          if (AccountType.fromString(_userProfile?['accountType']) == AccountType.business) ...[
-                            // My Catalog Card
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.25),
-                                    Colors.white.withValues(alpha: 0.15),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: ListTile(
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E).withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(
-                                    Icons.storefront_outlined,
-                                    color: Color(0xFF22C55E),
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(
-                                  'My Catalog',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Manage products & services',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                trailing: Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  size: 20,
-                                ),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const CatalogManagementScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            // Edit Business Info Card
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.25),
-                                    Colors.white.withValues(alpha: 0.15),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: ListTile(
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFB300).withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(
-                                    Icons.business_outlined,
-                                    color: Color(0xFFFFB300),
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(
-                                  'Business Info',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Name, hours, contact',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                trailing: Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  size: 20,
-                                ),
-                                onTap: () {
-                                  final bpMap = _userProfile?['businessProfile'];
-                                  final bp = bpMap != null
-                                      ? BusinessProfile.fromMap(bpMap as Map<String, dynamic>)
-                                      : BusinessProfile();
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => BusinessInfoEdit(businessProfile: bp),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                          // ── Rich Business Profile Section ──
+                          if (AccountType.fromString(_userProfile?['accountType']) == AccountType.business)
+                            _buildBusinessProfileSection(),
 
                           // Account Type Card (non-interactive)
                           IgnorePointer(
@@ -1129,6 +1007,518 @@ class _ProfileWithHistoryScreenState
                   ],
                 ),
         ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ── Rich Business Profile Section (embedded in personal profile)
+  // ══════════════════════════════════════════════════════════════
+
+  Widget _buildBusinessProfileSection() {
+    final bpMap = _userProfile?['businessProfile'];
+    final bp = bpMap != null
+        ? BusinessProfile.fromMap(bpMap as Map<String, dynamic>)
+        : BusinessProfile();
+    final userId = _auth.currentUser?.uid;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        color: Colors.white.withValues(alpha: 0.05),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cover image banner
+          _buildProfileCoverBanner(bp),
+
+          // Business name + label + status
+          _buildProfileBusinessHeader(bp),
+
+          // Stats row
+          _buildProfileStatsRow(bp),
+
+          // Quick action buttons
+          _buildProfileQuickActions(bp),
+
+          // Featured catalog items
+          if (userId != null) _buildProfileFeaturedCatalog(userId),
+
+          // Social links
+          if (bp.socialLinks != null && bp.socialLinks!.isNotEmpty)
+            _buildProfileSocialLinks(bp),
+
+          // View Dashboard button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const BusinessHubScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.dashboard_outlined, size: 18),
+                label: const Text('View Business Dashboard'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF22C55E),
+                  side: BorderSide(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.4),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCoverBanner(BusinessProfile bp) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BusinessInfoEdit(businessProfile: bp),
+          ),
+        );
+      },
+      child: Stack(
+        children: [
+          Container(
+            height: 120,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: bp.coverImageUrl == null
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+                    )
+                  : null,
+            ),
+            child: bp.coverImageUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: bp.coverImageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+                        ),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      size: 40,
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                  ),
+          ),
+          // Dark overlay
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.5),
+                ],
+              ),
+            ),
+          ),
+          // Edit icon
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.edit_outlined, color: Colors.white, size: 16),
+            ),
+          ),
+          // Live/Open badge
+          if (bp.isLive || bp.hours != null)
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: bp.isLive
+                      ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+                      : bp.isCurrentlyOpen
+                          ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                          : Colors.red.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: bp.isLive
+                      ? Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.5))
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (bp.isLive) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      bp.isLive ? 'Live' : (bp.isCurrentlyOpen ? 'Open' : 'Closed'),
+                      style: TextStyle(
+                        color: (bp.isLive || bp.isCurrentlyOpen)
+                            ? const Color(0xFF22C55E)
+                            : Colors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileBusinessHeader(BusinessProfile bp) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            bp.businessName ?? 'My Business',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (bp.softLabel != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A84FF).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                bp.softLabel!,
+                style: const TextStyle(
+                  color: Color(0xFF0A84FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+          if (bp.description != null && bp.description!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              bp.description!,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileStatsRow(BusinessProfile bp) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Row(
+        children: [
+          _profileStatItem(bp.profileViews.toString(), 'Views'),
+          _profileStatDivider(),
+          _profileStatItem(bp.catalogViews.toString(), 'Catalog'),
+          _profileStatDivider(),
+          _profileStatItem(bp.enquiryCount.toString(), 'Enquiries'),
+          _profileStatDivider(),
+          _profileStatItem(
+            bp.averageRating > 0 ? bp.averageRating.toStringAsFixed(1) : '-',
+            'Rating',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileStatItem(String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.45),
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileStatDivider() {
+    return Container(
+      width: 1,
+      height: 28,
+      color: Colors.white.withValues(alpha: 0.1),
+    );
+  }
+
+  Widget _buildProfileQuickActions(BusinessProfile bp) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+      child: Row(
+        children: [
+          _profileActionChip(
+            icon: Icons.edit_outlined,
+            label: 'Edit Info',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BusinessInfoEdit(businessProfile: bp),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          _profileActionChip(
+            icon: Icons.access_time,
+            label: 'Hours',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BusinessHoursEdit(
+                    hours: bp.hours ?? BusinessHours.defaultHours(),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          _profileActionChip(
+            icon: Icons.storefront_outlined,
+            label: 'Catalog',
+            color: const Color(0xFF22C55E),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CatalogManagementScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileActionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final c = color ?? Colors.white.withValues(alpha: 0.7);
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: c.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: c.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: c, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: c,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileFeaturedCatalog(String userId) {
+    return FutureBuilder<List<CatalogItem>>(
+      future: CatalogService().getAvailableItems(userId, limit: 6),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? [];
+        if (items.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Featured',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CatalogManagementScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'See All',
+                      style: TextStyle(
+                        color: const Color(0xFF0A84FF).withValues(alpha: 0.8),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 160,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  return SizedBox(
+                    width: 130,
+                    child: CatalogCardWidget(
+                      item: items[index],
+                      compact: true,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CatalogManagementScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileSocialLinks(BusinessProfile bp) {
+    final links = bp.socialLinks!;
+    final socialIcons = <String, IconData>{
+      'instagram': Icons.camera_alt_outlined,
+      'facebook': Icons.facebook_outlined,
+      'twitter': Icons.alternate_email,
+      'linkedin': Icons.work_outline,
+      'youtube': Icons.play_circle_outline,
+      'website': Icons.language,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      child: Row(
+        children: links.entries
+            .where((e) => e.value.isNotEmpty)
+            .map((e) {
+              final icon = socialIcons[e.key.toLowerCase()] ?? Icons.link;
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () {
+                    // Could launch URL in future
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 18),
+                  ),
+                ),
+              );
+            })
+            .toList(),
       ),
     );
   }

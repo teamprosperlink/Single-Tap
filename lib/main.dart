@@ -321,8 +321,8 @@ void main() async {
 
 /// Initialize non-critical services after app has started rendering
 Future<void> _initializeServicesInBackground() async {
-  // Shorter delay - reduced from 500ms to 200ms for faster startup
-  await Future.delayed(const Duration(milliseconds: 200));
+  // Delay to let the first frame render before starting heavy services
+  await Future.delayed(const Duration(milliseconds: 500));
 
   // Initialize Firebase Analytics
   unawaited(AnalyticsService().initialize().catchError((e) {}));
@@ -1052,6 +1052,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         );
       } catch (e) {
         // Profile service error (non-fatal)
+      }
+
+      // Claim this device's session on startup so the device monitoring
+      // doesn't detect a stale token mismatch and log the user out.
+      // This handles persistent-auth restarts where another device updated
+      // the server token while this device was offline.
+      try {
+        await _authService.saveCurrentDeviceSession();
+      } catch (e) {
+        // Non-fatal — monitoring will still work
       }
 
       await Future.delayed(const Duration(milliseconds: 100));
