@@ -1,0 +1,260 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
+class ProfileViewsScreen extends StatelessWidget {
+  const ProfileViewsScreen({super.key});
+
+  String? get _userId => FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark
+        ? Colors.white.withValues(alpha: 0.6)
+        : Colors.black.withValues(alpha: 0.5);
+
+    if (_userId == null) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(title: const Text('Profile Views')),
+        body: const Center(child: Text('Please sign in')),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: const Text('Profile Views',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(_userId)
+            .collection('profileViews')
+            .orderBy('viewedAt', descending: true)
+            .limit(100)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+
+          return Column(
+            children: [
+              // Total views header
+              _buildViewsHeader(docs.length, isDark, textColor, subtitleColor),
+
+              // Views list
+              Expanded(
+                child: docs.isEmpty
+                    ? _buildEmptyState(isDark, textColor, subtitleColor)
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final data =
+                              docs[index].data() as Map<String, dynamic>;
+                          return _buildViewItem(
+                              data, isDark, textColor, subtitleColor);
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildViewsHeader(
+      int count, bool isDark, Color textColor, Color subtitleColor) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.visibility_outlined,
+                color: Color(0xFF8B5CF6), size: 24),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Total profile views',
+                style: TextStyle(color: subtitleColor, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewItem(Map<String, dynamic> data, bool isDark,
+      Color textColor, Color subtitleColor) {
+    final viewerName = data['viewerName'] as String? ?? 'Someone';
+    final viewerPhotoUrl = data['viewerPhotoUrl'] as String?;
+    final viewedAt = data['viewedAt'] != null
+        ? (data['viewedAt'] as Timestamp).toDate()
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: isDark
+                ? const Color(0xFF2C2C2E)
+                : const Color(0xFFF0F0F5),
+            backgroundImage: viewerPhotoUrl != null && viewerPhotoUrl.isNotEmpty
+                ? CachedNetworkImageProvider(viewerPhotoUrl)
+                : null,
+            child: viewerPhotoUrl == null || viewerPhotoUrl.isEmpty
+                ? Text(
+                    viewerName.isNotEmpty ? viewerName[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                      color: Color(0xFF8B5CF6),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+
+          // Name + time
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  viewerName,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (viewedAt != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatTime(viewedAt),
+                    style: TextStyle(color: subtitleColor, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Time ago
+          if (viewedAt != null)
+            Text(
+              _timeAgo(viewedAt),
+              style: TextStyle(color: subtitleColor, fontSize: 12),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final min = dt.minute.toString().padLeft(2, '0');
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} at $hour:$min $ampm';
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()}w ago';
+    return '${(diff.inDays / 30).floor()}mo ago';
+  }
+
+  Widget _buildEmptyState(
+      bool isDark, Color textColor, Color subtitleColor) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(Icons.visibility_off_outlined,
+                size: 36,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.2)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No views yet',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'When someone views your profile,\nit will show up here',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: subtitleColor, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
