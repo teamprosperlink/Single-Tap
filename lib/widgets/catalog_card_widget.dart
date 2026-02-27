@@ -91,15 +91,11 @@ class CatalogCardWidget extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: item.type == CatalogItemType.service
-                            ? const Color(0xFF3B82F6).withValues(alpha: 0.9)
-                            : const Color(0xFF22C55E).withValues(alpha: 0.9),
+                        color: _badgeColor(item.type),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        item.type == CatalogItemType.service
-                            ? 'Service'
-                            : 'Product',
+                        _badgeLabel(item.type),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -156,14 +152,39 @@ class CatalogCardWidget extends StatelessWidget {
     );
   }
 
+  Color _badgeColor(CatalogItemType type) {
+    switch (type) {
+      case CatalogItemType.service:
+        return const Color(0xFF3B82F6).withValues(alpha: 0.9);
+      case CatalogItemType.product:
+        return const Color(0xFF22C55E).withValues(alpha: 0.9);
+    }
+  }
+
+  String _badgeLabel(CatalogItemType type) {
+    switch (type) {
+      case CatalogItemType.service:
+        return 'Service';
+      case CatalogItemType.product:
+        return 'Product';
+    }
+  }
+
+  IconData _placeholderIcon(CatalogItemType type) {
+    switch (type) {
+      case CatalogItemType.service:
+        return Icons.build_outlined;
+      case CatalogItemType.product:
+        return Icons.shopping_bag_outlined;
+    }
+  }
+
   Widget _placeholder(bool isDark) {
     return Container(
       color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF0F0F0),
       child: Center(
         child: Icon(
-          item.type == CatalogItemType.service
-              ? Icons.home_repair_service_outlined
-              : Icons.shopping_bag_outlined,
+          _placeholderIcon(item.type),
           size: compact ? 28 : 40,
           color: isDark
               ? Colors.white.withValues(alpha: 0.3)

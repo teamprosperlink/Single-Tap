@@ -22,8 +22,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _durationController = TextEditingController();
 
-  CatalogItemType _type = CatalogItemType.product;
+  CatalogItemType _type = CatalogItemType.service;
   bool _isAvailable = true;
   String _currency = 'INR';
   File? _imageFile;
@@ -43,6 +44,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
       _isAvailable = item.isAvailable;
       _currency = item.currency;
       _existingImageUrl = item.imageUrl;
+      if (item.duration != null) {
+        _durationController.text = item.duration.toString();
+      }
     }
   }
 
@@ -51,8 +55,11 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _durationController.dispose();
     super.dispose();
   }
+
+  bool get _showDuration => _type == CatalogItemType.service;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -67,6 +74,18 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     }
   }
 
+  int? _parseDuration(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+    // Support "45", "45 min", "1.5h", "90min"
+    final numOnly = double.tryParse(trimmed.replaceAll(RegExp(r'[^0-9.]'), ''));
+    if (numOnly == null) return null;
+    if (trimmed.toLowerCase().contains('h')) {
+      return (numOnly * 60).round();
+    }
+    return numOnly.round();
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -77,7 +96,6 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     try {
       String? imageUrl = _existingImageUrl;
 
-      // Upload new image if selected
       if (_imageFile != null) {
         imageUrl =
             await _catalogService.uploadCatalogImage(_imageFile!, userId);
@@ -85,9 +103,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
 
       final priceText = _priceController.text.trim();
       final price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
+      final duration = _showDuration ? _parseDuration(_durationController.text) : null;
 
       if (widget.isEditing) {
-        // Update existing item
         await _catalogService.updateItem(userId, widget.item!.id, {
           'name': _nameController.text.trim(),
           'description': _descriptionController.text.trim().isNotEmpty
@@ -98,9 +116,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
           'imageUrl': imageUrl,
           'type': _type.name,
           'isAvailable': _isAvailable,
+          'duration': duration,
         });
       } else {
-        // Add new item
         final item = CatalogItem(
           id: '',
           userId: userId,
@@ -113,6 +131,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
           imageUrl: imageUrl,
           type: _type,
           isAvailable: _isAvailable,
+          duration: duration,
         );
 
         final itemId = await _catalogService.addItem(item);
@@ -156,11 +175,16 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
+    final currencySymbol = _currency == 'USD' ? '\$' : '\u20B9';
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit Item' : 'Add Item'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(widget.isEditing ? 'Edit Item' : 'Add New Item'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -174,7 +198,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                   )
                 : const Text('Save',
                     style: TextStyle(
-                        color: Color(0xFF22C55E), fontWeight: FontWeight.w600)),
+                        color: Color(0xFF3B82F6),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15)),
           ),
         ],
       ),
@@ -183,24 +209,51 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Image
+            // ── Item Type chips ──
+            Text('Item Type',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _typeChip('Service', CatalogItemType.service,
+                    Icons.build_outlined, isDark),
+                const SizedBox(width: 8),
+                _typeChip('Product', CatalogItemType.product,
+                    Icons.shopping_bag_outlined, isDark),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Item Image ──
+            Text('Item Image',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
             GestureDetector(
               onTap: _pickImage,
               child: Container(
-                height: 200,
+                height: 160,
                 decoration: BoxDecoration(
                   color: cardColor,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
                   image: _imageFile != null
                       ? DecorationImage(
-                          image: FileImage(_imageFile!),
-                          fit: BoxFit.cover,
-                        )
+                          image: FileImage(_imageFile!), fit: BoxFit.cover)
                       : (_existingImageUrl != null
                           ? DecorationImage(
                               image: NetworkImage(_existingImageUrl!),
-                              fit: BoxFit.cover,
-                            )
+                              fit: BoxFit.cover)
                           : null),
                 ),
                 child: (_imageFile == null && _existingImageUrl == null)
@@ -208,15 +261,29 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_photo_alternate_outlined,
-                                size: 40,
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.4)
-                                    : Colors.black.withValues(alpha: 0.3)),
+                            Icon(Icons.camera_alt_outlined,
+                                size: 32, color: subtitleColor),
                             const SizedBox(height: 8),
-                            Text('Add Photo',
+                            Text('Upload Images',
                                 style: TextStyle(
-                                    color: subtitleColor, fontSize: 14)),
+                                    color: textColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3B82F6)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Select Files',
+                                  style: TextStyle(
+                                      color: Color(0xFF3B82F6),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500)),
+                            ),
                           ],
                         ),
                       )
@@ -230,124 +297,192 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.camera_alt,
-                              color: Colors.white, size: 20),
+                              color: Colors.white, size: 18),
                         ),
                       ),
               ),
             ),
+
+            const SizedBox(height: 20),
+
+            // ── Item Name ──
+            Text('Item Name',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _nameController,
+              style: TextStyle(color: textColor),
+              decoration: _inputDecoration(
+                _type == CatalogItemType.service
+                    ? 'e.g., Hair Cut & Styling'
+                    : 'e.g., Organic Shampoo',
+                isDark,
+              ),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Name is required' : null,
+            ),
+
             const SizedBox(height: 16),
 
-            // Form fields
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _nameController,
-                    style: TextStyle(color: textColor),
-                    decoration: _inputDecoration('Item Name *', isDark),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Name is required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _descriptionController,
-                    style: TextStyle(color: textColor),
-                    decoration: _inputDecoration('Description', isDark),
-                    maxLines: 3,
-                    maxLength: 500,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
+            // ── Description ──
+            Text('Description',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _descriptionController,
+              style: TextStyle(color: textColor),
+              decoration: _inputDecoration('Describe your item...', isDark),
+              maxLines: 3,
+              maxLength: 500,
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Price + Duration row ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Price
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Currency
-                      SizedBox(
-                        width: 100,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _currency,
-                          decoration: _inputDecoration('', isDark).copyWith(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 14),
+                      Text('Price',
+                          style: TextStyle(
+                              color: textColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _priceController,
+                        style: TextStyle(color: textColor),
+                        decoration: _inputDecoration('0.00', isDark).copyWith(
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.only(left: 12, right: 4),
+                            child: Text(currencySymbol,
+                                style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500)),
                           ),
-                          dropdownColor: cardColor,
-                          isExpanded: true,
-                          style: TextStyle(color: textColor, fontSize: 14),
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'INR', child: Text('\u20B9 INR')),
-                            DropdownMenuItem(
-                                value: 'USD', child: Text('\$ USD')),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) setState(() => _currency = v);
-                          },
+                          prefixIconConstraints:
+                              const BoxConstraints(minWidth: 0, minHeight: 0),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Price
-                      Expanded(
-                        child: TextFormField(
-                          controller: _priceController,
-                          style: TextStyle(color: textColor),
-                          decoration: _inputDecoration(
-                              'Price (leave empty for "Contact")', isDark),
-                          keyboardType: TextInputType.number,
-                        ),
+                        keyboardType: TextInputType.number,
                       ),
                     ],
+                  ),
+                ),
+
+                // Duration (Service / Booking only)
+                if (_showDuration) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Duration',
+                            style: TextStyle(
+                                color: textColor,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _durationController,
+                          style: TextStyle(color: textColor),
+                          decoration:
+                              _inputDecoration('e.g., 45 min', isDark).copyWith(
+                            prefixIcon: Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 12, right: 4),
+                              child: Icon(Icons.access_time,
+                                  size: 18, color: subtitleColor),
+                            ),
+                            prefixIconConstraints:
+                                const BoxConstraints(minWidth: 0, minHeight: 0),
+                          ),
+                          keyboardType: TextInputType.text,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 16),
 
-            // Type toggle
+            const SizedBox(height: 20),
+
+            // ── Active Status ──
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: cardColor,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text('Type',
-                      style: TextStyle(
-                          color: subtitleColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _typeChip('Product', CatalogItemType.product,
-                          Icons.shopping_bag_outlined, isDark),
-                      const SizedBox(width: 12),
-                      _typeChip('Service', CatalogItemType.service,
-                          Icons.home_repair_service_outlined, isDark),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SwitchListTile(
-                    title: Text('Available',
-                        style: TextStyle(color: textColor, fontSize: 15)),
-                    subtitle: Text(
-                      _isAvailable
-                          ? 'Visible to customers'
-                          : 'Hidden from customers',
-                      style: TextStyle(color: subtitleColor, fontSize: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Active Status',
+                            style: TextStyle(
+                                color: textColor,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text('Make this item available to customers',
+                            style:
+                                TextStyle(color: subtitleColor, fontSize: 13)),
+                      ],
                     ),
+                  ),
+                  Switch(
                     value: _isAvailable,
                     onChanged: (v) => setState(() => _isAvailable = v),
                     activeThumbColor: const Color(0xFF22C55E),
-                    contentPadding: EdgeInsets.zero,
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 28),
+
+            // ── Save Button ──
+            SizedBox(
+              height: 50,
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(
+                        widget.isEditing ? 'Update Item' : 'Save Item',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -361,34 +496,38 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
       child: GestureDetector(
         onTap: () => setState(() => _type = type),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                ? const Color(0xFF3B82F6)
                 : (isDark
                     ? const Color(0xFF2C2C2E)
                     : const Color(0xFFF0F0F0)),
             borderRadius: BorderRadius.circular(10),
-            border:
-                selected ? Border.all(color: const Color(0xFF22C55E)) : null,
+            border: selected
+                ? Border.all(color: const Color(0xFF3B82F6))
+                : Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon,
-                  size: 18,
+                  size: 20,
                   color: selected
-                      ? const Color(0xFF22C55E)
-                      : (isDark ? Colors.white70 : Colors.black54)),
-              const SizedBox(width: 6),
+                      ? Colors.white
+                      : (isDark ? Colors.white60 : Colors.black45)),
+              const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
                   color: selected
-                      ? const Color(0xFF22C55E)
-                      : (isDark ? Colors.white : Colors.black),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 14,
+                      ? Colors.white
+                      : (isDark ? Colors.white70 : Colors.black54),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -398,13 +537,13 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, bool isDark) {
+  InputDecoration _inputDecoration(String hint, bool isDark) {
     return InputDecoration(
-      labelText: label.isNotEmpty ? label : null,
-      labelStyle: TextStyle(
+      hintText: hint,
+      hintStyle: TextStyle(
         color: isDark
-            ? Colors.white.withValues(alpha: 0.5)
-            : Colors.black.withValues(alpha: 0.4),
+            ? Colors.white.withValues(alpha: 0.35)
+            : Colors.black.withValues(alpha: 0.3),
       ),
       filled: true,
       fillColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),

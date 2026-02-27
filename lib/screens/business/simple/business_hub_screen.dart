@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
+import '../../../services/account_type_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
 import 'business_setup_flow.dart';
 import 'business_info_edit.dart';
-import 'business_hours_edit.dart';
 import 'catalog_item_form.dart';
+import 'catalog_management_screen.dart';
+import 'profile_views_screen.dart';
+import 'bookings_screen.dart';
+import 'reviews_screen.dart';
+import '../../profile/profile_view_screen.dart';
 
 class BusinessHubScreen extends StatefulWidget {
   const BusinessHubScreen({super.key});
@@ -19,7 +25,9 @@ class BusinessHubScreen extends StatefulWidget {
 
 class _BusinessHubScreenState extends State<BusinessHubScreen> {
   final _catalogService = CatalogService();
+  final _accountService = AccountTypeService();
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
+  bool _hasItems = false;
 
   void _addItem() {
     Navigator.push(
@@ -36,83 +44,98 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   }
 
   void _showItemOptions(CatalogItem item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1C1C1E),
+      backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined, color: Colors.white),
-              title:
-                  const Text('Edit', style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _editItem(item);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                item.isAvailable
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: Colors.white,
+      builder: (ctx) {
+        final textColor = isDark ? Colors.white : Colors.black;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              title: Text(
-                item.isAvailable ? 'Mark Unavailable' : 'Mark Available',
-                style: const TextStyle(color: Colors.white),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(Icons.edit_outlined, color: textColor),
+                title: Text('Edit', style: TextStyle(color: textColor)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editItem(item);
+                },
               ),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _catalogService.toggleAvailability(
-                  item.userId,
-                  item.id,
-                  !item.isAvailable,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title:
-                  const Text('Delete', style: TextStyle(color: Colors.red)),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: const Color(0xFF1C1C1E),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              ListTile(
+                leading: Icon(
+                  item.isAvailable
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: textColor,
+                ),
+                title: Text(
+                  item.isAvailable ? 'Mark Unavailable' : 'Mark Available',
+                  style: TextStyle(color: textColor),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _catalogService.toggleAvailability(
+                    item.userId,
+                    item.id,
+                    !item.isAvailable,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title:
+                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: Text('Delete Item',
+                          style: TextStyle(color: textColor)),
+                      content: Text('Delete "${item.name}"?',
+                          style: TextStyle(
+                              color: textColor.withValues(alpha: 0.7))),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
                     ),
-                    title: const Text('Delete Item',
-                        style: TextStyle(color: Colors.white)),
-                    content: Text('Delete "${item.name}"?',
-                        style: const TextStyle(color: Colors.white70)),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Delete',
-                            style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true && _userId != null) {
-                  await _catalogService.deleteItem(_userId!, item.id);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+                  );
+                  if (confirm == true && _userId != null) {
+                    await _catalogService.deleteItem(_userId!, item.id);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -122,7 +145,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text('Please sign in', style: TextStyle(color: Colors.white)),
+          child:
+              Text('Please sign in', style: TextStyle(color: Colors.white)),
         ),
       );
     }
@@ -140,7 +164,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           );
         }
 
-        final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+        final userData =
+            userSnapshot.data?.data() as Map<String, dynamic>?;
         final isBusiness =
             AccountType.fromString(userData?['accountType']) ==
                 AccountType.business;
@@ -154,7 +179,9 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 Map<String, dynamic>.from(userData!['businessProfile']))
             : BusinessProfile();
 
-        return _buildBusinessView(bp);
+        final location = userData?['location'] as String?;
+
+        return _buildBusinessDashboard(bp, location);
       },
     );
   }
@@ -162,8 +189,9 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   // ── Non-business users: prompt to enable ──
 
   Widget _buildEnableBusinessView() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
       appBar: AppBar(
         title: const Text('Business'),
         backgroundColor: Colors.transparent,
@@ -187,10 +215,10 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                     size: 40, color: Color(0xFF22C55E)),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Enable Business Mode',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: isDark ? Colors.white : Colors.black,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
@@ -200,7 +228,9 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 'Add products, services, and a catalog to your profile. Customers can browse and enquire directly.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.6)
+                      : Colors.black.withValues(alpha: 0.5),
                   fontSize: 15,
                   height: 1.4,
                 ),
@@ -226,8 +256,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                     elevation: 0,
                   ),
                   child: const Text('Get Started',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -237,196 +267,248 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     );
   }
 
-  // ── Business users: full hub ──
+  // ── Business Dashboard ──
 
-  Widget _buildBusinessView(BusinessProfile bp) {
+  Widget _buildBusinessDashboard(BusinessProfile bp, String? location) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('My Business'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addItem,
-        backgroundColor: const Color(0xFF22C55E),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
       body: CustomScrollView(
         slivers: [
-          // Business header + stats + actions
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                _buildBusinessHeader(bp),
-                const SizedBox(height: 12),
-                _buildStatsRow(bp),
-                const SizedBox(height: 12),
-                _buildQuickActions(bp),
-                const SizedBox(height: 16),
-                // Catalog section title
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'My Catalog',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      StreamBuilder<List<CatalogItem>>(
-                        stream: _catalogService.streamCatalog(_userId!),
-                        builder: (context, snap) {
-                          final count = snap.data?.length ?? 0;
-                          return Text(
-                            '$count / ${CatalogService.maxItems}',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 13,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Catalog grid
-          _buildCatalogGrid(),
-        ],
-      ),
-    );
-  }
+          // Collapsing app bar with cover image
+          _buildSliverAppBar(bp, location, isDark),
 
-  Widget _buildBusinessHeader(BusinessProfile bp) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          // Business icon
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF22C55E).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.storefront_rounded,
-                color: Color(0xFF22C55E), size: 24),
+          // Quick Actions
+          SliverToBoxAdapter(child: _buildQuickActions(bp, isDark)),
+
+          // Profile completeness (hidden when 100%)
+          SliverToBoxAdapter(
+            child: _buildProfileCompleteness(bp, isDark),
           ),
-          const SizedBox(width: 14),
-          // Name + label
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  bp.businessName ?? 'My Business',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (bp.softLabel != null) ...[
-                  const SizedBox(height: 4),
+
+          // Catalog header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
                   Text(
-                    bp.softLabel!,
+                    'My Catalog',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 13,
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const Spacer(),
+                  StreamBuilder<List<CatalogItem>>(
+                    stream: _catalogService.streamCatalog(_userId!),
+                    builder: (context, snap) {
+                      final count = snap.data?.length ?? 0;
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const CatalogManagementScreen()),
+                          );
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              '$count items',
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.5)
+                                    : Colors.black.withValues(alpha: 0.4),
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 18,
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.4)
+                                  : Colors.black.withValues(alpha: 0.3),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ],
-              ],
+              ),
             ),
           ),
-          // Open/Closed badge
-          if (bp.hours != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: bp.isCurrentlyOpen
-                    ? const Color(0xFF22C55E).withValues(alpha: 0.15)
-                    : Colors.red.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
+
+          // Catalog grid
+          _buildCatalogGrid(isDark),
+
+          // Bottom padding (nav bar 60 + FAB ~56 + safe area + margin)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: MediaQuery.of(context).padding.bottom + 140,
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: _hasItems
+          ? Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 60,
               ),
-              child: Text(
-                bp.isCurrentlyOpen ? 'Open' : 'Closed',
-                style: TextStyle(
-                  color: bp.isCurrentlyOpen
-                      ? const Color(0xFF22C55E)
-                      : Colors.red,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              child: FloatingActionButton.extended(
+                onPressed: _addItem,
+                backgroundColor: const Color(0xFF22C55E),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Add Item',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            )
+          : null,
+    );
+  }
+
+  // ── SliverAppBar with cover image ──
+
+  Widget _buildSliverAppBar(
+      BusinessProfile bp, String? location, bool isDark) {
+    return SliverAppBar(
+      expandedHeight: 200,
+      pinned: true,
+      automaticallyImplyLeading: false,
+      backgroundColor: isDark ? Colors.black : Colors.white,
+      surfaceTintColor: Colors.transparent,
+      title: const Text('My Business',
+          style: TextStyle(fontWeight: FontWeight.w600)),
+      actions: [
+        // Live toggle
+        _buildLiveChip(bp),
+        const SizedBox(width: 4),
+        // Preview as customer
+        IconButton(
+          icon: const Icon(Icons.remove_red_eye_outlined, size: 22),
+          tooltip: 'Preview as customer',
+          onPressed: () => _previewProfile(),
+        ),
+        // Edit button
+        IconButton(
+          icon: const Icon(Icons.edit_outlined, size: 22),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessInfoEdit(businessProfile: bp),
+              ),
+            );
+          },
+        ),
+        const SizedBox(width: 4),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Cover image
+            if (bp.coverImageUrl != null)
+              CachedNetworkImage(
+                imageUrl: bp.coverImageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => _coverGradient(),
+                errorWidget: (_, __, ___) => _coverGradient(),
+              )
+            else
+              _coverGradient(),
+
+            // Dark gradient overlay for text readability
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.4, 1.0],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildStatsRow(BusinessProfile bp) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          _statCard('Profile Views', bp.profileViews),
-          const SizedBox(width: 10),
-          _statCard('Catalog Views', bp.catalogViews),
-          const SizedBox(width: 10),
-          _statCard('Enquiries', bp.enquiryCount),
-        ],
-      ),
-    );
-  }
-
-  Widget _statCard(String label, int value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value.toString(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            // Business info at bottom of header
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    bp.businessName ?? 'My Business',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 8,
+                          color: Colors.black54,
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (bp.softLabel != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            bp.softLabel!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (bp.address != null || location != null) ...[
+                        Icon(Icons.location_on_outlined,
+                            size: 14,
+                            color:
+                                Colors.white.withValues(alpha: 0.8)),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            bp.address ?? location ?? '',
+                            style: TextStyle(
+                              color:
+                                  Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 11,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -434,75 +516,230 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     );
   }
 
-  Widget _buildQuickActions(BusinessProfile bp) {
+  Widget _coverGradient() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveChip(BusinessProfile bp) {
+    return GestureDetector(
+      onTap: () => _toggleLive(bp),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: bp.isLive
+              ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: bp.isLive
+              ? Border.all(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.5))
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (bp.isLive) ...[
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF22C55E),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Live',
+                style: TextStyle(
+                  color: Color(0xFF22C55E),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ] else ...[
+              Icon(Icons.circle_outlined,
+                  size: 12,
+                  color: Colors.white.withValues(alpha: 0.5)),
+              const SizedBox(width: 5),
+              Text(
+                bp.isCurrentlyOpen ? 'Open' : 'Offline',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleLive(BusinessProfile bp) async {
+    await _accountService.toggleLiveStatus(!bp.isLive);
+  }
+
+  Future<void> _previewProfile() async {
+    final uid = _userId;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    if (!doc.exists || !mounted) return;
+    final profile = UserProfile.fromFirestore(doc);
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileViewScreen(userProfile: profile),
+      ),
+    );
+  }
+
+  // ── Quick Actions ──
+
+  Widget _buildQuickActions(BusinessProfile bp, bool isDark) {
+    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          _actionButton(
-            icon: Icons.edit_outlined,
-            label: 'Edit Info',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BusinessInfoEdit(businessProfile: bp),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-          _actionButton(
-            icon: Icons.access_time,
-            label: 'Hours',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BusinessHoursEdit(
-                    hours: bp.hours ?? BusinessHours.defaultHours(),
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-          _actionButton(
-            icon: Icons.add_circle_outline,
-            label: 'Add Item',
+          _quickAction(
+            icon: Icons.storefront_outlined,
+            label: 'Catalog',
             color: const Color(0xFF22C55E),
-            onTap: _addItem,
+            cardBg: cardBg,
+            textColor: textColor,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CatalogManagementScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+          _quickAction(
+            icon: Icons.calendar_month_outlined,
+            label: 'Bookings',
+            color: const Color(0xFF3B82F6),
+            cardBg: cardBg,
+            textColor: textColor,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const BookingsScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+          _quickAction(
+            icon: Icons.star_outline_rounded,
+            label: 'Reviews',
+            color: const Color(0xFFF59E0B),
+            cardBg: cardBg,
+            textColor: textColor,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ReviewsScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+          _quickAction(
+            icon: Icons.visibility_outlined,
+            label: 'Views',
+            color: const Color(0xFF8B5CF6),
+            cardBg: cardBg,
+            textColor: textColor,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ProfileViewsScreen()),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _actionButton({
+  Widget _quickAction({
     required IconData icon,
     required String label,
+    required Color color,
+    required Color cardBg,
+    required Color textColor,
     required VoidCallback onTap,
-    Color? color,
+    String? badge,
   }) {
-    final c = color ?? Colors.white;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: c.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: c.withValues(alpha: 0.2)),
+            color: cardBg,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             children: [
-              Icon(icon, color: c, size: 22),
-              const SizedBox(height: 6),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: color, size: 22),
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      top: -4,
+                      right: -8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badge,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: c,
+                  color: textColor.withValues(alpha: 0.8),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -514,10 +751,108 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     );
   }
 
-  Widget _buildCatalogGrid() {
+  // ── Profile Completeness ──
+
+  Widget _buildProfileCompleteness(BusinessProfile bp, bool isDark) {
+    final checks = [
+      (bp.businessName != null && bp.businessName!.isNotEmpty, 'Business Name', 20),
+      (bp.description != null && bp.description!.isNotEmpty, 'Description', 15),
+      (bp.softLabel != null && bp.softLabel!.isNotEmpty, 'Category Label', 10),
+      (bp.coverImageUrl != null, 'Cover Image', 10),
+      (bp.contactPhone != null || bp.contactEmail != null, 'Contact Info', 15),
+      (bp.address != null && bp.address!.isNotEmpty, 'Address', 10),
+      (bp.hours != null, 'Business Hours', 10),
+      (bp.socialLinks != null && bp.socialLinks!.isNotEmpty, 'Social Links', 10),
+    ];
+
+    final score = checks.fold<int>(0, (acc, c) => c.$1 ? acc + c.$3 : acc);
+    if (score >= 100) return const SizedBox.shrink();
+
+    final missing = checks.where((c) => !c.$1).map((c) => c.$2).toList();
+    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF22C55E).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.task_alt_outlined,
+                  size: 15, color: Color(0xFF22C55E)),
+              const SizedBox(width: 6),
+              Text(
+                'Profile $score% complete',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        BusinessInfoEdit(businessProfile: bp),
+                  ),
+                ),
+                child: const Text(
+                  'Complete profile →',
+                  style: TextStyle(
+                    color: Color(0xFF22C55E),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (score / 100).clamp(0.0, 1.0),
+              backgroundColor: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.06),
+              valueColor:
+                  const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+              minHeight: 6,
+            ),
+          ),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'Missing: ${missing.take(3).join(', ')}${missing.length > 3 ? '…' : ''}',
+              style: TextStyle(
+                color: isDark ? Colors.white54 : Colors.black45,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Catalog Grid ──
+
+  Widget _buildCatalogGrid(bool isDark) {
     if (_userId == null) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
+
+    final textColor = isDark ? Colors.white : Colors.black;
 
     return StreamBuilder<List<CatalogItem>>(
       stream: _catalogService.streamCatalog(_userId!),
@@ -533,40 +868,63 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
 
         final items = snapshot.data ?? [];
 
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _hasItems != items.isNotEmpty) {
+            setState(() => _hasItems = items.isNotEmpty);
+          }
+        });
+
         if (items.isEmpty) {
           return SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
               child: Column(
                 children: [
-                  Icon(Icons.inventory_2_outlined,
-                      size: 56,
-                      color: Colors.white.withValues(alpha: 0.25)),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(Icons.inventory_2_outlined,
+                        size: 32,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.black.withValues(alpha: 0.15)),
+                  ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'No items yet',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: textColor,
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add your first product or service',
+                    'Add your first product or service\nto start your catalog',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: textColor.withValues(alpha: 0.5),
                       fontSize: 14,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   ElevatedButton.icon(
                     onPressed: _addItem,
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Item'),
+                    label: const Text('Add First Item'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF22C55E),
                       foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -579,7 +937,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         }
 
         return SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           sliver: SliverGrid(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,

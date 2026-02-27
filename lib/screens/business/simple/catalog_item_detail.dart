@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/catalog_item.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/catalog_service.dart';
+import 'booking_request_screen.dart';
 
 class CatalogItemDetail extends StatelessWidget {
   final CatalogItem item;
@@ -251,20 +252,48 @@ class CatalogItemDetail extends StatelessWidget {
                 // Action buttons
                 Row(
                   children: [
-                    // Enquire button
+                    // Book Now (services) or Enquire (products)
                     Expanded(
                       flex: 3,
                       child: SizedBox(
                         height: 48,
                         child: ElevatedButton.icon(
-                          onPressed: item.isAvailable ? onEnquire : null,
-                          icon: const Icon(Icons.chat_outlined, size: 20),
-                          label: const Text('Enquire',
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600)),
+                          onPressed: item.isAvailable
+                              ? () {
+                                  if (item.type == CatalogItemType.service) {
+                                    Navigator.pop(context);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => BookingRequestScreen(
+                                          item: item,
+                                          businessUser: businessUser,
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    onEnquire?.call();
+                                  }
+                                }
+                              : null,
+                          icon: Icon(
+                            item.type == CatalogItemType.service
+                                ? Icons.calendar_month_outlined
+                                : Icons.chat_outlined,
+                            size: 20,
+                          ),
+                          label: Text(
+                            item.type == CatalogItemType.service
+                                ? 'Book Now'
+                                : 'Enquire',
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600),
+                          ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF22C55E),
+                            backgroundColor: item.type == CatalogItemType.service
+                                ? const Color(0xFF3B82F6)
+                                : const Color(0xFF22C55E),
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: isDark
                                 ? const Color(0xFF2C2C2E)
