@@ -1088,7 +1088,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Text(
               steps[step],
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive ? _color : Colors.grey[600],
               ),

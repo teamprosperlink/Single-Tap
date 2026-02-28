@@ -1282,7 +1282,7 @@ class _MembershipDetailsSheetState extends State<_MembershipDetailsSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

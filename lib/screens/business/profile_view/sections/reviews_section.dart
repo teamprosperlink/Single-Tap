@@ -191,7 +191,7 @@ class ReviewsSection extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(
+                      const Icon(
                         Icons.star,
                         size: 12,
                         color: AppColors.iosYellow,

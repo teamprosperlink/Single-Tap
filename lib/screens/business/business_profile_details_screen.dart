@@ -559,7 +559,7 @@ class _BusinessProfileDetailsScreenState
 
     final success = await _businessService.updateBusinessProfile(updatedBusiness);
 
-    setState(() => _isSaving = false);
+    if (mounted) setState(() => _isSaving = false);
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

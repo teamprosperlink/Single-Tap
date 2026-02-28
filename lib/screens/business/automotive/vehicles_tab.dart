@@ -1529,7 +1529,7 @@ class _VehicleFormSheetState extends State<_VehicleFormSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

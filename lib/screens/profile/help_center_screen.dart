@@ -150,7 +150,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         ),
         title: const Text(
           'Help Center',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: PreferredSize(
@@ -237,6 +237,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               Text(
                 category.title,
                 style: const TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -288,6 +289,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     child: Text(
                       faq.question,
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -307,6 +309,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 child: Text(
                   faq.answer,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
                     height: 1.5,

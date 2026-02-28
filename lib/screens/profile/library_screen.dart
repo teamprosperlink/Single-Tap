@@ -41,7 +41,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           .get();
 
       final projects = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
       for (var doc in snapshot.docs) {
+        // Deduplicate by doc.id
+        if (!seenIds.add(doc.id)) continue;
         final data = doc.data();
         projects.add({'id': doc.id, ...data});
       }
@@ -120,23 +123,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Delete Project?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         content: Text(
           'This will delete "$projectName" and remove all chats from this project. The chats themselves won\'t be deleted.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -188,15 +191,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Rename Project',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Project name',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+            hintStyle: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.4)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.08),
             border: OutlineInputBorder(
@@ -210,12 +213,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save', style: TextStyle(color: Colors.blue)),
+            child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', color: Colors.blue)),
           ),
         ],
       ),
@@ -266,6 +269,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 title: const Text(
                   'Library',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -313,7 +317,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Project',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -340,6 +344,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             'No Projects Yet',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.8),
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -352,6 +357,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               'Create projects to organize your chats, add custom instructions, and keep related conversations together.',
               textAlign: TextAlign.center,
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 14,
                 height: 1.4,
@@ -384,6 +390,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   Text(
                     'Create Project',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -487,6 +494,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       Text(
                         name,
                         style: const TextStyle(
+                          fontFamily: 'Poppins',
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -506,6 +514,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           Text(
                             '$chatCount chat${chatCount != 1 ? 's' : ''}',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 12,
                             ),
@@ -514,6 +523,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             Text(
                               '  \u00B7  $timeAgo',
                               style: TextStyle(
+                                fontFamily: 'Poppins',
                                 color: Colors.white.withValues(alpha: 0.3),
                                 fontSize: 12,
                               ),
@@ -563,6 +573,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               Text(
                 description,
                 style: TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 13,
                   height: 1.3,
@@ -597,6 +608,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             label,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: isDestructive ? Colors.red : Colors.white,
               fontSize: 14,
             ),
@@ -695,6 +707,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
       title: const Text(
         'New Project',
         style: TextStyle(
+          fontFamily: 'Poppins',
           color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.w600,
@@ -711,10 +724,11 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               TextField(
                 controller: _nameController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Project name',
                   hintStyle: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.35),
                   ),
                   filled: true,
@@ -743,6 +757,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               Text(
                 'Icon',
                 style: TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -793,7 +808,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(
             'Cancel',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.6)),
           ),
         ),
         TextButton(
@@ -822,6 +837,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
           child: const Text(
             'Create',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Color(0xFF016CFF),
               fontWeight: FontWeight.w600,
             ),
@@ -918,14 +934,18 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
 
       final existingChatIds = Set<String>.from(_project['chatIds'] ?? []);
 
+      final seenChatIds = <String>{};
       final availableChats = allChats.docs
-          .where((doc) => !existingChatIds.contains(doc.id))
+          .where((doc) => seenChatIds.add(doc.id) && !existingChatIds.contains(doc.id))
           .map(
-            (doc) => {
-              'id': doc.id,
-              'title': doc.data()['title'] ?? 'Chat',
-              'createdAt': doc.data()['createdAt'],
-              'selected': false,
+            (doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'title': data['title'] ?? 'Chat',
+                'createdAt': data['createdAt'],
+                'selected': false,
+              };
             },
           )
           .toList();
@@ -1060,6 +1080,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                 title: Text(
                   name,
                   style: const TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -1122,7 +1143,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Chat',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -1150,6 +1171,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           Text(
             'No chats in this project',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.6),
               fontSize: 16,
             ),
@@ -1158,6 +1180,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           Text(
             'Start a new chat or add existing ones',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.35),
               fontSize: 13,
             ),
@@ -1189,6 +1212,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   Text(
                     'Start New Chat',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1217,6 +1241,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   Text(
                     'Add Existing Chats',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: color,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -1277,11 +1302,12 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
             ),
             title: const Text(
               'Remove from project?',
-              style: TextStyle(color: Colors.white, fontSize: 16),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
             ),
             content: Text(
               'This will remove "$title" from the project. The chat itself won\'t be deleted.',
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.6),
                 fontSize: 14,
               ),
@@ -1291,14 +1317,14 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(
                   'Cancel',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.6)),
                 ),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text(
                   'Remove',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
                 ),
               ),
             ],
@@ -1350,6 +1376,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                     Text(
                       title,
                       style: const TextStyle(
+                        fontFamily: 'Poppins',
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -1362,6 +1389,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                       Text(
                         timeStr,
                         style: TextStyle(
+                          fontFamily: 'Poppins',
                           color: Colors.white.withValues(alpha: 0.3),
                           fontSize: 11,
                         ),
@@ -1428,6 +1456,7 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                   child: Text(
                     'Add Chats to Project',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -1451,6 +1480,7 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                       child: Text(
                         'Add (${_selectedIds.length})',
                         style: const TextStyle(
+                          fontFamily: 'Poppins',
                           color: Colors.white,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1535,6 +1565,7 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                           child: Text(
                             title,
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               color: isSelected
                                   ? Colors.white
                                   : Colors.white.withValues(alpha: 0.7),

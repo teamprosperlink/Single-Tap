@@ -15,27 +15,19 @@
       },
       "oauth_client": [
         {
-          "client_id": "1027499426345-2qclqehls729lrmhji6nlii8v4m6bkv4.apps.googleusercontent.com",
+          "client_id": "1027499426345-lvsfhuj1c95eu5u11m8jaoqvn9fagvgn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.plink.supper",
-            "certificate_hash": "738cb209a9f1fdf76dd7867865f3ff8b5867f890"
+            "certificate_hash": "5f61eefbd832b98c8ed46cf21a9cbfc59cfa7835"
           }
         },
         {
-          "client_id": "1027499426345-jke49khj5on1jmddnt1abmbccloequqq.apps.googleusercontent.com",
+          "client_id": "1027499426345-uj2uoctvap5lkod1546l0upb08e4vq67.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.plink.supper",
-            "certificate_hash": "738cb209a9f1fdf76dd7867865f3ff8b5867f890"
-          }
-        },
-        {
-          "client_id": "1027499426345-jke49khj5on1jmddnt1abmbccloequqq.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.plink.supper",
-            "certificate_hash": "e7e92e8a1acd0b63b8fa218d2f43428e7b85bc9c"
+            "certificate_hash": "c88b8ddb77fc4d8fab82d200bb9b4ea198f965a7"
           }
         },
         {
@@ -54,6 +46,13 @@
             {
               "client_id": "1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1027499426345-v7of0f2hqdj0rtt70epdvjv07hlkpo2g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.plink.supper"
+              }
             }
           ]
         }

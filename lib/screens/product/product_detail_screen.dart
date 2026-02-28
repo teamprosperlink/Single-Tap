@@ -111,7 +111,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 50),
                       child: Text(
                         _name,
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -149,7 +149,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 child: Icon(
                                   _categoryIcon,
                                   size: 80,
-                                  color: Colors.white24,
+                                  color: Colors.white38,
                                 ),
                               ),
                             ),
@@ -200,10 +200,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       const SizedBox(width: 5),
                                       Text(
                                         _categoryLabel,
-                                        style: const TextStyle(
+                                        style: const TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,
-                                          fontSize: 11,
+                                          fontSize: 13,
                                         ),
                                       ),
                                     ],
@@ -213,7 +213,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 // Product Name
                                 Text(
                                   _name,
-                                  style: const TextStyle(
+                                  style: const TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.white,
                                     fontSize: 26,
                                     fontWeight: FontWeight.w800,
@@ -234,7 +234,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       Flexible(
                                         child: Text(
                                           _subtitle,
-                                          style: TextStyle(
+                                          style: TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.grey[400],
                                             fontSize: 14,
                                           ),
@@ -261,7 +261,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(width: 3),
                                     Text(
                                       '$_rating',
-                                      style: const TextStyle(
+                                      style: const TextStyle(fontFamily: 'Poppins', 
                                         color: Colors.amber,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -366,7 +366,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     children: [
                                       Text(
                                         _price,
-                                        style: const TextStyle(
+                                        style: const TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontSize: 24,
                                           fontWeight: FontWeight.w800,
@@ -376,7 +376,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         const SizedBox(width: 6),
                                         Text(
                                           _getPriceLabel(),
-                                          style: TextStyle(
+                                          style: TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.grey[500],
                                             fontSize: 12,
                                           ),
@@ -416,7 +416,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         SizedBox(width: 4),
                                         Text(
                                           '20% OFF',
-                                          style: TextStyle(
+                                          style: TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.greenAccent,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
@@ -444,13 +444,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     children: [
                                       Icon(
                                         Icons.info_outline_rounded,
-                                        color: Colors.white70,
+                                        color: Colors.white,
                                         size: 18,
                                       ),
                                       SizedBox(width: 8),
                                       Text(
                                         'Description',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
@@ -461,7 +461,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   const SizedBox(height: 12),
                                   Text(
                                     _getDescription(),
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.grey[400],
                                       fontSize: 13,
                                       height: 1.7,
@@ -586,7 +586,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(width: 6),
                 Text(
                   chip['text'] as String,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -618,7 +618,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -652,7 +652,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(width: 5),
                     Text(
                       f,
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: 'Poppins', 
                         color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -787,12 +787,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 children: [
                   Text(
                     'Price',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey[400]),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     _price,
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -842,7 +842,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         const SizedBox(width: 8),
                         Text(
                           _getPrimaryButtonText(),
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -914,7 +914,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               const SizedBox(height: 20),
               const Text(
                 'Share via',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -960,7 +960,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+          Text(label, style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12)),
         ],
       ),
     );

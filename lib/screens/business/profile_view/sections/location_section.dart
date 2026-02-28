@@ -240,7 +240,7 @@ class LocationSection extends StatelessWidget {
   String _getStaticMapUrl(double lat, double lng) {
     // Using OpenStreetMap static tiles as fallback
     // For production, use Google Static Maps API with your API key
-    final zoom = 15;
+    const zoom = 15;
     return 'https://maps.googleapis.com/maps/api/staticmap?'
         'center=$lat,$lng'
         '&zoom=$zoom'

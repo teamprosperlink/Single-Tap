@@ -7,6 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:http/http.dart' as http;
+import '../../widgets/networking/networking_constants.dart';
+import '../../widgets/networking/networking_widgets.dart';
 
 class EditNetworkingProfileScreen extends StatefulWidget {
   const EditNetworkingProfileScreen({super.key});
@@ -38,6 +41,8 @@ class _EditNetworkingProfileScreenState
   RangeValues _ageRange = const RangeValues(18, 60);
   RangeValues _distanceRange = const RangeValues(1, 500);
   String? _locationCity;
+  double? _userLatitude;
+  double? _userLongitude;
 
   // Selected values
   String? _selectedGender;
@@ -48,1478 +53,9 @@ class _EditNetworkingProfileScreenState
   final List<String> _selectedActivities = [];
   final List<String> _selectedInterests = [];
 
+  bool _allowCalls = true;
   bool _isSaving = false;
   bool _isLoading = true;
-
-  // ── Categories → Subcategories ──
-  static const Map<String, List<String>> _categorySubcategories = {
-    'Professional': [
-      'Job Seekers',
-      'Recruiters',
-      'Freelancers',
-      'Consultants',
-      'Remote Workers',
-      'Career Changers',
-      'Interns',
-      'Mentors',
-      'Resume Review',
-      'Interview Prep',
-    ],
-    'Business': [
-      'Startup Founders',
-      'Investors',
-      'Retailers',
-      'Wholesalers',
-      'Importers & Exporters',
-      'Franchise',
-      'E-commerce',
-      'B2B Services',
-      'Small Business',
-      'Partnerships',
-    ],
-    'Social': [
-      'Dating',
-      'Friendship',
-      'Casual Hangout',
-      'Party Buddies',
-      'Travel Companions',
-      'Roommates',
-      'Pen Pals',
-      'Neighbors',
-      'Nightlife',
-      'Coffee Meetups',
-    ],
-    'Educational': [
-      'Tutoring',
-      'Study Groups',
-      'Online Courses',
-      'Skill Exchange',
-      'Workshops',
-      'Exam Prep',
-      'Language Learning',
-      'Research',
-      'Coding Bootcamp',
-      'Certifications',
-    ],
-    'Creative': [
-      'Photography',
-      'Graphic Design',
-      'Music Production',
-      'Film Making',
-      'Writing & Blogging',
-      'Animation',
-      'Fashion Design',
-      'Interior Design',
-      'Crafts & DIY',
-      'Content Creation',
-    ],
-    'Tech': [
-      'Software Development',
-      'Web Development',
-      'Mobile Apps',
-      'AI & Machine Learning',
-      'Cybersecurity',
-      'Cloud Computing',
-      'Data Science',
-      'Blockchain',
-      'DevOps',
-      'UI/UX Design',
-    ],
-    'Industry': [
-      'Manufacturing',
-      'Construction',
-      'Logistics & Supply Chain',
-      'Agriculture',
-      'Mining & Energy',
-      'Textiles',
-      'Automotive',
-      'Pharmaceuticals',
-      'Food Processing',
-      'Real Estate',
-    ],
-    'Investment & Finance': [
-      'Stock Market',
-      'Mutual Funds',
-      'Real Estate Investment',
-      'Cryptocurrency',
-      'Insurance',
-      'Banking',
-      'Fintech',
-      'Angel Investing',
-      'Venture Capital',
-      'Financial Planning',
-    ],
-    'Event & Meetup': [
-      'Conferences',
-      'Workshops & Seminars',
-      'Hackathons',
-      'Networking Events',
-      'Cultural Events',
-      'Sports Events',
-      'Concerts & Music',
-      'Webinars',
-      'Trade Shows',
-      'Community Gatherings',
-    ],
-    'Community': [
-      'NGO & Nonprofits',
-      'Volunteering',
-      'Social Causes',
-      'Environmental',
-      'Health Awareness',
-      'Education Outreach',
-      'Animal Welfare',
-      'Elder Care',
-      'Women Empowerment',
-      'Youth Development',
-    ],
-    'Personal Development': [
-      'Fitness & Gym',
-      'Meditation & Yoga',
-      'Public Speaking',
-      'Leadership Skills',
-      'Time Management',
-      'Emotional Intelligence',
-      'Goal Setting',
-      'Mindfulness',
-      'Life Coaching',
-      'Book Club',
-    ],
-    'Global / NRI': [
-      'Immigration',
-      'Visa Assistance',
-      'Cultural Exchange',
-      'Overseas Jobs',
-      'Study Abroad',
-      'Diaspora Connect',
-      'International Trade',
-      'Relocation Help',
-      'Foreign Investment',
-      'NRI Services',
-    ],
-  };
-
-  // ── Category icons ──
-  static const Map<String, IconData> _categoryIcons = {
-    'Professional': Icons.business_center_rounded,
-    'Business': Icons.storefront_rounded,
-    'Social': Icons.groups_rounded,
-    'Educational': Icons.school_rounded,
-    'Creative': Icons.palette_rounded,
-    'Tech': Icons.computer_rounded,
-    'Industry': Icons.factory_rounded,
-    'Investment & Finance': Icons.account_balance_rounded,
-    'Event & Meetup': Icons.event_rounded,
-    'Community': Icons.volunteer_activism_rounded,
-    'Personal Development': Icons.self_improvement_rounded,
-    'Global / NRI': Icons.public_rounded,
-  };
-
-  // ── Category colors ──
-  static const Map<String, List<Color>> _categoryColors = {
-    'Professional': [Color(0xFF6366F1), Color(0xFF818CF8)],
-    'Business': [Color(0xFF10B981), Color(0xFF34D399)],
-    'Social': [Color(0xFFEC4899), Color(0xFFF472B6)],
-    'Educational': [Color(0xFFF59E0B), Color(0xFFFBBF24)],
-    'Creative': [Color(0xFFA855F7), Color(0xFFC084FC)],
-    'Tech': [Color(0xFF3B82F6), Color(0xFF60A5FA)],
-    'Industry': [Color(0xFFF97316), Color(0xFFFB923C)],
-    'Investment & Finance': [Color(0xFF14B8A6), Color(0xFF2DD4BF)],
-    'Event & Meetup': [Color(0xFFEF4444), Color(0xFFF87171)],
-    'Community': [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
-    'Personal Development': [Color(0xFF06B6D4), Color(0xFF22D3EE)],
-    'Global / NRI': [Color(0xFFD946EF), Color(0xFFE879F9)],
-  };
-
-  // ── Category-specific filters ──
-  static const Map<String, List<Map<String, dynamic>>> _categoryFilters = {
-    'Professional': [
-      {
-        'label': 'Experience Level',
-        'options': [
-          'Entry Level',
-          'Mid Level',
-          'Senior',
-          'Executive',
-          'Intern',
-        ],
-      },
-      {
-        'label': 'Employment Type',
-        'options': [
-          'Full-Time',
-          'Part-Time',
-          'Contract',
-          'Freelance',
-          'Internship',
-        ],
-      },
-      {
-        'label': 'Work Mode',
-        'options': ['On-Site', 'Remote', 'Hybrid'],
-      },
-      {
-        'label': 'Industry',
-        'options': [
-          'Technology',
-          'Healthcare',
-          'Finance',
-          'Education',
-          'Marketing',
-          'Legal',
-          'Manufacturing',
-          'Retail',
-          'Media',
-          'Government',
-          'Other',
-        ],
-      },
-    ],
-    'Business': [
-      {
-        'label': 'Business Stage',
-        'options': [
-          'Idea Stage',
-          'Pre-Revenue',
-          'Early Revenue',
-          'Growth Stage',
-          'Established',
-          'Scaling',
-        ],
-      },
-      {
-        'label': 'Company Size',
-        'options': ['Solo', '2-10', '11-50', '51-200', '201-1000', '1000+'],
-      },
-      {
-        'label': 'Business Model',
-        'options': ['B2B', 'B2C', 'D2C', 'Marketplace', 'SaaS', 'Subscription'],
-      },
-      {
-        'label': 'Industry Sector',
-        'options': [
-          'Technology',
-          'Retail',
-          'F&B',
-          'Healthcare',
-          'Manufacturing',
-          'Real Estate',
-          'Agriculture',
-          'Services',
-          'Logistics',
-          'Finance',
-          'Other',
-        ],
-      },
-    ],
-    'Social': [
-      {
-        'label': 'Availability',
-        'options': ['Now', 'Today', 'This Week', 'This Weekend', 'Flexible'],
-      },
-      {
-        'label': 'Interests',
-        'options': [
-          'Music',
-          'Sports',
-          'Travel',
-          'Food',
-          'Art',
-          'Tech',
-          'Fitness',
-          'Reading',
-          'Gaming',
-          'Movies',
-          'Photography',
-          'Cooking',
-        ],
-      },
-      {
-        'label': 'Vibe',
-        'options': [
-          'Chill',
-          'Energetic',
-          'Intellectual',
-          'Creative',
-          'Adventurous',
-        ],
-      },
-    ],
-    'Educational': [
-      {
-        'label': 'Skill Level',
-        'options': ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
-      },
-      {
-        'label': 'Format',
-        'options': ['In-Person', 'Online Live', 'Self-Paced', 'Hybrid'],
-      },
-      {
-        'label': 'Subject',
-        'options': [
-          'Mathematics',
-          'Science',
-          'Languages',
-          'Programming',
-          'Business',
-          'Arts',
-          'Music',
-          'Test Prep',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Language',
-        'options': [
-          'English',
-          'Hindi',
-          'Spanish',
-          'French',
-          'Mandarin',
-          'Arabic',
-          'German',
-          'Japanese',
-          'Other',
-        ],
-      },
-    ],
-    'Creative': [
-      {
-        'label': 'Skill Level',
-        'options': [
-          'Hobbyist',
-          'Beginner',
-          'Intermediate',
-          'Professional',
-          'Expert',
-        ],
-      },
-      {
-        'label': 'Collaboration',
-        'options': [
-          'Hire Me',
-          'Looking to Hire',
-          'Collaborate',
-          'Learn Together',
-          'Mentor/Mentee',
-        ],
-      },
-      {
-        'label': 'Portfolio',
-        'options': ['Has Portfolio', 'No Portfolio'],
-      },
-    ],
-    'Tech': [
-      {
-        'label': 'Experience Level',
-        'options': [
-          'Junior (0-2 yr)',
-          'Mid (2-5 yr)',
-          'Senior (5-10 yr)',
-          'Lead/Architect (10+ yr)',
-        ],
-      },
-      {
-        'label': 'Tech Stack',
-        'options': [
-          'Python',
-          'JavaScript',
-          'TypeScript',
-          'Java',
-          'C++',
-          'Go',
-          'Rust',
-          'Swift',
-          'Kotlin',
-          'Dart',
-          'Flutter',
-          'React',
-        ],
-      },
-      {
-        'label': 'Purpose',
-        'options': [
-          'Hire',
-          'Get Hired',
-          'Collaborate',
-          'Learn',
-          'Mentor',
-          'Open Source',
-        ],
-      },
-    ],
-    'Industry': [
-      {
-        'label': 'Business Role',
-        'options': [
-          'Manufacturer',
-          'Supplier',
-          'Distributor',
-          'Buyer',
-          'Consultant',
-          'Service Provider',
-        ],
-      },
-      {
-        'label': 'Company Size',
-        'options': [
-          'Micro (1-10)',
-          'Small (11-50)',
-          'Medium (51-200)',
-          'Large (201-1000)',
-          'Enterprise (1000+)',
-        ],
-      },
-      {
-        'label': 'Trade Type',
-        'options': ['Local', 'National', 'International'],
-      },
-      {
-        'label': 'Certifications',
-        'options': [
-          'ISO 9001',
-          'ISO 14001',
-          'GMP',
-          'HACCP',
-          'CE',
-          'FDA',
-          'BIS',
-          'Organic',
-        ],
-      },
-    ],
-    'Investment & Finance': [
-      {
-        'label': 'Experience',
-        'options': ['Beginner', 'Intermediate', 'Advanced', 'Professional'],
-      },
-      {
-        'label': 'Risk Appetite',
-        'options': [
-          'Conservative',
-          'Moderate',
-          'Aggressive',
-          'Very Aggressive',
-        ],
-      },
-      {
-        'label': 'Investment Horizon',
-        'options': [
-          'Short-Term (< 1yr)',
-          'Medium (1-3yr)',
-          'Long-Term (3-10yr)',
-          'Very Long (10+yr)',
-        ],
-      },
-      {
-        'label': 'Purpose',
-        'options': ['Invest', 'Raise Capital', 'Advise', 'Learn', 'Partner'],
-      },
-    ],
-    'Event & Meetup': [
-      {
-        'label': 'Event Format',
-        'options': ['In-Person', 'Online', 'Hybrid'],
-      },
-      {
-        'label': 'When',
-        'options': ['Today', 'This Week', 'This Weekend', 'This Month'],
-      },
-      {
-        'label': 'Time of Day',
-        'options': ['Morning', 'Afternoon', 'Evening', 'Night'],
-      },
-      {
-        'label': 'Price',
-        'options': ['Free', 'Paid'],
-      },
-    ],
-    'Community': [
-      {
-        'label': 'Involvement',
-        'options': ['Volunteer', 'Donate', 'Organize', 'Advocate', 'Mentor'],
-      },
-      {
-        'label': 'Commitment',
-        'options': ['One-Time', 'Weekly', 'Monthly', 'Ongoing', 'Seasonal'],
-      },
-      {
-        'label': 'Cause Area',
-        'options': [
-          'Education',
-          'Health',
-          'Environment',
-          'Poverty',
-          'Human Rights',
-          'Animals',
-          'Arts & Culture',
-          'Technology',
-        ],
-      },
-      {
-        'label': 'Skills Offered',
-        'options': [
-          'Teaching',
-          'Medical',
-          'Technical',
-          'Legal',
-          'Marketing',
-          'Fundraising',
-          'Counseling',
-          'Creative',
-        ],
-      },
-    ],
-    'Personal Development': [
-      {
-        'label': 'Level',
-        'options': ['Beginner', 'Intermediate', 'Advanced'],
-      },
-      {
-        'label': 'Format',
-        'options': [
-          'In-Person',
-          'Online Live',
-          'Self-Paced',
-          'Group',
-          '1-on-1',
-        ],
-      },
-      {
-        'label': 'Session Duration',
-        'options': ['15 min', '30 min', '45 min', '1 hr', '2 hr'],
-      },
-      {
-        'label': 'Goal',
-        'options': [
-          'Weight Loss',
-          'Muscle Gain',
-          'Flexibility',
-          'Stress Relief',
-          'Focus',
-          'Confidence',
-          'Leadership',
-        ],
-      },
-    ],
-    'Global / NRI': [
-      {
-        'label': 'Destination',
-        'options': [
-          'USA',
-          'Canada',
-          'UK',
-          'Australia',
-          'Germany',
-          'UAE',
-          'Singapore',
-          'New Zealand',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Service Type',
-        'options': [
-          'Consultation',
-          'Documentation',
-          'Representation',
-          'Guidance',
-          'Community',
-        ],
-      },
-      {
-        'label': 'Urgency',
-        'options': [
-          'Immediate',
-          'Within 1 Month',
-          'Within 3 Months',
-          'Within 6 Months',
-          'Planning Ahead',
-        ],
-      },
-      {
-        'label': 'Language',
-        'options': [
-          'English',
-          'Hindi',
-          'Gujarati',
-          'Punjabi',
-          'Tamil',
-          'Telugu',
-          'Bengali',
-          'Marathi',
-        ],
-      },
-    ],
-  };
-
-  // ── Subcategory-Specific Filters ──
-  static const Map<String, List<Map<String, dynamic>>> _subcategoryFilters = {
-    // Professional
-    'Job Seekers': [
-      {
-        'label': 'Education',
-        'options': [
-          'High School',
-          'Associate',
-          "Bachelor's",
-          "Master's",
-          'PhD',
-          'Self-Taught',
-        ],
-      },
-    ],
-    'Freelancers': [
-      {
-        'label': 'Project Type',
-        'options': ['Hourly', 'Fixed-Price', 'Retainer', 'Equity'],
-      },
-    ],
-    'Consultants': [
-      {
-        'label': 'Specialty',
-        'options': [
-          'Strategy',
-          'Operations',
-          'Finance',
-          'Marketing',
-          'HR',
-          'IT',
-          'Legal',
-          'Other',
-        ],
-      },
-    ],
-    'Remote Workers': [
-      {
-        'label': 'Time Zone',
-        'options': [
-          'IST (UTC+5:30)',
-          'EST (UTC-5)',
-          'PST (UTC-8)',
-          'GMT (UTC+0)',
-          'CET (UTC+1)',
-          'AEST (UTC+10)',
-          'JST (UTC+9)',
-        ],
-      },
-    ],
-    'Recruiters': [
-      {
-        'label': 'Hiring For',
-        'options': [
-          'Tech',
-          'Sales',
-          'Marketing',
-          'Design',
-          'Operations',
-          'Finance',
-          'HR',
-          'Executive',
-        ],
-      },
-    ],
-    // Business
-    'Startup Founders': [
-      {
-        'label': 'Funding Stage',
-        'options': [
-          'Bootstrapped',
-          'Pre-Seed',
-          'Seed',
-          'Series A',
-          'Series B',
-          'Series C+',
-        ],
-      },
-    ],
-    'Investors': [
-      {
-        'label': 'Investment Type',
-        'options': ['Angel', 'VC', 'PE', 'Debt', 'Crypto'],
-      },
-      {
-        'label': 'Preferred Stage',
-        'options': [
-          'Pre-Seed',
-          'Seed',
-          'Series A',
-          'Series B',
-          'Series C+',
-          'Growth',
-        ],
-      },
-    ],
-    'E-commerce': [
-      {
-        'label': 'Platform',
-        'options': [
-          'Shopify',
-          'Amazon',
-          'WooCommerce',
-          'Custom',
-          'Multi-Platform',
-        ],
-      },
-    ],
-    'Franchise': [
-      {
-        'label': 'Franchise Type',
-        'options': ['Food', 'Retail', 'Service', 'Education', 'Fitness'],
-      },
-    ],
-    // Social
-    'Dating': [
-      {
-        'label': 'Relationship Goal',
-        'options': ['Serious', 'Casual', 'Open to Anything'],
-      },
-      {
-        'label': 'Lifestyle',
-        'options': [
-          'Non-Smoker',
-          'Social Drinker',
-          'Vegetarian',
-          'Fitness Lover',
-          'Pet Lover',
-        ],
-      },
-    ],
-    'Travel Companions': [
-      {
-        'label': 'Travel Style',
-        'options': ['Budget', 'Mid-Range', 'Luxury', 'Backpacking'],
-      },
-      {
-        'label': 'Trip Duration',
-        'options': ['Weekend', '1 Week', '2+ Weeks', 'Long-Term'],
-      },
-    ],
-    'Roommates': [
-      {
-        'label': 'Lifestyle',
-        'options': [
-          'Early Bird',
-          'Night Owl',
-          'Pet-Friendly',
-          'Vegetarian',
-          'Non-Smoker',
-          'Quiet',
-        ],
-      },
-    ],
-    'Party Buddies': [
-      {
-        'label': 'Scene',
-        'options': ['Clubs', 'Bars', 'House Parties', 'Live Music', 'Rooftops'],
-      },
-      {
-        'label': 'Music Taste',
-        'options': ['EDM', 'Hip-Hop', 'Bollywood', 'Rock', 'Pop', 'Jazz'],
-      },
-    ],
-    // Educational
-    'Exam Prep': [
-      {
-        'label': 'Exam Type',
-        'options': [
-          'SAT',
-          'GRE',
-          'GMAT',
-          'IELTS',
-          'TOEFL',
-          'UPSC',
-          'CAT',
-          'JEE',
-          'NEET',
-          'Other',
-        ],
-      },
-    ],
-    'Language Learning': [
-      {
-        'label': 'Target Language',
-        'options': [
-          'English',
-          'Spanish',
-          'French',
-          'German',
-          'Mandarin',
-          'Japanese',
-          'Korean',
-          'Arabic',
-          'Hindi',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Proficiency',
-        'options': [
-          'A1 (Beginner)',
-          'A2 (Elementary)',
-          'B1 (Intermediate)',
-          'B2 (Upper Intermediate)',
-          'C1 (Advanced)',
-          'C2 (Fluent)',
-        ],
-      },
-    ],
-    'Coding Bootcamp': [
-      {
-        'label': 'Tech Stack',
-        'options': [
-          'Python',
-          'JavaScript',
-          'React',
-          'Node.js',
-          'Flutter',
-          'AI/ML',
-          'Java',
-          'Swift',
-        ],
-      },
-      {
-        'label': 'Duration',
-        'options': ['4 Weeks', '8 Weeks', '12 Weeks', '6 Months'],
-      },
-    ],
-    'Study Groups': [
-      {
-        'label': 'Group Size',
-        'options': ['2-3', '4-6', '7-10', '10+'],
-      },
-    ],
-    // Creative
-    'Photography': [
-      {
-        'label': 'Style',
-        'options': [
-          'Portrait',
-          'Landscape',
-          'Wedding',
-          'Product',
-          'Street',
-          'Wildlife',
-          'Fashion',
-          'Event',
-        ],
-      },
-    ],
-    'Graphic Design': [
-      {
-        'label': 'Tool',
-        'options': [
-          'Figma',
-          'Adobe PS',
-          'Illustrator',
-          'Canva',
-          'Sketch',
-          'InDesign',
-        ],
-      },
-    ],
-    'Music Production': [
-      {
-        'label': 'Genre',
-        'options': [
-          'Pop',
-          'Hip-Hop',
-          'EDM',
-          'Rock',
-          'Classical',
-          'Bollywood',
-          'Indie',
-          'Jazz',
-        ],
-      },
-      {
-        'label': 'DAW',
-        'options': [
-          'FL Studio',
-          'Ableton',
-          'Logic Pro',
-          'Pro Tools',
-          'GarageBand',
-          'Other',
-        ],
-      },
-    ],
-    'Film Making': [
-      {
-        'label': 'Role',
-        'options': [
-          'Director',
-          'Cinematographer',
-          'Editor',
-          'Writer',
-          'Actor',
-          'Producer',
-          'Sound',
-          'VFX',
-        ],
-      },
-    ],
-    'Content Creation': [
-      {
-        'label': 'Platform',
-        'options': [
-          'YouTube',
-          'Instagram',
-          'TikTok',
-          'Twitter/X',
-          'LinkedIn',
-          'Blog',
-          'Podcast',
-        ],
-      },
-      {
-        'label': 'Niche',
-        'options': [
-          'Tech',
-          'Lifestyle',
-          'Education',
-          'Gaming',
-          'Food',
-          'Travel',
-          'Finance',
-          'Fitness',
-        ],
-      },
-    ],
-    'Writing & Blogging': [
-      {
-        'label': 'Genre',
-        'options': [
-          'Fiction',
-          'Non-Fiction',
-          'Technical',
-          'Poetry',
-          'Journalism',
-          'Copywriting',
-          'SEO',
-        ],
-      },
-    ],
-    // Tech
-    'Software Development': [
-      {
-        'label': 'Domain',
-        'options': [
-          'Frontend',
-          'Backend',
-          'Full-Stack',
-          'Embedded',
-          'Systems',
-          'Game Dev',
-        ],
-      },
-    ],
-    'Mobile Apps': [
-      {
-        'label': 'Platform',
-        'options': ['iOS', 'Android', 'Cross-Platform', 'Flutter', 'React Native'],
-      },
-    ],
-    'AI & Machine Learning': [
-      {
-        'label': 'Focus',
-        'options': ['NLP', 'Computer Vision', 'Generative AI', 'MLOps', 'Robotics'],
-      },
-    ],
-    'Cybersecurity': [
-      {
-        'label': 'Specialty',
-        'options': [
-          'Pen Testing',
-          'SOC',
-          'Forensics',
-          'Cloud Security',
-          'AppSec',
-          'GRC',
-        ],
-      },
-    ],
-    'Cloud Computing': [
-      {
-        'label': 'Provider',
-        'options': ['AWS', 'Azure', 'GCP', 'Multi-Cloud', 'On-Prem'],
-      },
-    ],
-    'Data Science': [
-      {
-        'label': 'Focus',
-        'options': [
-          'Analytics',
-          'Visualization',
-          'Big Data',
-          'Statistical Modeling',
-          'ETL',
-        ],
-      },
-    ],
-    'Blockchain': [
-      {
-        'label': 'Focus',
-        'options': ['DeFi', 'NFT', 'Smart Contracts', 'DAOs', 'Web3', 'Gaming'],
-      },
-    ],
-    'UI/UX Design': [
-      {
-        'label': 'Focus',
-        'options': [
-          'UI Design',
-          'UX Research',
-          'Interaction Design',
-          'Design Systems',
-          'Prototyping',
-        ],
-      },
-    ],
-    // Industry
-    'Manufacturing': [
-      {
-        'label': 'Sector',
-        'options': [
-          'Electronics',
-          'Textiles',
-          'Automotive',
-          'Chemical',
-          'Food',
-          'Metal',
-          'Plastic',
-        ],
-      },
-    ],
-    'Construction': [
-      {
-        'label': 'Type',
-        'options': [
-          'Residential',
-          'Commercial',
-          'Infrastructure',
-          'Industrial',
-          'Renovation',
-        ],
-      },
-    ],
-    'Real Estate': [
-      {
-        'label': 'Type',
-        'options': [
-          'Residential',
-          'Commercial',
-          'Land',
-          'Industrial',
-          'Rental',
-          'Co-Working',
-        ],
-      },
-    ],
-    'Agriculture': [
-      {
-        'label': 'Type',
-        'options': [
-          'Farming',
-          'Dairy',
-          'Poultry',
-          'Organic',
-          'AgriTech',
-          'Export',
-        ],
-      },
-    ],
-    'Automotive': [
-      {
-        'label': 'Segment',
-        'options': [
-          'Passenger',
-          'Commercial',
-          'EV',
-          'Two-Wheeler',
-          'Spare Parts',
-          'Service',
-        ],
-      },
-    ],
-    'Pharmaceuticals': [
-      {
-        'label': 'Area',
-        'options': [
-          'Generic',
-          'Biotech',
-          'Ayurveda',
-          'Medical Devices',
-          'Clinical Research',
-        ],
-      },
-    ],
-    'Food Processing': [
-      {
-        'label': 'Category',
-        'options': [
-          'Snacks',
-          'Beverages',
-          'Dairy',
-          'Frozen',
-          'Bakery',
-          'Organic',
-          'Spices',
-        ],
-      },
-    ],
-    // Investment & Finance
-    'Stock Market': [
-      {
-        'label': 'Style',
-        'options': [
-          'Day Trading',
-          'Swing Trading',
-          'Long-Term',
-          'Options',
-          'Futures',
-        ],
-      },
-    ],
-    'Cryptocurrency': [
-      {
-        'label': 'Focus',
-        'options': ['Trading', 'Mining', 'DeFi', 'NFTs', 'Research', 'Staking'],
-      },
-    ],
-    'Mutual Funds': [
-      {
-        'label': 'Type',
-        'options': ['Equity', 'Debt', 'Hybrid', 'ELSS', 'Index', 'International'],
-      },
-    ],
-    'Angel Investing': [
-      {
-        'label': 'Sector Focus',
-        'options': [
-          'Tech',
-          'Healthcare',
-          'EdTech',
-          'FinTech',
-          'D2C',
-          'SaaS',
-          'AgriTech',
-        ],
-      },
-    ],
-    'Venture Capital': [
-      {
-        'label': 'Fund Size',
-        'options': [
-          'Micro (<5Cr)',
-          'Small (5-25Cr)',
-          'Medium (25-100Cr)',
-          'Large (100Cr+)',
-        ],
-      },
-    ],
-    'Financial Planning': [
-      {
-        'label': 'Service',
-        'options': [
-          'Tax Planning',
-          'Retirement',
-          'Insurance',
-          'Estate',
-          'Wealth Management',
-        ],
-      },
-    ],
-    // Event & Meetup
-    'Hackathons': [
-      {
-        'label': 'Theme',
-        'options': [
-          'AI/ML',
-          'Web3',
-          'Social Impact',
-          'FinTech',
-          'HealthTech',
-          'Open',
-        ],
-      },
-    ],
-    'Conferences': [
-      {
-        'label': 'Industry',
-        'options': [
-          'Tech',
-          'Business',
-          'Healthcare',
-          'Education',
-          'Marketing',
-          'Design',
-        ],
-      },
-    ],
-    'Sports Events': [
-      {
-        'label': 'Sport',
-        'options': [
-          'Cricket',
-          'Football',
-          'Badminton',
-          'Tennis',
-          'Running',
-          'Cycling',
-          'Swimming',
-        ],
-      },
-    ],
-    'Concerts & Music': [
-      {
-        'label': 'Genre',
-        'options': [
-          'Bollywood',
-          'EDM',
-          'Rock',
-          'Classical',
-          'Jazz',
-          'Hip-Hop',
-          'Pop',
-          'Indie',
-        ],
-      },
-    ],
-    // Community
-    'Volunteering': [
-      {
-        'label': 'Area',
-        'options': [
-          'Teaching',
-          'Healthcare',
-          'Environment',
-          'Animal Care',
-          'Disaster Relief',
-          'Elder Care',
-        ],
-      },
-    ],
-    'Environmental': [
-      {
-        'label': 'Focus',
-        'options': [
-          'Climate Action',
-          'Waste Management',
-          'Tree Planting',
-          'Water Conservation',
-          'Renewable Energy',
-        ],
-      },
-    ],
-    'Animal Welfare': [
-      {
-        'label': 'Focus',
-        'options': [
-          'Rescue',
-          'Adoption',
-          'Shelter',
-          'Veterinary',
-          'Wildlife',
-          'Advocacy',
-        ],
-      },
-    ],
-    'Women Empowerment': [
-      {
-        'label': 'Focus',
-        'options': [
-          'Education',
-          'Skills',
-          'Entrepreneurship',
-          'Safety',
-          'Health',
-          'Legal Rights',
-        ],
-      },
-    ],
-    'Youth Development': [
-      {
-        'label': 'Program',
-        'options': [
-          'Mentoring',
-          'Sports',
-          'Education',
-          'Leadership',
-          'Coding',
-          'Arts',
-        ],
-      },
-    ],
-    // Personal Development
-    'Fitness & Gym': [
-      {
-        'label': 'Type',
-        'options': [
-          'Weight Training',
-          'CrossFit',
-          'Calisthenics',
-          'Cardio',
-          'HIIT',
-          'Yoga',
-        ],
-      },
-    ],
-    'Meditation & Yoga': [
-      {
-        'label': 'Style',
-        'options': [
-          'Hatha',
-          'Vinyasa',
-          'Ashtanga',
-          'Kundalini',
-          'Mindfulness',
-          'Transcendental',
-        ],
-      },
-    ],
-    'Public Speaking': [
-      {
-        'label': 'Context',
-        'options': [
-          'Business',
-          'Motivational',
-          'TEDx',
-          'Stand-Up',
-          'Debate',
-          'Toastmasters',
-        ],
-      },
-    ],
-    'Life Coaching': [
-      {
-        'label': 'Area',
-        'options': [
-          'Career',
-          'Relationship',
-          'Health',
-          'Mindset',
-          'Productivity',
-          'Financial',
-        ],
-      },
-    ],
-    'Book Club': [
-      {
-        'label': 'Genre',
-        'options': [
-          'Fiction',
-          'Non-Fiction',
-          'Self-Help',
-          'Business',
-          'Science',
-          'Philosophy',
-          'Biography',
-        ],
-      },
-    ],
-    // Global / NRI
-    'Immigration': [
-      {
-        'label': 'Visa Type',
-        'options': [
-          'Work Visa',
-          'Student Visa',
-          'PR',
-          'Tourist',
-          'Business',
-          'Family',
-        ],
-      },
-    ],
-    'Study Abroad': [
-      {
-        'label': 'Level',
-        'options': [
-          "Bachelor's",
-          "Master's",
-          'PhD',
-          'Diploma',
-          'Exchange',
-          'Language Course',
-        ],
-      },
-      {
-        'label': 'Field',
-        'options': [
-          'Engineering',
-          'Business',
-          'Medicine',
-          'Arts',
-          'Science',
-          'Law',
-          'Other',
-        ],
-      },
-    ],
-    'Overseas Jobs': [
-      {
-        'label': 'Industry',
-        'options': [
-          'IT',
-          'Healthcare',
-          'Engineering',
-          'Finance',
-          'Hospitality',
-          'Construction',
-        ],
-      },
-    ],
-    'International Trade': [
-      {
-        'label': 'Type',
-        'options': ['Import', 'Export', 'Both', 'Agent/Broker'],
-      },
-      {
-        'label': 'Products',
-        'options': [
-          'Textiles',
-          'Electronics',
-          'Food',
-          'Machinery',
-          'Chemicals',
-          'Handicrafts',
-        ],
-      },
-    ],
-    'Relocation Help': [
-      {
-        'label': 'Need',
-        'options': [
-          'Housing',
-          'Schools',
-          'Jobs',
-          'Legal',
-          'Moving',
-          'Community',
-        ],
-      },
-    ],
-    'NRI Services': [
-      {
-        'label': 'Service',
-        'options': [
-          'Property Management',
-          'Tax Filing',
-          'Banking',
-          'Legal',
-          'Investment',
-          'Repatriation',
-        ],
-      },
-    ],
-  };
-
-  static const List<String> _genderOptions = [
-    'Male',
-    'Female',
-    'Non-binary',
-    'Other',
-  ];
 
   @override
   void initState() {
@@ -1549,63 +85,78 @@ class _EditNetworkingProfileScreenState
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
+      // Read from networking_profiles first; fall back to users for legacy data
+      final netDoc = await FirebaseFirestore.instance
+          .collection('networking_profiles')
+          .doc(uid)
+          .get();
+
+      // Always fetch users doc for lat/lon (kept current by location service)
+      final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
-      if (!doc.exists || doc.data() == null || !mounted) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
 
-      final data = doc.data()!;
+      final userData = (userDoc.exists ? userDoc.data() : null) ?? {};
+      // Use networking_profiles if it exists, otherwise fall back to users
+      final data = (netDoc.exists && netDoc.data() != null)
+          ? netDoc.data()!
+          : userData;
+
+      if (!mounted) return;
+
       setState(() {
         _nameController.text = data['name'] ?? data['displayName'] ?? '';
         _currentPhotoUrl = data['photoUrl'];
         _aboutMeController.text = data['aboutMe'] ?? '';
         _occupationController.text = data['occupation'] ?? '';
-        if (data['ageRangeStart'] != null && data['ageRangeEnd'] != null) {
-          _ageRange = RangeValues(
-            (data['ageRangeStart'] as num).toDouble(),
-            (data['ageRangeEnd'] as num).toDouble(),
-          );
-        } else if (data['age'] != null) {
-          final age = (data['age'] as num).toDouble();
-          _ageRange = RangeValues(age, age);
+        final ageStart = (data['ageRangeStart'] as num?)?.toDouble();
+        final ageEnd = (data['ageRangeEnd'] as num?)?.toDouble();
+        if (ageStart != null && ageEnd != null) {
+          _ageRange = RangeValues(ageStart, ageEnd);
+        } else {
+          final age = (data['age'] as num?)?.toDouble();
+          if (age != null) _ageRange = RangeValues(age, age);
         }
-        if (data['distanceRangeStart'] != null &&
-            data['distanceRangeEnd'] != null) {
-          _distanceRange = RangeValues(
-            (data['distanceRangeStart'] as num).toDouble(),
-            (data['distanceRangeEnd'] as num).toDouble(),
-          );
+        final distStart = (data['distanceRangeStart'] as num?)?.toDouble();
+        final distEnd = (data['distanceRangeEnd'] as num?)?.toDouble();
+        if (distStart != null && distEnd != null) {
+          _distanceRange = RangeValues(distStart, distEnd);
         }
         _selectedGender = data['gender'];
         _discoveryModeEnabled = data['discoveryModeEnabled'] ?? true;
+        _allowCalls = data['allowCalls'] ?? true;
         _locationCity = data['city'] ?? data['location'];
+        // Always take lat/lon from users (kept live by location service)
+        _userLatitude = (userData['latitude'] as num?)?.toDouble()
+            ?? (data['latitude'] as num?)?.toDouble();
+        _userLongitude = (userData['longitude'] as num?)?.toDouble()
+            ?? (data['longitude'] as num?)?.toDouble();
         _selectedCategory = data['networkingCategory'];
         _selectedSubcategory = data['networkingSubcategory'];
-        if (data['categoryFilters'] != null) {
+        if (data['categoryFilters'] is Map) {
           _categoryFilterValues.addAll(
-            Map<String, String>.from(data['categoryFilters']),
+            (data['categoryFilters'] as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
           );
         }
-        if (data['connectionTypes'] != null) {
+        if (data['connectionTypes'] is List) {
           _selectedConnectionTypes.addAll(
-            List<String>.from(data['connectionTypes']),
+            (data['connectionTypes'] as List).map((e) => e.toString()),
           );
         }
-        if (data['activities'] != null) {
-          for (final item in data['activities']) {
+        if (data['activities'] is List) {
+          for (final item in (data['activities'] as List)) {
             if (item is String) {
               _selectedActivities.add(item);
             } else if (item is Map) {
-              _selectedActivities.add(item['name'] ?? '');
+              _selectedActivities.add((item['name'] ?? '').toString());
             }
           }
         }
-        if (data['interests'] != null) {
-          _selectedInterests.addAll(List<String>.from(data['interests']));
+        if (data['interests'] is List) {
+          _selectedInterests.addAll(
+            (data['interests'] as List).map((e) => e.toString()),
+          );
         }
         _isLoading = false;
       });
@@ -1616,7 +167,7 @@ class _EditNetworkingProfileScreenState
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState?.validate() != true) return;
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -1632,56 +183,66 @@ class _EditNetworkingProfileScreenState
       if (_selectedImage != null) {
         try {
           final ref = FirebaseStorage.instance.ref().child(
-            'profile_images/$uid.jpg',
+            'networking_profile_images/$uid.jpg',
           );
           await ref.putFile(_selectedImage!);
           photoUrl = await ref.getDownloadURL();
         } catch (e) {
           debugPrint('Failed to upload image: $e');
         }
+      } else if (_currentPhotoUrl != null &&
+          _currentPhotoUrl!.isNotEmpty &&
+          !_currentPhotoUrl!.contains('networking_profile_images')) {
+        // Old networking photo used the shared profile_images/ path.
+        // Auto-migrate it to the dedicated networking_profile_images/ path
+        // so it no longer conflicts with the main account profile photo.
+        try {
+          final response = await http.get(Uri.parse(_currentPhotoUrl!));
+          if (response.statusCode == 200) {
+            final ref = FirebaseStorage.instance.ref().child(
+              'networking_profile_images/$uid.jpg',
+            );
+            await ref.putData(response.bodyBytes);
+            photoUrl = await ref.getDownloadURL();
+          }
+        } catch (e) {
+          debugPrint('Failed to migrate networking photo: $e');
+        }
       }
 
       final data = <String, dynamic>{
+        'userId': uid,
         'name': _nameController.text.trim(),
-        'photoUrl': photoUrl,
+        'photoUrl': photoUrl ?? '',
         'aboutMe': _aboutMeController.text.trim(),
         'occupation': _occupationController.text.trim(),
         'age': _ageRange.start.round(),
         'ageRangeStart': _ageRange.start.round(),
         'ageRangeEnd': _ageRange.end.round(),
-        'gender': _selectedGender,
+        'gender': _selectedGender ?? '',
         'discoveryModeEnabled': _discoveryModeEnabled,
+        'allowCalls': _allowCalls,
         'distanceRangeStart': _distanceRange.start.round(),
         'distanceRangeEnd': _distanceRange.end.round(),
-        'city': _locationCity,
-        'location': _locationCity,
-        'networkingCategory': _selectedCategory,
-        'networkingSubcategory': _selectedSubcategory,
+        'city': _locationCity ?? '',
+        'location': _locationCity ?? '',
+        if (_userLatitude != null) 'latitude': _userLatitude,
+        if (_userLongitude != null) 'longitude': _userLongitude,
+        'networkingCategory': _selectedCategory ?? '',
+        'networkingSubcategory': _selectedSubcategory ?? '',
         'connectionTypes': _selectedConnectionTypes,
         'activities': _selectedActivities,
         'interests': _selectedInterests,
+        'categoryFilters': _categoryFilterValues.isNotEmpty
+            ? _categoryFilterValues
+            : <String, String>{},
       };
 
-      // Category filters
-      if (_categoryFilterValues.isNotEmpty) {
-        data['categoryFilters'] = _categoryFilterValues;
-      } else {
-        data['categoryFilters'] = FieldValue.delete();
-      }
-
+      // Save to networking_profiles — separate from main user profile
       await FirebaseFirestore.instance
-          .collection('users')
+          .collection('networking_profiles')
           .doc(uid)
-          .update(data);
-
-      // Update Firebase Auth profile
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await user.updateProfile(
-          displayName: _nameController.text.trim(),
-          photoURL: photoUrl,
-        );
-      }
+          .set(data, SetOptions(merge: true));
 
       if (mounted) {
         _showSnackBar('Profile updated successfully!');
@@ -1769,8 +330,7 @@ class _EditNetworkingProfileScreenState
                     const SizedBox(width: 22),
                     const Text(
                       'Change Photo',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -1805,9 +365,8 @@ class _EditNetworkingProfileScreenState
                 ),
                 title: const Text(
                   'Choose from Gallery',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
-                    fontFamily: 'Poppins',
                     fontSize: 14,
                   ),
                 ),
@@ -1833,9 +392,8 @@ class _EditNetworkingProfileScreenState
                 ),
                 title: const Text(
                   'Take a Photo',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
-                    fontFamily: 'Poppins',
                     fontSize: 14,
                   ),
                 ),
@@ -1859,9 +417,8 @@ class _EditNetworkingProfileScreenState
                   ),
                   title: const Text(
                     'Remove Photo',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.red,
-                      fontFamily: 'Poppins',
                       fontSize: 14,
                     ),
                   ),
@@ -1886,61 +443,10 @@ class _EditNetworkingProfileScreenState
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: const Color(0xFF000000),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leadingWidth: 46,
-          leading: IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.fromRGBO(40, 40, 40, 1),
-                  Color.fromRGBO(64, 64, 64, 1),
-                ],
-              ),
-              border: Border(
-                bottom: BorderSide(color: Colors.white, width: 0.5),
-              ),
-            ),
-          ),
-          centerTitle: true,
-          title: const Text(
-            'Edit Networking Profile',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ),
+        appBar: NetworkingWidgets.networkingAppBar(title: 'Edit Profile', onBack: () => Navigator.pop(context)),
         bottomNavigationBar: _buildSaveButton(),
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(40, 40, 40, 1),
-                Color.fromRGBO(0, 0, 0, 1),
-              ],
-              stops: [0.0, 0.45, 0.7, 1.0],
-            ),
-          ),
+          decoration: NetworkingWidgets.bodyGradient(fourStop: true),
           child: _isLoading
               ? const Center(
                   child: CircularProgressIndicator(
@@ -2082,8 +588,7 @@ class _EditNetworkingProfileScreenState
                         // Name Field
                         Text(
                           'Name',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -2123,8 +628,7 @@ class _EditNetworkingProfileScreenState
                           children: [
                             Text(
                               'About Me',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white.withValues(alpha: 0.7),
@@ -2135,8 +639,7 @@ class _EditNetworkingProfileScreenState
                               builder: (context, value, _) {
                                 return Text(
                                   '${value.text.length}/300',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     fontSize: 11,
                                     color: value.text.length > 300
                                         ? Colors.redAccent
@@ -2158,8 +661,7 @@ class _EditNetworkingProfileScreenState
                         const SizedBox(height: 16),
                         Text(
                           'Occupation',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -2203,11 +705,11 @@ class _EditNetworkingProfileScreenState
                                 borderRadius: BorderRadius.circular(14),
                                 initialValue: _selectedCategory,
                                 itemBuilder: (context) =>
-                                    _categorySubcategories.keys.map((catName) {
-                                      final icon = _categoryIcons[catName] ??
+                                    NetworkingConstants.categorySubcategories.keys.map((catName) {
+                                      final icon = NetworkingConstants.categoryIcons[catName] ??
                                           Icons.hub_rounded;
                                       final colors =
-                                          _categoryColors[catName] ??
+                                          NetworkingConstants.categoryColors[catName] ??
                                           [const Color(0xFF6366F1)];
                                       return PopupMenuItem<String>(
                                         value: catName,
@@ -2221,7 +723,7 @@ class _EditNetworkingProfileScreenState
                                             const SizedBox(width: 12),
                                             Text(
                                               catName,
-                                              style: const TextStyle(
+                                              style: const TextStyle(fontFamily: 'Poppins', 
                                                 color: Colors.white,
                                               ),
                                             ),
@@ -2256,10 +758,10 @@ class _EditNetworkingProfileScreenState
                                     children: [
                                       if (_selectedCategory != null) ...[
                                         Icon(
-                                          _categoryIcons[_selectedCategory] ??
+                                          NetworkingConstants.categoryIcons[_selectedCategory] ??
                                               Icons.hub_rounded,
                                           color:
-                                              (_categoryColors[
+                                              (NetworkingConstants.categoryColors[
                                                       _selectedCategory] ??
                                                   [
                                                     const Color(0xFF6366F1),
@@ -2272,13 +774,12 @@ class _EditNetworkingProfileScreenState
                                         child: Text(
                                           _selectedCategory ??
                                               'Select Category',
-                                          style: TextStyle(
+                                          style: TextStyle(fontFamily: 'Poppins', 
                                             color: _selectedCategory != null
                                                 ? Colors.white
                                                 : Colors.white.withValues(
                                                     alpha: 0.5,
                                                   ),
-                                            fontFamily: 'Poppins',
                                             fontSize: 14,
                                           ),
                                         ),
@@ -2299,10 +800,10 @@ class _EditNetworkingProfileScreenState
                           Builder(
                             builder: (context) {
                               final subs =
-                                  _categorySubcategories[_selectedCategory] ??
+                                  NetworkingConstants.categorySubcategories[_selectedCategory] ??
                                   [];
                               final catColor =
-                                  (_categoryColors[_selectedCategory] ??
+                                  (NetworkingConstants.categoryColors[_selectedCategory] ??
                                   [const Color(0xFF6366F1)])[0];
                               return LayoutBuilder(
                                 builder: (_, boxConstraints) =>
@@ -2329,7 +830,7 @@ class _EditNetworkingProfileScreenState
                                               value: sub,
                                               child: Text(
                                                 sub,
-                                                style: const TextStyle(
+                                                style: const TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white,
                                                 ),
                                               ),
@@ -2366,7 +867,7 @@ class _EditNetworkingProfileScreenState
                                               child: Text(
                                                 _selectedSubcategory ??
                                                     'Select Subcategory',
-                                                style: TextStyle(
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   color:
                                                       _selectedSubcategory !=
                                                               null
@@ -2375,7 +876,6 @@ class _EditNetworkingProfileScreenState
                                                               .withValues(
                                                                 alpha: 0.5,
                                                               ),
-                                                  fontFamily: 'Poppins',
                                                   fontSize: 14,
                                                 ),
                                               ),
@@ -2395,16 +895,17 @@ class _EditNetworkingProfileScreenState
 
                           // 4. Category + Subcategory specific filter dropdowns
                           for (final filter in <Map<String, dynamic>>[
-                            ...(_categoryFilters[_selectedCategory] ?? []),
+                            ...(NetworkingConstants.categoryFilters[_selectedCategory] ?? []),
                             if (_selectedSubcategory != null)
-                              ...(_subcategoryFilters[_selectedSubcategory] ??
+                              ...(NetworkingConstants.subcategoryFilters[_selectedSubcategory] ??
                                   []),
                           ]) ...[
                             const SizedBox(height: 16),
                             Text(
-                              filter['label'] as String,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
+                              (filter['label'] ?? '').toString(),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(fontFamily: 'Poppins',
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -2413,12 +914,11 @@ class _EditNetworkingProfileScreenState
                             const SizedBox(height: 8),
                             LayoutBuilder(
                               builder: (_, boxConstraints) {
-                                final label = filter['label'] as String;
-                                final options = List<String>.from(
-                                  filter['options'] as List,
-                                );
+                                final label = (filter['label'] ?? '').toString();
+                                final options = (filter['options'] as List?)
+                                    ?.map((e) => e.toString()).toList() ?? <String>[];
                                 final catColor =
-                                    (_categoryColors[_selectedCategory] ??
+                                    (NetworkingConstants.categoryColors[_selectedCategory] ??
                                     [const Color(0xFF6366F1)])[0];
                                 return PopupMenuButton<String>(
                                   constraints: BoxConstraints(
@@ -2442,7 +942,7 @@ class _EditNetworkingProfileScreenState
                                           value: opt,
                                           child: Text(
                                             opt,
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontSize: 13,
                                             ),
@@ -2476,7 +976,7 @@ class _EditNetworkingProfileScreenState
                                           child: Text(
                                             _categoryFilterValues[label] ??
                                                 'Select $label',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color:
                                                   _categoryFilterValues[
                                                               label] !=
@@ -2486,7 +986,6 @@ class _EditNetworkingProfileScreenState
                                                           .withValues(
                                                             alpha: 0.5,
                                                           ),
-                                              fontFamily: 'Poppins',
                                               fontSize: 13,
                                             ),
                                           ),
@@ -2509,8 +1008,7 @@ class _EditNetworkingProfileScreenState
                         // ── Age Range (RangeSlider Popup) ──
                         Text(
                           'Age Range',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -2535,7 +1033,7 @@ class _EditNetworkingProfileScreenState
                                   ),
                                   title: const Text(
                                     'Age Range',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -2546,7 +1044,7 @@ class _EditNetworkingProfileScreenState
                                     children: [
                                       Text(
                                         '${tempAge.start.round()} - ${tempAge.end.round() == 60 ? "60+" : tempAge.end.round()}',
-                                        style: const TextStyle(
+                                        style: const TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
@@ -2588,14 +1086,14 @@ class _EditNetworkingProfileScreenState
                                         children: [
                                           Text(
                                             '18',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white70,
                                               fontSize: 12,
                                             ),
                                           ),
                                           Text(
                                             '60+',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white70,
                                               fontSize: 12,
                                             ),
@@ -2610,7 +1108,7 @@ class _EditNetworkingProfileScreenState
                                       child: const Text(
                                         'Cancel',
                                         style:
-                                            TextStyle(color: Colors.white70),
+                                            TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                                       ),
                                     ),
                                     TextButton(
@@ -2620,7 +1118,7 @@ class _EditNetworkingProfileScreenState
                                       },
                                       child: const Text(
                                         'Done',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -2649,9 +1147,8 @@ class _EditNetworkingProfileScreenState
                                 Expanded(
                                   child: Text(
                                     '${_ageRange.start.round()} - ${_ageRange.end.round() == 60 ? "60+" : _ageRange.end.round()}',
-                                    style: const TextStyle(
+                                    style: const TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
-                                      fontFamily: 'Poppins',
                                       fontSize: 14,
                                     ),
                                   ),
@@ -2670,8 +1167,7 @@ class _EditNetworkingProfileScreenState
                         // ── Gender (Popup with Icons) ──
                         Text(
                           'Gender',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -2695,7 +1191,7 @@ class _EditNetworkingProfileScreenState
                                 position: PopupMenuPosition.under,
                                 borderRadius: BorderRadius.circular(14),
                                 initialValue: _selectedGender,
-                                itemBuilder: (context) => _genderOptions
+                                itemBuilder: (context) => NetworkingConstants.genderOptions
                                     .map(
                                       (gender) => PopupMenuItem<String>(
                                         value: gender,
@@ -2713,7 +1209,7 @@ class _EditNetworkingProfileScreenState
                                             const SizedBox(width: 12),
                                             Text(
                                               gender,
-                                              style: const TextStyle(
+                                              style: const TextStyle(fontFamily: 'Poppins', 
                                                 color: Colors.white,
                                               ),
                                             ),
@@ -2758,13 +1254,12 @@ class _EditNetworkingProfileScreenState
                                       Expanded(
                                         child: Text(
                                           _selectedGender ?? 'Select Gender',
-                                          style: TextStyle(
+                                          style: TextStyle(fontFamily: 'Poppins', 
                                             color: _selectedGender != null
                                                 ? Colors.white
                                                 : Colors.white.withValues(
                                                     alpha: 0.5,
                                                   ),
-                                            fontFamily: 'Poppins',
                                             fontSize: 14,
                                           ),
                                         ),
@@ -2783,8 +1278,7 @@ class _EditNetworkingProfileScreenState
                         // ── Location (Distance RangeSlider Popup) ──
                         Text(
                           'Location',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -2809,7 +1303,7 @@ class _EditNetworkingProfileScreenState
                                   ),
                                   title: const Text(
                                     'Location Range',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -2820,7 +1314,7 @@ class _EditNetworkingProfileScreenState
                                     children: [
                                       Text(
                                         '${tempDist.start.round()} km - ${tempDist.end.round() == 500 ? "500+" : "${tempDist.end.round()}"} km',
-                                        style: const TextStyle(
+                                        style: const TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
@@ -2862,14 +1356,14 @@ class _EditNetworkingProfileScreenState
                                         children: [
                                           Text(
                                             '1 km',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white70,
                                               fontSize: 12,
                                             ),
                                           ),
                                           Text(
                                             '500+ km',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white70,
                                               fontSize: 12,
                                             ),
@@ -2884,7 +1378,7 @@ class _EditNetworkingProfileScreenState
                                       child: const Text(
                                         'Cancel',
                                         style:
-                                            TextStyle(color: Colors.white70),
+                                            TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                                       ),
                                     ),
                                     TextButton(
@@ -2896,7 +1390,7 @@ class _EditNetworkingProfileScreenState
                                       },
                                       child: const Text(
                                         'Done',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -2925,9 +1419,8 @@ class _EditNetworkingProfileScreenState
                                 Expanded(
                                   child: Text(
                                     '${_distanceRange.start.round()} km - ${_distanceRange.end.round() == 500 ? "500+" : "${_distanceRange.end.round()}"} km',
-                                    style: const TextStyle(
+                                    style: const TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
-                                      fontFamily: 'Poppins',
                                       fontSize: 14,
                                     ),
                                   ),
@@ -2982,9 +1475,8 @@ class _EditNetworkingProfileScreenState
                               const Expanded(
                                 child: Text(
                                   'Show me in Discovery',
-                                  style: TextStyle(
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     fontSize: 14,
-                                    fontFamily: 'Poppins',
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white,
                                   ),
@@ -3012,6 +1504,64 @@ class _EditNetworkingProfileScreenState
                             ],
                           ),
                         ),
+                        const SizedBox(height: 12),
+
+                        // Allow Calls Toggle
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            color: Colors.white.withValues(alpha: 0.08),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _allowCalls
+                                      ? const Color(0xFF00E676).withValues(alpha: 0.2)
+                                      : Colors.grey.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.call_rounded,
+                                  color: _allowCalls ? const Color(0xFF00E676) : Colors.grey,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Allow Calls',
+                                  style: TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                height: 24,
+                                width: 40,
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: Switch(
+                                    value: _allowCalls,
+                                    onChanged: (value) {
+                                      HapticFeedback.lightImpact();
+                                      setState(() => _allowCalls = value);
+                                    },
+                                    activeTrackColor: const Color(0xFF00E676).withValues(alpha: 0.5),
+                                    activeThumbColor: const Color(0xFF00E676),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 24),
                       ],
                     ),
@@ -3030,8 +1580,7 @@ class _EditNetworkingProfileScreenState
   ) {
     return Text(
       title,
-      style: const TextStyle(
-        fontFamily: 'Poppins',
+      style: const TextStyle(fontFamily: 'Poppins', 
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Colors.white,
@@ -3070,8 +1619,7 @@ class _EditNetworkingProfileScreenState
         textAlignVertical: TextAlignVertical.top,
         validator: validator,
         inputFormatters: inputFormatters,
-        style: const TextStyle(
-          fontFamily: 'Poppins',
+        style: const TextStyle(fontFamily: 'Poppins', 
           fontSize: 14,
           color: Colors.white,
         ),
@@ -3081,18 +1629,15 @@ class _EditNetworkingProfileScreenState
           alignLabelWithHint: true,
           filled: true,
           fillColor: Colors.transparent,
-          labelStyle: TextStyle(
-            fontFamily: 'Poppins',
+          labelStyle: TextStyle(fontFamily: 'Poppins', 
             fontSize: 14,
             color: Colors.white.withValues(alpha: 0.7),
           ),
-          hintStyle: TextStyle(
-            fontFamily: 'Poppins',
+          hintStyle: TextStyle(fontFamily: 'Poppins', 
             fontSize: 14,
             color: Colors.white.withValues(alpha: 0.4),
           ),
-          counterStyle: TextStyle(
-            fontFamily: 'Poppins',
+          counterStyle: TextStyle(fontFamily: 'Poppins', 
             fontSize: 11,
             color: Colors.white.withValues(alpha: 0.5),
           ),
@@ -3163,8 +1708,7 @@ class _EditNetworkingProfileScreenState
                           SizedBox(width: 8),
                           Text(
                             'Update Profile',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,

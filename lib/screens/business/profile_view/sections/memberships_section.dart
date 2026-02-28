@@ -354,7 +354,7 @@ class MembershipCard extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.check_circle,
                             size: 16,
                             color: Colors.green,
@@ -401,7 +401,7 @@ class MembershipCard extends StatelessWidget {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
+                child: const Text(
                   'Choose Plan',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,

@@ -76,21 +76,23 @@ class _ArtPortfolioDashboardState extends State<ArtPortfolioDashboard> {
 
       int portfolioViews = businessDoc.data()?['views'] ?? 0;
 
-      setState(() {
-        _stats = {
-          'totalArtworks': totalArtworks,
-          'availableForSale': availableForSale,
-          'totalCommissions': totalCommissions,
-          'pendingCommissions': pendingCommissions,
-          'inProgressCommissions': inProgressCommissions,
-          'totalRevenue': totalRevenue,
-          'portfolioViews': portfolioViews,
-        };
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = {
+            'totalArtworks': totalArtworks,
+            'availableForSale': availableForSale,
+            'totalCommissions': totalCommissions,
+            'pendingCommissions': pendingCommissions,
+            'inProgressCommissions': inProgressCommissions,
+            'totalRevenue': totalRevenue,
+            'portfolioViews': portfolioViews,
+          };
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading art stats: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -465,7 +465,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                     '#$orderId',
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 11,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -542,8 +542,8 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                 Text(
                                   'Paid via GPay',
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                    color: Colors.grey[500],
                                   ),
                                 ),
                               ],
@@ -576,8 +576,8 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                   Text(
                                     'Est. ${_getDeliveryLabel()}',
                                     style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey[500],
+                                      fontSize: 13,
+                                      color: Colors.grey[400],
                                     ),
                                   ),
                                 ],
@@ -604,8 +604,8 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                   Text(
                                     'Hyderabad',
                                     style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey[500],
+                                      fontSize: 13,
+                                      color: Colors.grey[400],
                                     ),
                                   ),
                                 ],
@@ -860,7 +860,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
             Text(
               steps[step],
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive ? color : Colors.grey[600],
               ),

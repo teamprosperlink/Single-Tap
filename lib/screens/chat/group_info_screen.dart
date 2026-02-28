@@ -169,10 +169,13 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     final availableUsers = usersSnapshot.docs
         .where((doc) => !_memberIds.contains(doc.id) && doc.id != currentUserId)
         .map(
-          (doc) => {
-            'uid': doc.id,
-            'name': doc.data()['name'] ?? 'Unknown',
-            'photoUrl': doc.data()['photoUrl'] ?? doc.data()['profileImageUrl'],
+          (doc) {
+            final data = doc.data();
+            return {
+              'uid': doc.id,
+              'name': data['name'] ?? 'Unknown',
+              'photoUrl': data['photoUrl'] ?? data['profileImageUrl'],
+            };
           },
         )
         .toList();
@@ -451,7 +454,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
         }
       }
     }
-    controller.dispose();
   }
 
   void _showThemePicker() {

@@ -1360,7 +1360,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

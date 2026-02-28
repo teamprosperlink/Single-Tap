@@ -441,7 +441,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         leadingWidth: 0,
         title: const Text(
           'Messages',
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -512,11 +512,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               dividerColor: Colors.transparent,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-              labelStyle: const TextStyle(
+              labelStyle: const TextStyle(fontFamily: 'Poppins', 
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
-              unselectedLabelStyle: const TextStyle(
+              unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', 
                 fontSize: 15,
                 fontWeight: FontWeight.normal,
               ),
@@ -539,8 +539,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             SizedBox(
               height: MediaQuery.of(context).padding.top + kToolbarHeight + 48,
             ),
-            // Search bar (hidden in selection mode)
-            if (!_isConversationSelectionMode) _buildSearchBar(isDarkMode),
             // Tab content
             Expanded(
               child: TabBarView(
@@ -605,7 +603,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
                 Text(
                   '${_selectedConversationIds.length} selected',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontWeight: FontWeight.w500,
                   ),
@@ -615,7 +613,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   onPressed: () => _selectAllConversations(isGroup),
                   child: Text(
                     'Select All',
-                    style: TextStyle(color: Theme.of(context).primaryColor),
+                    style: TextStyle(fontFamily: 'Poppins', color: Theme.of(context).primaryColor),
                   ),
                 ),
                 IconButton(
@@ -645,7 +643,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               }
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return _buildEmptyState(isDarkMode, isGroup);
+                return Column(
+                  children: [
+                    _buildSearchBar(isDarkMode),
+                    Expanded(child: _buildEmptyState(isDarkMode, isGroup)),
+                  ],
+                );
               }
 
               // Filter conversations based on isGroup
@@ -673,9 +676,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
                   final List<ConversationModel> conversations = [];
                   final List<String> userIdsToPrefetch = [];
+                  final seenConvIds = <String>{};
 
                   for (var doc in snapshot.data!.docs) {
                     try {
+                      // Deduplicate by conversation ID
+                      if (!seenConvIds.add(doc.id)) continue;
+
                       final conv = ConversationModel.fromFirestore(doc);
 
                       // Filter by group or direct chat
@@ -736,14 +743,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   });
 
                   if (conversations.isEmpty) {
-                    return _buildEmptyState(isDarkMode, isGroup);
+                    return Column(
+                      children: [
+                        _buildSearchBar(isDarkMode),
+                        Expanded(child: _buildEmptyState(isDarkMode, isGroup)),
+                      ],
+                    );
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.only(top: 8),
-                    itemCount: conversations.length,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 80),
+                    itemCount: conversations.length + 1,
                     itemBuilder: (context, index) {
-                      final conversation = conversations[index];
+                      if (index == 0) {
+                        return _buildSearchBar(isDarkMode);
+                      }
+                      final conversation = conversations[index - 1];
                       return _buildConversationTile(conversation, isDarkMode);
                     },
                   );
@@ -786,7 +802,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
                 Text(
                   '${_selectedCallIds.length} selected',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: isDarkMode ? Colors.white : Colors.black,
                     fontWeight: FontWeight.w500,
                   ),
@@ -796,7 +812,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   onPressed: _selectAllCalls,
                   child: Text(
                     'Select All',
-                    style: TextStyle(color: Theme.of(context).primaryColor),
+                    style: TextStyle(fontFamily: 'Poppins', color: Theme.of(context).primaryColor),
                   ),
                 ),
                 IconButton(
@@ -818,7 +834,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 return const Center(child: CircularProgressIndicator());
               }
 
-              var allCalls = [..._individualCalls, ..._groupCalls];
+              // Deduplicate by doc.id when combining individual + group calls
+              final seenCallIds = <String>{};
+              var allCalls = [..._individualCalls, ..._groupCalls]
+                  .where((doc) => seenCallIds.add(doc.id))
+                  .toList();
 
               // Filter out calls deleted for current user
               allCalls = allCalls.where((doc) {
@@ -833,7 +853,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               }).toList();
 
               if (allCalls.isEmpty) {
-                return _buildEmptyCallsState(isDarkMode);
+                return Column(
+                  children: [
+                    _buildSearchBar(isDarkMode),
+                    Expanded(child: _buildEmptyCallsState(isDarkMode)),
+                  ],
+                );
               }
 
               // Sort by timestamp (descending)
@@ -867,14 +892,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               );
 
               if (filteredCalls.isEmpty) {
-                return _buildEmptyCallsState(isDarkMode);
+                return Column(
+                  children: [
+                    _buildSearchBar(isDarkMode),
+                    Expanded(child: _buildEmptyCallsState(isDarkMode)),
+                  ],
+                );
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.only(top: 8),
-                itemCount: filteredCalls.length,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 80),
+                itemCount: filteredCalls.length + 1,
                 itemBuilder: (context, index) {
-                  final callDoc = filteredCalls[index];
+                  if (index == 0) {
+                    return _buildSearchBar(isDarkMode);
+                  }
+                  final callDoc = filteredCalls[index - 1];
                   final rawData = callDoc.data();
                   if (rawData == null) return const SizedBox.shrink();
                   final callData = rawData as Map<String, dynamic>;
@@ -1397,7 +1431,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text(
                   'Delete',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
                 ),
               ),
             ],
@@ -1423,7 +1457,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 const Expanded(
                   child: Text(
                     'Delete Call',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1443,7 +1477,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               count == 1
                   ? 'Are you sure you want to delete this call from history?'
                   : 'Are you sure you want to delete $count calls from history?',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
             ),
             actions: [
               OutlinedButton(
@@ -1456,7 +1490,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
                 child: const Text(
                   'Cancel',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
                 ),
               ),
               OutlinedButton(
@@ -1469,7 +1503,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
                 child: const Text(
                   'Delete',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
                 ),
               ),
             ],
@@ -1608,44 +1642,36 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // Get group name for group calls
     final groupName = callData['groupName'] as String? ?? 'Group Call';
 
-    // Get joined participants info (saved when call ends)
+    // Get joined participants count
     final joinedParticipants = List<String>.from(
       callData['joinedParticipants'] ?? [],
     );
     final joinedCount =
         callData['joinedCount'] as int? ?? joinedParticipants.length;
-    final totalMembers =
-        callData['totalMembers'] as int? ?? participants.length;
 
     // Determine call status icon, color and label
     IconData statusIcon;
     Color statusColor;
-    String statusLabel;
 
     if (callStatus == 'missed' ||
         callStatus == 'no_answer' ||
         callStatus == 'timeout') {
       statusIcon = Icons.call_missed;
       statusColor = Colors.red;
-      statusLabel = 'Missed';
     } else if (callStatus == 'declined' ||
         callStatus == 'rejected' ||
         callStatus == 'busy') {
       statusIcon = Icons.call_missed_outgoing;
       statusColor = Colors.red;
-      statusLabel = isOutgoing ? 'Declined' : 'Missed';
     } else if (callStatus == 'canceled' || callStatus == 'cancelled') {
       statusIcon = Icons.call_missed_outgoing;
       statusColor = Colors.red;
-      statusLabel = 'Cancelled';
     } else if (isOutgoing) {
       statusIcon = Icons.call_made;
       statusColor = Colors.green;
-      statusLabel = 'Outgoing';
     } else {
       statusIcon = Icons.call_received;
       statusColor = Colors.green;
-      statusLabel = 'Incoming';
     }
 
     return Container(
@@ -1666,76 +1692,82 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         ),
       ),
       child: ListTile(
-        dense: true,
-        visualDensity: const VisualDensity(vertical: -2),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        dense: false,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: finalIsGroupCall
             ? _buildUserAvatar(
                 photoUrl: fixedCallerPhotoUrl,
                 initial: callerInitial,
-                radius: 22,
+                radius: 24,
                 context: context,
                 uniqueId: callerId,
               )
             : _buildUserAvatar(
                 photoUrl: fixedPhotoUrl,
                 initial: initial,
-                radius: 22,
+                radius: 24,
                 context: context,
                 uniqueId: otherUserId,
               ),
         title: Text(
           finalIsGroupCall ? groupName : formatDisplayName(displayName),
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             fontWeight: FontWeight.w600,
-            fontSize: 15,
+            fontSize: 16,
             color: isDarkMode ? Colors.white : Colors.black,
           ),
         ),
-        subtitle: Row(
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(statusIcon, size: 14, color: statusColor),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                finalIsGroupCall
-                    ? '$statusLabel • ${joinedCount > 0 ? '$joinedCount joined' : 'No one joined'} • $totalMembers members • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}'
-                    : '$statusLabel • ${timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time'}',
-                style: TextStyle(
-                  color:
-                      callStatus == 'missed' ||
-                          callStatus == 'declined' ||
-                          callStatus == 'rejected' ||
-                          callStatus == 'no_answer' ||
-                          callStatus == 'timeout' ||
-                          callStatus == 'busy'
-                      ? Colors.red.withValues(alpha: 0.8)
-                      : (isDarkMode ? Colors.grey[500] : Colors.grey[600]),
-                  fontSize: 12,
+            Row(
+              children: [
+                Icon(statusIcon, size: 15, color: statusColor),
+                const SizedBox(width: 4),
+                Text(
+                  finalIsGroupCall ? (joinedCount > 0 ? 'joined $joinedCount' : 'not joined') : '',
+                  style: TextStyle(fontFamily: 'Poppins',
+                    color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 13,
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              timestamp != null ? timeago.format(timestamp.toDate()) : 'Unknown time',
+              style: TextStyle(fontFamily: 'Poppins',
+                color:
+                    callStatus == 'missed' ||
+                        callStatus == 'declined' ||
+                        callStatus == 'rejected' ||
+                        callStatus == 'no_answer' ||
+                        callStatus == 'timeout' ||
+                        callStatus == 'busy'
+                    ? Colors.red.withValues(alpha: 0.9)
+                    : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                fontSize: 13,
               ),
             ),
           ],
         ),
-        trailing: Row(
+        trailing: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildCallTypeTag(
               callData: callData,
               isGroupCall: finalIsGroupCall,
             ),
-            const SizedBox(width: 6),
-            IconButton(
-              icon: Icon(Icons.call, color: Theme.of(context).primaryColor),
-              constraints: const BoxConstraints(),
-              padding: EdgeInsets.zero,
-              onPressed: () {
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
                 if (finalIsGroupCall && groupId != null) {
                   _initiateGroupCall(groupId, groupName, participants);
                 } else {
-                  _initiateCall(otherUserId, false);
+                  _initiateCall(otherUserId, false, source: callData['source'] as String? ?? 'Chat');
                 }
               },
+              child: Icon(Icons.call, color: Theme.of(context).primaryColor, size: 24),
             ),
           ],
         ),
@@ -1756,7 +1788,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 16),
           Text(
             'No calls yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: isDarkMode ? Colors.white : Colors.black,
@@ -1765,7 +1797,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 8),
           Text(
             'Your call history will appear here',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 14,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -1812,7 +1844,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
-  void _initiateCall(String userId, bool isVideo) async {
+  void _initiateCall(String userId, bool isVideo, {String source = 'Chat'}) async {
     // Prevent video calls (feature disabled)
     if (isVideo) {
       HapticFeedback.lightImpact();
@@ -1905,7 +1937,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         'participants': [currentUserId, userId],
         'status': 'calling',
         'type': 'audio',
-        'source': 'Chat',
+        'source': source,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -2459,7 +2491,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                           Expanded(
                             child: Text(
                               formatDisplayName(displayName),
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -2476,9 +2508,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       if (conversation.lastMessageTime != null)
                         Text(
                           timeago.format(conversation.lastMessageTime!),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withValues(alpha: 0.5),
+                          style: TextStyle(fontFamily: 'Poppins', 
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.6),
                           ),
                         ),
                       const SizedBox(height: 4),
@@ -2494,7 +2526,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                               padding: EdgeInsets.only(right: 4),
                               child: Icon(
                                 Icons.mic,
-                                size: 14,
+                                size: 15,
                                 color: Colors.white,
                               ),
                             ),
@@ -2504,9 +2536,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                   ? 'Typing...'
                                   : conversation.lastMessage ??
                                         'Start a conversation',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white.withValues(alpha: 0.6),
+                              style: TextStyle(fontFamily: 'Poppins', 
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2526,9 +2558,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                 unreadCount > 99
                                     ? '99+'
                                     : unreadCount.toString(),
-                                style: const TextStyle(
+                                style: const TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -2588,24 +2620,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: sourceColor.withValues(alpha: 0.15),
+        color: sourceColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: sourceColor.withValues(alpha: 0.3),
+          color: sourceColor.withValues(alpha: 0.4),
           width: 0.5,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(sourceIcon, size: 11, color: Colors.white),
+          Icon(sourceIcon, size: 13, color: Colors.white),
           const SizedBox(width: 4),
           Text(
             source,
-            style: const TextStyle(
-              fontSize: 10,
+            style: const TextStyle(fontFamily: 'Poppins', 
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
@@ -2626,7 +2658,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     Color tagColor;
 
     if (isGroupCall) {
-      label = 'Group Call';
+      final groupName = callData['groupName'] as String? ?? 'Group Call';
+      label = groupName;
       icon = Icons.groups_outlined;
       tagColor = const Color(0xFF8B5CF6); // Purple
     } else {
@@ -2655,23 +2688,28 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      constraints: const BoxConstraints(maxWidth: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: tagColor.withValues(alpha: 0.15),
+        color: tagColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: tagColor.withValues(alpha: 0.3), width: 0.5),
+        border: Border.all(color: tagColor.withValues(alpha: 0.4), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: Colors.white),
+          Icon(icon, size: 13, color: Colors.white),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(fontFamily: 'Poppins',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -2709,7 +2747,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(width: 4),
           Text(
             isOnline ? 'Active' : 'Offline',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: isOnline
@@ -2757,7 +2795,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             const SizedBox(width: 4),
             Text(
               isOnline ? 'Active' : 'Offline',
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: isOnline
@@ -2822,7 +2860,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         child: Center(
           child: Text(
             initial,
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white,
               fontSize: radius * 0.8,
               fontWeight: FontWeight.bold,
@@ -2951,7 +2989,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 16),
           Text(
             isGroup ? 'No groups yet' : 'No chats yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: isDarkMode ? Colors.white : Colors.black,
@@ -2962,7 +3000,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             isGroup
                 ? 'Create a group to get started'
                 : 'Start a new conversation',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 14,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -2981,7 +3019,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 16),
           Text(
             'Unable to load',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: isDarkMode ? Colors.white : Colors.black,
@@ -3116,7 +3154,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
         ),
         title: const Text(
           'New Message',
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -3219,7 +3257,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
               return const Center(
                 child: Text(
                   'Error loading contacts',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
                 ),
               );
             }
@@ -3243,7 +3281,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                   _searchQuery.isNotEmpty
                       ? 'No results found'
                       : 'No contacts yet',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 16),
                 ),
               );
             }
@@ -3329,7 +3367,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                             backgroundColor: avatarColor,
                             child: Text(
                               initial,
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -3359,7 +3397,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                     children: [
                       Text(
                         formatDisplayName(name),
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -3369,7 +3407,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
                       const SizedBox(height: 4),
                       Text(
                         isOnline ? 'Active now' : 'Tap to message',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           fontSize: 12,
                           color: isOnline
                               ? Colors.green
@@ -3396,7 +3434,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
           const SizedBox(height: 16),
           const Text(
             'No contacts yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: Colors.white,
@@ -3408,7 +3446,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
             child: Text(
               'Start chatting with people from Home or Live Connect',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.grey[600]),
             ),
           ),
         ],

@@ -585,7 +585,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     bool isDarkMode,
     bool isDeleted,
   ) {
-    final baseStyle = TextStyle(
+    final baseStyle = TextStyle(fontFamily: 'Poppins', 
       color: isDeleted
           ? Colors.grey
           : (isMe
@@ -619,7 +619,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         spans.add(
           TextSpan(
             text: text.substring(lastIndex, match.start),
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDeleted
                   ? Colors.grey
                   : (isMe
@@ -634,7 +634,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       spans.add(
         TextSpan(
           text: match.group(0), // @Username
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isMe
                 ? Colors.white
                 : AppColors.iosBlue, // Blue highlight for mentions
@@ -654,7 +654,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       spans.add(
         TextSpan(
           text: text.substring(lastIndex),
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isDeleted
                 ? Colors.grey
                 : (isMe
@@ -667,7 +667,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(
+        style: TextStyle(fontFamily: 'Poppins', 
           fontSize: 16,
           height: 1.35,
           fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
@@ -1186,7 +1186,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             const SizedBox(width: 16),
             Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: isDestructive ? Colors.red : Colors.white,
                 fontSize: 16,
               ),
@@ -2040,7 +2040,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ),
               Text(
                 'Choose Chat Theme',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -2085,7 +2085,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                       const SizedBox(width: 8),
                       Text(
                         'None (Default)',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: isDarkMode ? Colors.white : Colors.black,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -2106,7 +2106,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               const SizedBox(height: 16),
               Text(
                 'Theme Colors',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.white70 : Colors.grey[700],
                   fontSize: 14,
                 ),
@@ -2164,7 +2164,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 onPressed: () => Navigator.pop(context),
                 child: Text(
                   'Cancel',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: isDarkMode ? Colors.white70 : Colors.grey[700],
                   ),
                 ),
@@ -2809,7 +2809,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               const SizedBox(width: 20),
               Text(
                 label,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDestructive ? Colors.red : Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -3317,7 +3317,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   const SizedBox(height: 16),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -3327,7 +3327,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   const Text(
                     'Choose how to delete',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
                   if (showDeleteForEveryone) ...[
@@ -3343,7 +3343,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         child: const Center(
                           child: Text(
                             'Delete for everyone',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -3371,7 +3371,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             child: const Center(
                               child: Text(
                                 'Cancel',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -3394,7 +3394,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             child: const Center(
                               child: Text(
                                 'Delete for me',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -3835,7 +3835,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                           child: Text(
                                             (_memberNames[userId] ?? '?')[0]
                                                 .toUpperCase(),
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               fontSize: 14,
                                               fontWeight: FontWeight.bold,
                                               color: Color(0xFF00A884),
@@ -3856,7 +3856,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         children: [
                           const Text(
                             'Tap to join call',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -3867,7 +3867,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             count > 0
                                 ? '$count members in call'
                                 : 'Waiting for others...',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 13,
                             ),
@@ -3886,7 +3886,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                       ),
                       child: const Text(
                         'Join',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Color(0xFF00A884),
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -4057,9 +4057,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               );
                             }
 
-                            final messages = snapshot.data?.docs ?? [];
-                            // Reduced logging to prevent spam
-                            // debugPrint('💬 StreamBuilder received ${messages.length} messages from Firestore');
+                            // Deduplicate by message ID
+                            final seenMsgIds = <String>{};
+                            final messages = (snapshot.data?.docs ?? [])
+                                .where((doc) => seenMsgIds.add(doc.id))
+                                .toList();
 
                             if (messages.isNotEmpty) {
                               _lastDocument = messages.last;
@@ -4299,7 +4301,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       onPressed: _loadMoreMessages,
                                       child: Text(
                                         'Load earlier messages',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Theme.of(context).primaryColor,
                                         ),
                                       ),
@@ -4398,7 +4400,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       title: _isMultiSelectMode
           ? Text(
               '${_selectedMessageIds.length} selected',
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white, // Always white for solid dark appbar
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -4471,7 +4473,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           children: [
                             Text(
                               _currentGroupName,
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: isDarkMode ? Colors.white : Colors.black,
@@ -4481,7 +4483,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               typingText.isNotEmpty
                                   ? typingText
                                   : '${_memberNames.length} members',
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 12,
                                 color: typingText.isNotEmpty
                                     ? Theme.of(context).primaryColor
@@ -4577,7 +4579,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 : _searchResults.isEmpty
                 ? 'Type to search'
                 : '${_currentSearchIndex + 1} of ${_searchResults.length}',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
               fontSize: 14,
             ),
@@ -4622,7 +4624,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           const SizedBox(height: 16),
           Text(
             _searchQuery.isNotEmpty ? 'No messages found' : 'No messages yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 18,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -4632,7 +4634,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             _searchQuery.isNotEmpty
                 ? 'Try a different search'
                 : 'Start the conversation!',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDarkMode ? Colors.grey[700] : Colors.grey[400],
             ),
           ),
@@ -4681,7 +4683,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               children: [
                 Text(
                   isMe ? 'You' : senderName,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Color(0xFFE91E63), // Pink color
                     fontWeight: FontWeight.w600,
@@ -4690,7 +4692,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _replyToMessage!['text'] ?? 'Photo',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -4752,7 +4754,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               children: [
                 const Text(
                   'Editing message',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Colors.orange,
                     fontWeight: FontWeight.w600,
@@ -4761,7 +4763,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _editingMessage!['text'] ?? '',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -5287,7 +5289,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                           _formatRecordingTime(
                                             _recordingDuration,
                                           ),
-                                          style: const TextStyle(
+                                          style: const TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.white,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -5429,13 +5431,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               child: !PhotoUrlHelper.isValidUrl(photo)
                   ? Text(
                       name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
                     )
                   : null,
             ),
             title: Text(
               name,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -5566,37 +5568,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   ),
                 ),
               ],
-              // Profile circle for receiver
-              if (!isCallerCurrentUser) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundImage:
-                        PhotoUrlHelper.isValidUrl(_memberPhotos[callerId])
-                        ? CachedNetworkImageProvider(_memberPhotos[callerId]!)
-                        : null,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).primaryColor.withValues(alpha: 0.1),
-                    child: !PhotoUrlHelper.isValidUrl(_memberPhotos[callerId])
-                        ? Text(
-                            callerName != null && callerName.isNotEmpty
-                                ? callerName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
               Column(
                 crossAxisAlignment: isCallerCurrentUser
                     ? CrossAxisAlignment
@@ -5626,7 +5597,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(20),
+                          topRight: const Radius.circular(20),
+                          bottomLeft: isCallerCurrentUser
+                              ? const Radius.circular(20)
+                              : const Radius.circular(4),
+                          bottomRight: isCallerCurrentUser
+                              ? const Radius.circular(4)
+                              : const Radius.circular(20),
+                        ),
                         border: Border.all(color: Colors.white, width: 1),
                       ),
                       child: Column(
@@ -5641,7 +5621,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           if (!isCallerCurrentUser && callerName != null) ...[
                             Text(
                               callerName,
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -5686,7 +5666,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   children: [
                                     Text(
                                       callText,
-                                      style: const TextStyle(
+                                      style: const TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
                                         color: Colors.white,
@@ -5699,7 +5679,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                         DateFormat(
                                           'MMM d, h:mm a',
                                         ).format(timestamp.toDate()),
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           fontSize: 11,
                                           color: Colors.white.withValues(
                                             alpha: 0.7,
@@ -5737,7 +5717,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           SizedBox(width: 4),
                           Text(
                             'Join',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -5774,7 +5754,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         ),
         child: Text(
           text,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             fontSize: 12,
             color: Colors.white,
             fontStyle: FontStyle.italic,
@@ -5800,7 +5780,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     int? voiceDuration,
   }) {
     final senderName = _memberNames[senderId] ?? 'Unknown';
-    final senderPhoto = _memberPhotos[senderId];
     final totalMembers = _memberNames.length;
     final readCount = readBy.length;
     final hasContent =
@@ -5846,35 +5825,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   ),
                 ),
               ],
-              if (!isMe) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundImage: PhotoUrlHelper.isValidUrl(senderPhoto)
-                        ? CachedNetworkImageProvider(senderPhoto!)
-                        : null,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).primaryColor.withValues(alpha: 0.1),
-                    child: !PhotoUrlHelper.isValidUrl(senderPhoto)
-                        ? Text(
-                            senderName.isNotEmpty
-                                ? senderName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
               Flexible(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -5890,7 +5840,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           maxWidth: MediaQuery.of(context).size.width * 0.5,
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(20),
+                            topRight: const Radius.circular(20),
+                            bottomLeft: isMe
+                                ? const Radius.circular(20)
+                                : const Radius.circular(4),
+                            bottomRight: isMe
+                                ? const Radius.circular(4)
+                                : const Radius.circular(20),
+                          ),
                           child: BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                             child: Container(
@@ -5925,7 +5884,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                         voiceUrl == null)
                                     ? Border.all(color: Colors.white, width: 1)
                                     : null,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(20),
+                                  topRight: const Radius.circular(20),
+                                  bottomLeft: isMe
+                                      ? const Radius.circular(20)
+                                      : const Radius.circular(4),
+                                  bottomRight: isMe
+                                      ? const Radius.circular(4)
+                                      : const Radius.circular(20),
+                                ),
                               ),
                               child: Column(
                                 crossAxisAlignment: isMe
@@ -5941,7 +5909,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       voiceUrl == null) ...[
                                     Text(
                                       senderName,
-                                      style: const TextStyle(
+                                      style: const TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 12,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -6054,7 +6022,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                       .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(
+                                                    style: const TextStyle(fontFamily: 'Poppins', 
                                                       fontSize: 12,
                                                       color: Colors.white,
                                                       fontWeight:
@@ -6205,7 +6173,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                       .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(
+                                                    style: const TextStyle(fontFamily: 'Poppins', 
                                                       fontSize: 12,
                                                       color: Colors.white,
                                                       fontWeight:
@@ -6359,7 +6327,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           if (timestamp != null)
                             Text(
                               DateFormat('h:mm a').format(timestamp.toDate()),
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: isDarkMode
@@ -6458,7 +6426,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           end: Alignment.bottomRight,
         ),
         border: Border.all(color: Colors.white, width: 1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
+          bottomLeft: isMe
+              ? const Radius.circular(20)
+              : const Radius.circular(4),
+          bottomRight: isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(20),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6476,7 +6453,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ),
               child: Text(
                 senderName,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   fontSize: 12,
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -6568,7 +6545,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 // Duration
                 Text(
                   formatDuration(voiceDuration),
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
@@ -6698,7 +6675,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             children: [
               Text(
                 replySenderName,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: isMe ? Colors.white : Theme.of(context).primaryColor,
@@ -6706,7 +6683,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ),
               Text(
                 replyData['text'] ?? ' Photo',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 12,
                   color: isMe
                       ? Colors.white.withValues(alpha: 0.8)
@@ -6993,7 +6970,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                             // Duration text
                             Text(
                               _formatTime(widget.duration),
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white70,
                                 fontSize: 11,
                               ),
@@ -7043,7 +7020,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Delete',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.redAccent,
                               fontWeight: FontWeight.w600,
                             ),
@@ -7090,7 +7067,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Send',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
@@ -7248,7 +7225,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
         ),
         title: const Text(
           'Forward to...',
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -7271,7 +7248,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                 ),
                 child: Text(
                   'Send (${_selectedUsers.length})',
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -7293,10 +7270,10 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
               onChanged: (value) {
                 setState(() => _searchQuery = value);
               },
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+              style: TextStyle(fontFamily: 'Poppins', color: isDarkMode ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 hintText: 'Search contacts...',
-                hintStyle: TextStyle(
+                hintStyle: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                 ),
                 prefixIcon: Icon(
@@ -7355,13 +7332,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                         child: !PhotoUrlHelper.isValidUrl(user['photoUrl'])
                             ? Text(
                                 user['name'][0].toUpperCase(),
-                                style: const TextStyle(fontSize: 10),
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 10),
                               )
                             : null,
                       ),
                       label: Text(
                         user['name'].split(' ').first,
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: isDarkMode ? Colors.white : Colors.black,
                           fontSize: 12,
                         ),
@@ -7386,7 +7363,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                 ? Center(
                     child: Text(
                       'No contacts found',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                         fontSize: 16,
                       ),
@@ -7408,13 +7385,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                           child: !PhotoUrlHelper.isValidUrl(contact['photoUrl'])
                               ? Text(
                                   contact['name'][0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 18),
+                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 18),
                                 )
                               : null,
                         ),
                         title: Text(
                           contact['name'],
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: isDarkMode ? Colors.white : Colors.black,
                             fontWeight: FontWeight.w500,
                           ),
@@ -7424,7 +7401,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                                 contact['email'].isNotEmpty
                             ? Text(
                                 contact['email'],
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: isDarkMode
                                       ? Colors.grey[400]
                                       : Colors.grey[600],

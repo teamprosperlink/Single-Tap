@@ -19,6 +19,7 @@ import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../screens/product/my_orders_screen.dart';
 import '../../screens/home/main_navigation_screen.dart';
+import '../../screens/networking/networking_profiles_page_screen.dart';
 
 /// SingleTap-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
@@ -92,8 +93,11 @@ class AppDrawerState extends State<AppDrawer> {
       debugPrint('Chat history loaded: ${chatsSnapshot.docs.length} documents');
 
       final chats = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
 
       for (var doc in chatsSnapshot.docs) {
+        // Deduplicate by doc.id
+        if (!seenIds.add(doc.id)) continue;
         final data = doc.data();
         // Skip archived chats and project chats (shown in Library)
         if (data['isArchived'] == true) continue;
@@ -216,8 +220,13 @@ class AppDrawerState extends State<AppDrawer> {
 
                     const Divider(color: Colors.white12, height: 1),
 
-                    const SizedBox(height: 8),
-
+                    // Scrollable content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.only(top: 8, bottom: 80),
+                        child: Column(
+                          children: [
                     // Feature Cards - Single Column
                     _buildFeatureCard(
                       icon: Icons.edit_outlined,
@@ -248,7 +257,10 @@ class AppDrawerState extends State<AppDrawer> {
                           MaterialPageRoute(
                             builder: (_) => const DownloadsScreen(),
                           ),
-                        );
+                        ).then((_) {
+                          MainNavigationScreen.scaffoldKey.currentState
+                              ?.openEndDrawer();
+                        });
                       },
                     ),
 
@@ -273,9 +285,32 @@ class AppDrawerState extends State<AppDrawer> {
                               MaterialPageRoute(
                                 builder: (_) => const NotificationsScreen(),
                               ),
-                            );
+                            ).then((_) {
+                              MainNavigationScreen.scaffoldKey.currentState
+                                  ?.openEndDrawer();
+                            });
                           },
                         );
+                      },
+                    ),
+
+                    _buildFeatureCard(
+                      icon: Icons.hub_outlined,
+                      label: 'Networking Profile',
+                      color: const Color(0xFF016CFF),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const NetworkingProfilesPageScreen(),
+                          ),
+                        ).then((_) {
+                          MainNavigationScreen.scaffoldKey.currentState
+                              ?.openEndDrawer();
+                        });
                       },
                     ),
 
@@ -313,7 +348,10 @@ class AppDrawerState extends State<AppDrawer> {
                               onNewChatInProject: widget.onNewChatInProject,
                             ),
                           ),
-                        );
+                        ).then((_) {
+                          MainNavigationScreen.scaffoldKey.currentState
+                              ?.openEndDrawer();
+                        });
                       },
                     ),
 
@@ -331,77 +369,73 @@ class AppDrawerState extends State<AppDrawer> {
 
                     // Chat list (shown when expanded)
                     if (_showChatHistory)
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.only(
-                            left: 12,
-                            right: 12,
-                            top: 2,
-                            bottom: 4,
+                      Container(
+                        margin: const EdgeInsets.only(
+                          left: 12,
+                          right: 12,
+                          top: 2,
+                          bottom: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.25),
+                              Colors.white.withValues(alpha: 0.15),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withValues(alpha: 0.25),
-                                Colors.white.withValues(alpha: 0.15),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: _recentChats.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(20),
-                                      child: Text(
-                                        'No chats yet',
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.5,
-                                          ),
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.only(
-                                      top: 4,
-                                      bottom: 8,
-                                    ),
-                                    physics:
-                                        const AlwaysScrollableScrollPhysics(
-                                          parent: BouncingScrollPhysics(),
-                                        ),
-                                    shrinkWrap: false,
-                                    itemCount: _showAllChats
-                                        ? _recentChats.length
-                                        : (_recentChats.length > 10
-                                              ? 11
-                                              : _recentChats.length),
-                                    itemBuilder: (context, index) {
-                                      if (!_showAllChats &&
-                                          index == 10 &&
-                                          _recentChats.length > 10) {
-                                        return _buildShowMoreButton();
-                                      }
-                                      return _buildChatItem(
-                                        _recentChats[index],
-                                      );
-                                    },
-                                  ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
                           ),
                         ),
-                      )
-                    else
-                      const Spacer(),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: _recentChats.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Text(
+                                    'No chats yet',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.only(
+                                    top: 4,
+                                    bottom: 8,
+                                  ),
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  shrinkWrap: true,
+                                  itemCount: _showAllChats
+                                      ? _recentChats.length
+                                      : (_recentChats.length > 10
+                                            ? 11
+                                            : _recentChats.length),
+                                  itemBuilder: (context, index) {
+                                    if (!_showAllChats &&
+                                        index == 10 &&
+                                        _recentChats.length > 10) {
+                                      return _buildShowMoreButton();
+                                    }
+                                    return _buildChatItem(
+                                      _recentChats[index],
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                          ],
+                        ),
+                      ),
+                    ), // Close Expanded > SingleChildScrollView
 
                     // Bottom profile button
                     _buildProfileButton(user),
@@ -474,7 +508,7 @@ class AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
+                shape: BoxShape.circle,
               ),
               child: Icon(icon, color: Colors.white, size: 20),
             ),
@@ -482,6 +516,7 @@ class AppDrawerState extends State<AppDrawer> {
             Text(
               label,
               style: const TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -498,6 +533,7 @@ class AppDrawerState extends State<AppDrawer> {
                 child: Text(
                   badge > 99 ? '99+' : '$badge',
                   style: const TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -558,7 +594,7 @@ class AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
+                shape: BoxShape.circle,
               ),
               child: Icon(icon, color: Colors.white, size: 20),
             ),
@@ -566,6 +602,7 @@ class AppDrawerState extends State<AppDrawer> {
             Text(
               label,
               style: const TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -600,7 +637,7 @@ class AppDrawerState extends State<AppDrawer> {
             height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white24, width: 2),
+              border: Border.all(color: Colors.white38, width: 2),
             ),
             child: ClipOval(
               child: _userProfile?['photoUrl'] != null
@@ -623,6 +660,7 @@ class AppDrawerState extends State<AppDrawer> {
                 Text(
                   _userProfile?['name'] ?? user?.displayName ?? 'User',
                   style: const TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -634,6 +672,7 @@ class AppDrawerState extends State<AppDrawer> {
                 Text(
                   user?.email ?? '',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 12,
                   ),
@@ -662,7 +701,7 @@ class AppDrawerState extends State<AppDrawer> {
               ),
               child: const Icon(
                 Icons.close_rounded,
-                color: Colors.white70,
+                color: Colors.white,
                 size: 20,
               ),
             ),
@@ -719,6 +758,7 @@ class AppDrawerState extends State<AppDrawer> {
                   child: Text(
                     chatName,
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white.withValues(alpha: 0.85),
                       fontSize: 14,
                       fontWeight: hasUnread
@@ -820,13 +860,14 @@ class AppDrawerState extends State<AppDrawer> {
         children: [
           Icon(
             icon,
-            color: isDestructive ? Colors.red : Colors.white70,
-            size: 20,
+            color: isDestructive ? Colors.red : Colors.white,
+            size: 22,
           ),
           const SizedBox(width: 12),
           Text(
             label,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: isDestructive ? Colors.red : Colors.white,
               fontSize: 14,
             ),
@@ -990,15 +1031,15 @@ class AppDrawerState extends State<AppDrawer> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Rename chat',
-          style: TextStyle(color: Colors.white, fontSize: 18),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Enter new name',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            hintStyle: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.5)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.1),
             border: OutlineInputBorder(
@@ -1012,7 +1053,7 @@ class AppDrawerState extends State<AppDrawer> {
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
             ),
           ),
           TextButton(
@@ -1026,7 +1067,7 @@ class AppDrawerState extends State<AppDrawer> {
               }
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
-            child: const Text('Save', style: TextStyle(color: Colors.blue)),
+            child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', color: Colors.blue)),
           ),
         ],
       ),
@@ -1043,18 +1084,18 @@ class AppDrawerState extends State<AppDrawer> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Delete chat?',
-          style: TextStyle(color: Colors.white, fontSize: 18),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18),
         ),
         content: Text(
           'This will delete "$chatName" permanently.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
             ),
           ),
           TextButton(
@@ -1063,7 +1104,7 @@ class AppDrawerState extends State<AppDrawer> {
               await _loadRecentChats();
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -1091,6 +1132,7 @@ class AppDrawerState extends State<AppDrawer> {
             Text(
               'Show more',
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 12,
               ),
@@ -1122,7 +1164,10 @@ class AppDrawerState extends State<AppDrawer> {
                 MaterialPageRoute(
                   builder: (_) => const ProfileWithHistoryScreen(),
                 ),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
             child: Container(
               width: 36,
@@ -1130,7 +1175,7 @@ class AppDrawerState extends State<AppDrawer> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.purple.withValues(alpha: 0.3),
-                border: Border.all(color: Colors.white24, width: 1),
+                border: Border.all(color: Colors.white38, width: 1),
               ),
               child: ClipOval(
                 child: _userProfile?['photoUrl'] != null
@@ -1149,6 +1194,7 @@ class AppDrawerState extends State<AppDrawer> {
             child: Text(
               _userProfile?['name'] ?? user?.displayName ?? 'User',
               style: const TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -1165,8 +1211,8 @@ class AppDrawerState extends State<AppDrawer> {
             },
             child: const Icon(
               Icons.settings_outlined,
-              color: Colors.white54,
-              size: 20,
+              color: Colors.white70,
+              size: 22,
             ),
           ),
         ],
@@ -1184,6 +1230,7 @@ class AppDrawerState extends State<AppDrawer> {
         child: Text(
           initial,
           style: const TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -1235,7 +1282,10 @@ class AppDrawerState extends State<AppDrawer> {
                 MaterialPageRoute(
                   builder: (_) => const ProfileWithHistoryScreen(),
                 ),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
           ),
 
@@ -1249,7 +1299,10 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const UpgradePlanScreen()),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
           ),
 
@@ -1265,7 +1318,10 @@ class AppDrawerState extends State<AppDrawer> {
                 MaterialPageRoute(
                   builder: (_) => const PersonalizationScreen(),
                 ),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
           ),
 
@@ -1279,7 +1335,10 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
           ),
 
@@ -1293,7 +1352,10 @@ class AppDrawerState extends State<AppDrawer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
-              );
+              ).then((_) {
+                MainNavigationScreen.scaffoldKey.currentState
+                    ?.openEndDrawer();
+              });
             },
           ),
 
@@ -1344,8 +1406,8 @@ class AppDrawerState extends State<AppDrawer> {
                 Icon(
                   icon,
                   color: isDestructive
-                      ? Colors.red.withValues(alpha: 0.8)
-                      : Colors.white70,
+                      ? Colors.red.withValues(alpha: 0.9)
+                      : Colors.white,
                   size: 22,
                 ),
                 const SizedBox(width: 14),
@@ -1353,6 +1415,7 @@ class AppDrawerState extends State<AppDrawer> {
                   child: Text(
                     label,
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: isDestructive
                           ? Colors.red.withValues(alpha: 0.8)
                           : Colors.white,

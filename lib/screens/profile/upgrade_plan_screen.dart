@@ -52,6 +52,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
         title: const Text(
           'Upgrade your plan',
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -78,10 +79,12 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
               labelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
               unselectedLabelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 15,
                 fontWeight: FontWeight.normal,
               ),
@@ -163,6 +166,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             'Continue',
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: isSelected
                   ? Colors.white
                   : Colors.white.withValues(alpha: 0.4),
@@ -468,6 +472,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
                 Text(
                   buttonText,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w500,
                     fontSize: 15,
@@ -491,6 +496,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
                     child: const Text(
                       'POPULAR',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         color: Color.fromARGB(255, 193, 193, 218),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -508,11 +514,12 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
               children: [
                 const Text(
                   '₹',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 16),
                 ),
                 Text(
                   price,
                   style: const TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -524,6 +531,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
                   child: Text(
                     period,
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 12,
                     ),
@@ -538,6 +546,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             Text(
               description,
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
               ),
@@ -561,6 +570,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
                       child: Text(
                         feature.text,
                         style: TextStyle(
+                          fontFamily: 'Poppins',
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 14,
                         ),
@@ -577,6 +587,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
               Text(
                 footerText,
                 style: TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white.withValues(alpha: 0.4),
                   fontSize: 11,
                 ),

@@ -135,8 +135,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         title: const Text(
           'Notifications',
-          style: TextStyle(
-            fontFamily: 'Poppins',
+          style: TextStyle(fontFamily: 'Poppins', 
             fontSize: 17,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -171,7 +170,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ? const Center(
                 child: Text(
                   'Please sign in',
-                  style: TextStyle(color: Colors.white54),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                 ),
               )
             : SafeArea(
@@ -192,7 +191,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       return Center(
                         child: Text(
                           'Error loading notifications',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.red.shade300,
                             fontSize: 14,
                           ),
@@ -200,7 +199,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       );
                     }
 
-                    final docs = snapshot.data?.docs ?? [];
+                    // Deduplicate by doc.id
+                    final seenIds = <String>{};
+                    final docs = (snapshot.data?.docs ?? [])
+                        .where((doc) => seenIds.add(doc.id))
+                        .toList();
                     // Sort client-side to avoid composite index
                     docs.sort((a, b) {
                       final aTime =
@@ -228,8 +231,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             const SizedBox(height: 16),
                             Text(
                               'No notifications yet',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white.withValues(alpha: 0.5),
@@ -238,8 +240,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             const SizedBox(height: 8),
                             Text(
                               'Your notifications will appear here',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 14,
                                 color: Colors.white.withValues(alpha: 0.35),
                               ),
@@ -322,8 +323,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             builder: (context, snap) {
                                               return Text(
                                                 snap.data ?? title,
-                                                style: TextStyle(
-                                                  fontFamily: 'Poppins',
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   fontSize: 14,
                                                   fontWeight: isRead
                                                       ? FontWeight.w500
@@ -336,11 +336,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           if (time.isNotEmpty)
                                             Text(
                                               time,
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 11,
+                                              style: TextStyle(fontFamily: 'Poppins', 
+                                                fontSize: 13,
                                                 color: Colors.white.withValues(
-                                                  alpha: 0.4,
+                                                  alpha: 0.75,
                                                 ),
                                               ),
                                             ),
@@ -349,11 +348,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                               body,
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 12,
+                                              style: TextStyle(fontFamily: 'Poppins', 
+                                                fontSize: 13,
                                                 color: Colors.white.withValues(
-                                                  alpha: 0.6,
+                                                  alpha: 0.75,
                                                 ),
                                               ),
                                             ),
@@ -380,9 +378,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       ),
                                       child: Text(
                                         _getScreenLabel(type),
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 10,
+                                        style: const TextStyle(fontFamily: 'Poppins', 
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.white,
                                         ),

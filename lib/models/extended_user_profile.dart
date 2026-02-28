@@ -46,6 +46,7 @@ class ExtendedUserProfile {
 
   // Discovery and Privacy
   final bool discoveryModeEnabled; // Controls visibility in Live Connect
+  final bool allowCalls; // Controls whether others can call this user
   final List<String> blockedUsers;
   final List<String> connections;
   final int connectionCount;
@@ -82,6 +83,7 @@ class ExtendedUserProfile {
     this.age,
     this.gender,
     this.discoveryModeEnabled = true,
+    this.allowCalls = true,
     this.blockedUsers = const [],
     this.connections = const [],
     this.connectionCount = 0,
@@ -125,18 +127,23 @@ class ExtendedUserProfile {
     // Extract business name from professional or business profile
     String? businessName;
     String? category;
-    if (map['professionalProfile'] != null) {
-      businessName = map['professionalProfile']['businessName'];
-      category = map['professionalProfile']['category'];
-    } else if (map['businessProfile'] != null) {
-      businessName = map['businessProfile']['companyName'];
-      category = map['businessProfile']['industry'];
+    final profProfile = map['professionalProfile'];
+    if (profProfile is Map<String, dynamic>) {
+      businessName = profProfile['businessName']?.toString();
+      category = profProfile['category']?.toString();
+    } else {
+      final bizProfile = map['businessProfile'];
+      if (bizProfile is Map<String, dynamic>) {
+        businessName = bizProfile['companyName']?.toString();
+        category = bizProfile['industry']?.toString();
+      }
     }
 
     // Extract verification status
     VerificationStatus verificationStatus = VerificationStatus.none;
-    if (map['verification'] != null) {
-      verificationStatus = VerificationStatus.fromString(map['verification']['status']);
+    final verification = map['verification'];
+    if (verification is Map<String, dynamic>) {
+      verificationStatus = VerificationStatus.fromString(verification['status']);
     }
 
     // Get display name - fallback to phone number for phone login users
@@ -151,21 +158,22 @@ class ExtendedUserProfile {
       photoUrl: map['photoUrl'],
       city: map['city'],
       location: map['location'] ?? map['displayLocation'],
-      latitude: map['latitude']?.toDouble(),
-      longitude: map['longitude']?.toDouble(),
-      interests: List<String>.from(map['interests'] ?? []),
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      interests: (map['interests'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       verified: map['verified'] ?? false,
-      connectionTypes: List<String>.from(map['connectionTypes'] ?? []),
+      connectionTypes: (map['connectionTypes'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       activities: activities,
       aboutMe: map['aboutMe'],
       isOnline: map['isOnline'] ?? false,
       lastSeen: map['lastSeen'] as Timestamp?,
-      age: map['age'] as int?,
+      age: (map['age'] as num?)?.toInt(),
       gender: map['gender'] as String?,
       discoveryModeEnabled: map['discoveryModeEnabled'] ?? true,
-      blockedUsers: List<String>.from(map['blockedUsers'] ?? []),
-      connections: List<String>.from(map['connections'] ?? []),
-      connectionCount: map['connectionCount'] ?? 0,
+      allowCalls: map['allowCalls'] ?? true,
+      blockedUsers: (map['blockedUsers'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      connections: (map['connections'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      connectionCount: (map['connectionCount'] as num?)?.toInt() ?? 0,
       // Account type fields
       accountType: AccountType.fromString(map['accountType']),
       accountStatus: AccountStatus.fromString(map['accountStatus']),
@@ -175,8 +183,8 @@ class ExtendedUserProfile {
       occupation: map['occupation'] as String?,
       networkingCategory: map['networkingCategory'] as String?,
       networkingSubcategory: map['networkingSubcategory'] as String?,
-      categoryFilters: map['categoryFilters'] != null
-          ? Map<String, String>.from(map['categoryFilters'])
+      categoryFilters: map['categoryFilters'] is Map
+          ? (map['categoryFilters'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()))
           : const {},
     );
   }
@@ -200,6 +208,7 @@ class ExtendedUserProfile {
       'age': age,
       'gender': gender,
       'discoveryModeEnabled': discoveryModeEnabled,
+      'allowCalls': allowCalls,
       'blockedUsers': blockedUsers,
       'connections': connections,
       'connectionCount': connectionCount,
@@ -233,6 +242,7 @@ class ExtendedUserProfile {
       age: age,
       gender: gender,
       discoveryModeEnabled: discoveryModeEnabled,
+      allowCalls: allowCalls,
       blockedUsers: blockedUsers,
       connections: connections,
       connectionCount: connectionCount,

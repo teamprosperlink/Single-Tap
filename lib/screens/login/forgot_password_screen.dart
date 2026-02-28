@@ -171,21 +171,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       // Sign in with phone credential to verify OTP
       await _auth.signInWithCredential(credential);
 
-      setState(() {
-        _isLoading = false;
-        _currentStep = 2;
-      });
-      _showSuccess('OTP verified successfully!');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _currentStep = 2;
+        });
+        _showSuccess('OTP verified successfully!');
+      }
     } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (e.code == 'invalid-verification-code') {
-        _showError('Invalid OTP. Please try again.');
+        if (mounted) _showError('Invalid OTP. Please try again.');
       } else {
-        _showError(e.message ?? 'OTP verification failed');
+        if (mounted) _showError(e.message ?? 'OTP verification failed');
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      _showError('Verification failed: ${e.toString()}');
+      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _showError('Verification failed: ${e.toString()}');
     }
   }
 
@@ -211,8 +213,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (user != null) {
         await user.updatePassword(newPassword);
 
-        setState(() => _isLoading = false);
-        _showSuccess('Password updated successfully!');
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showSuccess('Password updated successfully!');
+        }
 
         // Sign out and go back to login
         await _auth.signOut();
@@ -221,19 +225,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Navigator.of(context).pop();
         }
       } else {
-        setState(() => _isLoading = false);
-        _showError('User not authenticated. Please try again.');
+        if (mounted) setState(() => _isLoading = false);
+        if (mounted) _showError('User not authenticated. Please try again.');
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
-      _showError(e.message ?? 'Failed to update password');
+      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _showError(e.message ?? 'Failed to update password');
     } catch (e) {
-      setState(() => _isLoading = false);
-      _showError('Failed to update password: ${e.toString()}');
+      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _showError('Failed to update password: ${e.toString()}');
     }
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: ClipRRect(
@@ -298,6 +303,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   void _showSuccess(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: ClipRRect(

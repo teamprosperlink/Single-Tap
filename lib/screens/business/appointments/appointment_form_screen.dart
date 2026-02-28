@@ -87,9 +87,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   Future<void> _loadServices() async {
     try {
       final services = await _businessService.getBusinessListings(widget.business.id);
-      setState(() {
-        _services = services.where((s) => s.type == 'service').toList();
-      });
+      if (mounted) {
+        setState(() {
+          _services = services.where((s) => s.type == 'service').toList();
+        });
+      }
     } catch (e) {
       debugPrint('Error loading services: $e');
     }
@@ -103,13 +105,15 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
         _selectedDate,
         slotDurationMinutes: _duration,
       );
-      setState(() {
-        _availableSlots = slots;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _availableSlots = slots;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading slots: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

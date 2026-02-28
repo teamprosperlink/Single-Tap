@@ -357,8 +357,8 @@ class OrderSummaryScreen extends StatelessWidget {
                                     Text(
                                       '${_getDeliveryLabel()} Address',
                                       style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[500],
+                                        fontSize: 13,
+                                        color: Colors.grey[400],
                                       ),
                                     ),
                                     const SizedBox(height: 3),
@@ -407,8 +407,8 @@ class OrderSummaryScreen extends StatelessWidget {
                                     Text(
                                       'Payment',
                                       style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[500],
+                                        fontSize: 13,
+                                        color: Colors.grey[400],
                                       ),
                                     ),
                                     const SizedBox(height: 3),
@@ -842,7 +842,7 @@ class OrderSummaryScreen extends StatelessWidget {
             Text(
               steps[step],
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive ? color : Colors.grey[600],
               ),

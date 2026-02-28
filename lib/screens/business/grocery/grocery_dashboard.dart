@@ -98,21 +98,23 @@ class _GroceryDashboardState extends State<GroceryDashboard> {
         todayRevenue += total;
       }
 
-      setState(() {
-        _stats = {
-          'totalProducts': totalProducts,
-          'lowStockCount': lowStockCount,
-          'expiringCount': expiringCount,
-          'perishableCount': perishableCount,
-          'inventoryValue': totalInventoryValue,
-          'todayOrders': todayOrders,
-          'todayRevenue': todayRevenue,
-        };
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = {
+            'totalProducts': totalProducts,
+            'lowStockCount': lowStockCount,
+            'expiringCount': expiringCount,
+            'perishableCount': perishableCount,
+            'inventoryValue': totalInventoryValue,
+            'todayOrders': todayOrders,
+            'todayRevenue': todayRevenue,
+          };
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading grocery stats: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

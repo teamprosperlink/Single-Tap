@@ -138,6 +138,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                           'My Orders',
                           textAlign: TextAlign.center,
                           style: TextStyle(
+                            fontFamily: 'Poppins',
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -157,10 +158,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.grey[500],
                   labelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                   unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
@@ -206,6 +209,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                                     Text(
                                       'Something went wrong',
                                       style: TextStyle(
+                                        fontFamily: 'Poppins',
                                         color: Colors.grey[500],
                                         fontSize: 16,
                                       ),
@@ -215,7 +219,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                               );
                             }
 
-                            final docs = snapshot.data?.docs ?? [];
+                            // Deduplicate by doc.id
+                            final seenIds = <String>{};
+                            final docs = (snapshot.data?.docs ?? [])
+                                .where((doc) => seenIds.add(doc.id))
+                                .toList();
                             // Sort locally (newest first) to avoid composite index requirement
                             final sortedDocs = List<QueryDocumentSnapshot>.from(
                               docs,
@@ -340,6 +348,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                         Text(
                           data['itemName'] as String? ?? 'Product',
                           style: const TextStyle(
+                            fontFamily: 'Poppins',
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -351,6 +360,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                         Text(
                           '#${data['orderId'] ?? ''}',
                           style: TextStyle(
+                            fontFamily: 'Poppins',
                             fontSize: 12,
                             color: Colors.grey[500],
                           ),
@@ -359,8 +369,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                         Text(
                           _formatDate(createdAt),
                           style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[600],
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: Colors.grey[500],
                           ),
                         ),
                       ],
@@ -374,6 +385,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                       Text(
                         '₹${(data['totalAmount'] as num?)?.toStringAsFixed(0) ?? '0'}',
                         style: const TextStyle(
+                          fontFamily: 'Poppins',
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -392,7 +404,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                         child: Text(
                           _getStatusLabel(status),
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
@@ -419,6 +432,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           const Text(
             'No orders yet',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -427,7 +441,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           const SizedBox(height: 8),
           Text(
             'Your orders will appear here',
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 14),
           ),
         ],
       ),

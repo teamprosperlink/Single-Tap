@@ -97,7 +97,7 @@ class _BusinessAnalyticsScreenState extends State<BusinessAnalyticsScreen> {
         return <String, dynamic>{'name': 'Unknown', 'views': 0, 'inquiries': 0};
       }).toList();
 
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error loading analytics: $e');
       if (mounted) {

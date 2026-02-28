@@ -422,7 +422,7 @@ class ConversationService {
       final Map<String, List<QueryDocumentSnapshot>> groupedConversations = {};
 
       for (var doc in conversations.docs) {
-        final participants = List<String>.from(doc.data()['participants']);
+        final participants = List<String>.from(doc.data()['participants'] ?? []);
         participants.sort();
         final key = participants.join('_');
 

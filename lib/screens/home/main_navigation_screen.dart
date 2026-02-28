@@ -19,6 +19,7 @@ import '../chat/conversations_screen.dart';
 import '../networking/pending_requests_screen.dart';
 import '../networking/my_networking_profile_screen.dart';
 import '../networking/create_networking_profile_screen.dart';
+import '../networking/onboarding_networking_screen.dart';
 import '../../models/extended_user_profile.dart';
 
 // Professional & Business screens
@@ -66,13 +67,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   late TabController _tabController;
   late TabController _networkingTabController;
   int _networkingTabIndex = 0;
+  int _networkingProfileCount = 0;
+  StreamSubscription? _profileCountSub;
 
   // GlobalKeys to access LiveConnectTabScreen state for filter dialog
   final GlobalKey<LiveConnectTabScreenState> _discoverConnectKey = GlobalKey();
   final GlobalKey<LiveConnectTabScreenState> _smartConnectKey = GlobalKey();
 
-  // Horizontal scroll controller for My Network mosaic grid
-  final ScrollController _myNetworkScrollController = ScrollController();
 
   // Stream subscription for cleanup
   StreamSubscription<QuerySnapshot>? _unreadSubscription;
@@ -101,6 +102,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         setState(() {
           _networkingTabIndex = _networkingTabController.index;
         });
+
       }
     });
 
@@ -171,7 +173,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     }
   }
 
+  void _listenNetworkingProfileCount() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _profileCountSub?.cancel();
+    _profileCountSub = FirebaseFirestore.instance
+        .collection('networking_profiles')
+        .doc(uid)
+        .collection('profiles')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _networkingProfileCount = snapshot.docs.length);
+      }
+    });
+  }
+
   void _safeInit() {
+    _listenNetworkingProfileCount();
     try {
       _listenUnread();
     } catch (e) {
@@ -286,9 +305,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _networkingTabController.dispose();
-    _myNetworkScrollController.dispose();
+
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
+    _profileCountSub?.cancel();
     super.dispose();
   }
 
@@ -981,7 +1001,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         child: Center(
           child: Text(
             userInitial,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: 'Poppins', 
               fontSize: 36,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -1064,20 +1084,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Image — grayscale for non-center cards
+                // Image fills entire card
                 Positioned.fill(
-                  child: ColorFiltered(
-                    colorFilter: isCenter
-                        ? const ColorFilter.mode(
-                            Colors.transparent,
-                            BlendMode.multiply,
-                          )
-                        : const ColorFilter.mode(
-                            Colors.grey,
-                            BlendMode.saturation,
-                          ),
-                    child: imageWidget,
-                  ),
+                  child: imageWidget,
                 ),
 
                 // Networking category badge top-left
@@ -1092,22 +1101,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: Colors.black.withValues(alpha: 0.55),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.15),
+                              color: Colors.white.withValues(alpha: 0.2),
                               width: 0.5,
                             ),
                           ),
                           child: Text(
                             networkingCategory,
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
-                              fontSize: 8,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1127,22 +1136,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: Colors.black.withValues(alpha: 0.55),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.15),
+                              color: Colors.white.withValues(alpha: 0.2),
                               width: 0.5,
                             ),
                           ),
                           child: Text(
                             timeAgo,
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
-                              fontSize: 8,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1162,14 +1171,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
+                          horizontal: 10,
+                          vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
+                          color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: Colors.white.withValues(alpha: 0.2),
                             width: 0.5,
                           ),
                         ),
@@ -1187,9 +1196,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                         : firstName,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: const TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
-                                      fontSize: 12,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -1223,10 +1232,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                   profession,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     color:
-                                        Colors.white.withValues(alpha: 0.7),
-                                    fontSize: 10,
+                                        Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
@@ -1238,59 +1247,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                   children: [
                                     Icon(
                                       Icons.location_on,
-                                      size: 10,
+                                      size: 12,
                                       color: Colors.white
-                                          .withValues(alpha: 0.6),
+                                          .withValues(alpha: 0.8),
                                     ),
                                     const SizedBox(width: 2),
                                     Text(
                                       distance < 1
                                           ? '${(distance * 1000).toInt()} m'
                                           : '${distance.toStringAsFixed(1)} km',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         color: Colors.white
-                                            .withValues(alpha: 0.6),
-                                        fontSize: 10,
+                                            .withValues(alpha: 0.8),
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            // Message button
-                            if (onMessage != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: GestureDetector(
-                                  onTap: onMessage,
-                                  child: Container(
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF007AFF),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Center(
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.chat_bubble_rounded,
-                                            size: 11,
-                                            color: Colors.white,
-                                          ),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Message',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
                                 ),
                               ),
                           ],
@@ -1386,7 +1358,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             child: Center(
                               child: Text(
                                 initial,
-                                style: const TextStyle(
+                                style: const TextStyle(fontFamily: 'Poppins', 
                                   fontSize: 36,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
@@ -1402,7 +1374,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       child: Center(
                         child: Text(
                           initial,
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: 'Poppins', 
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -1423,7 +1395,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       Expanded(
                         child: Text(
                           name,
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: 'Poppins', 
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -1435,7 +1407,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       if (timeAgo.isNotEmpty)
                         Text(
                           timeAgo,
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 10,
                             color: Colors.white.withValues(alpha: 0.35),
                           ),
@@ -1446,7 +1418,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   if (occupation != null && occupation.isNotEmpty)
                     Text(
                       occupation,
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.45),
                       ),
@@ -1461,7 +1433,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       if (age != null)
                         Text(
                           '$age yrs',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 12,
                             color: Colors.white.withValues(alpha: 0.55),
                           ),
@@ -1469,7 +1441,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       if (distanceStr != null)
                         Text(
                           distanceStr,
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 12,
                             color: Colors.white.withValues(alpha: 0.55),
                           ),
@@ -1521,8 +1493,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text(result['message'] ?? 'Failed'),
+                                  content: Text(result['message'] ?? 'Failed', style: const TextStyle(fontFamily: 'Poppins')),
                                   backgroundColor: Colors.red,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  margin: const EdgeInsets.all(16),
+                                  duration: const Duration(seconds: 2),
                                 ),
                               );
                             }
@@ -1536,7 +1512,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             child: const Center(
                               child: Text(
                                 'Confirm',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
@@ -1573,7 +1549,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             child: const Center(
                               child: Text(
                                 'Delete',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white70,
@@ -1598,10 +1574,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       final connectionService = ConnectionService();
       final currentUid = _auth.currentUser?.uid;
 
-      const int columnCount = 5;
-      const double cardWidth = 145.0;
-      const double spacing = 8.0;
-      const List<double> heightPattern = [180, 240, 200, 260, 210];
 
       String? resolveName(Map<String, dynamic> data) {
         final name = data['name'] as String?;
@@ -1641,7 +1613,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     return Center(
                       child: Text(
                         'Error: $error',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.red.shade300,
                           fontSize: 14,
                         ),
@@ -1651,7 +1623,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
                   final asReceiver = receiverSnap.data ?? [];
                   final asSender = senderSnap.data ?? [];
-                  final connections = [...asReceiver, ...asSender];
+
+                  // Deduplicate by otherUserId to avoid showing same person twice
+                  final seen = <String>{};
+                  final connections = <Map<String, dynamic>>[];
+                  for (final conn in [...asReceiver, ...asSender]) {
+                    final senderId = conn['senderId'] as String?;
+                    final receiverId = conn['receiverId'] as String?;
+                    final otherUserId = senderId == currentUid
+                        ? receiverId
+                        : senderId;
+                    if (otherUserId != null && seen.add(otherUserId)) {
+                      connections.add(conn);
+                    }
+                  }
 
                   connections.sort((a, b) {
                     final aTime =
@@ -1677,7 +1662,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           const SizedBox(height: 16),
                           Text(
                             'No connections yet',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: Colors.white.withValues(alpha: 0.5),
@@ -1687,7 +1672,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           Text(
                             'Accepted connections will appear here',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 14,
                               color: Colors.white.withValues(alpha: 0.35),
                             ),
@@ -1695,15 +1680,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         ],
                       ),
                     );
-                  }
-
-                  // Build 5-column mosaic
-                  final List<List<int>> columns = List.generate(
-                    columnCount,
-                    (_) => [],
-                  );
-                  for (int i = 0; i < connections.length; i++) {
-                    columns[i % columnCount].add(i);
                   }
 
                   bool isColorCard(int index) => index % 3 == 0;
@@ -1742,10 +1718,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         ? (conn['receiverLongitude'] as num?)?.toDouble()
                         : (conn['senderLongitude'] as num?)?.toDouble();
 
-                    final int col = index % columnCount;
-                    final int row = index ~/ columnCount;
-                    final double cardHeight =
-                        heightPattern[(col + row) % heightPattern.length];
 
                     // Calculate stored distance for fallback
                     double? storedDist;
@@ -1771,7 +1743,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           return buildNetworkMosaicCard(
                             userName: storedName ?? 'Loading...',
                             imageUrl: fallbackPhoto,
-                            height: cardHeight,
+                            height: 145.0,
                             isCenter: isColorCard(index),
                             onTap: () {},
                             age: storedAgeInt,
@@ -1817,7 +1789,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         return buildNetworkMosaicCard(
                           userName: name,
                           imageUrl: fixedPhoto,
-                          height: cardHeight,
+                          height: 145.0,
                           isCenter: isColorCard(index),
                           onTap: () {
                             HapticFeedback.lightImpact();
@@ -1840,7 +1812,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                   connectionStatus: 'connected',
                                 ),
                               ),
-                            );
+                            ).then((_) {
+                              // Refresh Discover tabs when returning (handles disconnect)
+                              _discoverConnectKey.currentState?.refreshPeople();
+                              _smartConnectKey.currentState?.refreshPeople();
+                            });
                           },
                           onMessage: () {
                             HapticFeedback.lightImpact();
@@ -1878,58 +1854,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     );
                   }
 
-                  // Scroll to center only when content is wider than screen
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (_myNetworkScrollController.hasClients &&
-                        _myNetworkScrollController.position.pixels == 0) {
-                      final totalWidth =
-                          (cardWidth + spacing) * columnCount - spacing + 24;
-                      final screenWidth = MediaQuery.of(context).size.width;
-                      final centerOffset = (totalWidth - screenWidth) / 2;
-                      if (centerOffset > 0) {
-                        _myNetworkScrollController.jumpTo(centerOffset);
-                      }
-                    }
-                  });
-
-                  return SingleChildScrollView(
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(15, 12, 15, 90),
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    child: SingleChildScrollView(
-                      controller: _myNetworkScrollController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 12, 16, 90),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: List.generate(columnCount, (colIndex) {
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                right: colIndex < columnCount - 1
-                                    ? spacing
-                                    : 0,
-                              ),
-                              child: SizedBox(
-                                width: cardWidth,
-                                child: Column(
-                                  children: columns[colIndex].map((
-                                    cardIndex,
-                                  ) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: spacing,
-                                      ),
-                                      child: buildCardAt(cardIndex),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            );
-                          }),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.85,
                         ),
-                      ),
+                    itemCount: connections.length,
+                    itemBuilder: (context, index) => FloatingCard(
+                      animationIndex: index,
+                      child: buildCardAt(index),
                     ),
                   );
                 },
@@ -1954,25 +1894,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           final myLat = (myData?['latitude'] as num?)?.toDouble();
           final myLng = (myData?['longitude'] as num?)?.toDouble();
 
-          // Use two nested StreamBuilders for reliable real-time updates
+          // Only show received requests (requests sent TO current user)
           return StreamBuilder<List<Map<String, dynamic>>>(
             stream: connectionService.getPendingRequestsStream(),
             builder: (context, receivedSnapshot) {
-              return StreamBuilder<List<Map<String, dynamic>>>(
-                stream: connectionService.getSentRequestsStream(),
-                builder: (context, sentSnapshot) {
                   if (receivedSnapshot.connectionState ==
-                          ConnectionState.waiting &&
-                      sentSnapshot.connectionState == ConnectionState.waiting) {
+                          ConnectionState.waiting) {
                     return const Center(
                       child: CircularProgressIndicator(color: Colors.white),
                     );
                   }
 
                   // Show errors
-                  if (receivedSnapshot.hasError || sentSnapshot.hasError) {
-                    final error = (receivedSnapshot.error ?? sentSnapshot.error)
-                        .toString();
+                  if (receivedSnapshot.hasError) {
+                    final error = receivedSnapshot.error.toString();
                     debugPrint('Requests tab error: $error');
                     if (error.contains('index') ||
                         error.contains('FAILED_PRECONDITION')) {
@@ -1990,7 +1925,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                               const SizedBox(height: 16),
                               const Text(
                                 'Firestore index required',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   fontSize: 17,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
@@ -2000,7 +1935,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                               Text(
                                 'Check console logs for the index creation link.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   fontSize: 14,
                                   color: Colors.white.withValues(alpha: 0.5),
                                 ),
@@ -2013,7 +1948,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     return Center(
                       child: Text(
                         'Error: $error',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.red.shade300,
                           fontSize: 14,
                         ),
@@ -2021,10 +1956,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     );
                   }
 
-                  // Combine both lists
-                  final received = receivedSnapshot.data ?? [];
-                  final sent = sentSnapshot.data ?? [];
-                  final requests = [...received, ...sent];
+                  // Only show received requests (not sent ones)
+                  // Deduplicate by senderId to avoid showing same person twice
+                  final seenSenders = <String>{};
+                  final requests = (receivedSnapshot.data ?? []).where((req) {
+                    final senderId = req['senderId'] as String?;
+                    if (senderId == null) return true;
+                    return seenSenders.add(senderId);
+                  }).toList();
                   // Sort by createdAt descending
                   requests.sort((a, b) {
                     final aTime = a['createdAt'] as Timestamp?;
@@ -2046,7 +1985,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           const SizedBox(height: 16),
                           Text(
                             'No pending requests',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: Colors.white.withValues(alpha: 0.5),
@@ -2056,7 +1995,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           Text(
                             'When someone sends you a connect request,\nit will appear here',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               fontSize: 14,
                               color: Colors.white.withValues(alpha: 0.35),
                             ),
@@ -2190,10 +2129,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                       );
                     },
                   );
-                }, // inner StreamBuilder builder
-              ); // inner StreamBuilder
-            }, // outer StreamBuilder builder
-          ); // outer StreamBuilder
+            }, // StreamBuilder builder
+          ); // StreamBuilder
         }, // FutureBuilder builder
       ); // FutureBuilder
     }
@@ -2266,6 +2203,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       );
     }
     if (_currentIndex == 2) {
+      // If user has no networking profile, show onboarding screen
+      if (_networkingProfileCount == 0) {
+        return Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent,
+          body: const LiveConnectScreen(),
+          bottomNavigationBar: buildBottomNavBar(),
+        );
+      }
       return Scaffold(
         extendBody: true,
         backgroundColor: Colors.transparent,
@@ -2279,68 +2225,73 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
           leadingWidth: 56,
-          leading: Padding(
-            padding: const EdgeInsets.only(left: 16),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MyNetworkingProfileScreen(),
-                  ),
-                );
-              },
+          leading: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MyNetworkingProfileScreen(),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16),
               child: Center(
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.4),
-                      width: 1.5,
-                    ),
-                    color: Colors.white.withValues(alpha: 0.1),
-                  ),
-                  child: ClipOval(
-                    child: Builder(
-                      builder: (context) {
-                        final user = _auth.currentUser;
-                        final photoUrl = user?.photoURL;
-                        if (photoUrl != null && photoUrl.isNotEmpty) {
-                          return CachedNetworkImage(
-                            imageUrl: photoUrl,
-                            width: 34,
-                            height: 34,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Icon(
-                              Icons.person_rounded,
-                              size: 18,
-                              color: Colors.white54,
-                            ),
-                            errorWidget: (context, url, error) => const Icon(
-                              Icons.person_rounded,
-                              size: 18,
-                              color: Colors.white54,
-                            ),
-                          );
-                        }
-                        return const Icon(
-                          Icons.person_rounded,
-                          size: 18,
-                          color: Colors.white54,
-                        );
-                      },
-                    ),
-                  ),
+                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('networking_profiles')
+                      .doc(_auth.currentUser?.uid)
+                      .snapshots(),
+                  builder: (ctx, snap) {
+                    final photoUrl =
+                        snap.data?.data()?['photoUrl'] as String?;
+                    return Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                      child: ClipOval(
+                        child: photoUrl != null && photoUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: photoUrl,
+                                width: 34,
+                                height: 34,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => const Icon(
+                                  Icons.person_rounded,
+                                  size: 18,
+                                  color: Colors.white54,
+                                ),
+                                errorWidget: (context, url, error) =>
+                                    const Icon(
+                                  Icons.person_rounded,
+                                  size: 18,
+                                  color: Colors.white54,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.person_rounded,
+                                size: 18,
+                                color: Colors.white54,
+                              ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
           ),
           title: const Text(
             'Networking',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -2404,7 +2355,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                 ),
                                 child: Text(
                                   count > 9 ? '9+' : '$count',
-                                  style: const TextStyle(
+                                  style: const TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.white,
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
@@ -2473,17 +2424,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 dividerColor: Colors.transparent,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-                labelStyle: const TextStyle(
-                  fontSize: 15,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                labelStyle: const TextStyle(fontFamily: 'Poppins',
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
-                unselectedLabelStyle: const TextStyle(
-                  fontSize: 15,
+                unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins',
+                  fontSize: 13,
                   fontWeight: FontWeight.normal,
                 ),
                 tabs: const [
-                  Tab(text: 'Discover '),
-                  Tab(text: 'Smart '),
+                  Tab(text: 'Discover All'),
+                  Tab(text: 'Smart Connect'),
                   Tab(text: 'My Network'),
                 ],
               ),
@@ -2505,55 +2457,61 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             ),
           ),
         ),
-        body: Stack(
-          children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color.fromRGBO(64, 64, 64, 1),
-                    Color.fromRGBO(0, 0, 0, 1),
-                  ],
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(64, 64, 64, 1),
+                Color.fromRGBO(0, 0, 0, 1),
+              ],
+            ),
+          ),
+          child: TabBarView(
+            controller: _networkingTabController,
+            children: [
+              LiveConnectTabScreen(
+                key: _discoverConnectKey,
+                activateNetworkingFilter: false,
+              ),
+              LiveConnectTabScreen(
+                key: _smartConnectKey,
+                activateNetworkingFilter: true,
+              ),
+              buildMyNetworkTab(),
+            ],
+          ),
+        ),
+        floatingActionButton: (_networkingTabIndex == 2 || _networkingProfileCount >= 3)
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: FloatingActionButton(
+                  onPressed: () async {
+                    HapticFeedback.lightImpact();
+                    final navigator = Navigator.of(context);
+                    if (!mounted) return;
+                    final tabNames = ['Discover All', 'Smart Connect', null];
+                    final currentTab = tabNames[_networkingTabIndex];
+                    final saved = await navigator.push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => CreateNetworkingProfileScreen(
+                          createdFrom: currentTab,
+                        ),
+                      ),
+                    );
+                    if (saved == true) {
+              
+                      _discoverConnectKey.currentState?.refreshPeople();
+                      _smartConnectKey.currentState?.refreshPeople();
+                    }
+                  },
+                  backgroundColor: const Color(0xFF007AFF),
+                  shape: const CircleBorder(),
+                  child: const Icon(Icons.add, color: Colors.white, size: 28),
                 ),
               ),
-              child: TabBarView(
-                controller: _networkingTabController,
-                children: [
-                  LiveConnectTabScreen(
-                    key: _discoverConnectKey,
-                    activateNetworkingFilter: false,
-                  ),
-                  LiveConnectTabScreen(
-                    key: _smartConnectKey,
-                    activateNetworkingFilter: true,
-                  ),
-                  buildMyNetworkTab(),
-                ],
-              ),
-            ),
-            // Floating Action Button - Create Networking Profile
-            Positioned(
-              bottom: 75,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CreateNetworkingProfileScreen(),
-                    ),
-                  );
-                },
-                backgroundColor: const Color(0xFF007AFF),
-                shape: const CircleBorder(),
-                child: const Icon(Icons.add, color: Colors.white, size: 28),
-              ),
-            ),
-          ],
-        ),
         bottomNavigationBar: buildBottomNavBar(),
       );
     }
@@ -2617,7 +2575,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           child: Center(
             child: Text(
               'SingleTap',
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -2731,7 +2689,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: isActive
                     ? Colors.white
                     : Colors.white.withValues(alpha: 0.5),

@@ -533,8 +533,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     if (_callStatus == 'calling' || _callStatus == 'ringing') {
       Timer(const Duration(seconds: _callTimeoutSeconds), () async {
         if (!FloatingCallService().isShowing ||
-            FloatingCallService().callId != callId)
+            FloatingCallService().callId != callId) {
           return;
+        }
         try {
           final doc = await FirebaseFirestore.instance
               .collection('calls')

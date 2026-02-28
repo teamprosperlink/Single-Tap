@@ -82,21 +82,23 @@ class _ConstructionDashboardState extends State<ConstructionDashboard> {
         materialsValue += (quantity * unitPrice);
       }
 
-      setState(() {
-        _stats = {
-          'totalProjects': totalProjects,
-          'activeProjects': activeProjects,
-          'completedProjects': completedProjects,
-          'totalQuotes': totalQuotes,
-          'pendingQuotes': pendingQuotes,
-          'totalRevenue': totalRevenue,
-          'materialsValue': materialsValue,
-        };
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = {
+            'totalProjects': totalProjects,
+            'activeProjects': activeProjects,
+            'completedProjects': completedProjects,
+            'totalQuotes': totalQuotes,
+            'pendingQuotes': pendingQuotes,
+            'totalRevenue': totalRevenue,
+            'materialsValue': materialsValue,
+          };
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading construction stats: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

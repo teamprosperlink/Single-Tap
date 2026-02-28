@@ -451,10 +451,12 @@ class _BusinessHomeTabState extends State<BusinessHomeTab> {
     final address = widget.business.address;
     if (address == null) return 'Location not set';
     final parts = <String>[];
-    if (address.city != null && address.city!.isNotEmpty)
+    if (address.city != null && address.city!.isNotEmpty) {
       parts.add(address.city!);
-    if (address.state != null && address.state!.isNotEmpty)
+    }
+    if (address.state != null && address.state!.isNotEmpty) {
       parts.add(address.state!);
+    }
     return parts.isNotEmpty ? parts.join(', ') : 'Location not set';
   }
 

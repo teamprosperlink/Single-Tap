@@ -1,16 +1,17 @@
-import 'dart:math' show sin, cos, sqrt, atan2, pi;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supper/screens/networking/onboarding_networking_screen.dart';
 
 import 'user_profile_detail_screen.dart';
+import 'live_connect_tab_screen.dart';
 import '../../models/extended_user_profile.dart';
 import '../../services/connection_service.dart';
 import '../../res/utils/photo_url_helper.dart';
+import '../../widgets/networking/networking_helpers.dart';
+import '../../widgets/networking/networking_widgets.dart';
 
 class PendingRequestsScreen extends StatefulWidget {
   const PendingRequestsScreen({super.key});
@@ -22,121 +23,10 @@ class PendingRequestsScreen extends StatefulWidget {
 class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final ScrollController _horizontalScrollController = ScrollController();
 
   @override
   void dispose() {
-    _horizontalScrollController.dispose();
     super.dispose();
-  }
-
-  static const int columnCount = 5;
-  static const double cardWidth = 145.0;
-  static const double spacing = 8.0;
-  static const List<double> heightPattern = [180, 240, 200, 260, 210];
-
-  String formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final diff = now.difference(dateTime);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${(diff.inDays / 7).floor()}w ago';
-  }
-
-  double calcDistance(double lat1, double lon1, double lat2, double lon2) {
-    const earthRadius = 6371.0;
-    final dLat = (lat2 - lat1) * pi / 180;
-    final dLon = (lon2 - lon1) * pi / 180;
-    final a =
-        sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1 * pi / 180) *
-            cos(lat2 * pi / 180) *
-            sin(dLon / 2) *
-            sin(dLon / 2);
-    return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a));
-  }
-
-  /// Resolve user display name from Firestore data, checking multiple fields
-  String? _resolveUserName(Map<String, dynamic> data) {
-    final name = data['name'] as String?;
-    if (name != null &&
-        name.isNotEmpty &&
-        name != 'User' &&
-        name != 'Unknown') {
-      return name;
-    }
-    final displayName = data['displayName'] as String?;
-    if (displayName != null &&
-        displayName.isNotEmpty &&
-        displayName != 'User' &&
-        displayName != 'Unknown') {
-      return displayName;
-    }
-    final phone = data['phone'] as String?;
-    if (phone != null && phone.isNotEmpty) {
-      return phone;
-    }
-    return null;
-  }
-
-  /// Calculate age from dateOfBirth string (ISO8601) if age field is null
-  int? _calcAgeFromDob(dynamic dob) {
-    if (dob == null) return null;
-    try {
-      final DateTime birthDate;
-      if (dob is Timestamp) {
-        birthDate = dob.toDate();
-      } else if (dob is String && dob.isNotEmpty) {
-        birthDate = DateTime.parse(dob);
-      } else {
-        return null;
-      }
-      final now = DateTime.now();
-      int age = now.year - birthDate.year;
-      if (now.month < birthDate.month ||
-          (now.month == birthDate.month && now.day < birthDate.day)) {
-        age--;
-      }
-      return age > 0 ? age : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Resolve occupation from multiple possible fields
-  String? _resolveOccupation(Map<String, dynamic> data) {
-    final occupation = data['occupation'] as String?;
-    if (occupation != null && occupation.isNotEmpty) return occupation;
-    final profession = data['profession'] as String?;
-    if (profession != null && profession.isNotEmpty) return profession;
-    // Check professional profile
-    final profProfile = data['professionalProfile'] as Map<String, dynamic>?;
-    if (profProfile != null) {
-      final category = profProfile['category'] as String?;
-      if (category != null && category.isNotEmpty) return category;
-    }
-    // Check networking subcategory
-    final subcat = data['networkingSubcategory'] as String?;
-    if (subcat != null && subcat.isNotEmpty) return subcat;
-    return null;
-  }
-
-  List<Color> _getAvatarGradient(String name) {
-    final hash = name.hashCode % 5;
-    switch (hash) {
-      case 0:
-        return [const Color(0xFFFF6B9D), const Color(0xFFC7365F)];
-      case 1:
-        return [const Color(0xFF4A90E2), const Color(0xFF2E5BFF)];
-      case 2:
-        return [const Color(0xFFFF6B35), const Color(0xFFFF4E00)];
-      case 3:
-        return [const Color(0xFF9B59B6), const Color(0xFF6C3483)];
-      default:
-        return [const Color(0xFF00D67D), const Color(0xFF00A85E)];
-    }
   }
 
   void _showProfileDetail({
@@ -153,23 +43,32 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   }) async {
     HapticFeedback.lightImpact();
 
-    // Fetch full user profile from Firestore
+    // Fetch full user profile — try networking_profiles first, then users
     ExtendedUserProfile userProfile;
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists && userDoc.data() != null) {
-        userProfile = ExtendedUserProfile.fromMap(userDoc.data()!, userId);
+      final netDoc = await _firestore
+          .collection('networking_profiles')
+          .doc(userId)
+          .get();
+      if (netDoc.exists && netDoc.data() != null) {
+        userProfile = ExtendedUserProfile.fromMap(netDoc.data()!, userId);
       } else {
-        // Fallback to minimal data from connection request
-        userProfile = ExtendedUserProfile(
-          uid: userId,
-          name: name,
-          photoUrl: photo,
-          age: age is int ? age : int.tryParse('$age'),
-          occupation: occupation,
-          latitude: lat,
-          longitude: lng,
-        );
+        // Fall back to users collection
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          userProfile = ExtendedUserProfile.fromMap(userDoc.data()!, userId);
+        } else {
+          // Fallback to minimal data from connection request
+          userProfile = ExtendedUserProfile(
+            uid: userId,
+            name: name,
+            photoUrl: photo,
+            age: age is int ? age : int.tryParse('$age'),
+            occupation: occupation,
+            latitude: lat,
+            longitude: lng,
+          );
+        }
       }
     } catch (e) {
       // Fallback to minimal data on error
@@ -200,25 +99,32 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   if (!mounted) return;
                   if (result['success'] == true) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Row(
+                      SnackBar(
+                        content: const Row(
                           children: [
                             Icon(Icons.check_circle, color: Colors.white),
                             SizedBox(width: 12),
                             Expanded(
-                              child: Text('Connection request accepted!'),
+                              child: Text('Connection request accepted!', style: TextStyle(fontFamily: 'Poppins')),
                             ),
                           ],
                         ),
                         backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        margin: const EdgeInsets.all(16),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(result['message'] ?? 'Failed'),
+                        content: Text(result['message'] ?? 'Failed', style: const TextStyle(fontFamily: 'Poppins')),
                         backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        margin: const EdgeInsets.all(16),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   }
@@ -246,7 +152,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     bool isSent = false,
   }) {
     final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
-    final gradientColors = _getAvatarGradient(userName);
+    final gradientColors = NetworkingHelpers.getAvatarGradient(userName);
     final firstName = userName.split(' ').first;
 
     // Gradient background for placeholder / behind transparent images
@@ -264,6 +170,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         child: Text(
           userInitial,
           style: const TextStyle(
+            fontFamily: 'Poppins',
             fontSize: 36,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -346,20 +253,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Image fills entire card — grayscale for non-center cards
+              // Image fills entire card
               Positioned.fill(
-                child: ColorFiltered(
-                  colorFilter: isCenter
-                      ? const ColorFilter.mode(
-                          Colors.transparent,
-                          BlendMode.multiply,
-                        )
-                      : const ColorFilter.mode(
-                          Colors.grey,
-                          BlendMode.saturation,
-                        ),
-                  child: imageWidget,
-                ),
+                child: imageWidget,
               ),
 
               // Top-left: Request type badge (Sent/Received)
@@ -367,34 +263,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 Positioned(
                   top: 6,
                   left: 6,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          requestType,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: NetworkingWidgets.glassBadge(requestType),
                 ),
 
               // Top-right: Time ago badge
@@ -402,34 +271,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 Positioned(
                   top: 6,
                   right: 6,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          timeAgo,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: NetworkingWidgets.glassBadge(timeAgo),
                 ),
 
               // Glassmorphism info card at bottom (matching Smart tab style)
@@ -443,14 +285,14 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
+                        horizontal: 10,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
+                        color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: Colors.white.withValues(alpha: 0.2),
                           width: 0.5,
                         ),
                       ),
@@ -467,8 +309,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
+                                    fontFamily: 'Poppins',
                                     color: Colors.white,
-                                    fontSize: 12,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -505,8 +348,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 10,
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 12,
                                 ),
                               ),
                             ),
@@ -518,8 +362,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                 children: [
                                   Icon(
                                     Icons.location_on,
-                                    size: 10,
-                                    color: Colors.white.withValues(alpha: 0.6),
+                                    size: 12,
+                                    color: Colors.white.withValues(alpha: 0.8),
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
@@ -527,10 +371,11 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                         ? '${(distance * 1000).toInt()} m'
                                         : '${distance.toStringAsFixed(1)} km',
                                     style: TextStyle(
+                                      fontFamily: 'Poppins',
                                       color: Colors.white.withValues(
-                                        alpha: 0.6,
+                                        alpha: 0.8,
                                       ),
-                                      fontSize: 10,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ],
@@ -552,6 +397,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                               .cancelConnectionRequest(
                                                 requestId,
                                               );
+                                          if (!context.mounted) return;
                                         } else {
                                           final result = await connectionService
                                               .acceptConnectionRequest(
@@ -562,11 +408,16 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                             ScaffoldMessenger.of(
                                               context,
                                             ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
+                                              SnackBar(
+                                                content: const Text(
                                                   'Connection accepted!',
+                                                  style: TextStyle(fontFamily: 'Poppins'),
                                                 ),
                                                 backgroundColor: Colors.green,
+                                                behavior: SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                margin: const EdgeInsets.all(16),
+                                                duration: const Duration(seconds: 2),
                                               ),
                                             );
                                           } else {
@@ -576,15 +427,20 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                               SnackBar(
                                                 content: Text(
                                                   result['message'] ?? 'Failed',
+                                                  style: const TextStyle(fontFamily: 'Poppins'),
                                                 ),
                                                 backgroundColor: Colors.red,
+                                                behavior: SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                margin: const EdgeInsets.all(16),
+                                                duration: const Duration(seconds: 2),
                                               ),
                                             );
                                           }
                                         }
                                       },
                                       child: Container(
-                                        height: 28,
+                                        height: 34,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF007AFF),
                                           borderRadius: BorderRadius.circular(
@@ -593,9 +449,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                         ),
                                         child: Center(
                                           child: Text(
-                                            isSent ? 'Cancel' : 'Confirm',
+                                            isSent ? 'Confirm' : 'Confirm',
                                             style: const TextStyle(
-                                              fontSize: 11,
+                                              fontFamily: 'Poppins',
+                                              fontSize: 13,
                                               fontWeight: FontWeight.w600,
                                               color: Colors.white,
                                             ),
@@ -610,30 +467,34 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                       behavior: HitTestBehavior.opaque,
                                       onTap: () async {
                                         HapticFeedback.lightImpact();
-                                        if (isSent) {
-                                          await connectionService
-                                              .cancelConnectionRequest(
-                                                requestId,
-                                              );
-                                        } else {
-                                          await connectionService
-                                              .rejectConnectionRequest(
-                                                requestId,
-                                              );
+                                        try {
+                                          if (isSent) {
+                                            await connectionService
+                                                .cancelConnectionRequest(
+                                                  requestId,
+                                                );
+                                          } else {
+                                            await connectionService
+                                                .rejectConnectionRequest(
+                                                  requestId,
+                                                );
+                                          }
+                                        } catch (e) {
+                                          debugPrint('Error: $e');
                                         }
                                       },
                                       child: Container(
-                                        height: 28,
+                                        height: 34,
                                         decoration: BoxDecoration(
                                           color: Colors.white.withValues(
-                                            alpha: 0.1,
+                                            alpha: 0.15,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
                                           border: Border.all(
                                             color: Colors.white.withValues(
-                                              alpha: 0.2,
+                                              alpha: 0.3,
                                             ),
                                           ),
                                         ),
@@ -641,9 +502,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                           child: Text(
                                             'Delete',
                                             style: TextStyle(
-                                              fontSize: 11,
+                                              fontFamily: 'Poppins',
+                                              fontSize: 13,
                                               fontWeight: FontWeight.w600,
-                                              color: Colors.white70,
+                                              color: Colors.white,
                                             ),
                                           ),
                                         ),
@@ -694,69 +556,19 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        centerTitle: true,
-        toolbarHeight: 56,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        leading: GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            Navigator.pop(context);
-          },
-          child: const Padding(
-            padding: EdgeInsets.only(left: 12),
-            child: Center(
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-        ),
-        title: const Text(
-          'Pending Requests',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(40, 40, 40, 1),
-                Color.fromRGBO(64, 64, 64, 1),
-              ],
-            ),
-            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
-          ),
-        ),
+      appBar: NetworkingWidgets.networkingAppBar(
+        title: 'Pending Requests',
+        onBack: () {
+          HapticFeedback.lightImpact();
+          Navigator.pop(context);
+        },
       ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color.fromRGBO(64, 64, 64, 1), // #404040
-              Color.fromRGBO(0, 0, 0, 1), // #000000
-            ],
-          ),
-        ),
+        decoration: NetworkingWidgets.bodyGradient(),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: FutureBuilder<DocumentSnapshot>(
+          child: FutureBuilder<DocumentSnapshot>(
               future: currentUid != null
                   ? _firestore.collection('users').doc(currentUid).get()
                   : null,
@@ -768,12 +580,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 return StreamBuilder<List<Map<String, dynamic>>>(
                   stream: connectionService.getPendingRequestsStream(),
                   builder: (context, receivedSnapshot) {
-                    return StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: connectionService.getSentRequestsStream(),
-                      builder: (context, sentSnapshot) {
                         if (receivedSnapshot.connectionState ==
-                                ConnectionState.waiting &&
-                            sentSnapshot.connectionState ==
                                 ConnectionState.waiting) {
                           return const Center(
                             child: CircularProgressIndicator(
@@ -782,15 +589,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                           );
                         }
 
-                        if (receivedSnapshot.hasError ||
-                            sentSnapshot.hasError) {
-                          final error =
-                              (receivedSnapshot.error ?? sentSnapshot.error)
-                                  .toString();
+                        if (receivedSnapshot.hasError) {
+                          final error = receivedSnapshot.error.toString();
                           return Center(
                             child: Text(
                               'Error: $error',
                               style: TextStyle(
+                                fontFamily: 'Poppins',
                                 color: Colors.red.shade300,
                                 fontSize: 14,
                               ),
@@ -798,9 +603,14 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                           );
                         }
 
-                        final received = receivedSnapshot.data ?? [];
-                        final sent = sentSnapshot.data ?? [];
-                        final requests = [...received, ...sent];
+                        final rawRequests = receivedSnapshot.data ?? [];
+                        // Deduplicate by otherUserId to avoid showing same person twice
+                        final seen = <String>{};
+                        final requests = rawRequests.where((req) {
+                          final senderId = req['senderId'] as String?;
+                          if (senderId == null) return false;
+                          return seen.add(senderId);
+                        }).toList();
                         requests.sort((a, b) {
                           final aTime = a['createdAt'] as Timestamp?;
                           final bTime = b['createdAt'] as Timestamp?;
@@ -809,64 +619,28 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         });
 
                         if (requests.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.person_add_disabled_rounded,
-                                  size: 72,
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No pending requests',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'When someone sends you a connect request,\nit will appear here',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white.withValues(alpha: 0.35),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          return NetworkingWidgets.emptyState(
+                            icon: Icons.person_add_disabled_rounded,
+                            title: 'No pending requests',
+                            message: 'When someone sends you a connect request,\nit will appear here',
                           );
                         }
-
-                        final actualColumns = requests.length < columnCount
-                            ? requests.length
-                            : columnCount;
-                        final List<List<int>> columns = List.generate(
-                          actualColumns,
-                          (_) => [],
-                        );
-                        for (int i = 0; i < requests.length; i++) {
-                          columns[i % actualColumns].add(i);
-                        }
-
-                        // Colorful cards — every 3rd card shows in full color
-                        bool isColorCard(int index) => index % 3 == 0;
 
                         Widget buildCardAt(int index) {
                           final request = requests[index];
                           final isSent = request['requestType'] == 'sent';
-                          final requestId = request['id'] as String;
+                          final requestId = (request['id'] ?? '').toString();
                           final createdAt = request['createdAt'] as Timestamp?;
                           final timeAgo = createdAt != null
-                              ? formatTimeAgo(createdAt.toDate())
+                              ? NetworkingHelpers.formatTimeAgo(createdAt.toDate())
                               : '';
 
                           final otherUserId = isSent
-                              ? request['receiverId'] as String
-                              : request['senderId'] as String;
+                              ? (request['receiverId'] ?? '').toString()
+                              : (request['senderId'] ?? '').toString();
+                          if (requestId.isEmpty || otherUserId.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
 
                           final storedName = isSent
                               ? request['receiverName'] as String?
@@ -890,10 +664,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               : (request['senderLongitude'] as num?)
                                     ?.toDouble();
 
-                          final int col = index % columnCount;
-                          final int row = index ~/ columnCount;
-                          final double cardHeight =
-                              heightPattern[(col + row) % heightPattern.length];
+                          const double cardHeight = 145.0;
 
                           // Calculate stored distance for fallback
                           double? storedDist;
@@ -901,7 +672,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               myLng != null &&
                               storedLat != null &&
                               storedLng != null) {
-                            storedDist = calcDistance(
+                            storedDist = NetworkingHelpers.calcDistance(
                               myLat,
                               myLng,
                               storedLat,
@@ -912,12 +683,22 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               ? storedAge
                               : int.tryParse('${storedAge ?? ''}');
 
-                          // Always fetch fresh user data from Firestore
-                          return FutureBuilder<DocumentSnapshot>(
+                          // Fetch fresh data — try networking_profiles first, fall back to users
+                          return FutureBuilder<Map<String, dynamic>>(
                             future: _firestore
-                                .collection('users')
+                                .collection('networking_profiles')
                                 .doc(otherUserId)
-                                .get(),
+                                .get()
+                                .then((netDoc) async {
+                              if (netDoc.exists && netDoc.data() != null) {
+                                return netDoc.data()!;
+                              }
+                              final userDoc = await _firestore
+                                  .collection('users')
+                                  .doc(otherUserId)
+                                  .get();
+                              return userDoc.data() ?? {};
+                            }),
                             builder: (context, userSnap) {
                               // Show card with stored data while loading
                               if (userSnap.connectionState ==
@@ -931,7 +712,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   userName: storedName ?? 'Loading...',
                                   imageUrl: fallbackPhoto,
                                   height: cardHeight,
-                                  isCenter: isColorCard(index),
+                                  isCenter: true,
                                   onTap: () {},
                                   age: storedAgeInt,
                                   profession: storedOccupation,
@@ -943,13 +724,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   isSent: isSent,
                                 );
                               }
-                              final userData =
-                                  userSnap.data?.data()
-                                      as Map<String, dynamic>? ??
-                                  {};
+                              final userData = userSnap.data ?? {};
                               // Resolve name: name → displayName → phone → storedName → Unknown
                               final name =
-                                  _resolveUserName(userData) ??
+                                  NetworkingHelpers.resolveUserName(userData) ??
                                   storedName ??
                                   'Unknown';
                               final photo =
@@ -958,9 +736,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               final rawAge = userData['age'] ?? storedAge;
                               final fetchedAge =
                                   rawAge ??
-                                  _calcAgeFromDob(userData['dateOfBirth']);
+                                  NetworkingHelpers.calcAgeFromDob(userData['dateOfBirth']);
                               final occupation =
-                                  _resolveOccupation(userData) ??
+                                  NetworkingHelpers.resolveOccupation(userData) ??
                                   storedOccupation;
                               final userLat =
                                   (userData['latitude'] as num?)?.toDouble() ??
@@ -978,7 +756,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   myLng != null &&
                                   userLat != null &&
                                   userLng != null) {
-                                fetchedDist = calcDistance(
+                                fetchedDist = NetworkingHelpers.calcDistance(
                                   myLat,
                                   myLng,
                                   userLat,
@@ -994,7 +772,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                 userName: name,
                                 imageUrl: fixedPhoto,
                                 height: cardHeight,
-                                isCenter: isColorCard(index),
+                                isCenter: true,
                                 onTap: () => _showProfileDetail(
                                   userId: otherUserId,
                                   name: name,
@@ -1024,76 +802,30 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                           );
                         }
 
-                        // Scroll to center only when content is wider than screen
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (_horizontalScrollController.hasClients &&
-                              _horizontalScrollController.position.pixels ==
-                                  0) {
-                            final totalWidth =
-                                (cardWidth + spacing) * actualColumns -
-                                spacing +
-                                24;
-                            final screenWidth = MediaQuery.of(
-                              context,
-                            ).size.width;
-                            final centerOffset = (totalWidth - screenWidth) / 2;
-                            if (centerOffset > 0) {
-                              _horizontalScrollController.jumpTo(centerOffset);
-                            }
-                          }
-                        });
-
-                        return SingleChildScrollView(
+                        return GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(15, 12, 15, 90),
                           physics: const AlwaysScrollableScrollPhysics(
                             parent: BouncingScrollPhysics(),
                           ),
-                          child: SingleChildScrollView(
-                            controller: _horizontalScrollController,
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 12, 16, 90),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: List.generate(actualColumns, (
-                                  colIndex,
-                                ) {
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      right: colIndex < actualColumns - 1
-                                          ? spacing
-                                          : 0,
-                                    ),
-                                    child: SizedBox(
-                                      width: cardWidth,
-                                      child: Column(
-                                        children: columns[colIndex].map((
-                                          cardIndex,
-                                        ) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: spacing,
-                                            ),
-                                            child: buildCardAt(cardIndex),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  );
-                                }),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 0.85,
                               ),
-                            ),
+                          itemCount: requests.length,
+                          itemBuilder: (context, index) => FloatingCard(
+                            animationIndex: index,
+                            child: buildCardAt(index),
                           ),
                         );
-                      },
-                    );
                   },
                 );
               },
             ),
           ),
         ),
-      ),
     );
   }
 }

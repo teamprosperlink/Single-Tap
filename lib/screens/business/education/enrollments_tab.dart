@@ -1283,7 +1283,7 @@ class _EnrollmentDetailsSheetState extends State<_EnrollmentDetailsSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

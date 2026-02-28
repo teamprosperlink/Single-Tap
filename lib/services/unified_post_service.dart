@@ -503,25 +503,6 @@ Examples:
     }
   }
 
-  /// Get user's active posts
-  Future<List<PostModel>> getUserPosts(String userId) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('posts')
-          .where('userId', isEqualTo: userId)
-          .where('isActive', isEqualTo: true)
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => PostModel.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      debugPrint('  Error getting user posts: $e');
-      return [];
-    }
-  }
-
   /// Deactivate a post (soft delete)
   Future<bool> deactivatePost(String postId) async {
     try {
@@ -547,42 +528,6 @@ Examples:
     }
   }
 
-  /// Stream user's active posts
-  Stream<List<PostModel>> streamUserPosts(String userId) {
-    return _firestore
-        .collection('posts')
-        .where('userId', isEqualTo: userId)
-        .where('isActive', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => PostModel.fromFirestore(doc))
-              .toList();
-        });
-  }
-
-  /// Increment view count
-  Future<void> incrementViewCount(String postId) async {
-    try {
-      await _firestore.collection('posts').doc(postId).update({
-        'viewCount': FieldValue.increment(1),
-      });
-    } catch (e) {
-      debugPrint('   Error incrementing view count: $e');
-    }
-  }
-
-  /// Add matched user ID
-  Future<void> addMatchedUser(String postId, String matchedUserId) async {
-    try {
-      await _firestore.collection('posts').doc(postId).update({
-        'matchedUserIds': FieldValue.arrayUnion([matchedUserId]),
-      });
-    } catch (e) {
-      debugPrint('   Error adding matched user: $e');
-    }
-  }
 }
 
 /// Extension to add copyWith method to PostModel

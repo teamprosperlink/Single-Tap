@@ -26,7 +26,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _hashtagController = TextEditingController();
 
   // Speech to text
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -38,7 +37,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   bool _allowCalls = true;
   bool _isDonation = false;
   String _selectedCurrency = 'INR';
-  final List<String> _hashtags = [];
 
   final List<Map<String, String>> _currencies = [
     {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
@@ -49,10 +47,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     {'code': 'SAR', 'symbol': '﷼', 'name': 'Saudi Riyal'},
   ];
 
+  bool get _isFormValid =>
+      _titleController.text.trim().isNotEmpty && _selectedImages.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
     _initSpeech();
+    _titleController.addListener(() => setState(() {}));
   }
 
   @override
@@ -61,7 +63,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _hashtagController.dispose();
     super.dispose();
   }
 
@@ -163,29 +164,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  void _addHashtag() {
-    final tag = _hashtagController.text.trim();
-    if (tag.isEmpty) return;
 
-    // Max 10 hashtags allowed
-    if (_hashtags.length >= 10) {
-      _showSnackBar('Maximum 10 hashtags allowed', isError: true);
-      return;
-    }
-
-    if (!_hashtags.contains(tag) && !_hashtags.contains('#$tag')) {
-      setState(() {
-        _hashtags.add(tag.startsWith('#') ? tag : '#$tag');
-        _hashtagController.clear();
-      });
-    }
-  }
-
-  void _removeHashtag(String tag) {
-    setState(() {
-      _hashtags.remove(tag);
-    });
-  }
 
   Future<List<String>> _uploadImages() async {
     if (_selectedImages.isEmpty) return [];
@@ -274,7 +253,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'allowCalls': _allowCalls,
         'isDonation': _isDonation,
         'currency': _selectedCurrency,
-        'hashtags': _hashtags,
+        'hashtags': <String>[],
       };
 
       if (imageUrls.isNotEmpty) {
@@ -394,11 +373,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
                           // Allow Calls Toggle
                           _buildCallToggle(),
-
-                          const SizedBox(height: 20),
-
-                          // Hashtags Section
-                          _buildHashtagSection(),
 
                           const SizedBox(height: 32),
 
@@ -1094,167 +1068,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  Widget _buildHashtagSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Hashtags',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Hashtag input
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withValues(alpha: 0.25),
-                Colors.white.withValues(alpha: 0.15),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _hashtagController,
-                  cursorColor: Colors.white,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  onSubmitted: (_) => _addHashtag(),
-                  decoration: InputDecoration(
-                    hintText: 'Add hashtag',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.tag_rounded,
-                      color: Colors.grey[400],
-                      size: 22,
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 16,
-                    ),
-                    isDense: true,
-                    filled: true,
-                    fillColor: Colors.transparent,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: _addHashtag,
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(
-                    color: AppColors.iosBlue,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.add_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Hashtag chips
-        if (_hashtags.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _hashtags.map((tag) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0.15),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      tag,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _removeHashtag(tag),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white70,
-                        size: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ],
-    );
-  }
 
   Widget _buildCreateButton() {
+    final bool enabled = _isFormValid && !_isLoading;
     return GestureDetector(
-      onTap: _isLoading ? null : _createPost,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: AppColors.iosBlue,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(
-          child: Text(
-            'Create Post',
-            style: TextStyle(
-              color: AppColors.buttonForeground,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+      onTap: enabled ? _createPost : null,
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.4,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: AppColors.iosBlue,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Center(
+            child: Text(
+              'Create Post',
+              style: TextStyle(
+                color: AppColors.buttonForeground,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),

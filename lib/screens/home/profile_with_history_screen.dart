@@ -241,7 +241,9 @@ class _ProfileWithHistoryScreenState
 
         if (mounted) {
           setState(() {
-            _searchHistory = intents.docs.map((doc) {
+            // Deduplicate by doc.id
+            final seenIds = <String>{};
+            _searchHistory = intents.docs.where((doc) => seenIds.add(doc.id)).map((doc) {
               final data = doc.data();
               data['id'] = doc.id;
               return data;
@@ -410,6 +412,7 @@ class _ProfileWithHistoryScreenState
                                 ? 'Your active status is now visible to others'
                                 : 'Your active status is now hidden',
                             style: const TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -453,7 +456,14 @@ class _ProfileWithHistoryScreenState
     // Theme state watched for reactivity
     ref.watch(themeProvider);
 
-    return Scaffold(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        splashFactory: NoSplash.splashFactory,
+      ),
+      child: Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
       appBar: PreferredSize(
@@ -488,6 +498,7 @@ class _ProfileWithHistoryScreenState
                 title: const Text(
                   'Profile',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
@@ -526,7 +537,7 @@ class _ProfileWithHistoryScreenState
                         color: Colors.red,
                       ),
                       const SizedBox(height: 16),
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      Text(_error!, style: const TextStyle(fontFamily: 'Poppins', color: Colors.red)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadUserData,
@@ -585,6 +596,7 @@ class _ProfileWithHistoryScreenState
                                       Text(
                                         _userProfile?['name'] ?? 'Unknown User',
                                         style: const TextStyle(
+                                          fontFamily: 'Poppins',
                                           fontSize: 28,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white,
@@ -598,6 +610,7 @@ class _ProfileWithHistoryScreenState
                                       Text(
                                         _userProfile?['email'] ?? '',
                                         style: TextStyle(
+                                          fontFamily: 'Poppins',
                                           fontSize: 14,
                                           color: Colors.white.withValues(
                                             alpha: 0.7,
@@ -608,106 +621,38 @@ class _ProfileWithHistoryScreenState
 
                                       const SizedBox(height: 12),
 
-                                      // Location - Centered
-                                      GestureDetector(
-                                        onTap: () async {
-                                          if (!mounted) return;
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Updating location...',
-                                              ),
+                                      // Location - Centered (display only)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.location_on_rounded,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.7,
                                             ),
-                                          );
-                                          try {
-                                            final success =
-                                                await _locationService
-                                                    .updateUserLocation(
-                                                      silent: false,
-                                                    );
-                                            if (!mounted) return;
-                                            if (success) {
-                                              await Future.delayed(
-                                                const Duration(
-                                                  milliseconds: 500,
-                                                ),
-                                              );
-                                              if (!mounted) return;
-                                              _loadUserData();
-                                              if (!mounted) return;
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Location updated successfully',
-                                                  ),
-                                                  backgroundColor: Colors.green,
-                                                ),
-                                              );
-                                            } else {
-                                              if (!mounted) return;
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Could not update location',
-                                                  ),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            debugPrint(
-                                              'Error during manual location update: $e',
-                                            );
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Location update failed',
-                                                ),
-                                                backgroundColor: Colors.red,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              _userProfile?['displayLocation'] ??
+                                                  _userProfile?['city'] ??
+                                                  _userProfile?['location'] ??
+                                                  'No location set',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 16,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.7),
                                               ),
-                                            );
-                                          }
-                                        },
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.location_on_rounded,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                              size: 20,
+                                              textAlign: TextAlign.center,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            const SizedBox(width: 8),
-                                            Flexible(
-                                              child: Text(
-                                                _userProfile?['displayLocation'] ??
-                                                    _userProfile?['city'] ??
-                                                    _userProfile?['location'] ??
-                                                    'Tap to set location',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.7),
-                                                ),
-                                                textAlign: TextAlign.center,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -734,45 +679,52 @@ class _ProfileWithHistoryScreenState
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: ListTile(
-                              leading: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: _showOnlineStatus
-                                      ? AppColors.iosGreen.withValues(
-                                          alpha: 0.2,
-                                        )
-                                      : Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  _showOnlineStatus
-                                      ? CupertinoIcons.circle_fill
-                                      : CupertinoIcons.circle,
-                                  color: _showOnlineStatus
-                                      ? AppColors.iosGreen
-                                      : Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                'Active Status',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: Transform.scale(
-                                scale: 0.9,
-                                child: CupertinoSwitch(
-                                  value: _showOnlineStatus,
-                                  onChanged: _isStatusLoading
-                                      ? null
-                                      : _updateOnlineStatusPreference,
-                                  activeTrackColor: AppColors.iosGreen,
-                                ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: _showOnlineStatus
+                                          ? AppColors.iosGreen.withValues(alpha: 0.2)
+                                          : Colors.white.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      _showOnlineStatus
+                                          ? CupertinoIcons.circle_fill
+                                          : CupertinoIcons.circle,
+                                      color: _showOnlineStatus
+                                          ? AppColors.iosGreen
+                                          : Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      'Active Status',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Transform.scale(
+                                    scale: 0.9,
+                                    child: CupertinoSwitch(
+                                      value: _showOnlineStatus,
+                                      onChanged: _isStatusLoading
+                                          ? null
+                                          : _updateOnlineStatusPreference,
+                                      activeTrackColor: AppColors.iosGreen,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -795,43 +747,52 @@ class _ProfileWithHistoryScreenState
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: ListTile(
-                              dense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              leading: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.edit,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                'Edit Profile',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: Icon(
-                                Icons.chevron_right,
-                                color: Colors.white.withValues(alpha: 0.5),
-                                size: 20,
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ProfileEditScreen(),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                   ),
-                                );
-                              },
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      'Edit Profile',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const ProfileEditScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white.withValues(alpha: 0.5),
+                                      size: 20,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
 
@@ -900,6 +861,7 @@ class _ProfileWithHistoryScreenState
                                           child: Text(
                                             'Account Type',
                                             style: TextStyle(
+                                              fontFamily: 'Poppins',
                                               color: Colors.white.withValues(
                                                 alpha: 0.9,
                                               ),
@@ -924,6 +886,7 @@ class _ProfileWithHistoryScreenState
                                           child: Text(
                                             typeLabel,
                                             style: TextStyle(
+                                              fontFamily: 'Poppins',
                                               color: Colors.white.withValues(
                                                 alpha: 0.7,
                                               ),
@@ -958,41 +921,50 @@ class _ProfileWithHistoryScreenState
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: ListTile(
-                              dense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              leading: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.person_add,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.person_add,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      'Invite Friends',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Share.share(
+                                        'Check out SingleTap - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
+                                        subject: 'Join me on SingleTap!',
+                                      );
+                                    },
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white.withValues(alpha: 0.5),
+                                      size: 20,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              title: Text(
-                                'Invite Friends',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: Icon(
-                                Icons.chevron_right,
-                                color: Colors.white.withValues(alpha: 0.5),
-                                size: 20,
-                              ),
-                              onTap: () {
-                                Share.share(
-                                  'Check out SingleTap - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
-                                  subject: 'Join me on SingleTap!',
-                                );
-                              },
                             ),
                           ),
 
@@ -1014,43 +986,52 @@ class _ProfileWithHistoryScreenState
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: ListTile(
-                              dense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              leading: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.settings,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                'Settings',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: Icon(
-                                Icons.chevron_right,
-                                color: Colors.white.withValues(alpha: 0.5),
-                                size: 20,
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const SettingsScreen(),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.settings,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                   ),
-                                );
-                              },
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      'Settings',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const SettingsScreen(),
+                                        ),
+                                      );
+                                    },
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white.withValues(alpha: 0.5),
+                                      size: 20,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -1060,6 +1041,7 @@ class _ProfileWithHistoryScreenState
                 ),
         ],
       ),
+    ),
     );
   }
 }

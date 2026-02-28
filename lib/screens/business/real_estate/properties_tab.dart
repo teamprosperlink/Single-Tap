@@ -1898,7 +1898,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

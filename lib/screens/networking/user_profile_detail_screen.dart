@@ -3,12 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/extended_user_profile.dart';
 import '../../models/user_profile.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../services/connection_service.dart';
+import '../../services/notification_service.dart';
+import '../call/voice_call_screen.dart';
 import '../chat/enhanced_chat_screen.dart';
+import '../../widgets/networking/networking_constants.dart';
+import '../../widgets/networking/networking_widgets.dart';
 
 class UserProfileDetailScreen extends StatefulWidget {
   final ExtendedUserProfile user;
@@ -61,15 +66,28 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
   Future<void> _fetchFullProfile() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
+      // Try networking_profiles first — this is where networking-specific data lives
+      final netDoc = await FirebaseFirestore.instance
+          .collection('networking_profiles')
           .doc(widget.user.uid)
           .get();
-      if (doc.exists && doc.data() != null && mounted) {
-        final fetched = ExtendedUserProfile.fromMap(
-          doc.data()!,
-          widget.user.uid,
-        );
+
+      Map<String, dynamic>? data;
+      if (netDoc.exists && netDoc.data() != null) {
+        data = netDoc.data()!;
+      } else {
+        // Fall back to users collection for non-networking profiles
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.user.uid)
+            .get();
+        if (userDoc.exists && userDoc.data() != null) {
+          data = userDoc.data()!;
+        }
+      }
+
+      if (data != null && mounted) {
+        final fetched = ExtendedUserProfile.fromMap(data, widget.user.uid);
         // Preserve the distance passed from the previous screen
         fetched.distance = widget.user.distance ?? fetched.distance;
         setState(() {
@@ -114,45 +132,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: const Color.fromRGBO(0, 0, 0, 1),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leadingWidth: 46,
-          leading: IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.fromRGBO(40, 40, 40, 1),
-                  Color.fromRGBO(64, 64, 64, 1),
-                ],
-              ),
-              border: Border(
-                bottom: BorderSide(color: Colors.white, width: 0.5),
-              ),
-            ),
-          ),
-          centerTitle: true,
-          title: const Text(
-            'Profile Details',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
+        appBar: NetworkingWidgets.networkingAppBar(
+          title: 'Profile Details',
+          onBack: () => Navigator.pop(context),
           actions: [
             if (widget.connectionStatus == 'connected')
               Padding(
@@ -171,8 +153,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                   ),
                   child: const Text(
                     'Disconnect',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
+                    style: TextStyle(fontFamily: 'Poppins',
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -186,19 +167,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             ? const SizedBox.shrink()
             : _buildBottomActions(context, user),
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(40, 40, 40, 1),
-                Color.fromRGBO(0, 0, 0, 1),
-              ],
-              stops: [0.0, 0.45, 0.7, 1.0],
-            ),
-          ),
+          decoration: NetworkingWidgets.bodyGradient(fourStop: true),
           child: SingleChildScrollView(
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
@@ -287,7 +256,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
                         // Connection Types
                         if (user.connectionTypes.isNotEmpty) ...[
-                          _buildSectionTitle('Looking For'),
+                          NetworkingWidgets.sectionTitle('Looking For'),
                           const SizedBox(height: 12),
                           _buildConnectionTypeChips(user.connectionTypes),
                           const SizedBox(height: 24),
@@ -295,7 +264,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
                         // Activities
                         if (user.activities.isNotEmpty) ...[
-                          _buildSectionTitle('Activities'),
+                          NetworkingWidgets.sectionTitle('Activities'),
                           const SizedBox(height: 12),
                           _buildActivityChips(
                             user.activities.map((a) => a.name).toList(),
@@ -305,7 +274,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
                         // Interests
                         if (user.interests.isNotEmpty) ...[
-                          _buildSectionTitle('Interests'),
+                          NetworkingWidgets.sectionTitle('Interests'),
                           const SizedBox(height: 12),
                           _buildInterestChips(user.interests),
                           const SizedBox(height: 24),
@@ -385,7 +354,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       child: Center(
         child: Text(
           user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             fontSize: 80,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -411,8 +380,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             Flexible(
               child: Text(
                 nameWithAge,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
+                style: const TextStyle(fontFamily: 'Poppins', 
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -460,8 +428,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
           const SizedBox(height: 4),
           Text(
             user.occupation!,
-            style: TextStyle(
-              fontFamily: 'Poppins',
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 15,
               fontWeight: FontWeight.w500,
               color: Colors.white.withValues(alpha: 0.85),
@@ -476,12 +445,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             children: [
               const Icon(Icons.location_on, color: Colors.white, size: 16),
               const SizedBox(width: 4),
-              Text(
-                user.formattedDistance!,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  color: Colors.white.withValues(alpha: 0.8),
+              Flexible(
+                child: Text(
+                  user.formattedDistance!,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
                 ),
               ),
             ],
@@ -609,8 +581,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                 const SizedBox(width: 6),
                 Text(
                   item.label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: item.gradient[0],
@@ -623,154 +594,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       ),
     );
   }
-
-  // ── Networking category data (categories → subcategories) ──
-  static const Map<String, List<String>> _networkingCategorySubcategories = {
-    'Professional': [
-      'Job Seekers',
-      'Recruiters',
-      'Freelancers',
-      'Consultants',
-      'Remote Workers',
-      'Career Changers',
-      'Interns',
-      'Mentors',
-      'Resume Review',
-      'Interview Prep',
-    ],
-    'Business': [
-      'Startup Founders',
-      'Investors',
-      'Retailers',
-      'Wholesalers',
-      'Importers & Exporters',
-      'Franchise',
-      'E-commerce',
-      'B2B Services',
-      'Small Business',
-      'Partnerships',
-    ],
-    'Social': [
-      'Dating',
-      'Friendship',
-      'Casual Hangout',
-      'Party Buddies',
-      'Travel Companions',
-      'Roommates',
-      'Pen Pals',
-      'Neighbors',
-      'Nightlife',
-      'Coffee Meetups',
-    ],
-    'Educational': [
-      'Tutoring',
-      'Study Groups',
-      'Online Courses',
-      'Skill Exchange',
-      'Workshops',
-      'Exam Prep',
-      'Language Learning',
-      'Research',
-      'Coding Bootcamp',
-      'Certifications',
-    ],
-    'Creative': [
-      'Photography',
-      'Graphic Design',
-      'Music Production',
-      'Film Making',
-      'Writing & Blogging',
-      'Animation',
-      'Fashion Design',
-      'Interior Design',
-      'Crafts & DIY',
-      'Content Creation',
-    ],
-    'Tech': [
-      'Software Development',
-      'Web Development',
-      'Mobile Apps',
-      'AI & Machine Learning',
-      'Cybersecurity',
-      'Cloud Computing',
-      'Data Science',
-      'Blockchain',
-      'DevOps',
-      'UI/UX Design',
-    ],
-    'Industry': [
-      'Manufacturing',
-      'Construction',
-      'Logistics & Supply Chain',
-      'Agriculture',
-      'Mining & Energy',
-      'Textiles',
-      'Automotive',
-      'Pharmaceuticals',
-      'Food Processing',
-      'Real Estate',
-    ],
-    'Investment & Finance': [
-      'Stock Market',
-      'Mutual Funds',
-      'Real Estate Investment',
-      'Cryptocurrency',
-      'Insurance',
-      'Banking',
-      'Fintech',
-      'Angel Investing',
-      'Venture Capital',
-      'Financial Planning',
-    ],
-    'Event & Meetup': [
-      'Conferences',
-      'Workshops & Seminars',
-      'Hackathons',
-      'Networking Events',
-      'Cultural Events',
-      'Sports Events',
-      'Concerts & Music',
-      'Webinars',
-      'Trade Shows',
-      'Community Gatherings',
-    ],
-    'Community': [
-      'NGO & Nonprofits',
-      'Volunteering',
-      'Social Causes',
-      'Environmental',
-      'Health Awareness',
-      'Education Outreach',
-      'Animal Welfare',
-      'Elder Care',
-      'Women Empowerment',
-      'Youth Development',
-    ],
-    'Personal Development': [
-      'Fitness & Gym',
-      'Meditation & Yoga',
-      'Public Speaking',
-      'Leadership Skills',
-      'Time Management',
-      'Emotional Intelligence',
-      'Goal Setting',
-      'Mindfulness',
-      'Life Coaching',
-      'Book Club',
-    ],
-    'Global / NRI': [
-      'Immigration',
-      'Visa Assistance',
-      'Cultural Exchange',
-      'Overseas Jobs',
-      'Study Abroad',
-      'Diaspora Connect',
-      'International Trade',
-      'Relocation Help',
-      'Foreign Investment',
-      'NRI Services',
-    ],
-  };
 
   // ── Category-specific filter labels (what details each category can have) ──
   static const Map<String, List<String>> _categoryFilterLabels = {
@@ -974,11 +797,11 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       // 3b: Fall back to interests if occupation didn't match
       if (category == null) {
         for (final interest in user.interests) {
-          if (_networkingCategorySubcategories.containsKey(interest)) {
+          if (NetworkingConstants.categorySubcategories.containsKey(interest)) {
             category = interest;
             break;
           }
-          for (final entry in _networkingCategorySubcategories.entries) {
+          for (final entry in NetworkingConstants.categorySubcategories.entries) {
             if (entry.value.any(
               (sub) => sub.toLowerCase() == interest.toLowerCase(),
             )) {
@@ -998,7 +821,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     if (category == null) return [];
 
     final widgets = <Widget>[];
-    final subs = _networkingCategorySubcategories[category] ?? [];
+    final subs = NetworkingConstants.categorySubcategories[category] ?? [];
 
     // Category badge
     widgets.add(_buildNetworkingBadge(category));
@@ -1017,7 +840,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     } else {
       // Show subcategories for this category
       if (subs.isNotEmpty) {
-        widgets.add(_buildSectionTitle('$category Subcategories'));
+        widgets.add(NetworkingWidgets.sectionTitle('$category Subcategories'));
         widgets.add(const SizedBox(height: 12));
         widgets.add(_buildSubcategoryChips(category, subs));
         widgets.add(const SizedBox(height: 16));
@@ -1035,39 +858,14 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   }
 
   Widget _buildSubcategoryChips(String category, List<String> subcategories) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: subcategories.map((sub) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 0.5,
-            ),
-          ),
-          child: Text(
-            sub,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-        );
-      }).toList(),
-    );
+    return NetworkingWidgets.tagChipWrap(subcategories);
   }
 
   Widget _buildCategoryFilterLabelsCard(
     String category,
     List<String> filterLabels,
   ) {
-    final catColors = _getCategoryColors(category);
+    final catColors = NetworkingConstants.getCategoryColors(category);
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
@@ -1098,13 +896,16 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '$category Attributes',
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                  Expanded(
+                    child: Text(
+                      '$category Attributes',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -1138,8 +939,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         const SizedBox(width: 6),
                         Text(
                           label,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
+                          style: const TextStyle(fontFamily: 'Poppins', 
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             color: Colors.white,
@@ -1158,23 +958,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   }
 
   Widget _buildNetworkingBadge(String category) {
-    final catIcons = <String, IconData>{
-      'Professional': Icons.business_center_rounded,
-      'Business': Icons.storefront_rounded,
-      'Social': Icons.groups_rounded,
-      'Educational': Icons.school_rounded,
-      'Creative': Icons.palette_rounded,
-      'Tech': Icons.computer_rounded,
-      'Industry': Icons.factory_rounded,
-      'Investment & Finance': Icons.account_balance_rounded,
-      'Event & Meetup': Icons.event_rounded,
-      'Community': Icons.volunteer_activism_rounded,
-      'Personal Development': Icons.self_improvement_rounded,
-      'Global / NRI': Icons.public_rounded,
-    };
-
-    final colors = _getCategoryColors(category);
-    final icon = catIcons[category] ?? Icons.hub_rounded;
+    final colors = NetworkingConstants.getCategoryColors(category);
+    final icon = NetworkingConstants.getCategoryIcon(category);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -1209,8 +994,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                   children: [
                     Text(
                       '$category Networking',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
+                      style: const TextStyle(fontFamily: 'Poppins', 
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -1219,8 +1003,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                     const SizedBox(height: 2),
                     Text(
                       'Active in this networking category',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 12,
                         color: Colors.white.withValues(alpha: 0.7),
                       ),
@@ -1236,7 +1019,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   }
 
   Widget _buildSubcategoryBadge(String category, String subcategory) {
-    final catColors = _getCategoryColors(category);
+    final catColors = NetworkingConstants.getCategoryColors(category);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -1275,8 +1058,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                   children: [
                     Text(
                       'Subcategory',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: Colors.white.withValues(alpha: 0.7),
@@ -1285,8 +1067,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                     const SizedBox(height: 1),
                     Text(
                       subcategory,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
+                      style: const TextStyle(fontFamily: 'Poppins', 
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -1306,7 +1087,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     String category,
     Map<String, String> filters,
   ) {
-    final catColors = _getCategoryColors(category);
+    final catColors = NetworkingConstants.getCategoryColors(category);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -1357,8 +1138,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         width: 130,
                         child: Text(
                           entry.key,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                             color: Colors.white.withValues(alpha: 0.7),
@@ -1381,8 +1161,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                           ),
                           child: Text(
                             entry.value,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               color: Colors.white,
@@ -1399,31 +1178,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
         ),
       ),
     );
-  }
-
-  List<Color> _getCategoryColors(String category) {
-    final catColors = <String, List<Color>>{
-      'Professional': [const Color(0xFF6366F1), const Color(0xFF818CF8)],
-      'Business': [const Color(0xFF10B981), const Color(0xFF34D399)],
-      'Social': [const Color(0xFFEC4899), const Color(0xFFF472B6)],
-      'Educational': [const Color(0xFFF59E0B), const Color(0xFFFBBF24)],
-      'Creative': [const Color(0xFFA855F7), const Color(0xFFC084FC)],
-      'Tech': [const Color(0xFF3B82F6), const Color(0xFF60A5FA)],
-      'Industry': [const Color(0xFFF97316), const Color(0xFFFB923C)],
-      'Investment & Finance': [
-        const Color(0xFF14B8A6),
-        const Color(0xFF2DD4BF),
-      ],
-      'Event & Meetup': [const Color(0xFFEF4444), const Color(0xFFF87171)],
-      'Community': [const Color(0xFF8B5CF6), const Color(0xFFA78BFA)],
-      'Personal Development': [
-        const Color(0xFF06B6D4),
-        const Color(0xFF22D3EE),
-      ],
-      'Global / NRI': [const Color(0xFFD946EF), const Color(0xFFE879F9)],
-    };
-    return catColors[category] ??
-        [const Color(0xFF6366F1), const Color(0xFF818CF8)];
   }
 
   Widget _buildAboutSection(ExtendedUserProfile user) {
@@ -1481,32 +1235,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 18,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
-            ),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: AppTextStyles.titleSmall.copyWith(
-            color: Colors.white.withValues(alpha: 0.9),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildConnectionTypeChips(List<String> types) {
     final gradients = <String, List<Color>>{
       'Dating': [const Color(0xFFFF4444), const Color(0xFFFF6B6B)],
@@ -1533,10 +1261,11 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   }
 
   Widget _buildInterestChips(List<String> interests) {
-    return _buildChipWrap(interests, (interest, index) {
-      final colors = _getInterestColors(index);
-      return _buildGradientChip(interest, colors, null);
-    });
+    return NetworkingWidgets.tagChipWrap(
+      interests,
+      spacing: 10,
+      runSpacing: 10,
+    );
   }
 
   Widget _buildChipWrap(
@@ -1574,8 +1303,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
           ],
           Text(
             label,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
+            style: const TextStyle(fontFamily: 'Poppins', 
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: Colors.white,
@@ -1627,9 +1355,13 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         if (result['success'] == true) {
                           setState(() => _requestSentLocally = true);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Connection request sent!'),
+                            SnackBar(
+                              content: const Text('Connection request sent!', style: TextStyle(fontFamily: 'Poppins')),
                               backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              margin: const EdgeInsets.all(16),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         } else {
@@ -1637,8 +1369,13 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                             SnackBar(
                               content: Text(
                                 result['message'] ?? 'Failed to send request',
+                                style: const TextStyle(fontFamily: 'Poppins'),
                               ),
                               backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              margin: const EdgeInsets.all(16),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         }
@@ -1659,19 +1396,21 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                           ),
                         ],
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.favorite_rounded,
-                            color: Colors.white,
-                            size: 22,
+                          ClipOval(
+                            child: Image.asset(
+                              'assets/logo/AppLogo.png',
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.cover,
+                            ),
                           ),
-                          SizedBox(width: 8),
-                          Text(
+                          const SizedBox(width: 8),
+                          const Text(
                             'Connect',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
+                            style: TextStyle(fontFamily: 'Poppins',
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
@@ -1699,19 +1438,21 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.schedule_rounded,
-                          color: Colors.white,
-                          size: 22,
+                        ClipOval(
+                          child: Image.asset(
+                            'assets/logo/AppLogo.png',
+                            width: 24,
+                            height: 24,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        SizedBox(width: 8),
-                        Text(
+                        const SizedBox(width: 8),
+                        const Text(
                           'Request Sent',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
+                          style: TextStyle(fontFamily: 'Poppins',
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
@@ -1722,8 +1463,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                   ),
                 ),
 
-              // State 3: Connected → Show Message button only (Disconnect is in AppBar)
-              if (isConnected)
+              // State 3: Connected → Show Message + Call buttons
+              if (isConnected) ...[
                 Expanded(
                   child: GestureDetector(
                     onTap: () => _openChat(user),
@@ -1753,8 +1494,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                           SizedBox(width: 8),
                           Text(
                             'Message',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
+                            style: TextStyle(fontFamily: 'Poppins',
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
@@ -1765,6 +1505,45 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                     ),
                   ),
                 ),
+                if (user.allowCalls) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _makeVoiceCall(user),
+                      child: Container(
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withValues(alpha: 0.4),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.call, color: Colors.white, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              'Call',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ],
           ),
         ),
@@ -1783,16 +1562,14 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
         ),
         title: const Text(
           'Disconnect',
-          style: TextStyle(
-            fontFamily: 'Poppins',
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           'Are you sure you want to disconnect from ${_user.name}? You will need to send a new connection request to reconnect.',
-          style: TextStyle(
-            fontFamily: 'Poppins',
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white.withValues(alpha: 0.7),
             fontSize: 14,
           ),
@@ -1802,8 +1579,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: TextStyle(
-                fontFamily: 'Poppins',
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white.withValues(alpha: 0.5),
               ),
             ),
@@ -1817,17 +1593,25 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
               if (!mounted) return;
               if (result['success'] == true) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Disconnected successfully'),
+                  SnackBar(
+                    content: const Text('Disconnected successfully', style: TextStyle(fontFamily: 'Poppins')),
                     backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
                 Navigator.of(context).popUntil((route) => route.isFirst);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(result['message'] ?? 'Failed to disconnect'),
+                    content: Text(result['message'] ?? 'Failed to disconnect', style: const TextStyle(fontFamily: 'Poppins')),
                     backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               }
@@ -1841,8 +1625,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             ),
             child: const Text(
               'Disconnect',
-              style: TextStyle(
-                fontFamily: 'Poppins',
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),
@@ -1874,6 +1657,89 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
             EnhancedChatScreen(otherUser: userProfile, source: 'Networking'),
       ),
     );
+  }
+
+  Future<void> _makeVoiceCall(ExtendedUserProfile user) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final currentUserDoc = await firestore.collection('users').doc(currentUserId).get();
+      if (!mounted) return;
+
+      final userData = currentUserDoc.exists ? currentUserDoc.data() : null;
+      final currentUserName = userData?['name']?.toString() ?? 'Unknown';
+      final currentUserPhoto = userData?['photoUrl']?.toString() ?? '';
+
+      final callDoc = await firestore.collection('calls').add({
+        'callerId': currentUserId,
+        'receiverId': user.uid,
+        'callerName': currentUserName,
+        'callerPhoto': currentUserPhoto,
+        'receiverName': user.name,
+        'receiverPhoto': user.photoUrl ?? '',
+        'participants': [currentUserId, user.uid],
+        'status': 'calling',
+        'type': 'audio',
+        'source': 'Networking',
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      NotificationService().sendNotificationToUser(
+        userId: user.uid,
+        title: 'Incoming Call',
+        body: '$currentUserName is calling you',
+        type: 'call',
+        data: {
+          'callId': callDoc.id,
+          'callerId': currentUserId,
+          'callerName': currentUserName,
+          'callerPhoto': currentUserPhoto,
+        },
+      );
+
+      final userProfile = UserProfile(
+        uid: user.uid,
+        name: user.name,
+        email: '',
+        profileImageUrl: user.photoUrl,
+        location: user.location,
+        latitude: user.latitude,
+        longitude: user.longitude,
+        createdAt: DateTime.now(),
+        lastSeen: DateTime.now(),
+        isOnline: user.isOnline,
+        interests: user.interests,
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoiceCallScreen(
+            callId: callDoc.id,
+            otherUser: userProfile,
+            isOutgoing: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error making voice call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to start call. Please try again.', style: TextStyle(fontFamily: 'Poppins')),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
   }
 
   // Helper methods for icons and colors
@@ -1959,18 +1825,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     return palettes[index % palettes.length];
   }
 
-  List<Color> _getInterestColors(int index) {
-    final palettes = [
-      [const Color(0xFFEC4899), const Color(0xFFF472B6)],
-      [const Color(0xFF8B5CF6), const Color(0xFFA78BFA)],
-      [const Color(0xFF06B6D4), const Color(0xFF22D3EE)],
-      [const Color(0xFFF59E0B), const Color(0xFFFBBF24)],
-      [const Color(0xFF10B981), const Color(0xFF34D399)],
-      [const Color(0xFF6366F1), const Color(0xFF818CF8)],
-      [const Color(0xFFF97316), const Color(0xFFFB923C)],
-    ];
-    return palettes[index % palettes.length];
-  }
 }
 
 class _InfoItem {

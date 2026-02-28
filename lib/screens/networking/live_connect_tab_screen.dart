@@ -13,6 +13,9 @@ import '../../models/extended_user_profile.dart';
 import 'user_profile_detail_screen.dart';
 import '../../services/connection_service.dart';
 import '../../services/location_services/location_service.dart';
+import '../../widgets/networking/networking_constants.dart';
+import '../../widgets/networking/networking_helpers.dart';
+import '../../widgets/networking/networking_widgets.dart';
 
 class _MosaicCardData {
   final ExtendedUserProfile? profile;
@@ -28,6 +31,57 @@ class _MosaicCardData {
     required this.isDummy,
     this.dummyDataIndex = 0,
   });
+}
+
+/// Floating animation wrapper — each card bobs up & down continuously
+class FloatingCard extends StatefulWidget {
+  final Widget child;
+  final int animationIndex;
+
+  const FloatingCard({super.key, required this.child, this.animationIndex = 0});
+
+  @override
+  State<FloatingCard> createState() => FloatingCardState();
+}
+
+class FloatingCardState extends State<FloatingCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _floatAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    // Slightly different duration per card so they don't all move in sync
+    final ms = 1600 + (widget.animationIndex % 6) * 220;
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: ms),
+    );
+    // Start each card at a different phase so grid looks alive
+    _controller.value = (widget.animationIndex * 0.17) % 1.0;
+    _controller.repeat(reverse: true);
+
+    _floatAnim = Tween<double>(begin: -6.0, end: 6.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _floatAnim,
+      builder: (context, child) =>
+          Transform.translate(offset: Offset(0, _floatAnim.value), child: child),
+      child: widget.child,
+    );
+  }
 }
 
 class LiveConnectTabScreen extends ConsumerStatefulWidget {
@@ -100,1638 +154,17 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   final Map<String, String?> _requestStatusCache =
       {}; // userId -> 'sent'|'received'|null
   List<String> _myConnections = []; // List of connected user IDs
+  List<String> _pendingRequestUserIds = []; // List of users with pending requests
   bool _connectionsLoaded = false;
 
   // Networking category filter
   String _selectedNetworkingCategory = 'All';
   String? _selectedSubcategory;
 
-  static const Map<String, Map<String, dynamic>> _networkingCategoryData = {
-    'Professional': {
-      'icon': Icons.business_center,
-      'color': Color(0xFF2196F3),
-      'subs': [
-        'Job Seekers',
-        'Recruiters',
-        'Freelancers',
-        'Consultants',
-        'Remote Workers',
-        'Career Changers',
-        'Interns',
-        'Mentors',
-        'Resume Review',
-        'Interview Prep',
-      ],
-    },
-    'Business': {
-      'icon': Icons.storefront,
-      'color': Color(0xFFFFA502),
-      'subs': [
-        'Startup Founders',
-        'Investors',
-        'Retailers',
-        'Wholesalers',
-        'Importers & Exporters',
-        'Franchise',
-        'E-commerce',
-        'B2B Services',
-        'Small Business',
-        'Partnerships',
-      ],
-    },
-    'Social': {
-      'icon': Icons.groups,
-      'color': Color(0xFF00D2D3),
-      'subs': [
-        'Dating',
-        'Friendship',
-        'Casual Hangout',
-        'Party Buddies',
-        'Travel Companions',
-        'Roommates',
-        'Pen Pals',
-        'Neighbors',
-        'Nightlife',
-        'Coffee Meetups',
-      ],
-    },
-    'Educational': {
-      'icon': Icons.school,
-      'color': Color(0xFFFF6348),
-      'subs': [
-        'Tutoring',
-        'Study Groups',
-        'Online Courses',
-        'Skill Exchange',
-        'Workshops',
-        'Exam Prep',
-        'Language Learning',
-        'Research',
-        'Coding Bootcamp',
-        'Certifications',
-      ],
-    },
-    'Creative': {
-      'icon': Icons.palette,
-      'color': Color(0xFFFF9100),
-      'subs': [
-        'Photography',
-        'Graphic Design',
-        'Music Production',
-        'Film Making',
-        'Writing & Blogging',
-        'Animation',
-        'Fashion Design',
-        'Interior Design',
-        'Crafts & DIY',
-        'Content Creation',
-      ],
-    },
-    'Tech': {
-      'icon': Icons.computer,
-      'color': Color(0xFF7C4DFF),
-      'subs': [
-        'Software Development',
-        'Web Development',
-        'Mobile Apps',
-        'AI & Machine Learning',
-        'Cybersecurity',
-        'Cloud Computing',
-        'Data Science',
-        'Blockchain',
-        'DevOps',
-        'UI/UX Design',
-      ],
-    },
-    'Industry': {
-      'icon': Icons.factory,
-      'color': Color(0xFF78909C),
-      'subs': [
-        'Manufacturing',
-        'Construction',
-        'Logistics & Supply Chain',
-        'Agriculture',
-        'Mining & Energy',
-        'Textiles',
-        'Automotive',
-        'Pharmaceuticals',
-        'Food Processing',
-        'Real Estate',
-      ],
-    },
-    'Investment & Finance': {
-      'icon': Icons.account_balance,
-      'color': Color(0xFF4CAF50),
-      'subs': [
-        'Stock Market',
-        'Mutual Funds',
-        'Real Estate Investment',
-        'Cryptocurrency',
-        'Insurance',
-        'Banking',
-        'Fintech',
-        'Angel Investing',
-        'Venture Capital',
-        'Financial Planning',
-      ],
-    },
-    'Event & Meetup': {
-      'icon': Icons.event,
-      'color': Color(0xFFE040FB),
-      'subs': [
-        'Conferences',
-        'Workshops & Seminars',
-        'Hackathons',
-        'Networking Events',
-        'Cultural Events',
-        'Sports Events',
-        'Concerts & Music',
-        'Webinars',
-        'Trade Shows',
-        'Community Gatherings',
-      ],
-    },
-    'Community': {
-      'icon': Icons.volunteer_activism,
-      'color': Color(0xFFFF6B81),
-      'subs': [
-        'NGO & Nonprofits',
-        'Volunteering',
-        'Social Causes',
-        'Environmental',
-        'Health Awareness',
-        'Education Outreach',
-        'Animal Welfare',
-        'Elder Care',
-        'Women Empowerment',
-        'Youth Development',
-      ],
-    },
-    'Personal Development': {
-      'icon': Icons.self_improvement,
-      'color': Color(0xFF00E676),
-      'subs': [
-        'Fitness & Gym',
-        'Meditation & Yoga',
-        'Public Speaking',
-        'Leadership Skills',
-        'Time Management',
-        'Emotional Intelligence',
-        'Goal Setting',
-        'Mindfulness',
-        'Life Coaching',
-        'Book Club',
-      ],
-    },
-    'Global / NRI': {
-      'icon': Icons.public,
-      'color': Color(0xFF1E90FF),
-      'subs': [
-        'Immigration',
-        'Visa Assistance',
-        'Cultural Exchange',
-        'Overseas Jobs',
-        'Study Abroad',
-        'Diaspora Connect',
-        'International Trade',
-        'Relocation Help',
-        'Foreign Investment',
-        'NRI Services',
-      ],
-    },
-  };
+  // Category-specific filters and subcategory filters are now in NetworkingConstants
+  // (categoryFilters, subcategoryFilters)
 
-  // Category → relevant connection type groups & activity groups
-  static const Map<String, List<String>> _categoryConnectionGroups = {
-    'Professional': [], // covered by Employment Type, Work Mode
-    'Business': [], // covered by Business Model, Business Stage
-    'Social': ['Social', 'Other'],
-    'Educational': ['Educational'],
-    'Creative': ['Creative'],
-    'Tech': [], // covered by Purpose, Tech Stack
-    'Industry': [], // covered by Business Role, Trade Type
-    'Investment & Finance': [], // covered by Purpose, Risk Appetite
-    'Event & Meetup': [], // covered by Event Format, When
-    'Community': ['Community'], // only Community group (not Social)
-    'Personal Development': [], // covered by Format, Goal
-    'Global / NRI': [], // covered by Service Type, Urgency
-  };
-
-  static const Map<String, List<String>> _categoryActivityGroups = {
-    'Professional': [],
-    'Business': [],
-    'Social': ['Sports', 'Fitness', 'Outdoor', 'Creative'],
-    'Educational': ['Creative'],
-    'Creative': ['Creative'],
-    'Tech': [],
-    'Industry': [],
-    'Investment & Finance': [],
-    'Event & Meetup': ['Sports', 'Creative'],
-    'Community': ['Sports', 'Outdoor'],
-    'Personal Development': ['Fitness', 'Outdoor'],
-    'Global / NRI': [],
-  };
-
-  // ── Category-specific filters (shown below category/subcategory) ──
-  static const Map<String, List<Map<String, dynamic>>> _categoryFilters = {
-    'Professional': [
-      {
-        'label': 'Experience Level',
-        'type': 'dropdown',
-        'options': [
-          'Entry Level',
-          'Mid Level',
-          'Senior',
-          'Executive',
-          'Intern',
-        ],
-      },
-      {
-        'label': 'Employment Type',
-        'type': 'dropdown',
-        'options': [
-          'Full-Time',
-          'Part-Time',
-          'Contract',
-          'Freelance',
-          'Internship',
-        ],
-      },
-      {
-        'label': 'Work Mode',
-        'type': 'dropdown',
-        'options': ['On-Site', 'Remote', 'Hybrid'],
-      },
-      {
-        'label': 'Industry',
-        'type': 'dropdown',
-        'options': [
-          'Technology',
-          'Healthcare',
-          'Finance',
-          'Education',
-          'Marketing',
-          'Legal',
-          'Manufacturing',
-          'Retail',
-          'Media',
-          'Government',
-          'Other',
-        ],
-      },
-    ],
-    'Business': [
-      {
-        'label': 'Business Stage',
-        'type': 'dropdown',
-        'options': [
-          'Idea Stage',
-          'Pre-Revenue',
-          'Early Revenue',
-          'Growth Stage',
-          'Established',
-          'Scaling',
-        ],
-      },
-      {
-        'label': 'Company Size',
-        'type': 'dropdown',
-        'options': ['Solo', '2-10', '11-50', '51-200', '201-1000', '1000+'],
-      },
-      {
-        'label': 'Business Model',
-        'type': 'dropdown',
-        'options': ['B2B', 'B2C', 'D2C', 'Marketplace', 'SaaS', 'Subscription'],
-      },
-      {
-        'label': 'Industry Sector',
-        'type': 'dropdown',
-        'options': [
-          'Technology',
-          'Retail',
-          'F&B',
-          'Healthcare',
-          'Manufacturing',
-          'Real Estate',
-          'Agriculture',
-          'Services',
-          'Logistics',
-          'Finance',
-          'Other',
-        ],
-      },
-    ],
-    'Social': [
-      {
-        'label': 'Availability',
-        'type': 'dropdown',
-        'options': ['Now', 'Today', 'This Week', 'This Weekend', 'Flexible'],
-      },
-      {
-        'label': 'Interests',
-        'type': 'dropdown',
-        'options': [
-          'Music',
-          'Sports',
-          'Travel',
-          'Food',
-          'Art',
-          'Tech',
-          'Fitness',
-          'Reading',
-          'Gaming',
-          'Movies',
-          'Photography',
-          'Cooking',
-        ],
-      },
-      {
-        'label': 'Vibe',
-        'type': 'dropdown',
-        'options': [
-          'Chill',
-          'Energetic',
-          'Intellectual',
-          'Creative',
-          'Adventurous',
-        ],
-      },
-    ],
-    'Educational': [
-      {
-        'label': 'Skill Level',
-        'type': 'dropdown',
-        'options': ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
-      },
-      {
-        'label': 'Format',
-        'type': 'dropdown',
-        'options': ['In-Person', 'Online Live', 'Self-Paced', 'Hybrid'],
-      },
-      {
-        'label': 'Subject',
-        'type': 'dropdown',
-        'options': [
-          'Mathematics',
-          'Science',
-          'Languages',
-          'Programming',
-          'Business',
-          'Arts',
-          'Music',
-          'Test Prep',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Language',
-        'type': 'dropdown',
-        'options': [
-          'English',
-          'Hindi',
-          'Spanish',
-          'French',
-          'Mandarin',
-          'Arabic',
-          'German',
-          'Japanese',
-          'Other',
-        ],
-      },
-    ],
-    'Creative': [
-      {
-        'label': 'Skill Level',
-        'type': 'dropdown',
-        'options': [
-          'Hobbyist',
-          'Beginner',
-          'Intermediate',
-          'Professional',
-          'Expert',
-        ],
-      },
-      {
-        'label': 'Collaboration',
-        'type': 'dropdown',
-        'options': [
-          'Hire Me',
-          'Looking to Hire',
-          'Collaborate',
-          'Learn Together',
-          'Mentor/Mentee',
-        ],
-      },
-      {
-        'label': 'Portfolio',
-        'type': 'dropdown',
-        'options': ['Has Portfolio', 'No Portfolio'],
-      },
-    ],
-    'Tech': [
-      {
-        'label': 'Experience Level',
-        'type': 'dropdown',
-        'options': [
-          'Junior (0-2 yr)',
-          'Mid (2-5 yr)',
-          'Senior (5-10 yr)',
-          'Lead/Architect (10+ yr)',
-        ],
-      },
-      {
-        'label': 'Tech Stack',
-        'type': 'dropdown',
-        'options': [
-          'Python',
-          'JavaScript',
-          'TypeScript',
-          'Java',
-          'C++',
-          'Go',
-          'Rust',
-          'Swift',
-          'Kotlin',
-          'Dart',
-          'Flutter',
-          'React',
-        ],
-      },
-      {
-        'label': 'Purpose',
-        'type': 'dropdown',
-        'options': [
-          'Hire',
-          'Get Hired',
-          'Collaborate',
-          'Learn',
-          'Mentor',
-          'Open Source',
-        ],
-      },
-    ],
-    'Industry': [
-      {
-        'label': 'Business Role',
-        'type': 'dropdown',
-        'options': [
-          'Manufacturer',
-          'Supplier',
-          'Distributor',
-          'Buyer',
-          'Consultant',
-          'Service Provider',
-        ],
-      },
-      {
-        'label': 'Company Size',
-        'type': 'dropdown',
-        'options': [
-          'Micro (1-10)',
-          'Small (11-50)',
-          'Medium (51-200)',
-          'Large (201-1000)',
-          'Enterprise (1000+)',
-        ],
-      },
-      {
-        'label': 'Trade Type',
-        'type': 'dropdown',
-        'options': ['Local', 'National', 'International'],
-      },
-      {
-        'label': 'Certifications',
-        'type': 'dropdown',
-        'options': [
-          'ISO 9001',
-          'ISO 14001',
-          'GMP',
-          'HACCP',
-          'CE',
-          'FDA',
-          'BIS',
-          'Organic',
-        ],
-      },
-    ],
-    'Investment & Finance': [
-      {
-        'label': 'Experience',
-        'type': 'dropdown',
-        'options': ['Beginner', 'Intermediate', 'Advanced', 'Professional'],
-      },
-      {
-        'label': 'Risk Appetite',
-        'type': 'dropdown',
-        'options': [
-          'Conservative',
-          'Moderate',
-          'Aggressive',
-          'Very Aggressive',
-        ],
-      },
-      {
-        'label': 'Investment Horizon',
-        'type': 'dropdown',
-        'options': [
-          'Short-Term (< 1yr)',
-          'Medium (1-3yr)',
-          'Long-Term (3-10yr)',
-          'Very Long (10+yr)',
-        ],
-      },
-      {
-        'label': 'Purpose',
-        'type': 'dropdown',
-        'options': ['Invest', 'Raise Capital', 'Advise', 'Learn', 'Partner'],
-      },
-    ],
-    'Event & Meetup': [
-      {
-        'label': 'Event Format',
-        'type': 'dropdown',
-        'options': ['In-Person', 'Online', 'Hybrid'],
-      },
-      {
-        'label': 'When',
-        'type': 'dropdown',
-        'options': ['Today', 'This Week', 'This Weekend', 'This Month'],
-      },
-      {
-        'label': 'Time of Day',
-        'type': 'dropdown',
-        'options': ['Morning', 'Afternoon', 'Evening', 'Night'],
-      },
-      {
-        'label': 'Price',
-        'type': 'dropdown',
-        'options': ['Free', 'Paid'],
-      },
-    ],
-    'Community': [
-      {
-        'label': 'Involvement',
-        'type': 'dropdown',
-        'options': ['Volunteer', 'Donate', 'Organize', 'Advocate', 'Mentor'],
-      },
-      {
-        'label': 'Commitment',
-        'type': 'dropdown',
-        'options': ['One-Time', 'Weekly', 'Monthly', 'Ongoing', 'Seasonal'],
-      },
-      {
-        'label': 'Cause Area',
-        'type': 'dropdown',
-        'options': [
-          'Education',
-          'Health',
-          'Environment',
-          'Poverty',
-          'Human Rights',
-          'Animals',
-          'Arts & Culture',
-          'Technology',
-        ],
-      },
-      {
-        'label': 'Skills Offered',
-        'type': 'dropdown',
-        'options': [
-          'Teaching',
-          'Medical',
-          'Technical',
-          'Legal',
-          'Marketing',
-          'Fundraising',
-          'Counseling',
-          'Creative',
-        ],
-      },
-    ],
-    'Personal Development': [
-      {
-        'label': 'Level',
-        'type': 'dropdown',
-        'options': ['Beginner', 'Intermediate', 'Advanced'],
-      },
-      {
-        'label': 'Format',
-        'type': 'dropdown',
-        'options': [
-          'In-Person',
-          'Online Live',
-          'Self-Paced',
-          'Group',
-          '1-on-1',
-        ],
-      },
-      {
-        'label': 'Session Duration',
-        'type': 'dropdown',
-        'options': ['15 min', '30 min', '45 min', '1 hr', '2 hr'],
-      },
-      {
-        'label': 'Goal',
-        'type': 'dropdown',
-        'options': [
-          'Weight Loss',
-          'Muscle Gain',
-          'Flexibility',
-          'Stress Relief',
-          'Focus',
-          'Confidence',
-          'Leadership',
-        ],
-      },
-    ],
-    'Global / NRI': [
-      {
-        'label': 'Destination',
-        'type': 'dropdown',
-        'options': [
-          'USA',
-          'Canada',
-          'UK',
-          'Australia',
-          'Germany',
-          'UAE',
-          'Singapore',
-          'New Zealand',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Service Type',
-        'type': 'dropdown',
-        'options': [
-          'Consultation',
-          'Documentation',
-          'Representation',
-          'Guidance',
-          'Community',
-        ],
-      },
-      {
-        'label': 'Urgency',
-        'type': 'dropdown',
-        'options': [
-          'Immediate',
-          'Within 1 Month',
-          'Within 3 Months',
-          'Within 6 Months',
-          'Planning Ahead',
-        ],
-      },
-      {
-        'label': 'Language',
-        'type': 'dropdown',
-        'options': [
-          'English',
-          'Hindi',
-          'Gujarati',
-          'Punjabi',
-          'Tamil',
-          'Telugu',
-          'Bengali',
-          'Marathi',
-        ],
-      },
-    ],
-  };
-
-  // ── Subcategory-specific additional filters ──
-  static const Map<String, List<Map<String, dynamic>>> _subcategoryFilters = {
-    // Professional subcategories
-    'Job Seekers': [
-      {
-        'label': 'Education',
-        'type': 'dropdown',
-        'options': [
-          'High School',
-          'Associate',
-          "Bachelor's",
-          "Master's",
-          'PhD',
-          'Self-Taught',
-        ],
-      },
-    ],
-    'Freelancers': [
-      {
-        'label': 'Project Type',
-        'type': 'dropdown',
-        'options': ['Hourly', 'Fixed-Price', 'Retainer', 'Equity'],
-      },
-    ],
-    'Consultants': [
-      {
-        'label': 'Specialty',
-        'type': 'dropdown',
-        'options': [
-          'Strategy',
-          'Operations',
-          'Finance',
-          'Marketing',
-          'HR',
-          'IT',
-          'Legal',
-          'Other',
-        ],
-      },
-    ],
-    'Remote Workers': [
-      {
-        'label': 'Time Zone',
-        'type': 'dropdown',
-        'options': [
-          'IST (UTC+5:30)',
-          'EST (UTC-5)',
-          'PST (UTC-8)',
-          'GMT (UTC+0)',
-          'CET (UTC+1)',
-          'AEST (UTC+10)',
-          'JST (UTC+9)',
-        ],
-      },
-    ],
-    'Recruiters': [
-      {
-        'label': 'Hiring For',
-        'type': 'dropdown',
-        'options': [
-          'Tech',
-          'Sales',
-          'Marketing',
-          'Design',
-          'Operations',
-          'Finance',
-          'HR',
-          'Executive',
-        ],
-      },
-    ],
-    // Business subcategories
-    'Startup Founders': [
-      {
-        'label': 'Funding Stage',
-        'type': 'dropdown',
-        'options': [
-          'Bootstrapped',
-          'Pre-Seed',
-          'Seed',
-          'Series A',
-          'Series B',
-          'Series C+',
-        ],
-      },
-    ],
-    'Investors': [
-      {
-        'label': 'Investment Type',
-        'type': 'dropdown',
-        'options': ['Angel', 'VC', 'PE', 'Debt', 'Crypto'],
-      },
-      {
-        'label': 'Preferred Stage',
-        'type': 'dropdown',
-        'options': [
-          'Pre-Seed',
-          'Seed',
-          'Series A',
-          'Series B',
-          'Series C+',
-          'Growth',
-        ],
-      },
-    ],
-    'E-commerce': [
-      {
-        'label': 'Platform',
-        'type': 'dropdown',
-        'options': [
-          'Shopify',
-          'Amazon',
-          'WooCommerce',
-          'Custom',
-          'Multi-Platform',
-        ],
-      },
-    ],
-    'Franchise': [
-      {
-        'label': 'Franchise Type',
-        'type': 'dropdown',
-        'options': ['Food', 'Retail', 'Service', 'Education', 'Fitness'],
-      },
-    ],
-    // Social subcategories
-    'Dating': [
-      {
-        'label': 'Relationship Goal',
-        'type': 'dropdown',
-        'options': ['Serious', 'Casual', 'Open to Anything'],
-      },
-      {
-        'label': 'Lifestyle',
-        'type': 'dropdown',
-        'options': [
-          'Non-Smoker',
-          'Social Drinker',
-          'Vegetarian',
-          'Fitness Lover',
-          'Pet Lover',
-        ],
-      },
-    ],
-    'Travel Companions': [
-      {
-        'label': 'Travel Style',
-        'type': 'dropdown',
-        'options': ['Budget', 'Mid-Range', 'Luxury', 'Backpacking'],
-      },
-      {
-        'label': 'Trip Duration',
-        'type': 'dropdown',
-        'options': ['Weekend', '1 Week', '2+ Weeks', 'Long-Term'],
-      },
-    ],
-    'Roommates': [
-      {
-        'label': 'Lifestyle',
-        'type': 'dropdown',
-        'options': [
-          'Early Bird',
-          'Night Owl',
-          'Pet-Friendly',
-          'Vegetarian',
-          'Non-Smoker',
-          'Quiet',
-        ],
-      },
-    ],
-    'Party Buddies': [
-      {
-        'label': 'Scene',
-        'type': 'dropdown',
-        'options': ['Clubs', 'Bars', 'House Parties', 'Live Music', 'Rooftops'],
-      },
-      {
-        'label': 'Music Taste',
-        'type': 'dropdown',
-        'options': ['EDM', 'Hip-Hop', 'Bollywood', 'Rock', 'Pop', 'Jazz'],
-      },
-    ],
-    // Educational subcategories
-    'Exam Prep': [
-      {
-        'label': 'Exam Type',
-        'type': 'dropdown',
-        'options': [
-          'SAT',
-          'GRE',
-          'GMAT',
-          'IELTS',
-          'TOEFL',
-          'UPSC',
-          'CAT',
-          'JEE',
-          'NEET',
-          'Other',
-        ],
-      },
-    ],
-    'Language Learning': [
-      {
-        'label': 'Target Language',
-        'type': 'dropdown',
-        'options': [
-          'English',
-          'Spanish',
-          'French',
-          'German',
-          'Mandarin',
-          'Japanese',
-          'Korean',
-          'Arabic',
-          'Hindi',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Proficiency',
-        'type': 'dropdown',
-        'options': [
-          'A1 (Beginner)',
-          'A2 (Elementary)',
-          'B1 (Intermediate)',
-          'B2 (Upper Intermediate)',
-          'C1 (Advanced)',
-          'C2 (Fluent)',
-        ],
-      },
-    ],
-    'Coding Bootcamp': [
-      {
-        'label': 'Tech Stack',
-        'type': 'dropdown',
-        'options': [
-          'Python',
-          'JavaScript',
-          'React',
-          'Node.js',
-          'Flutter',
-          'AI/ML',
-          'Java',
-          'Swift',
-        ],
-      },
-      {
-        'label': 'Duration',
-        'type': 'dropdown',
-        'options': ['4 Weeks', '8 Weeks', '12 Weeks', '6 Months'],
-      },
-    ],
-    'Study Groups': [
-      {
-        'label': 'Group Size',
-        'type': 'dropdown',
-        'options': ['2-3', '4-6', '7-10', '10+'],
-      },
-    ],
-    // Creative subcategories
-    'Photography': [
-      {
-        'label': 'Style',
-        'type': 'dropdown',
-        'options': [
-          'Portrait',
-          'Landscape',
-          'Wedding',
-          'Product',
-          'Street',
-          'Fashion',
-          'Food',
-          'Drone',
-        ],
-      },
-    ],
-    'Graphic Design': [
-      {
-        'label': 'Specialty',
-        'type': 'dropdown',
-        'options': [
-          'Logo',
-          'Branding',
-          'UI/UX',
-          'Print',
-          'Packaging',
-          'Social Media',
-          'Illustration',
-        ],
-      },
-    ],
-    'Music Production': [
-      {
-        'label': 'Genre',
-        'type': 'dropdown',
-        'options': [
-          'Pop',
-          'Hip-Hop',
-          'EDM',
-          'Classical',
-          'Rock',
-          'Bollywood',
-          'Jazz',
-          'Lo-Fi',
-        ],
-      },
-      {
-        'label': 'Service',
-        'type': 'dropdown',
-        'options': [
-          'Mixing',
-          'Mastering',
-          'Beat Making',
-          'Composition',
-          'Sound Design',
-        ],
-      },
-    ],
-    'Film Making': [
-      {
-        'label': 'Type',
-        'type': 'dropdown',
-        'options': [
-          'Short Film',
-          'Documentary',
-          'Commercial',
-          'Music Video',
-          'Corporate',
-          'Wedding',
-        ],
-      },
-      {
-        'label': 'Role Needed',
-        'type': 'dropdown',
-        'options': [
-          'Director',
-          'Editor',
-          'Cinematographer',
-          'Actor',
-          'Sound',
-          'VFX',
-        ],
-      },
-    ],
-    'Content Creation': [
-      {
-        'label': 'Platform',
-        'type': 'dropdown',
-        'options': [
-          'YouTube',
-          'Instagram',
-          'TikTok',
-          'Podcast',
-          'Blog',
-          'LinkedIn',
-        ],
-      },
-      {
-        'label': 'Content Type',
-        'type': 'dropdown',
-        'options': ['Video', 'Photo', 'Written', 'Audio', 'Mixed Media'],
-      },
-    ],
-    'Writing & Blogging': [
-      {
-        'label': 'Niche',
-        'type': 'dropdown',
-        'options': [
-          'Tech',
-          'Lifestyle',
-          'Travel',
-          'Finance',
-          'Health',
-          'Food',
-          'Fiction',
-          'Copywriting',
-        ],
-      },
-    ],
-    // Tech subcategories
-    'Software Development': [
-      {
-        'label': 'Domain',
-        'type': 'dropdown',
-        'options': ['Backend', 'Frontend', 'Full-Stack', 'Embedded', 'Systems'],
-      },
-    ],
-    'Mobile Apps': [
-      {
-        'label': 'Platform',
-        'type': 'dropdown',
-        'options': [
-          'iOS',
-          'Android',
-          'Cross-Platform',
-          'Flutter',
-          'React Native',
-        ],
-      },
-    ],
-    'AI & Machine Learning': [
-      {
-        'label': 'Subfield',
-        'type': 'dropdown',
-        'options': [
-          'NLP',
-          'Computer Vision',
-          'Deep Learning',
-          'Generative AI',
-          'MLOps',
-          'Reinforcement Learning',
-        ],
-      },
-    ],
-    'Cybersecurity': [
-      {
-        'label': 'Focus',
-        'type': 'dropdown',
-        'options': [
-          'Pen Testing',
-          'Security Audit',
-          'Compliance',
-          'Incident Response',
-          'SOC',
-          'GRC',
-        ],
-      },
-    ],
-    'Cloud Computing': [
-      {
-        'label': 'Cloud Platform',
-        'type': 'dropdown',
-        'options': ['AWS', 'Azure', 'GCP', 'Multi-Cloud'],
-      },
-    ],
-    'Data Science': [
-      {
-        'label': 'Tools',
-        'type': 'dropdown',
-        'options': ['Python', 'R', 'SQL', 'Tableau', 'Power BI', 'Spark'],
-      },
-    ],
-    'Blockchain': [
-      {
-        'label': 'Chain',
-        'type': 'dropdown',
-        'options': ['Ethereum', 'Solana', 'Bitcoin', 'Polygon', 'Polkadot'],
-      },
-      {
-        'label': 'Focus',
-        'type': 'dropdown',
-        'options': ['Smart Contracts', 'DeFi', 'NFT', 'DApp', 'Web3'],
-      },
-    ],
-    'UI/UX Design': [
-      {
-        'label': 'Tools',
-        'type': 'dropdown',
-        'options': ['Figma', 'Sketch', 'Adobe XD', 'Framer', 'InVision'],
-      },
-    ],
-    // Industry subcategories
-    'Manufacturing': [
-      {
-        'label': 'Capacity',
-        'type': 'dropdown',
-        'options': ['Small Batch', 'Medium', 'Large Scale', 'Mass Production'],
-      },
-    ],
-    'Construction': [
-      {
-        'label': 'Project Type',
-        'type': 'dropdown',
-        'options': [
-          'Residential',
-          'Commercial',
-          'Infrastructure',
-          'Industrial',
-          'Renovation',
-        ],
-      },
-    ],
-    'Real Estate': [
-      {
-        'label': 'Property Type',
-        'type': 'dropdown',
-        'options': [
-          'Residential',
-          'Commercial',
-          'Industrial',
-          'Land',
-          'Co-Working',
-        ],
-      },
-      {
-        'label': 'Transaction',
-        'type': 'dropdown',
-        'options': ['Buy', 'Sell', 'Rent', 'Lease'],
-      },
-    ],
-    'Agriculture': [
-      {
-        'label': 'Product',
-        'type': 'dropdown',
-        'options': [
-          'Crops',
-          'Livestock',
-          'Dairy',
-          'Poultry',
-          'Aquaculture',
-          'Organic',
-          'AgriTech',
-        ],
-      },
-    ],
-    'Automotive': [
-      {
-        'label': 'Segment',
-        'type': 'dropdown',
-        'options': [
-          'Passenger',
-          'Commercial',
-          'Two-Wheeler',
-          'EV',
-          'Parts',
-          'Service',
-        ],
-      },
-    ],
-    'Pharmaceuticals': [
-      {
-        'label': 'Type',
-        'type': 'dropdown',
-        'options': ['Generic', 'Branded', 'API', 'Biotech', 'Medical Devices'],
-      },
-    ],
-    'Food Processing': [
-      {
-        'label': 'Category',
-        'type': 'dropdown',
-        'options': [
-          'Dairy',
-          'Bakery',
-          'Beverages',
-          'Frozen',
-          'Snacks',
-          'Spices',
-          'Organic',
-        ],
-      },
-    ],
-    // Investment & Finance subcategories
-    'Stock Market': [
-      {
-        'label': 'Sector',
-        'type': 'dropdown',
-        'options': [
-          'Technology',
-          'Healthcare',
-          'Finance',
-          'Energy',
-          'Consumer',
-          'Industrial',
-          'Real Estate',
-        ],
-      },
-      {
-        'label': 'Market Cap',
-        'type': 'dropdown',
-        'options': ['Micro', 'Small', 'Mid', 'Large', 'Mega'],
-      },
-    ],
-    'Cryptocurrency': [
-      {
-        'label': 'Token Type',
-        'type': 'dropdown',
-        'options': ['Layer 1', 'Layer 2', 'DeFi', 'NFT', 'Stablecoin', 'Meme'],
-      },
-    ],
-    'Mutual Funds': [
-      {
-        'label': 'Fund Type',
-        'type': 'dropdown',
-        'options': ['Equity', 'Debt', 'Hybrid', 'Index', 'ELSS', 'Liquid'],
-      },
-    ],
-    'Angel Investing': [
-      {
-        'label': 'Preferred Sector',
-        'type': 'dropdown',
-        'options': [
-          'Tech',
-          'Healthcare',
-          'FinTech',
-          'EdTech',
-          'D2C',
-          'SaaS',
-          'AgriTech',
-        ],
-      },
-    ],
-    'Venture Capital': [
-      {
-        'label': 'Preferred Stage',
-        'type': 'dropdown',
-        'options': ['Pre-Seed', 'Seed', 'Series A', 'Series B', 'Series C+'],
-      },
-    ],
-    'Financial Planning': [
-      {
-        'label': 'Goal',
-        'type': 'dropdown',
-        'options': [
-          'Retirement',
-          'Education',
-          'Wealth Building',
-          'Tax Saving',
-          'Emergency Fund',
-          'Debt Payoff',
-        ],
-      },
-    ],
-    // Event & Meetup subcategories
-    'Hackathons': [
-      {
-        'label': 'Theme',
-        'type': 'dropdown',
-        'options': [
-          'AI',
-          'Web3',
-          'FinTech',
-          'HealthTech',
-          'Social Good',
-          'Open',
-        ],
-      },
-      {
-        'label': 'Team Size',
-        'type': 'dropdown',
-        'options': ['Solo', '2-3', '4-5', 'Open'],
-      },
-    ],
-    'Conferences': [
-      {
-        'label': 'Audience',
-        'type': 'dropdown',
-        'options': ['Beginner', 'Professional', 'Executive', 'Academic'],
-      },
-    ],
-    'Sports Events': [
-      {
-        'label': 'Sport',
-        'type': 'dropdown',
-        'options': [
-          'Cricket',
-          'Football',
-          'Tennis',
-          'Running',
-          'Cycling',
-          'Swimming',
-          'Martial Arts',
-          'Other',
-        ],
-      },
-      {
-        'label': 'Participation',
-        'type': 'dropdown',
-        'options': ['Participate', 'Spectate', 'Volunteer'],
-      },
-    ],
-    'Concerts & Music': [
-      {
-        'label': 'Genre',
-        'type': 'dropdown',
-        'options': [
-          'Pop',
-          'Rock',
-          'Classical',
-          'EDM',
-          'Hip-Hop',
-          'Bollywood',
-          'Jazz',
-          'Indie',
-        ],
-      },
-    ],
-    // Community subcategories
-    'Volunteering': [
-      {
-        'label': 'Availability',
-        'type': 'dropdown',
-        'options': ['Weekdays', 'Weekends', 'Evenings', 'Flexible'],
-      },
-    ],
-    'Environmental': [
-      {
-        'label': 'Focus',
-        'type': 'dropdown',
-        'options': [
-          'Climate',
-          'Conservation',
-          'Recycling',
-          'Clean Energy',
-          'Water',
-          'Reforestation',
-          'Wildlife',
-        ],
-      },
-    ],
-    'Animal Welfare': [
-      {
-        'label': 'Animal Type',
-        'type': 'dropdown',
-        'options': [
-          'Dogs',
-          'Cats',
-          'Farm Animals',
-          'Wildlife',
-          'Marine',
-          'Birds',
-          'All',
-        ],
-      },
-    ],
-    'Women Empowerment': [
-      {
-        'label': 'Focus',
-        'type': 'dropdown',
-        'options': [
-          'Education',
-          'Employment',
-          'Safety',
-          'Health',
-          'Legal Rights',
-          'Leadership',
-          'Financial',
-        ],
-      },
-    ],
-    'Youth Development': [
-      {
-        'label': 'Age Group',
-        'type': 'dropdown',
-        'options': ['6-10', '11-14', '15-18', '18-25'],
-      },
-      {
-        'label': 'Program Type',
-        'type': 'dropdown',
-        'options': [
-          'Sports',
-          'STEM',
-          'Arts',
-          'Leadership',
-          'Career',
-          'Life Skills',
-        ],
-      },
-    ],
-    // Personal Development subcategories
-    'Fitness & Gym': [
-      {
-        'label': 'Workout Type',
-        'type': 'dropdown',
-        'options': [
-          'Strength',
-          'Cardio',
-          'CrossFit',
-          'HIIT',
-          'Calisthenics',
-          'Functional',
-        ],
-      },
-      {
-        'label': 'Fitness Goal',
-        'type': 'dropdown',
-        'options': [
-          'Weight Loss',
-          'Muscle Gain',
-          'Endurance',
-          'Flexibility',
-          'General Fitness',
-        ],
-      },
-    ],
-    'Meditation & Yoga': [
-      {
-        'label': 'Style',
-        'type': 'dropdown',
-        'options': [
-          'Hatha',
-          'Vinyasa',
-          'Ashtanga',
-          'Kundalini',
-          'Guided Meditation',
-          'Breathwork',
-        ],
-      },
-    ],
-    'Public Speaking': [
-      {
-        'label': 'Context',
-        'type': 'dropdown',
-        'options': [
-          'Professional',
-          'TED-Style',
-          'Debate',
-          'Toastmasters',
-          'Storytelling',
-          'Sales',
-        ],
-      },
-    ],
-    'Life Coaching': [
-      {
-        'label': 'Specialty',
-        'type': 'dropdown',
-        'options': [
-          'Career',
-          'Relationships',
-          'Health',
-          'Finance',
-          'Confidence',
-          'Executive',
-        ],
-      },
-    ],
-    'Book Club': [
-      {
-        'label': 'Genre',
-        'type': 'dropdown',
-        'options': [
-          'Self-Help',
-          'Business',
-          'Fiction',
-          'Science',
-          'Philosophy',
-          'Biography',
-          'Psychology',
-        ],
-      },
-      {
-        'label': 'Pace',
-        'type': 'dropdown',
-        'options': ['1 Chapter/Week', 'Whole Book', 'Audio + Discussion'],
-      },
-    ],
-    // Global / NRI subcategories
-    'Immigration': [
-      {
-        'label': 'Visa Category',
-        'type': 'dropdown',
-        'options': [
-          'Work Visa',
-          'Family Visa',
-          'Investor Visa',
-          'Permanent Residence',
-          'Citizenship',
-          'Asylum',
-        ],
-      },
-    ],
-    'Study Abroad': [
-      {
-        'label': 'Degree Level',
-        'type': 'dropdown',
-        'options': [
-          'Undergraduate',
-          'Postgraduate',
-          'PhD',
-          'Diploma',
-          'Certificate',
-          'Short Course',
-        ],
-      },
-      {
-        'label': 'Intake',
-        'type': 'dropdown',
-        'options': ['Fall', 'Spring', 'Summer', 'Rolling'],
-      },
-    ],
-    'Overseas Jobs': [
-      {
-        'label': 'Contract Type',
-        'type': 'dropdown',
-        'options': [
-          'Permanent',
-          'Contract',
-          'Temporary',
-          'Sponsorship Available',
-        ],
-      },
-    ],
-    'International Trade': [
-      {
-        'label': 'Direction',
-        'type': 'dropdown',
-        'options': ['Import', 'Export', 'Both'],
-      },
-      {
-        'label': 'Volume',
-        'type': 'dropdown',
-        'options': ['Small', 'Medium', 'Large', 'Bulk'],
-      },
-    ],
-    'Relocation Help': [
-      {
-        'label': 'Service Needed',
-        'type': 'dropdown',
-        'options': [
-          'Housing',
-          'Banking',
-          'Schools',
-          'Healthcare',
-          'Legal',
-          'Moving',
-        ],
-      },
-    ],
-    'NRI Services': [
-      {
-        'label': 'Service',
-        'type': 'dropdown',
-        'options': [
-          'Tax Filing',
-          'Property Management',
-          'Power of Attorney',
-          'Bank Account',
-          'Insurance',
-          'Repatriation',
-        ],
-      },
-    ],
-  };
+  // REMOVED: _categoryFilters and _subcategoryFilters — use NetworkingConstants instead
 
   // Available connection types (grouped)
   final Map<String, List<String>> _connectionTypeGroups = {
@@ -1851,7 +284,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
   ];
 
   // Tab categories for TabBar
-  final List<String> _tabCategories = ['Discover ', 'Smart '];
+  final List<String> _tabCategories = ['Discover All ', 'Smart '];
 
   @override
   void initState() {
@@ -1867,7 +300,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         HapticFeedback.lightImpact();
         final selectedCategory = _tabCategories[_tabController.index];
         setState(() {
-          if (selectedCategory == 'Discover ') {
+          if (selectedCategory == 'Discover All ') {
             _filterByInterests = false;
             _selectedInterests.clear();
             _locationFilter = 'Worldwide';
@@ -1906,8 +339,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     for (var groupName in _activityGroups.keys) {
       _expandedActivityGroups[groupName] = false;
     }
-    _loadMyConnections(); // Load connections for caching
-    _loadUserProfile();
+    _loadUserProfile(); // Also loads connections before loading people
   }
 
   @override
@@ -1919,12 +351,24 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     super.dispose();
   }
 
-  /// Load user's connections list once for caching
+  /// Public method to refresh people list (called after profile creation)
+  Future<void> refreshPeople() async {
+    _connectionsLoaded = false; // Force reload connections
+    await _loadMyConnections();
+    await _loadNearbyPeople();
+  }
+
+  /// Load user's connections and pending request user IDs for filtering
   Future<void> _loadMyConnections() async {
     if (_connectionsLoaded) return; // Already loaded
 
     try {
+      // Load accepted connections
       _myConnections = await _connectionService.getUserConnections();
+
+      // Load pending request user IDs (users we sent to or received from)
+      _pendingRequestUserIds = await _connectionService.getPendingRequestUserIds();
+
       _connectionsLoaded = true;
 
       // Initialize connection status cache
@@ -1933,7 +377,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       }
 
       debugPrint(
-        'LiveConnect: Loaded ${_myConnections.length} connections for caching',
+        'LiveConnect: Loaded ${_myConnections.length} connections and ${_pendingRequestUserIds.length} pending requests for filtering',
       );
     } catch (e) {
       debugPrint('LiveConnect: Error loading connections: $e');
@@ -1946,14 +390,23 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     bool isConnected, {
     String? requestStatus,
   }) {
+    if (!mounted) return;
     setState(() {
       _connectionStatusCache[userId] = isConnected;
       if (isConnected) {
         if (!_myConnections.contains(userId)) {
           _myConnections.add(userId);
         }
+        // Remove from pending since now connected
+        _pendingRequestUserIds.remove(userId);
       } else {
         _myConnections.remove(userId);
+      }
+      if (requestStatus == 'sent' || requestStatus == 'received') {
+        // Add to pending list so they're filtered from discover
+        if (!_pendingRequestUserIds.contains(userId)) {
+          _pendingRequestUserIds.add(userId);
+        }
       }
       if (requestStatus != null) {
         _requestStatusCache[userId] = requestStatus;
@@ -1968,17 +421,29 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       final userId = _auth.currentUser?.uid;
       if (userId == null) return;
 
-      // Load user profile
+      // Load user profile location from users (kept current by location service)
       final userDoc = await _firestore.collection('users').doc(userId).get();
       if (userDoc.exists && mounted) {
-        final userData = userDoc.data();
         setState(() {
-          _userProfile = userData;
-          // Load user's saved interests
-          _selectedInterests = List<String>.from(userData?['interests'] ?? []);
+          _userProfile = userDoc.data();
         });
 
-        // Always load nearby people (filters can be applied via filter dialog)
+        // Load interests from networking_profiles (interests are saved there)
+        final netDoc = await _firestore
+            .collection('networking_profiles')
+            .doc(userId)
+            .get();
+        if (mounted) {
+          setState(() {
+            _selectedInterests = List<String>.from(
+              netDoc.data()?['interests'] ?? [],
+            );
+          });
+        }
+
+        // Ensure connections are loaded before loading people (so connected users can be filtered)
+        await _loadMyConnections();
+        if (!mounted) return;
         _loadNearbyPeople();
       }
     } catch (e) {
@@ -1993,11 +458,15 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 Expanded(
                   child: Text(
                     'Failed to load profile. Please check your connection and try again.',
+                    style: TextStyle(fontFamily: 'Poppins'),
                   ),
                 ),
               ],
             ),
             backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
             duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: 'Retry',
@@ -2077,8 +546,10 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         } else {
           if (_currentUserLat == null || _currentUserLon == null) {
             // Fall back to profile location only if we have no cached location
-            _currentUserLat = _userProfile?['latitude']?.toDouble();
-            _currentUserLon = _userProfile?['longitude']?.toDouble();
+            final rawLat = _userProfile?['latitude'];
+            final rawLon = _userProfile?['longitude'];
+            _currentUserLat = rawLat is num ? rawLat.toDouble() : null;
+            _currentUserLon = rawLon is num ? rawLon.toDouble() : null;
             if (_currentUserLat != null && _currentUserLon != null) {
               _lastLocationRefresh = now;
             }
@@ -2101,8 +572,8 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       final userLat = _currentUserLat;
       final userLon = _currentUserLon;
 
-      // Build query based on filters - USE INDEXES FOR BETTER PERFORMANCE
-      Query<Map<String, dynamic>> usersQuery = _firestore.collection('users');
+      // Build query based on filters - query networking_profiles (separate from main user profile)
+      Query<Map<String, dynamic>> usersQuery = _firestore.collection('networking_profiles');
 
       // ALWAYS filter by discoveryModeEnabled to respect user privacy
       usersQuery = usersQuery.where('discoveryModeEnabled', isEqualTo: true);
@@ -2174,14 +645,28 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         try {
           if (doc.id == userId) continue; // Skip current user
 
+          // Skip users who are already connected (accepted connections)
+          if (_myConnections.contains(doc.id)) {
+            debugPrint('LiveConnect: Filtering out connected user: ${doc.id}');
+            continue;
+          }
+
+          // Skip users who have pending requests (sent or received)
+          if (_pendingRequestUserIds.contains(doc.id)) {
+            debugPrint('LiveConnect: Filtering out pending request user: ${doc.id}');
+            continue;
+          }
+
           final userData = doc.data();
 
           // Note: discoveryModeEnabled is now filtered at database level for better performance
 
-          final userInterests = List<String>.from(userData['interests'] ?? []);
+          final userInterests = (userData['interests'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
           final otherUserCity = userData['city'];
-          final otherUserLat = userData['latitude']?.toDouble();
-          final otherUserLon = userData['longitude']?.toDouble();
+          final rawOtherLat = userData['latitude'];
+          final rawOtherLon = userData['longitude'];
+          final otherUserLat = rawOtherLat is num ? rawOtherLat.toDouble() : null;
+          final otherUserLon = rawOtherLon is num ? rawOtherLon.toDouble() : null;
 
           // Calculate distance when both users have location data
           // (for filtering with "Near me" and for displaying on cards)
@@ -2206,8 +691,9 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
             // Skip if user is outside the distance range
             if (distance < _distanceRange.start ||
-                distance > _distanceRange.end)
+                distance > _distanceRange.end) {
               continue;
+            }
           } else if (_locationFilter == 'City') {
             // Additional city check for cases where query didn't filter
             if (userCity != null && userCity.isNotEmpty) {
@@ -2224,6 +710,16 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             }
           }
           // 'Worldwide' has no location filtering
+
+          // Smart tab always requires networking profile — even if Near me/City
+          // filter was applied (which overrides _locationFilter from 'Smart ')
+          if (_locationFilter != 'Smart ' && _tabController.index == 1) {
+            final userNetCategory =
+                userData['networkingCategory'] as String?;
+            if (userNetCategory == null || userNetCategory.isEmpty) {
+              continue;
+            }
+          }
 
           // Calculate common interests
           List<String> commonInterests = [];
@@ -2304,7 +800,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
           // Age range filtering
           if (_ageRange.start > 18 || _ageRange.end < 60) {
-            final userAge = userData['age'] as int?;
+            final userAge = (userData['age'] as num?)?.toInt();
             if (userAge != null) {
               if (userAge < _ageRange.start.round() ||
                   userAge > _ageRange.end.round()) {
@@ -2369,12 +865,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             people = people.sublist(0, _pageSize);
           }
 
-          // Update people list
+          // Update people list (deduplicate by userId)
           if (loadMore) {
-            _nearbyPeople.addAll(people);
+            final existingIds = _nearbyPeople.map((p) => p['userId'] as String).toSet();
+            final uniqueNew = people.where((p) => !existingIds.contains(p['userId'] as String)).toList();
+            _nearbyPeople.addAll(uniqueNew);
             _isLoadingMore = false;
           } else {
-            _nearbyPeople = people;
+            // Deduplicate initial load as well
+            final seen = <String>{};
+            _nearbyPeople = people.where((p) {
+              final id = p['userId'] as String;
+              return seen.add(id);
+            }).toList();
             _isLoadingPeople = false;
           }
 
@@ -2398,11 +901,15 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 Expanded(
                   child: Text(
                     'Failed to load nearby users. Please check your connection.',
+                    style: TextStyle(fontFamily: 'Poppins'),
                   ),
                 ),
               ],
             ),
             backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
             duration: const Duration(seconds: 4),
             action: SnackBarAction(
               label: 'Retry',
@@ -2479,15 +986,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     if (userId == null) return;
 
     try {
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('networking_profiles').doc(userId).set({
         'interests': _selectedInterests,
-      });
+      }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Interests updated successfully'),
+          SnackBar(
+            content: const Text('Interests updated successfully', style: TextStyle(fontFamily: 'Poppins')),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -2504,11 +1015,14 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 12),
                 Expanded(
-                  child: Text('Failed to save interests. Please try again.'),
+                  child: Text('Failed to save interests. Please try again.', style: TextStyle(fontFamily: 'Poppins')),
                 ),
               ],
             ),
             backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -2527,7 +1041,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Select Your Interests'),
+              title: const Text('Select Your Interests', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView.builder(
@@ -2538,7 +1052,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     final isSelected = tempSelected.contains(interest);
 
                     return CheckboxListTile(
-                      title: Text(interest),
+                      title: Text(interest, style: const TextStyle(fontFamily: 'Poppins')),
                       value: isSelected,
                       onChanged: (value) {
                         setDialogState(() {
@@ -2556,7 +1070,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -2566,7 +1080,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     Navigator.pop(context);
                     _updateInterests();
                   },
-                  child: const Text('Save'),
+                  child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                 ),
               ],
             );
@@ -2607,7 +1121,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                   ),
                   title: const Text(
                     'Filter Options',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -2658,7 +1172,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   children: [
                                     Text(
                                       'Categories',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         color: isDarkMode
@@ -2691,7 +1205,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           ),
                                           child: const Text(
                                             'Clear',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               fontSize: 12,
                                               color: Colors.red,
                                               fontWeight: FontWeight.w600,
@@ -2725,15 +1239,13 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                         ? null
                                         : _selectedNetworkingCategory,
                                     itemBuilder: (context) =>
-                                        _networkingCategoryData.entries.map((
-                                          entry,
+                                        NetworkingConstants.categorySubcategories.keys.map((
+                                          catName,
                                         ) {
-                                          final catName = entry.key;
-                                          final catData = entry.value;
                                           final icon =
-                                              catData['icon'] as IconData;
+                                              NetworkingConstants.categoryFlatIcons[catName] ?? Icons.hub_rounded;
                                           final color =
-                                              catData['color'] as Color;
+                                              NetworkingConstants.getCategoryFlatColor(catName);
                                           return PopupMenuItem<String>(
                                             value: catName,
                                             child: Row(
@@ -2746,7 +1258,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                 const SizedBox(width: 12),
                                                 Text(
                                                   catName,
-                                                  style: const TextStyle(
+                                                  style: const TextStyle(fontFamily: 'Poppins',
                                                     color: Colors.white,
                                                   ),
                                                 ),
@@ -2787,11 +1299,9 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           if (_selectedNetworkingCategory !=
                                               'All') ...[
                                             Icon(
-                                              _networkingCategoryData[_selectedNetworkingCategory]!['icon']
-                                                  as IconData,
+                                              NetworkingConstants.categoryFlatIcons[_selectedNetworkingCategory] ?? Icons.hub_rounded,
                                               color:
-                                                  _networkingCategoryData[_selectedNetworkingCategory]!['color']
-                                                      as Color,
+                                                  NetworkingConstants.getCategoryFlatColor(_selectedNetworkingCategory),
                                               size: 20,
                                             ),
                                             const SizedBox(width: 12),
@@ -2802,7 +1312,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                       'All'
                                                   ? 'Select Category'
                                                   : _selectedNetworkingCategory,
-                                              style: const TextStyle(
+                                              style: const TextStyle(fontFamily: 'Poppins', 
                                                 color: Colors.white,
                                                 fontSize: 14,
                                               ),
@@ -2823,11 +1333,9 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   const SizedBox(height: 12),
                                   Builder(
                                     builder: (context) {
-                                      final catData =
-                                          _networkingCategoryData[_selectedNetworkingCategory]!;
-                                      final color = catData['color'] as Color;
+                                      final color = NetworkingConstants.getCategoryFlatColor(_selectedNetworkingCategory);
                                       final subs =
-                                          catData['subs'] as List<String>;
+                                          NetworkingConstants.categorySubcategories[_selectedNetworkingCategory] ?? <String>[];
 
                                       return LayoutBuilder(
                                         builder: (_, boxConstraints) =>
@@ -2858,7 +1366,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                       value: sub,
                                                       child: Text(
                                                         sub,
-                                                        style: const TextStyle(
+                                                        style: const TextStyle(fontFamily: 'Poppins', 
                                                           color: Colors.white,
                                                         ),
                                                       ),
@@ -2898,7 +1406,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                       child: Text(
                                                         _selectedSubcategory ??
                                                             'Select Subcategory',
-                                                        style: const TextStyle(
+                                                        style: const TextStyle(fontFamily: 'Poppins', 
                                                           color: Colors.white,
                                                           fontSize: 14,
                                                         ),
@@ -2923,18 +1431,18 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   Builder(
                                     builder: (context) {
                                       final catColor =
-                                          _networkingCategoryData[_selectedNetworkingCategory]!['color']
-                                              as Color;
+                                          NetworkingConstants.getCategoryFlatColor(_selectedNetworkingCategory);
                                       // Collect filters: category-level + subcategory-level
                                       final filters = <Map<String, dynamic>>[
-                                        ...(_categoryFilters[_selectedNetworkingCategory] ??
+                                        ...(NetworkingConstants.categoryFilters[_selectedNetworkingCategory] ??
                                             []),
                                         if (_selectedSubcategory != null)
-                                          ...(_subcategoryFilters[_selectedSubcategory] ??
+                                          ...(NetworkingConstants.subcategoryFilters[_selectedSubcategory] ??
                                               []),
                                       ];
-                                      if (filters.isEmpty)
+                                      if (filters.isEmpty) {
                                         return const SizedBox.shrink();
+                                      }
 
                                       return Column(
                                         crossAxisAlignment:
@@ -2953,7 +1461,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             // Filter label
                                             Text(
                                               label,
-                                              style: const TextStyle(
+                                              style: const TextStyle(fontFamily: 'Poppins', 
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.white,
@@ -2992,7 +1500,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                         child: Text(
                                                           opt,
                                                           style:
-                                                              const TextStyle(
+                                                              const TextStyle(fontFamily: 'Poppins', 
                                                                 color: Colors
                                                                     .white,
                                                                 fontSize: 13,
@@ -3036,7 +1544,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                           _categoryDropdownSelections[label] ??
                                                               'Select $label',
                                                           style:
-                                                              const TextStyle(
+                                                              const TextStyle(fontFamily: 'Poppins', 
                                                                 color: Colors
                                                                     .white,
                                                                 fontSize: 13,
@@ -3066,7 +1574,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   children: [
                                     Text(
                                       'Gender',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         color: isDarkMode
@@ -3098,7 +1606,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           ),
                                           child: const Text(
                                             'Clear',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               fontSize: 12,
                                               color: Colors.red,
                                               fontWeight: FontWeight.w600,
@@ -3165,7 +1673,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                         Text(
                                                           gender,
                                                           style:
-                                                              const TextStyle(
+                                                              const TextStyle(fontFamily: 'Poppins', 
                                                                 color: Colors
                                                                     .white,
                                                               ),
@@ -3226,7 +1734,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                   _selectedGenders.isNotEmpty
                                                       ? _selectedGenders.first
                                                       : 'Select Gender',
-                                                  style: const TextStyle(
+                                                  style: const TextStyle(fontFamily: 'Poppins', 
                                                     color: Colors.white,
                                                     fontSize: 14,
                                                   ),
@@ -3250,7 +1758,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   children: [
                                     Text(
                                       'Age Range',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         color: isDarkMode
@@ -3283,7 +1791,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           ),
                                           title: const Text(
                                             'Age Range',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
@@ -3294,7 +1802,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             children: [
                                               Text(
                                                 '${tempAge.start.round()} - ${tempAge.end.round() == 60 ? "60+" : tempAge.end.round()}',
-                                                style: const TextStyle(
+                                                style: const TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white,
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.w600,
@@ -3335,14 +1843,14 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                 children: [
                                                   Text(
                                                     '18',
-                                                    style: TextStyle(
+                                                    style: TextStyle(fontFamily: 'Poppins', 
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
                                                   ),
                                                   Text(
                                                     '60+',
-                                                    style: TextStyle(
+                                                    style: TextStyle(fontFamily: 'Poppins', 
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
@@ -3357,7 +1865,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                   Navigator.pop(ctx),
                                               child: const Text(
                                                 'Cancel',
-                                                style: TextStyle(
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white70,
                                                 ),
                                               ),
@@ -3371,7 +1879,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                               },
                                               child: const Text(
                                                 'Done',
-                                                style: TextStyle(
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -3404,7 +1912,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                         Expanded(
                                           child: Text(
                                             '${_ageRange.start.round()} - ${_ageRange.end.round() == 60 ? "60+" : _ageRange.end.round()}',
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontSize: 14,
                                             ),
@@ -3427,7 +1935,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   children: [
                                     Text(
                                       'Location',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         color: isDarkMode
@@ -3460,7 +1968,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           ),
                                           title: const Text(
                                             'Location Range',
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
@@ -3471,7 +1979,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             children: [
                                               Text(
                                                 '${tempDist.start.round()} km - ${tempDist.end.round() == 500 ? "500+" : "${tempDist.end.round()}"} km',
-                                                style: const TextStyle(
+                                                style: const TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white,
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.w600,
@@ -3512,14 +2020,14 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                 children: [
                                                   Text(
                                                     '1 km',
-                                                    style: TextStyle(
+                                                    style: TextStyle(fontFamily: 'Poppins', 
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
                                                   ),
                                                   Text(
                                                     '500+ km',
-                                                    style: TextStyle(
+                                                    style: TextStyle(fontFamily: 'Poppins', 
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                     ),
@@ -3534,7 +2042,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                   Navigator.pop(ctx),
                                               child: const Text(
                                                 'Cancel',
-                                                style: TextStyle(
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white70,
                                                 ),
                                               ),
@@ -3549,7 +2057,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                               },
                                               child: const Text(
                                                 'Done',
-                                                style: TextStyle(
+                                                style: TextStyle(fontFamily: 'Poppins', 
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -3582,7 +2090,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                         Expanded(
                                           child: Text(
                                             '${_distanceRange.start.round()} km - ${_distanceRange.end.round() == 500 ? "500+" : "${_distanceRange.end.round()}"} km',
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontSize: 14,
                                             ),
@@ -3600,7 +2108,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
                                 // ── Connection Types (Dropdown, only if relevant) ──
                                 if (_selectedNetworkingCategory == 'All' ||
-                                    (_categoryConnectionGroups[_selectedNetworkingCategory] ??
+                                    (NetworkingConstants.categoryConnectionGroups[_selectedNetworkingCategory] ??
                                             [])
                                         .isNotEmpty) ...[
                                   const SizedBox(height: 12),
@@ -3608,7 +2116,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                     children: [
                                       Text(
                                         'Connection Types',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                           color: isDarkMode
@@ -3639,7 +2147,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             ),
                                             child: const Text(
                                               'Clear',
-                                              style: TextStyle(
+                                              style: TextStyle(fontFamily: 'Poppins', 
                                                 fontSize: 12,
                                                 color: Colors.red,
                                                 fontWeight: FontWeight.w600,
@@ -3657,7 +2165,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           _selectedNetworkingCategory == 'All'
                                           ? _connectionTypeGroups
                                           : Map.fromEntries(
-                                              (_categoryConnectionGroups[_selectedNetworkingCategory] ??
+                                              (NetworkingConstants.categoryConnectionGroups[_selectedNetworkingCategory] ??
                                                       _connectionTypeGroups.keys
                                                           .toList())
                                                   .where(
@@ -3712,7 +2220,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                       value: type,
                                                       child: Text(
                                                         type,
-                                                        style: const TextStyle(
+                                                        style: const TextStyle(fontFamily: 'Poppins', 
                                                           color: Colors.white,
                                                           fontSize: 14,
                                                         ),
@@ -3759,7 +2267,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                             ? _selectedConnectionTypes
                                                                   .first
                                                             : 'Select Connection Type',
-                                                        style: const TextStyle(
+                                                        style: const TextStyle(fontFamily: 'Poppins', 
                                                           color: Colors.white,
                                                           fontSize: 14,
                                                         ),
@@ -3781,7 +2289,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
                                 // ── Activities (Dropdown, only if relevant for selected category) ──
                                 if (_selectedNetworkingCategory == 'All' ||
-                                    (_categoryActivityGroups[_selectedNetworkingCategory] ??
+                                    (NetworkingConstants.categoryActivityGroups[_selectedNetworkingCategory] ??
                                             [])
                                         .isNotEmpty) ...[
                                   const SizedBox(height: 12),
@@ -3789,7 +2297,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                     children: [
                                       Text(
                                         'Activities',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                           color: isDarkMode
@@ -3820,7 +2328,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                             ),
                                             child: const Text(
                                               'Clear',
-                                              style: TextStyle(
+                                              style: TextStyle(fontFamily: 'Poppins', 
                                                 fontSize: 12,
                                                 color: Colors.red,
                                                 fontWeight: FontWeight.w600,
@@ -3837,7 +2345,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                           _selectedNetworkingCategory == 'All'
                                           ? _activityGroups
                                           : Map.fromEntries(
-                                              (_categoryActivityGroups[_selectedNetworkingCategory] ??
+                                              (NetworkingConstants.categoryActivityGroups[_selectedNetworkingCategory] ??
                                                       _activityGroups.keys
                                                           .toList())
                                                   .where(
@@ -3891,7 +2399,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                           child: Text(
                                                             activity,
                                                             style:
-                                                                const TextStyle(
+                                                                const TextStyle(fontFamily: 'Poppins', 
                                                                   color: Colors
                                                                       .white,
                                                                   fontSize: 14,
@@ -3937,7 +2445,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                                             ? _selectedActivities
                                                                   .first
                                                             : 'Select Activity',
-                                                        style: const TextStyle(
+                                                        style: const TextStyle(fontFamily: 'Poppins', 
                                                           color: Colors.white,
                                                           fontSize: 14,
                                                         ),
@@ -3999,7 +2507,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                       const SizedBox(width: 12),
                                       Text(
                                         'Show Online Only',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                           color: isDarkMode
@@ -4073,7 +2581,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   ),
                                   child: const Text(
                                     'Cancel',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                       color: Color(0xFF016CFF),
@@ -4107,7 +2615,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   ),
                                   child: const Text(
                                     'Apply Filters',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -4127,23 +2635,6 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         },
       ),
     );
-  }
-
-  // Helper method to get gradient colors based on user name
-  List<Color> _getAvatarGradient(String name) {
-    final hash = name.hashCode % 5;
-    switch (hash) {
-      case 0:
-        return [const Color(0xFFFF6B9D), const Color(0xFFC7365F)]; // Pink
-      case 1:
-        return [const Color(0xFF4A90E2), const Color(0xFF2E5BFF)]; // Blue
-      case 2:
-        return [const Color(0xFFFF6B35), const Color(0xFFFF4E00)]; // Orange
-      case 3:
-        return [const Color(0xFF9B59B6), const Color(0xFF6C3483)]; // Purple
-      default:
-        return [const Color(0xFF00D67D), const Color(0xFF00A85E)]; // Green
-    }
   }
 
   /// Check if user is truly online based on lastSeen timestamp
@@ -4210,16 +2701,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
 
                     if (result['success']) {
                       ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(
-                          content: Row(
+                        SnackBar(
+                          content: const Row(
                             children: [
                               Icon(Icons.check_circle, color: Colors.white),
                               SizedBox(width: 12),
-                              Expanded(child: Text('Connection request sent!')),
+                              Expanded(child: Text('Connection request sent!', style: TextStyle(fontFamily: 'Poppins'))),
                             ],
                           ),
                           backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          margin: const EdgeInsets.all(16),
+                          duration: const Duration(seconds: 2),
                         ),
                       );
                     } else {
@@ -4242,11 +2736,15 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                               Expanded(
                                 child: Text(
                                   result['message'] ?? 'Failed to send request',
+                                  style: const TextStyle(fontFamily: 'Poppins'),
                                 ),
                               ),
                             ],
                           ),
                           backgroundColor: Colors.red.shade600,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          margin: const EdgeInsets.all(16),
                           duration: const Duration(seconds: 3),
                         ),
                       );
@@ -4254,7 +2752,13 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                   },
           ),
         ),
-      );
+      ).then((_) {
+        // Refresh connections and people list when returning from profile detail
+        // (handles disconnect, accept, etc.)
+        if (mounted) {
+          refreshPeople();
+        }
+      });
     } catch (e) {
       debugPrint('Error opening profile detail: $e');
     }
@@ -4287,7 +2791,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             const SizedBox(height: 24),
             Text(
               'Connect with People',
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
@@ -4299,7 +2803,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               child: Text(
                 'Select your interests to find people with similar interests, or disable the interest filter to see everyone',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 14,
                   color: isDarkMode ? Colors.grey[600] : Colors.grey[500],
                 ),
@@ -4370,7 +2874,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     const SizedBox(height: 24),
                     Text(
                       'No results found',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
@@ -4380,7 +2884,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     const SizedBox(height: 12),
                     Text(
                       'Try adjusting your search term',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 15,
                         color: isDarkMode ? Colors.grey[600] : Colors.grey[500],
                       ),
@@ -4481,8 +2985,8 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       // Custom card - Abdulla
       {
         'name': 'Abdulla',
-        'age': 35,
-        'occupation': 'Founder',
+        'age': 34,
+        'occupation': 'Co - Founder',
         'category': 'Business',
         'subcategory': 'Startup Founders',
         'photo': 'assets/images/abdulla.jpeg',
@@ -4684,42 +3188,13 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       );
     }
 
-    // Stylish masonry grid — 5 columns, varied heights, 2D scroll
-    const int columnCount = 5;
-    const double cardWidth = 145.0;
-    const double spacing = 8.0;
-
-    // Scroll to center after first build so user can scroll both left & right
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_horizontalScrollController.hasClients &&
-          _horizontalScrollController.position.pixels == 0) {
-        const totalWidth = (cardWidth + spacing) * columnCount - spacing + 16;
-        final screenWidth = MediaQuery.of(context).size.width;
-        final centerOffset = (totalWidth - screenWidth) / 2;
-        if (centerOffset > 0) {
-          _horizontalScrollController.jumpTo(centerOffset);
-        }
-      }
-    });
-
-    // Height patterns per column for Pinterest-style masonry
-    const List<double> heightPattern = [180, 240, 200, 260, 210];
-
-    // Distribute cards into columns
-    final List<List<int>> columns = List.generate(columnCount, (_) => []);
-    for (int i = 0; i < allCards.length; i++) {
-      columns[i % columnCount].add(i);
-    }
 
     // Colorful cards — every 3rd card shows in full color
     bool isColorCard(int index) => index % 3 == 0;
 
     Widget buildCardAt(int index) {
       final card = allCards[index];
-      final int col = index % columnCount;
-      final int row = index ~/ columnCount;
-      final double cardHeight =
-          heightPattern[(col + row) % heightPattern.length];
+      const double cardHeight = 145.0;
 
       if (card.isDummy || card.profile == null) {
         final cardData =
@@ -4739,6 +3214,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
           imageUrl: dummyPhoto,
           isCenter: isColorCard(index),
           height: cardHeight,
+          animationIndex: index,
           onTap: () {
             HapticFeedback.lightImpact();
             // Create a temporary profile with full networking category data
@@ -4774,6 +3250,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         imageUrl: fixedPhotoUrl,
         isCenter: isColorCard(index),
         height: cardHeight,
+        animationIndex: index,
         onTap: () => _showProfileDetail(profile),
         userId: card.userId,
         age: profile.age,
@@ -4792,7 +3269,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         _selectedConnectionTypes.isNotEmpty ||
         _selectedActivities.isNotEmpty ||
         _showOnlineOnly ||
-        _locationFilter != 'Worldwide';
+        (_locationFilter != 'Worldwide' && _locationFilter != 'Smart ');
 
     return Column(
       children: [
@@ -4812,8 +3289,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                           ? '$_selectedNetworkingCategory > $_selectedSubcategory'
                           : _selectedNetworkingCategory,
                       color:
-                          _networkingCategoryData[_selectedNetworkingCategory]!['color']
-                              as Color,
+                          NetworkingConstants.getCategoryFlatColor(_selectedNetworkingCategory),
                       onRemove: () {
                         setState(() {
                           _selectedNetworkingCategory = 'All';
@@ -4824,7 +3300,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     ),
                     const SizedBox(width: 8),
                   ],
-                  if (_locationFilter != 'Worldwide') ...[
+                  if (_locationFilter != 'Worldwide' && _locationFilter != 'Smart ') ...[
                     _buildFilterChip(
                       label: _locationFilter == 'Near me'
                           ? 'Near me (${_distanceRange.start.round()}-${_distanceRange.end.round()} km)'
@@ -4926,46 +3402,26 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
               ),
             ),
           ),
-        // People grid
+        // People grid — 2 cards per row
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
               await _loadNearbyPeople(forceRefreshLocation: true);
             },
             color: const Color(0xFF00D67D),
-            child: SingleChildScrollView(
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(15, 12, 15, 90),
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
-              child: SingleChildScrollView(
-                controller: _horizontalScrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 16, 90),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: List.generate(columnCount, (colIndex) {
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          right: colIndex < columnCount - 1 ? spacing : 0,
-                        ),
-                        child: SizedBox(
-                          width: cardWidth,
-                          child: Column(
-                            children: columns[colIndex].map((cardIndex) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: spacing),
-                                child: buildCardAt(cardIndex),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.85,
               ),
+              itemCount: allCards.length,
+              itemBuilder: (context, index) => buildCardAt(index),
             ),
           ),
         ),
@@ -4990,7 +3446,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: color,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -5043,6 +3499,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     required bool isCenter,
     required VoidCallback onTap,
     required double height,
+    int animationIndex = 0,
     String? userId,
     int? age,
     String? profession,
@@ -5051,7 +3508,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
     String? networkingCategory,
   }) {
     final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
-    final gradientColors = _getAvatarGradient(userName);
+    final gradientColors = NetworkingHelpers.getAvatarGradient(userName);
     final firstName = userName.split(' ').first;
 
     // Gradient background for placeholder / behind transparent images
@@ -5068,7 +3525,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       child: Center(
         child: Text(
           userInitial,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             fontSize: 36,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -5125,10 +3582,12 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
       imageWidget = placeholderWidget;
     }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: height,
+    return FloatingCard(
+      animationIndex: animationIndex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: height,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -5157,53 +3616,15 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
             children: [
               // Image fills entire card
               Positioned.fill(
-                child: ColorFiltered(
-                  colorFilter: isCenter
-                      ? const ColorFilter.mode(
-                          Colors.transparent,
-                          BlendMode.multiply,
-                        )
-                      : const ColorFilter.mode(
-                          Colors.grey,
-                          BlendMode.saturation,
-                        ),
-                  child: imageWidget,
-                ),
+                child: imageWidget,
               ),
 
-              // Networking category badge at top-left
+              // Networking category badge at top-left (auto-sizes with text)
               if (networkingCategory != null && networkingCategory.isNotEmpty)
                 Positioned(
                   top: 6,
                   left: 6,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          networkingCategory,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: NetworkingWidgets.glassBadge(networkingCategory),
                 ),
 
               // Glassmorphism info card at bottom
@@ -5217,11 +3638,11 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
+                        horizontal: 10,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
+                        color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: Colors.white.withValues(alpha: 0.15),
@@ -5240,9 +3661,9 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                   age != null ? '$firstName, $age' : firstName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: const TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.white,
-                                    fontSize: 12,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -5278,9 +3699,9 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                 profession,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 10,
+                                style: TextStyle(fontFamily: 'Poppins', 
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 12,
                                 ),
                               ),
                             ),
@@ -5292,19 +3713,19 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                 children: [
                                   Icon(
                                     Icons.location_on,
-                                    size: 10,
-                                    color: Colors.white.withValues(alpha: 0.6),
+                                    size: 12,
+                                    color: Colors.white.withValues(alpha: 0.8),
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
                                     distance < 1
                                         ? '${(distance * 1000).toInt()} m'
                                         : '${distance.toStringAsFixed(1)} km',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white.withValues(
-                                        alpha: 0.6,
+                                        alpha: 0.8,
                                       ),
-                                      fontSize: 10,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ],
@@ -5340,6 +3761,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
           ),
         ),
       ),
+    ),
     );
   }
 }

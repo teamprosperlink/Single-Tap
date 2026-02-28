@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:supper/main.dart';
 import 'dart:async';
@@ -93,40 +92,30 @@ class _SplashScreenState extends State<SplashScreen>
                     child: child,
                   );
                 },
-                child: ClipOval(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: screenSize.height * 0.28,
-                      height: screenSize.height * 0.28,
-                      constraints: const BoxConstraints(
-                        maxWidth: 280,
-                        maxHeight: 280,
-                        minWidth: 180,
-                        minHeight: 180,
+                child: Container(
+                  width: screenSize.height * 0.28,
+                  height: screenSize.height * 0.28,
+                  constraints: const BoxConstraints(
+                    maxWidth: 280,
+                    maxHeight: 280,
+                    minWidth: 180,
+                    minHeight: 180,
+                  ),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.whiteAlpha(alpha: 0.3),
+                        blurRadius: 40,
+                        spreadRadius: 5,
+                        offset: const Offset(0, 10),
                       ),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        border: Border.all(
-                          color: AppColors.glassBorder(alpha: 0.3),
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.whiteAlpha(alpha: 0.3),
-                            blurRadius: 40,
-                            spreadRadius: 5,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          AppAssets.logoPath,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      AppAssets.logoPath,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),

@@ -885,7 +885,7 @@ class _BankAccountScreenState extends State<BankAccountScreen>
       bankAccount,
     );
 
-    setState(() => _isSaving = false);
+    if (mounted) setState(() => _isSaving = false);
 
     if (success && mounted) {
       _showSuccessDialog();

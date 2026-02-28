@@ -45,6 +45,7 @@ class HomeScreenState extends State<HomeScreen>
   final List<String> _suggestions = [];
   List<Map<String, dynamic>> _matches = [];
   String _currentUserName = '';
+  String? _currentUserPhotoUrl;
 
   late AnimationController _controller;
   Timer? _timer;
@@ -278,6 +279,7 @@ class HomeScreenState extends State<HomeScreen>
       if (userDoc.exists && mounted) {
         setState(() {
           _currentUserName = userDoc.data()?['name'] ?? 'User';
+          _currentUserPhotoUrl = userDoc.data()?['photoUrl'] as String?;
         });
       }
     }
@@ -1688,8 +1690,16 @@ class HomeScreenState extends State<HomeScreen>
           }
         }
 
+        // Deduplicate matches by userId
+        final seenUserIds = <String>{};
+        final dedupedMatches = matches.where((m) {
+          final userId = m['userId'] as String?;
+          if (userId == null) return true;
+          return seenUserIds.add(userId);
+        }).toList();
+
         setState(() {
-          _matches = matches;
+          _matches = dedupedMatches;
           _isProcessing = false;
         });
 
@@ -1818,7 +1828,7 @@ class HomeScreenState extends State<HomeScreen>
                         ),
                         child: Text(
                           _suggestions[index],
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Theme.of(context).primaryColor,
@@ -1917,7 +1927,7 @@ class HomeScreenState extends State<HomeScreen>
                                           : _currentSpeechText.isNotEmpty
                                           ? _currentSpeechText
                                           : 'Listening...',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         color: _currentSpeechText.isNotEmpty
                                             ? Colors.white
                                             : Colors.grey[400],
@@ -1932,7 +1942,7 @@ class HomeScreenState extends State<HomeScreen>
                             )
                           : AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 250),
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 color: _isSearchFocused
                                     ? Colors.white
                                     : Colors.grey[400],
@@ -1951,14 +1961,14 @@ class HomeScreenState extends State<HomeScreen>
                                 maxLines: 1,
                                 cursorWidth: 2,
                                 cursorColor: Colors.white,
-                                style: const TextStyle(
+                                style: const TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w400,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'Ask me anything...',
-                                  hintStyle: TextStyle(
+                                  hintStyle: TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.grey[300],
                                     fontSize: 15,
                                     fontWeight: FontWeight.w400,
@@ -2137,7 +2147,7 @@ class HomeScreenState extends State<HomeScreen>
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     image: DecorationImage(
-                      image: AssetImage('assets/logo/Clogo.jpeg'),
+                      image: AssetImage('assets/logo/AppLogo.png'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -2149,7 +2159,7 @@ class HomeScreenState extends State<HomeScreen>
                         MediaQuery.of(context).size.width * 0.65;
                     const bubblePadding = 28.0; // 14 * 2 horizontal padding
 
-                    final textStyle = TextStyle(
+                    final textStyle = TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
@@ -2269,7 +2279,7 @@ class HomeScreenState extends State<HomeScreen>
                                   children: [
                                     Text(
                                       text,
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         color: Colors.white,
                                         fontSize: 15,
                                         fontWeight: isUser
@@ -2323,17 +2333,17 @@ class HomeScreenState extends State<HomeScreen>
                   margin: const EdgeInsets.only(left: 8, top: 4),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    image: _auth.currentUser?.photoURL != null
+                    image: _currentUserPhotoUrl != null
                         ? DecorationImage(
-                            image: NetworkImage(_auth.currentUser!.photoURL!),
+                            image: NetworkImage(_currentUserPhotoUrl!),
                             fit: BoxFit.cover,
                           )
                         : null,
-                    color: _auth.currentUser?.photoURL == null
+                    color: _currentUserPhotoUrl == null
                         ? Colors.grey
                         : null,
                   ),
-                  child: _auth.currentUser?.photoURL == null
+                  child: _currentUserPhotoUrl == null
                       ? const Icon(Icons.person, color: Colors.white, size: 16)
                       : null,
                 ),
@@ -2529,7 +2539,7 @@ class HomeScreenState extends State<HomeScreen>
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Text(
                     "See All",
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.blue,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -2674,7 +2684,7 @@ class HomeScreenState extends State<HomeScreen>
                       return Container(
                         height: 100,
                         color: Colors.grey[700],
-                        child: Icon(getIcon(), color: Colors.white54, size: 40),
+                        child: Icon(getIcon(), color: Colors.white70, size: 40),
                       );
                     },
                     loadingBuilder: (context, child, loadingProgress) {
@@ -2700,7 +2710,7 @@ class HomeScreenState extends State<HomeScreen>
                   // Name
                   Text(
                     item['name'] as String? ?? '',
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -2712,7 +2722,7 @@ class HomeScreenState extends State<HomeScreen>
                   // Subtitle (restaurant/brand/location)
                   Text(
                     getSubtitle(),
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -2724,7 +2734,7 @@ class HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: Text(
                           item['price'] as String? ?? '',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.green[400],
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -2738,7 +2748,7 @@ class HomeScreenState extends State<HomeScreen>
                       const SizedBox(width: 2),
                       Text(
                         '${item['rating']}',
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 12,
                         ),
@@ -2754,9 +2764,9 @@ class HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: Text(
                           getBottomInfo(),
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 11,
+                          style: TextStyle(fontFamily: 'Poppins', 
+                            color: Colors.grey[400],
+                            fontSize: 13,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -2790,7 +2800,7 @@ class HomeScreenState extends State<HomeScreen>
               const SizedBox(width: 8),
               Text(
                 '${_matches.length} Matches Found',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.green[600],
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
@@ -2814,7 +2824,7 @@ class HomeScreenState extends State<HomeScreen>
                   ),
                   child: const Text(
                     'Clear',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -2898,7 +2908,7 @@ class HomeScreenState extends State<HomeScreen>
                           ),
                           child: Text(
                             userName.toUpperCase(),
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
@@ -2925,7 +2935,7 @@ class HomeScreenState extends State<HomeScreen>
                               const SizedBox(width: 4),
                               Text(
                                 '${matchScore.toStringAsFixed(0)}% match',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.blue[600],
                                   fontWeight: FontWeight.w500,
                                   fontSize: 12,
@@ -2956,7 +2966,7 @@ class HomeScreenState extends State<HomeScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   userProfile['city'].toString(),
-                                  style: TextStyle(
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.green[600],
                                     fontWeight: FontWeight.w500,
                                     fontSize: 12,
@@ -2986,7 +2996,7 @@ class HomeScreenState extends State<HomeScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   _formatDistance(match['distance'] as double),
-                                  style: TextStyle(
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.orange[600],
                                     fontWeight: FontWeight.w500,
                                     fontSize: 12,
@@ -3012,8 +3022,8 @@ class HomeScreenState extends State<HomeScreen>
                   children: [
                     Text(
                       'Posted:',
-                      style: TextStyle(
-                        fontSize: 11,
+                      style: TextStyle(fontFamily: 'Poppins', 
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                         color: Theme.of(context).primaryColor,
                       ),
@@ -3023,7 +3033,7 @@ class HomeScreenState extends State<HomeScreen>
                       match['title'] ??
                           match['description'] ??
                           'Looking for match',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: isDarkMode ? Colors.white : Colors.black,
@@ -3037,7 +3047,7 @@ class HomeScreenState extends State<HomeScreen>
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           match['description'],
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 13,
                             color: isDarkMode
                                 ? Colors.grey[400]
@@ -3065,7 +3075,7 @@ class HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: Text(
                           'Matches your search',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 12,
                             color: Colors.green[600],
                             fontWeight: FontWeight.w500,
@@ -3451,7 +3461,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                                   const SizedBox(width: 12),
                                   const Text(
                                     'New Chat',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -3504,7 +3514,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                               const SizedBox(width: 10),
                               Text(
                                 'Search chats...',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white.withValues(alpha: 0.5),
                                   fontSize: 14,
                                 ),
@@ -3623,7 +3633,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                             children: [
                               Text(
                                 'My Account',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -3631,9 +3641,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                               ),
                               Text(
                                 'Settings & Preferences',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
+                                style: TextStyle(fontFamily: 'Poppins', 
+                                  color: Colors.white70,
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
@@ -3706,7 +3716,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
             const SizedBox(width: 12),
             Text(
               label,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -3741,7 +3751,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
         padding: const EdgeInsets.only(left: 14, top: 12, bottom: 8),
         child: Text(
           title,
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -3790,7 +3800,7 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
               Expanded(
                 child: Text(
                   chat['title'] as String,
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 14,
                     fontWeight: FontWeight.w500,

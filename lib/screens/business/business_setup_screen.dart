@@ -509,7 +509,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult.contains(ConnectivityResult.none)) {
         _showError('No internet connection. Please connect and try again.');
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -522,11 +522,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         }
       } on SocketException catch (_) {
         _showError('No internet connection. Please check your network.');
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       } on TimeoutException catch (_) {
         _showError('Network is slow. Please check your connection.');
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 

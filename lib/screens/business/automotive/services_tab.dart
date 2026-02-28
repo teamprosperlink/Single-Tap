@@ -997,7 +997,7 @@ class _ServiceFormSheetState extends State<_ServiceFormSheet> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

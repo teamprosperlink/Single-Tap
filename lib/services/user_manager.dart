@@ -2,8 +2,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'profile services/photo_cache_service.dart';
-
 class UserManager {
   static final UserManager _instance = UserManager._internal();
   factory UserManager() => _instance;
@@ -11,7 +9,6 @@ class UserManager {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final PhotoCacheService _photoCache = PhotoCacheService();
 
   User? get currentUser => _auth.currentUser;
 
@@ -148,78 +145,6 @@ class UserManager {
       }
     } catch (e) {
       debugPrint('Error updating profile: $e');
-    }
-  }
-
-  // Get any user's profile
-  Future<Map<String, dynamic>?> getUserProfile(String userId) async {
-    try {
-      // Check cache first
-      final cachedPhotoUrl = _photoCache.getCachedPhotoUrl(userId);
-
-      final doc = await _firestore.collection('users').doc(userId).get();
-
-      if (doc.exists) {
-        final data = doc.data()!;
-
-        // Use cached photo if available
-        if (cachedPhotoUrl != null) {
-          data['photoUrl'] = cachedPhotoUrl;
-        } else {
-          // Fix Google photo URL if needed
-          if (data['photoUrl'] != null &&
-              data['photoUrl'].contains('googleusercontent.com')) {
-            final photoUrl = data['photoUrl'] as String;
-            if (!photoUrl.contains('=s400')) {
-              final baseUrl = photoUrl.split('=')[0];
-              data['photoUrl'] = '$baseUrl=s400-c';
-            }
-          }
-
-          // Cache the photo URL
-          if (data['photoUrl'] != null) {
-            _photoCache.cachePhotoUrl(userId, data['photoUrl']);
-          }
-        }
-
-        return data;
-      }
-
-      return null;
-    } catch (e) {
-      debugPrint('Error getting user profile: $e');
-      return null;
-    }
-  }
-
-  // Sign out and clear cache
-  Future<void> signOut() async {
-    try {
-      // Update online status (with timeout to prevent hanging)
-      final user = currentUser;
-      if (user != null) {
-        try {
-          await _firestore
-              .collection('users')
-              .doc(user.uid)
-              .update({
-                'isOnline': false,
-                'lastSeen': FieldValue.serverTimestamp(),
-              })
-              .timeout(const Duration(seconds: 5));
-        } catch (e) {
-          debugPrint('   Failed to update online status: $e');
-        }
-      }
-
-      // Clear all caches
-      _cachedProfile = null;
-      _profileController.add(null);
-      _photoCache.clearAllCache();
-
-      debugPrint('✓ UserManager: Session cleared');
-    } catch (e) {
-      debugPrint('Error during sign out: $e');
     }
   }
 

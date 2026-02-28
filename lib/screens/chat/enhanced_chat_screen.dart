@@ -584,7 +584,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         ),
         title: Text(
           '${_selectedMessageIds.length} selected',
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -791,7 +791,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                   SizedBox(width: 2),
                                   Text(
                                     'Business',
-                                    style: TextStyle(
+                                    style: TextStyle(fontFamily: 'Poppins', 
                                       color: Color(0xFF00D67D),
                                       fontSize: 9,
                                       fontWeight: FontWeight.w600,
@@ -968,8 +968,11 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         // Filter out messages deleted for current user (SingleTap-style "Delete for me")
         // Also filter out videos/images that are still uploading (status == sending) for receivers
         final currentUserId = _currentUserId;
+        final seenMsgIds = <String>{};
         final messages = snapshot.data!.docs
             .where((doc) {
+              // Deduplicate by message ID
+              if (!seenMsgIds.add(doc.id)) return false;
               final data = doc.data() as Map<String, dynamic>;
               // Check if message is deleted for current user
               final deletedFor = data['deletedFor'] as List<dynamic>?;
@@ -1272,7 +1275,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           const SizedBox(height: 16),
           Text(
             'No messages yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white.withValues(alpha: 0.7),
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -1281,7 +1284,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           const SizedBox(height: 8),
           Text(
             'Send a message to start the conversation',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white.withValues(alpha: 0.5),
               fontSize: 14,
             ),
@@ -1532,7 +1535,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           ),
           child: Text(
             dateText,
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: isDarkMode ? AppColors.iosGray : AppColors.iosGray,
@@ -1634,7 +1637,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             maxWidth: MediaQuery.of(context).size.width * 0.5,
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(20),
+                              topRight: const Radius.circular(20),
+                              bottomLeft: isMe
+                                  ? const Radius.circular(20)
+                                  : const Radius.circular(4),
+                              bottomRight: isMe
+                                  ? const Radius.circular(4)
+                                  : const Radius.circular(20),
+                            ),
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                               child: Container(
@@ -1677,7 +1689,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                           width: 1,
                                         )
                                       : null,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(20),
+                                    topRight: const Radius.circular(20),
+                                    bottomLeft: isMe
+                                        ? const Radius.circular(20)
+                                        : const Radius.circular(4),
+                                    bottomRight: isMe
+                                        ? const Radius.circular(4)
+                                        : const Radius.circular(20),
+                                  ),
                                 ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -1748,7 +1769,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                                     true) ...[
                                                   Text(
                                                     'edited ',
-                                                    style: TextStyle(
+                                                    style: TextStyle(fontFamily: 'Poppins', 
                                                       color: isMe
                                                           ? Colors.white
                                                                 .withValues(
@@ -1770,7 +1791,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                                   _formatMessageTime(
                                                     message.timestamp,
                                                   ),
-                                                  style: TextStyle(
+                                                  style: TextStyle(fontFamily: 'Poppins', 
                                                     color: isMe
                                                         ? Colors.white
                                                               .withValues(
@@ -1828,7 +1849,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                             ? _buildHighlightedText(
                                                 message.text!,
                                                 searchQuery,
-                                                TextStyle(
+                                                TextStyle(fontFamily: 'Poppins', 
                                                   color: isMe
                                                       ? Colors.white
                                                       : (isDarkMode
@@ -1868,7 +1889,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                               if (message.isEdited == true) ...[
                                 Text(
                                   'edited ',
-                                  style: TextStyle(
+                                  style: TextStyle(fontFamily: 'Poppins', 
                                     color: isDarkMode
                                         ? Colors.grey[500]
                                         : Colors.grey[600],
@@ -1880,7 +1901,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                               // Time
                               Text(
                                 _formatMessageTime(message.timestamp),
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: isDarkMode
                                       ? Colors.grey[500]
                                       : Colors.grey[600],
@@ -1923,7 +1944,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           ),
                           child: Text(
                             message.reactions!.join(' '),
-                            style: const TextStyle(fontSize: 16),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 16),
                           ),
                         ),
                     ],
@@ -2050,7 +2071,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const SizedBox(height: 16),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -2060,7 +2081,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const Text(
                     'Choose how to delete',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
                   if (showDeleteForEveryone) ...[
@@ -2076,7 +2097,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         child: const Center(
                           child: Text(
                             'Delete for everyone',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -2108,7 +2129,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             child: const Center(
                               child: Text(
                                 'Cancel',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -2131,7 +2152,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             child: const Center(
                               child: Text(
                                 'Delete for me',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -2448,7 +2469,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             children: [
               Text(
                 replyToName,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: isMe ? Colors.white : Theme.of(context).primaryColor,
@@ -2456,7 +2477,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               ),
               Text(
                 replyData['text'] ?? 'Photo',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 12,
                   color: isMe
                       ? Colors.white.withValues(alpha: 0.8)
@@ -2510,7 +2531,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               children: [
                 Text(
                   isReplyingToSelf ? 'You' : widget.otherUser.name,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Color(0xFFE91E63), // Pink color
                     fontWeight: FontWeight.w600,
@@ -2519,7 +2540,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _replyToMessage!.text ?? 'Photo',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -2581,7 +2602,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               children: [
                 const Text(
                   'Editing message',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Colors.orange,
                     fontWeight: FontWeight.w600,
@@ -2590,7 +2611,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _editingMessage!.text ?? '',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -2656,7 +2677,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         widget.otherUser.name.isNotEmpty
                             ? widget.otherUser.name[0].toUpperCase()
                             : '?',
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: AppColors.iosBlue,
@@ -2764,13 +2785,13 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               child: !PhotoUrlHelper.isValidUrl(photo)
                   ? Text(
                       name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
                     )
                   : null,
             ),
             title: Text(
               name,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -2987,7 +3008,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                           _formatRecordingTime(
                                             _recordingDuration,
                                           ),
-                                          style: const TextStyle(
+                                          style: const TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.white,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -3093,7 +3114,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             recentsLimit: 28,
                             noRecents: Text(
                               'No Recents',
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 14,
                                 color: Colors.grey[500],
                               ),
@@ -3194,7 +3215,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       ),
                       child: Text(
                         _unreadCount > 99 ? '99+' : _unreadCount.toString(),
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
@@ -3551,7 +3572,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             const SizedBox(width: 16),
             Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: isDestructive ? Colors.red : Colors.white,
                 fontSize: 16,
               ),
@@ -4040,7 +4061,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       const SizedBox(height: 16),
                       Text(
                         'Call ${widget.otherUser.name}?',
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -4050,7 +4071,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       const SizedBox(height: 8),
                       const Text(
                         'Start a voice call',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                        style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
                       ),
                       const SizedBox(height: 20),
 
@@ -4075,7 +4096,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                   child: const Center(
                                     child: Text(
                                       'Cancel',
-                                      style: TextStyle(
+                                      style: TextStyle(fontFamily: 'Poppins', 
                                         color: Colors.white70,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
@@ -4106,7 +4127,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                       SizedBox(width: 6),
                                       Text(
                                         'Call',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Colors.white,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -4230,7 +4251,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               const SizedBox(width: 20),
               Text(
                 label,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDestructive ? Colors.red : Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -4299,7 +4320,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const SizedBox(height: 16),
                   const Text(
                     'Delete Call',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -4309,7 +4330,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const Text(
                     'Choose how to delete',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
 
@@ -4330,7 +4351,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         child: const Center(
                           child: Text(
                             'Delete for everyone',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -4360,7 +4381,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             child: const Center(
                               child: Text(
                                 'Cancel',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -4386,7 +4407,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             child: const Center(
                               child: Text(
                                 'Delete for me',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -5478,7 +5499,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         'unreadCount.${widget.otherUser.uid}': FieldValue.increment(1),
       });
 
-      final currentUserProfile = this.ref
+      final currentUserProfile = ref
           .read(currentUserProfileProvider)
           .valueOrNull;
       final currentUserName = currentUserProfile?.name ?? 'Someone';
@@ -5938,10 +5959,28 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 : Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
             width: 1,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isMe
+                ? const Radius.circular(20)
+                : const Radius.circular(4),
+            bottomRight: isMe
+                ? const Radius.circular(4)
+                : const Radius.circular(20),
+          ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isMe
+                ? const Radius.circular(20)
+                : const Radius.circular(4),
+            bottomRight: isMe
+                ? const Radius.circular(4)
+                : const Radius.circular(20),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
             child: Stack(
@@ -5989,7 +6028,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                             SizedBox(height: 8),
                             Text(
                               'Uploading...',
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.orange,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -6035,10 +6074,28 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 : Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
             width: 1,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isMe
+                ? const Radius.circular(20)
+                : const Radius.circular(4),
+            bottomRight: isMe
+                ? const Radius.circular(4)
+                : const Radius.circular(20),
+          ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isMe
+                ? const Radius.circular(20)
+                : const Radius.circular(4),
+            bottomRight: isMe
+                ? const Radius.circular(4)
+                : const Radius.circular(20),
+          ),
           child: Stack(
             children: [
               // Video thumbnail or placeholder
@@ -6071,7 +6128,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         SizedBox(height: 8),
                         Text(
                           'Uploading...',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.orange,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -6144,7 +6201,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       const SizedBox(width: 6),
                       Text(
                         'This message was deleted',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: isDarkMode
                               ? Colors.grey.shade400
                               : Colors.grey.shade600,
@@ -6157,7 +6214,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const SizedBox(height: 4),
                   Text(
                     _formatMessageTime(message.timestamp),
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: isDarkMode
                           ? Colors.grey.shade500
                           : Colors.grey.shade500,
@@ -6231,7 +6288,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         child: const Center(
           child: Text(
             'Select',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white,
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -6404,7 +6461,16 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           end: Alignment.bottomRight,
         ),
         border: Border.all(color: Colors.white, width: 1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
+          bottomLeft: isMe
+              ? const Radius.circular(20)
+              : const Radius.circular(4),
+          bottomRight: isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(20),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -6444,7 +6510,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   const SizedBox(width: 4),
                   Text(
                     callLabel,
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: isMe ? Colors.white : iconColor,
                       fontSize: 14.5,
                       fontWeight: FontWeight.w500,
@@ -6456,7 +6522,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               // Second line: Call duration or status
               Text(
                 callDurationText,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w400,
@@ -6466,7 +6532,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               // Third line: Time
               Text(
                 _formatMessageTime(message.timestamp),
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 12,
                 ),
@@ -6694,7 +6760,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           // Duration
           Text(
             formatDuration(duration),
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white.withOpacity(0.9),
               fontSize: 10,
               fontWeight: FontWeight.w500,
@@ -7633,7 +7699,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 : _searchResults.isEmpty
                 ? 'Type to search'
                 : '${_currentSearchIndex + 1} of ${_searchResults.length}',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
               fontSize: 14,
             ),
@@ -7805,7 +7871,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       // No mentions, return simple text
       return Text(
         text,
-        style: TextStyle(
+        style: TextStyle(fontFamily: 'Poppins', 
           color: isDeleted
               ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
               : (isMe
@@ -7829,7 +7895,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         spans.add(
           TextSpan(
             text: text.substring(lastIndex, match.start),
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDeleted
                   ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
                   : (isMe
@@ -7844,7 +7910,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       spans.add(
         TextSpan(
           text: match.group(0), // @Username
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isMe
                 ? Colors.white
                 : (isDarkMode
@@ -7868,7 +7934,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       spans.add(
         TextSpan(
           text: text.substring(lastIndex),
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isDeleted
                 ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
                 : (isMe
@@ -7881,7 +7947,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(
+        style: TextStyle(fontFamily: 'Poppins', 
           fontSize: 16,
           height: 1.35,
           letterSpacing: -0.2,
@@ -7963,7 +8029,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               ),
               const Text(
                 'Choose Chat Theme',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -8007,7 +8073,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       const SizedBox(width: 8),
                       const Text(
                         'None (Default)',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -8028,7 +8094,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               const SizedBox(height: 16),
               const Text(
                 'Theme Colors',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -8086,7 +8152,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 onPressed: () => Navigator.pop(context),
                 child: const Text(
                   'Cancel',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                 ),
               ),
             ],
@@ -8176,7 +8242,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               const SizedBox(height: 16),
               const Text(
                 'Clear Chat?',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -8186,7 +8252,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               const SizedBox(height: 8),
               Text(
                 'This will clear all messages from this chat for you. ${widget.otherUser.name} will still see all messages.',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -8204,7 +8270,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white70,
                           fontWeight: FontWeight.w600,
                         ),
@@ -8227,7 +8293,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       ),
                       child: const Text(
                         'Clear',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
@@ -8427,7 +8493,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                       const Expanded(
                         child: Text(
                           'Chat Info',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -8498,7 +8564,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                                   ? widget.otherUser.name[0]
                                                         .toUpperCase()
                                                   : 'U',
-                                              style: const TextStyle(
+                                              style: const TextStyle(fontFamily: 'Poppins', 
                                                 fontSize: 48,
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.bold,
@@ -8513,7 +8579,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                   // Name
                                   Text(
                                     widget.otherUser.name,
-                                    style: const TextStyle(
+                                    style: const TextStyle(fontFamily: 'Poppins', 
                                       color: Colors.white,
                                       fontSize: 28,
                                       fontWeight: FontWeight.bold,
@@ -8543,7 +8609,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                         Flexible(
                                           child: Text(
                                             widget.otherUser.location!,
-                                            style: TextStyle(
+                                            style: TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white.withValues(
                                                 alpha: 0.7,
                                               ),
@@ -8671,7 +8737,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
             ),
             title: Text(
               title,
-              style: TextStyle(color: textColor ?? Colors.white, fontSize: 16),
+              style: TextStyle(fontFamily: 'Poppins', color: textColor ?? Colors.white, fontSize: 16),
             ),
             trailing:
                 trailing ??
@@ -8737,7 +8803,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
               const SizedBox(height: 16),
               Text(
                 'Block ${widget.otherUser.name}?',
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -8747,7 +8813,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
               const SizedBox(height: 8),
               const Text(
                 'Blocked users cannot send you messages or see your profile. You can unblock them later from settings.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -8765,7 +8831,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white70,
                           fontWeight: FontWeight.w600,
                         ),
@@ -8788,7 +8854,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                       ),
                       child: const Text(
                         'Block',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
@@ -9130,7 +9196,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                         child: Text(
                           'Forward to...',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -9149,7 +9215,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                           ),
                           child: Text(
                             '${_selectedUsers.length} selected',
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.green,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -9222,13 +9288,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                                   )
                                   ? Text(
                                       user.name[0].toUpperCase(),
-                                      style: const TextStyle(fontSize: 10),
+                                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 10),
                                     )
                                   : null,
                             ),
                             label: Text(
                               user.name.split(' ').first,
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white,
                                 fontSize: 12,
                               ),
@@ -9261,7 +9327,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                             _searchQuery.isEmpty
                                 ? 'No conversations yet'
                                 : 'No results found',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white.withValues(alpha: 0.6),
                               fontSize: 16,
                             ),
@@ -9296,7 +9362,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                                         ? Text(
                                             (contact['name'] as String)[0]
                                                 .toUpperCase(),
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -9324,7 +9390,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                               ),
                               title: Text(
                                 contact['name'],
-                                style: const TextStyle(
+                                style: const TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -9396,7 +9462,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                         const SizedBox(width: 8),
                         Text(
                           'Forward to ${_selectedUsers.length} ${_selectedUsers.length == 1 ? 'chat' : 'chats'}',
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -9575,7 +9641,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
                         child: Text(
                           'Media Gallery',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -9649,7 +9715,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isSelected ? Colors.white : Colors.white60,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               fontSize: 14,
@@ -9730,7 +9796,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -9745,7 +9811,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
           ),
           child: Text(
             '$count',
-            style: const TextStyle(color: Colors.white60, fontSize: 12),
+            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white60, fontSize: 12),
           ),
         ),
       ],
@@ -9767,7 +9833,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
           children: [
             Text(
               'Show more',
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: Color(0xFF2563EB),
                 fontWeight: FontWeight.w500,
               ),
@@ -9837,7 +9903,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
               ),
               child: Text(
                 key,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -9949,13 +10015,13 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         ),
         title: Text(
           url,
-          style: const TextStyle(color: Color(0xFF2563EB), fontSize: 13),
+          style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFF2563EB), fontSize: 13),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           _formatDate(timestamp),
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 11,
           ),
@@ -9993,7 +10059,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         ),
         title: Text(
           name,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -10003,7 +10069,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         ),
         subtitle: Text(
           '${size != null ? '${_formatFileSize(size)} • ' : ''}${_formatDate(timestamp)}',
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 11,
           ),
@@ -10061,7 +10127,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
                 ),
                 title: Text(
                   url,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     color: Color(0xFF2563EB),
                     fontSize: 14,
                   ),
@@ -10070,7 +10136,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
                 ),
                 subtitle: Text(
                   _formatDate(timestamp),
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
@@ -10157,7 +10223,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
                 ),
                 title: Text(
                   name,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -10167,7 +10233,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
                 ),
                 subtitle: Text(
                   '${size != null ? '${_formatFileSize(size)} • ' : ''}${_formatDate(timestamp)}',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
@@ -10228,7 +10294,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
           const SizedBox(height: 16),
           Text(
             title,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: 'Poppins', 
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -10239,7 +10305,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
               subtitle,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white.withValues(alpha: 0.6),
                 fontSize: 14,
               ),
@@ -10446,7 +10512,7 @@ class _FullScreenMediaViewerState extends State<_FullScreenMediaViewer> {
         ),
         title: Text(
           '${_currentIndex + 1} of ${widget.mediaItems.length}',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
         ),
         centerTitle: true,
         actions: [
@@ -10507,7 +10573,7 @@ class _FullScreenMediaViewerState extends State<_FullScreenMediaViewer> {
         child: SafeArea(
           child: Text(
             _formatTimestamp(widget.mediaItems[_currentIndex]['timestamp']),
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: Colors.white.withValues(alpha: 0.7),
               fontSize: 14,
             ),
@@ -10723,7 +10789,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
                   const SizedBox(height: 16),
                   Text(
                     'Error playing video',
-                    style: TextStyle(
+                    style: TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
@@ -10783,7 +10849,7 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
             const SizedBox(height: 16),
             Text(
               _errorMessage ?? 'Failed to load video',
-              style: const TextStyle(color: Colors.white70, fontSize: 16),
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 16),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -11055,7 +11121,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                             // Duration text
                             Text(
                               _formatTime(widget.duration),
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white70,
                                 fontSize: 12,
                               ),
@@ -11105,7 +11171,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Delete',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.redAccent,
                               fontWeight: FontWeight.w600,
                             ),
@@ -11152,7 +11218,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Send',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
@@ -11301,12 +11367,12 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'Error playing video',
-                  style: TextStyle(color: Colors.grey[400]),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400]),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   errorMessage,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[600], fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -11349,7 +11415,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Video', style: TextStyle(color: Colors.white)),
+        title: const Text('Video', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
       ),
       body: Center(
         child: _isLoading
@@ -11362,7 +11428,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
                 children: [
                   const Icon(Icons.error_outline, color: Colors.red, size: 48),
                   const SizedBox(height: 16),
-                  Text(_error!, style: TextStyle(color: Colors.grey[400])),
+                  Text(_error!, style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400])),
                 ],
               )
             : _chewieController != null
@@ -11434,7 +11500,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
         ),
         title: Text(
           '${_currentIndex + 1} / ${_selectedFiles.length}',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
         ),
         centerTitle: true,
         actions: [
@@ -11545,7 +11611,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                     ),
                     child: Text(
                       '${_selectedFiles.length} ${widget.isVideo ? 'video' : 'image'}${_selectedFiles.length > 1 ? 's' : ''}',
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: 'Poppins', 
                         color: Colors.white70,
                         fontSize: 14,
                       ),
@@ -11581,7 +11647,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                         children: [
                           Text(
                             'Send ${_selectedFiles.length > 1 ? '(${_selectedFiles.length})' : ''}',
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -11622,7 +11688,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load image',
-                  style: TextStyle(color: Colors.grey[600]),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[600]),
                 ),
               ],
             );
@@ -11653,7 +11719,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
           const SizedBox(height: 16),
           Text(
             file.path.split('/').last,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -11666,7 +11732,7 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
                 final sizeMB = snapshot.data! / (1024 * 1024);
                 return Text(
                   '${sizeMB.toStringAsFixed(1)} MB',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 12),
                 );
               }
               return const SizedBox.shrink();

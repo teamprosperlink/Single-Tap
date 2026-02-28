@@ -249,7 +249,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                     ),
                     Text(
                       _categoryLabel,
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: 'Poppins', 
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -339,7 +339,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                                         _currentSpeechText.isNotEmpty
                                             ? _currentSpeechText
                                             : 'Listening...',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: _currentSpeechText.isNotEmpty
                                               ? Colors.white
                                               : Colors.grey[400],
@@ -373,13 +373,13 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                             : TextField(
                                 controller: _searchController,
                                 onChanged: _onSearch,
-                                style: const TextStyle(
+                                style: const TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 14,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'Search $_categoryLabel...',
-                                  hintStyle: TextStyle(
+                                  hintStyle: TextStyle(fontFamily: 'Poppins', 
                                     color: Colors.grey[400],
                                     fontSize: 14,
                                   ),
@@ -473,7 +473,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                               const SizedBox(height: 12),
                               Text(
                                 'No results found',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.grey[500],
                                   fontSize: 16,
                                 ),
@@ -556,7 +556,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                 errorBuilder: (_, __, ___) => Container(
                   height: 80,
                   color: Colors.grey[700],
-                  child: Icon(_categoryIcon, color: Colors.white54, size: 40),
+                  child: Icon(_categoryIcon, color: Colors.white70, size: 40),
                 ),
                 loadingBuilder: (_, child, loadingProgress) {
                   if (loadingProgress == null) return child;
@@ -579,7 +579,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                   // Name
                   Text(
                     item['name'] as String? ?? '',
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -591,7 +591,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                   // Subtitle
                   Text(
                     _getSubtitle(item),
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -602,7 +602,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                       Expanded(
                         child: Text(
                           item['price'] as String? ?? '',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.green[400],
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -615,7 +615,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                       const SizedBox(width: 2),
                       Text(
                         '${item['rating'] ?? ''}',
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 12,
                         ),
@@ -635,9 +635,9 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                       Expanded(
                         child: Text(
                           _getBottomInfo(item),
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 11,
+                          style: TextStyle(fontFamily: 'Poppins', 
+                            color: Colors.grey[400],
+                            fontSize: 13,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

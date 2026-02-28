@@ -233,7 +233,7 @@ class NotificationService {
                   groupName: groupName ?? 'Unknown Group',
                   userId: currentUserId,
                   userName: _auth.currentUser?.displayName ?? 'Unknown',
-                  participants: [], // Empty - screen will fetch from Firestore
+                  participants: const [], // Empty - screen will fetch from Firestore
                 );
               },
               transitionDuration: Duration.zero, // Instant transition

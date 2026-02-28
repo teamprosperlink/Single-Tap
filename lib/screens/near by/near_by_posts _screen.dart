@@ -202,7 +202,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
           );
         }
 
-        final myPosts = snapshot.data!.docs;
+        // Deduplicate by doc ID
+        final seen = <String>{};
+        final myPosts = snapshot.data!.docs.where((d) => seen.add(d.id)).toList();
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
@@ -321,7 +323,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         userName,
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w600,
-                          fontSize: contentLevel >= 2 ? 13 : 12,
+                          fontSize: contentLevel >= 2 ? 15 : 14,
                           color: Colors.white,
                         ),
                       ),
@@ -332,8 +334,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                               Text(
                                 timeago.format(time),
                                 style: AppTextStyles.caption.copyWith(
-                                  color: Colors.white70,
-                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontSize: 12,
                                 ),
                               ),
                             if (time != null && post['isDonation'] == true)
@@ -342,8 +344,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                 child: Text(
                                   '•',
                                   style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white38,
-                                    fontSize: 10,
+                                    color: Colors.white60,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
@@ -354,10 +356,10 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.2),
+                                  color: Colors.orange.withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
-                                    color: Colors.orange.withValues(alpha: 0.4),
+                                    color: Colors.orange.withValues(alpha: 0.5),
                                     width: 0.5,
                                   ),
                                 ),
@@ -365,7 +367,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                   'Donation',
                                   style: TextStyle(
                                     color: Colors.orange,
-                                    fontSize: 9,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -432,7 +434,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 description,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.white70,
+                  color: Colors.white.withValues(alpha: 0.85),
                   height: 1.4,
                 ),
                 maxLines: 2,
@@ -446,7 +448,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 '₹${price.toString()}',
                 style: TextStyle(
-                  fontSize: contentLevel >= 2 ? 16 : 14,
+                  fontSize: contentLevel >= 2 ? 18 : 16,
                   fontWeight: FontWeight.w700,
                   color: AppColors.vibrantGreen,
                 ),
@@ -683,7 +685,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               const SizedBox(height: 8),
               const Text(
                 'Are you sure you want to delete this post? It will be moved to the Delete tab.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -696,13 +698,13 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(color: Colors.white24),
+                          side: const BorderSide(color: Colors.white38),
                         ),
                       ),
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -800,7 +802,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
           );
         }
 
-        final savedPosts = snapshot.data!.docs;
+        // Deduplicate by doc ID
+        final seenSaved = <String>{};
+        final savedPosts = snapshot.data!.docs.where((d) => seenSaved.add(d.id)).toList();
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
@@ -862,15 +866,17 @@ class _MyPostsScreenState extends State<MyPostsScreen>
           );
         }
 
-        // Filter deleted posts client-side (isActive == false)
+        // Filter deleted posts client-side (isActive == false) + deduplicate
         final allPosts = snapshot.data!.docs;
         final now = DateTime.now();
         final thirtyDaysAgo = now.subtract(const Duration(days: 30));
 
         final deletedPosts = <QueryDocumentSnapshot>[];
         final postsToAutoDelete = <String>[];
+        final seenDeleted = <String>{};
 
         for (final doc in allPosts) {
+          if (!seenDeleted.add(doc.id)) continue; // Skip duplicates
           final data = doc.data() as Map<String, dynamic>;
           if (data['isActive'] != false) continue;
 
@@ -971,8 +977,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
       }
     }
     // Limit to max 10 images
-    if (allImageUrls.length > 10)
+    if (allImageUrls.length > 10) {
       allImageUrls.removeRange(10, allImageUrls.length);
+    }
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -1044,7 +1051,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         userName,
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w600,
-                          fontSize: contentLevel >= 2 ? 13 : 12,
+                          fontSize: contentLevel >= 2 ? 15 : 14,
                           color: Colors.white,
                         ),
                       ),
@@ -1058,8 +1065,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                             style: AppTextStyles.caption.copyWith(
                               color: remainingDays <= 7
                                   ? AppColors.error
-                                  : Colors.white70,
-                              fontSize: 10,
+                                  : Colors.white,
+                              fontSize: 12,
                               fontWeight: remainingDays <= 7
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -1071,8 +1078,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                               child: Text(
                                 '•',
                                 style: AppTextStyles.caption.copyWith(
-                                  color: Colors.white38,
-                                  fontSize: 10,
+                                  color: Colors.white60,
+                                  fontSize: 12,
                                 ),
                               ),
                             ),
@@ -1093,7 +1100,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                 'Donation',
                                 style: TextStyle(
                                   color: Colors.orange,
-                                  fontSize: 9,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1140,7 +1147,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 description,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.white70,
+                  color: Colors.white.withValues(alpha: 0.85),
                   height: 1.4,
                 ),
                 maxLines: 2,
@@ -1154,7 +1161,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 '₹${price.toString()}',
                 style: TextStyle(
-                  fontSize: contentLevel >= 2 ? 16 : 14,
+                  fontSize: contentLevel >= 2 ? 18 : 16,
                   fontWeight: FontWeight.w700,
                   color: AppColors.vibrantGreen,
                 ),
@@ -1228,8 +1235,9 @@ class _MyPostsScreenState extends State<MyPostsScreen>
       }
     }
     // Limit to max 10 images
-    if (allImageUrls.length > 10)
+    if (allImageUrls.length > 10) {
       allImageUrls.removeRange(10, allImageUrls.length);
+    }
     final price = post['price'];
     final userName = post['userName'] ?? 'User';
     final userPhoto = post['userPhoto'];
@@ -1301,7 +1309,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         userName,
                         style: AppTextStyles.caption.copyWith(
                           fontWeight: FontWeight.w600,
-                          fontSize: contentLevel >= 2 ? 13 : 12,
+                          fontSize: contentLevel >= 2 ? 15 : 14,
                           color: Colors.white,
                         ),
                       ),
@@ -1312,8 +1320,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                               Text(
                                 timeago.format(time),
                                 style: AppTextStyles.caption.copyWith(
-                                  color: Colors.white70,
-                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontSize: 12,
                                 ),
                               ),
                             if (time != null && post['isDonation'] == true)
@@ -1322,8 +1330,8 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                 child: Text(
                                   '•',
                                   style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white38,
-                                    fontSize: 10,
+                                    color: Colors.white60,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
@@ -1334,10 +1342,10 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.2),
+                                  color: Colors.orange.withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
-                                    color: Colors.orange.withValues(alpha: 0.4),
+                                    color: Colors.orange.withValues(alpha: 0.5),
                                     width: 0.5,
                                   ),
                                 ),
@@ -1345,7 +1353,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                                   'Donation',
                                   style: TextStyle(
                                     color: Colors.orange,
-                                    fontSize: 9,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -1433,7 +1441,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 description,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.white70,
+                  color: Colors.white.withValues(alpha: 0.85),
                   height: 1.4,
                 ),
                 maxLines: 2,
@@ -1447,7 +1455,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               Text(
                 '₹${price.toString()}',
                 style: TextStyle(
-                  fontSize: contentLevel >= 2 ? 16 : 14,
+                  fontSize: contentLevel >= 2 ? 18 : 16,
                   fontWeight: FontWeight.w700,
                   color: AppColors.vibrantGreen,
                 ),
@@ -1739,7 +1747,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
     // Fixed size matching feed_screen for consistent look
     const double buttonSize = 32.0;
     const double iconSize = 16.0;
-    const double borderRadius = 8.0;
+    const double borderRadius = 16.0;
 
     // Wrap in Material to absorb InkWell splash from parent
     return Material(
@@ -1786,17 +1794,17 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.glassBorder(alpha: 0.3)),
               ),
-              child: Icon(icon, size: 64, color: Colors.white38),
+              child: Icon(icon, size: 64, color: Colors.white54),
             ),
             const SizedBox(height: 24),
             Text(
               title,
-              style: AppTextStyles.titleLarge.copyWith(color: Colors.white70),
+              style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
             ),
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white38),
+              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white60),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1868,7 +1876,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               const SizedBox(height: 8),
               const Text(
                 'This action cannot be undone. The post will be permanently deleted.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -1881,13 +1889,13 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(color: Colors.white24),
+                          side: const BorderSide(color: Colors.white38),
                         ),
                       ),
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1986,7 +1994,7 @@ class _MyPostsScreenState extends State<MyPostsScreen>
               const SizedBox(height: 8),
               const Text(
                 'This post will be restored and visible again in My Posts.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -1999,13 +2007,13 @@ class _MyPostsScreenState extends State<MyPostsScreen>
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(color: Colors.white24),
+                          side: const BorderSide(color: Colors.white38),
                         ),
                       ),
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

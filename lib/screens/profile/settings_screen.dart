@@ -128,6 +128,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text(
                   'Settings',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -492,6 +493,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Text(
           title,
           style: TextStyle(
+            fontFamily: 'Poppins',
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: isDark ? Colors.white : Colors.black,
@@ -527,6 +529,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: Text(
           title,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.9),
             fontSize: 15,
             fontWeight: FontWeight.w500,
@@ -535,6 +538,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         subtitle: Text(
           subtitle,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.7),
             fontSize: 14,
           ),
@@ -576,6 +580,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: Text(
           title,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.9),
             fontSize: 15,
             fontWeight: FontWeight.w500,
@@ -584,6 +589,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         subtitle: Text(
           subtitle,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.7),
             fontSize: 14,
           ),
@@ -620,6 +626,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: Text(
           title,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.9),
             fontSize: 15,
             fontWeight: FontWeight.w500,
@@ -628,6 +635,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         subtitle: Text(
           subtitle,
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.7),
             fontSize: 14,
           ),
@@ -656,7 +664,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final blockedUsers = snapshot.data!.docs;
+              // Deduplicate by doc.id
+              final seenIds = <String>{};
+              final blockedUsers = snapshot.data!.docs
+                  .where((doc) => seenIds.add(doc.id))
+                  .toList();
 
               if (blockedUsers.isEmpty) {
                 return const Center(
@@ -667,7 +679,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SizedBox(height: 16),
                       Text(
                         'No Blocked Users',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 18, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -730,7 +742,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               title: Text(
                 'Change Password',
-                style: TextStyle(color: hasPassword ? null : Colors.grey),
+                style: TextStyle(fontFamily: 'Poppins', color: hasPassword ? null : Colors.grey),
               ),
               subtitle: Text(
                 hasPassword
@@ -786,11 +798,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.devices_outlined, color: Colors.blue),
               title: const Text(
                 'Manage Devices',
-                style: TextStyle(color: Colors.blue),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.blue),
               ),
               subtitle: const Text(
                 'View and logout from devices',
-                style: TextStyle(fontSize: 12),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.blue),
               onTap: () {
@@ -803,11 +815,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.logout, color: Colors.orange),
               title: const Text(
                 'Logout',
-                style: TextStyle(color: Colors.orange),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.orange),
               ),
               subtitle: Text(
                 FirebaseAuth.instance.currentUser?.email ?? '',
-                style: const TextStyle(fontSize: 12),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.orange),
               onTap: () {
@@ -825,11 +837,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text(
                 'Delete Account',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
               ),
               subtitle: const Text(
                 'Permanently delete',
-                style: TextStyle(fontSize: 12),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.red),
               onTap: () {
@@ -941,6 +953,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Text(
                       'Active Device',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey,
@@ -973,6 +986,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     Text(
                                       deviceName,
                                       style: const TextStyle(
+                                        fontFamily: 'Poppins',
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
                                       ),
@@ -980,6 +994,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     Text(
                                       '$deviceModel • $platform $osVersion',
                                       style: const TextStyle(
+                                        fontFamily: 'Poppins',
                                         fontSize: 12,
                                         color: Colors.grey,
                                       ),
@@ -1000,6 +1015,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   child: const Text(
                                     'Current',
                                     style: TextStyle(
+                                      fontFamily: 'Poppins',
                                       color: Colors.white,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
@@ -1012,6 +1028,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Text(
                             'Last active: Just now',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               fontSize: 11,
                               color: Colors.grey[600],
                             ),
@@ -1046,6 +1063,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Text(
                       'Security Info',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         fontSize: 12,
                         color: Colors.grey,
                         fontWeight: FontWeight.w600,
@@ -1074,6 +1092,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Text(
                               'Only one device can be logged in at a time. Logging in on another device will automatically logout this device.',
                               style: TextStyle(
+                                fontFamily: 'Poppins',
                                 fontSize: 12,
                                 color: Colors.amber[900],
                                 height: 1.4,
@@ -1144,7 +1163,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             const Text(
               'This action cannot be undone. All your data will be permanently deleted.',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
             ),
             const SizedBox(height: 20),
             const Text('Type "DELETE" to confirm:'),
@@ -1272,6 +1291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: Text(
                     '${(totalSize / (1024 * 1024)).toStringAsFixed(2)} MB',
                     style: const TextStyle(
+                      fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -1582,6 +1602,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: const Text(
         'SOON',
         style: TextStyle(
+          fontFamily: 'Poppins',
           color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.bold,
@@ -1624,6 +1645,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text(
                   'SingleTap',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 20,
@@ -1631,7 +1653,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 Text(
                   'Version 1.0.0',
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
@@ -1644,6 +1666,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Text(
               'SingleTap is an AI-powered matching app that connects people for various purposes - marketplace, dating, friendship, jobs, and more.',
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 14,
                 height: 1.5,
@@ -1661,6 +1684,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text(
                   '2024 SingleTap Inc. All rights reserved.',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
@@ -1672,7 +1696,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.blue)),
+            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.blue)),
           ),
         ],
       ),

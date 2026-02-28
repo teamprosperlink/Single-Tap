@@ -608,46 +608,6 @@ class AuthService {
   }
 
   /// Link phone number to existing account
-  Future<void> linkPhoneNumber({
-    required String verificationId,
-    required String otp,
-  }) async {
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: otp,
-      );
-
-      await currentUser?.linkWithCredential(credential);
-
-      // Update phone in Firestore
-      if (currentUser != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser!.uid)
-            .update({'phone': currentUser!.phoneNumber});
-      }
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'provider-already-linked':
-          message = 'A phone number is already linked to this account.';
-          break;
-        case 'invalid-verification-code':
-          message = 'Invalid OTP. Please check and try again.';
-          break;
-        case 'credential-already-in-use':
-          message = 'This phone number is already used by another account.';
-          break;
-        default:
-          message = e.message ?? 'Failed to link phone number.';
-      }
-      throw Exception(message);
-    } catch (e) {
-      throw Exception('Failed to link phone number: ${e.toString()}');
-    }
-  }
-
   Future<void> resetPassword(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email);
@@ -810,25 +770,9 @@ class AuthService {
   // Store account type for phone login (set before OTP verification)
   String? _pendingAccountType;
 
-  // Store password for phone signup (used after OTP verification)
-  String? _pendingPassword;
-
   /// Set the account type for pending phone registration
   void setPendingAccountType(String? accountType) {
     _pendingAccountType = accountType;
-  }
-
-  /// Set the password for pending phone registration (for signup with password)
-  void setPendingPassword(String? password) {
-    _pendingPassword = password;
-  }
-
-  /// Get the pending password for phone signup
-  String? get pendingPassword => _pendingPassword;
-
-  /// Clear pending password after use
-  void clearPendingPassword() {
-    _pendingPassword = null;
   }
 
   /// Update user profile on phone login (awaitable version)
@@ -871,7 +815,6 @@ class AuthService {
 
       // Clear pending data after use
       _pendingAccountType = null;
-      _pendingPassword = null;
     } catch (e) {
       // Error updating profile on phone login
     }
@@ -952,14 +895,6 @@ class AuthService {
       print('[AuthService] Stack trace: $stackTrace');
       return null;
     }
-  }
-
-  /// Get the local device token (use async version for reliability)
-  /// This is kept as a placeholder - UI should use getLocalDeviceToken() instead
-  String? getLocalDeviceTokenSync() {
-    // Note: SharedPreferences.getInstance() is async, so we return null here
-    // The UI should call getLocalDeviceToken() for actual token retrieval
-    return null;
   }
 
   /// Save device token to SharedPreferences

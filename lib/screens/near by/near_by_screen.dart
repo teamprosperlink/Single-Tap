@@ -777,40 +777,61 @@ class _NearByScreenState extends State<NearByScreen>
                       MediaQuery.of(context).padding.top + kToolbarHeight + 48,
                 ),
 
-                // Search bar
-                _buildGlassSearchBar(),
-
                 // Posts list with TabBarView for swipe functionality
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: _categories.map((category) {
                       return _isLoading && _posts.isEmpty
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
+                          ? Column(
+                              children: [
+                                _buildGlassSearchBar(),
+                                const Expanded(
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             )
                           : _isCategoryLoading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
+                          ? Column(
+                              children: [
+                                _buildGlassSearchBar(),
+                                const Expanded(
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             )
                           : _filteredPosts.isEmpty
-                          ? _buildEmptyState()
+                          ? Column(
+                              children: [
+                                _buildGlassSearchBar(),
+                                Expanded(child: _buildEmptyState()),
+                              ],
+                            )
                           : ListView.builder(
                               controller: _scrollController,
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
                               // Performance optimizations
                               addAutomaticKeepAlives: false,
                               addRepaintBoundaries: true,
                               cacheExtent: 500,
                               itemCount:
                                   _filteredPosts.length +
+                                  1 +
                                   (_isLoadingMore ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (index == _filteredPosts.length) {
+                                if (index == 0) {
+                                  return _buildGlassSearchBar();
+                                }
+                                if (index == _filteredPosts.length + 1) {
                                   return const Padding(
                                     padding: EdgeInsets.all(16),
                                     child: Center(
@@ -821,7 +842,7 @@ class _NearByScreenState extends State<NearByScreen>
                                   );
                                 }
 
-                                final doc = _filteredPosts[index];
+                                final doc = _filteredPosts[index - 1];
                                 final data = doc.data() as Map<String, dynamic>;
 
                                 return RepaintBoundary(
@@ -864,7 +885,7 @@ class _NearByScreenState extends State<NearByScreen>
 
   Widget _buildGlassSearchBar() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 12),
       child: GlassSearchField(
         controller: _searchController,
         hintText: 'Search posts...',
@@ -908,8 +929,9 @@ class _NearByScreenState extends State<NearByScreen>
       }
     }
     // Limit to max 10 images
-    if (allImageUrls.length > 10)
+    if (allImageUrls.length > 10) {
       allImageUrls.removeRange(10, allImageUrls.length);
+    }
     final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
     final price = post['price'];
     final createdAt = post['createdAt'];
@@ -1012,7 +1034,7 @@ class _NearByScreenState extends State<NearByScreen>
                           userName,
                           style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w600,
-                            fontSize: contentLevel >= 2 ? 13 : 12,
+                            fontSize: contentLevel >= 2 ? 15 : 14,
                             color: Colors.white,
                           ),
                         ),
@@ -1023,8 +1045,8 @@ class _NearByScreenState extends State<NearByScreen>
                                 Text(
                                   timeago.format(time),
                                   style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white70,
-                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontSize: 12,
                                   ),
                                 ),
                               if (time != null && post['isDonation'] == true)
@@ -1035,23 +1057,23 @@ class _NearByScreenState extends State<NearByScreen>
                                   child: Text(
                                     '•',
                                     style: AppTextStyles.caption.copyWith(
-                                      color: Colors.white38,
-                                      fontSize: 10,
+                                      color: Colors.white60,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
                               if (post['isDonation'] == true)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
+                                    horizontal: 8,
+                                    vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.2),
+                                    color: Colors.orange.withValues(alpha: 0.25),
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
                                       color: Colors.orange.withValues(
-                                        alpha: 0.4,
+                                        alpha: 0.5,
                                       ),
                                       width: 0.5,
                                     ),
@@ -1060,7 +1082,7 @@ class _NearByScreenState extends State<NearByScreen>
                                     'Donation',
                                     style: TextStyle(
                                       color: Colors.orange,
-                                      fontSize: 9,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1132,7 +1154,7 @@ class _NearByScreenState extends State<NearByScreen>
                 Text(
                   '₹${price.toString()}',
                   style: TextStyle(
-                    fontSize: contentLevel >= 2 ? 16 : 14,
+                    fontSize: contentLevel >= 2 ? 18 : 16,
                     fontWeight: FontWeight.w700,
                     color: AppColors.vibrantGreen,
                   ),
@@ -1368,7 +1390,7 @@ class _NearByScreenState extends State<NearByScreen>
     // Fixed size for all posts - consistent look
     const double buttonSize = 32.0;
     const double iconSize = 16.0;
-    const double borderRadius = 8.0;
+    const double borderRadius = 16.0;
 
     // Wrap in Material to absorb InkWell splash from parent
     return Material(
@@ -1412,7 +1434,7 @@ class _NearByScreenState extends State<NearByScreen>
     );
 
     final descStyle = AppTextStyles.bodyMedium.copyWith(
-      color: Colors.white70,
+      color: Colors.white.withValues(alpha: 0.85),
       height: 1.4,
     );
 
@@ -1590,7 +1612,7 @@ class _NearByScreenState extends State<NearByScreen>
               const Text(
                 'You are about to start a voice call.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white, fontSize: 14),
               ),
               const SizedBox(height: 24),
               Row(
@@ -1602,13 +1624,13 @@ class _NearByScreenState extends State<NearByScreen>
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(color: Colors.white24),
+                          side: const BorderSide(color: Colors.white38),
                         ),
                       ),
                       child: const Text(
                         'Cancel',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1835,7 +1857,7 @@ class _NearByScreenState extends State<NearByScreen>
                   const Text(
                     'Are you sure? This cannot be undone.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -1964,18 +1986,18 @@ class _NearByScreenState extends State<NearByScreen>
               child: const Icon(
                 Icons.article_outlined,
                 size: 64,
-                color: Colors.white38,
+                color: Colors.white54,
               ),
             ),
             const SizedBox(height: 24),
             Text(
               'No Posts Found',
-              style: AppTextStyles.titleLarge.copyWith(color: Colors.white70),
+              style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
             ),
             const SizedBox(height: 8),
             Text(
               'Try a different search or category',
-              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white38),
+              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white60),
               textAlign: TextAlign.center,
             ),
           ],

@@ -1,64 +1,19 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'location_services/gemini_service.dart';
 import 'unified_post_service.dart';
 import '../models/post_model.dart';
 
 class UniversalIntentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GeminiService _geminiService = GeminiService();
-
-  // No more rigid role mappings - we use semantic matching now
-  // The AI understands complementary intents naturally
 
   // Wrapper method for unified processor
   Future<Map<String, dynamic>> processIntent(String text) async {
     return await processIntentAndMatch(text);
   }
 
-  // Find matches for a given intent
-  Future<List<Map<String, dynamic>>> findMatches(
-    Map<String, dynamic> intent,
-  ) async {
-    // Use the intent to find matches
-    final intents = await FirebaseFirestore.instance
-        .collection('intents')
-        .where('expiresAt', isGreaterThan: Timestamp.now())
-        .limit(20)
-        .get();
-
-    List<Map<String, dynamic>> matches = [];
-    final intentEmbedding = intent['embedding'] as List<double>?;
-
-    if (intentEmbedding != null) {
-      for (var doc in intents.docs) {
-        final data = doc.data();
-        final docEmbedding = List<double>.from(data['embedding'] ?? []);
-
-        if (docEmbedding.isNotEmpty) {
-          final similarity = _geminiService.calculateSimilarity(
-            intentEmbedding,
-            docEmbedding,
-          );
-          if (similarity > 0.65) {
-            data['id'] = doc.id;
-            data['similarity'] = similarity;
-            matches.add(data);
-          }
-        }
-      }
-    }
-
-    // Sort by similarity
-    matches.sort(
-      (a, b) => (b['similarity'] ?? 0).compareTo(a['similarity'] ?? 0),
-    );
-    return matches.take(10).toList();
-  }
-
-  // UPDATED: Process user intent and find matches using UnifiedPostService
+  // Process user intent and find matches using UnifiedPostService
   Future<Map<String, dynamic>> processIntentAndMatch(String userInput) async {
     try {
       final userId = _auth.currentUser?.uid;

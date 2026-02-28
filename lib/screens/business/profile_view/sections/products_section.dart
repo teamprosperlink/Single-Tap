@@ -104,8 +104,8 @@ class ProductsSection extends StatelessWidget {
             child: Text(
               '$count items',
               style: TextStyle(
-                fontSize: 12,
-                color: isDarkMode ? Colors.white54 : Colors.grey[600],
+                fontSize: 13,
+                color: isDarkMode ? Colors.white70 : Colors.grey[600],
               ),
             ),
           ),
@@ -295,9 +295,9 @@ class ProductCard extends StatelessWidget {
                   if (!product.inStock)
                     Positioned.fill(
                       child: Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black54,
-                          borderRadius: const BorderRadius.vertical(
+                          borderRadius: BorderRadius.vertical(
                             top: Radius.circular(12),
                           ),
                         ),
@@ -375,8 +375,8 @@ class ProductCard extends StatelessWidget {
                           Text(
                             '₹${product.originalPrice!.toStringAsFixed(0)}',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: isDarkMode ? Colors.white38 : Colors.grey,
+                              fontSize: 13,
+                              color: isDarkMode ? Colors.white54 : Colors.grey,
                               decoration: TextDecoration.lineThrough,
                             ),
                           ),

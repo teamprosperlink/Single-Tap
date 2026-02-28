@@ -95,7 +95,11 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                           return _buildEmptyState('No saved posts yet');
                         }
 
-                        final savedPosts = snapshot.data!.docs;
+                        // Deduplicate by doc.id
+                        final seenIds = <String>{};
+                        final savedPosts = snapshot.data!.docs
+                            .where((doc) => seenIds.add(doc.id))
+                            .toList();
 
                         return ListView.builder(
                           padding: const EdgeInsets.all(16),
@@ -210,8 +214,9 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
       }
     }
     // Limit to max 10 images
-    if (allImageUrls.length > 10)
+    if (allImageUrls.length > 10) {
       allImageUrls.removeRange(10, allImageUrls.length);
+    }
 
     final bool hasImage = allImageUrls.isNotEmpty;
     final bool hasDescription =
@@ -303,6 +308,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                             ? 'Offering'
                             : actionType,
                         style: TextStyle(
+                          fontFamily: 'Poppins',
                           color: _getActionColor(actionType),
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
@@ -326,6 +332,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
               Text(
                 post.title,
                 style: const TextStyle(
+                  fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -355,6 +362,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                 Text(
                   '₹${post.price!.toStringAsFixed(0)}',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: contentLevel >= 2 ? 16 : 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.vibrantGreen,
@@ -501,6 +509,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
                                           child: Text(
                                             '+${allImageUrls.length - 3}',
                                             style: const TextStyle(
+                                              fontFamily: 'Poppins',
                                               color: Colors.white,
                                               fontSize: 22,
                                               fontWeight: FontWeight.w700,
@@ -592,7 +601,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
             ),
             title: Text(
               '${currentPage + 1} / ${imageUrls.length}',
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
             ),
             centerTitle: true,
           ),
