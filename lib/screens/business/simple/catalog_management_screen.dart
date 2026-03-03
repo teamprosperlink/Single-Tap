@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
@@ -13,7 +14,8 @@ class CatalogManagementScreen extends StatefulWidget {
       _CatalogManagementScreenState();
 }
 
-class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
+class _CatalogManagementScreenState extends State<CatalogManagementScreen>
+    with SingleTickerProviderStateMixin {
   final _catalogService = CatalogService();
   final _searchController = TextEditingController();
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
@@ -23,8 +25,43 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
   bool _isGridView = false;
   bool _hasItems = false;
 
+  late final AnimationController _fabController;
+  late final CurvedAnimation _fabAnimation;
+  late final ScrollController _scrollController;
+  bool _isFabExpanded = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      value: 1.0,
+    );
+    _fabAnimation = CurvedAnimation(
+      parent: _fabController,
+      curve: Curves.easeInOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _onScroll() {
+    final dir = _scrollController.position.userScrollDirection;
+    if (dir == ScrollDirection.reverse && _isFabExpanded) {
+      setState(() => _isFabExpanded = false);
+      _fabController.reverse();
+    } else if (dir == ScrollDirection.forward && !_isFabExpanded) {
+      setState(() => _isFabExpanded = true);
+      _fabController.forward();
+    }
+  }
+
   @override
   void dispose() {
+    _fabController.dispose();
+    _fabAnimation.dispose();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -33,6 +70,72 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CatalogItemForm()),
+    );
+  }
+
+  Widget _buildAnimatedFab() {
+    return AnimatedBuilder(
+      animation: _fabAnimation,
+      builder: (context, _) {
+        final t = _fabAnimation.value;
+        return Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: const Color(0xFF3B82F6),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.38),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _addItem,
+              splashColor: Colors.white.withValues(alpha: 0.2),
+              highlightColor: Colors.white.withValues(alpha: 0.05),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                    SizedBox(
+                      width: 110 * t,
+                      child: Opacity(
+                        opacity: (t * 2).clamp(0.0, 1.0),
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Text(
+                            'Add Item',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -189,13 +292,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
           ),
         ],
       ),
-      floatingActionButton: _hasItems
-          ? FloatingActionButton(
-              onPressed: _addItem,
-              backgroundColor: const Color(0xFF3B82F6),
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
+      floatingActionButton: _hasItems ? _buildAnimatedFab() : null,
       body: Column(
         children: [
           // Search bar
@@ -293,6 +390,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
 
                 if (_isGridView) {
                   return GridView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
@@ -314,6 +412,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen> {
                 }
 
                 return ListView.separated(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                   itemCount: items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
