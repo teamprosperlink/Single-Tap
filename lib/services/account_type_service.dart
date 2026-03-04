@@ -74,30 +74,12 @@ class AccountTypeService {
       await _firestore.collection('users').doc(user.uid).update({
         'accountType': newType.name,
         'accountStatus': needsVerification ? 'pendingVerification' : 'active',
-        'verification': {
-          'status': needsVerification ? 'pending' : 'none',
-        },
+        'verification': {'status': needsVerification ? 'pending' : 'none'},
       });
 
       return true;
     } catch (e) {
       debugPrint('Error upgrading account type: $e');
-      return false;
-    }
-  }
-
-  /// Update professional profile
-  Future<bool> updateProfessionalProfile(ProfessionalProfile profile) async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-
-    try {
-      await _firestore.collection('users').doc(user.uid).update({
-        'professionalProfile': profile.toMap(),
-      });
-      return true;
-    } catch (e) {
-      debugPrint('Error updating professional profile: $e');
       return false;
     }
   }
@@ -221,25 +203,6 @@ class AccountTypeService {
           'bulkUpload': false,
         };
 
-      case AccountType.professional:
-        return {
-          'canBuySell': true,
-          'maxPostsPerDay': 20,
-          'canChat': true,
-          'canLiveConnect': true,
-          'verifiedBadge': true,
-          'portfolio': true,
-          'serviceListings': true,
-          'reviewsReceived': true,
-          'teamMembers': false,
-          'maxTeamMembers': 0,
-          'analytics': true,
-          'analyticsLevel': 'basic',
-          'prioritySupport': false,
-          'promotedListings': true,
-          'bulkUpload': false,
-        };
-
       case AccountType.business:
         return {
           'canBuySell': true,
@@ -286,7 +249,10 @@ class AccountTypeService {
       final postsQuery = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+          )
           .get();
 
       return postsQuery.docs.length < limit;
@@ -315,7 +281,10 @@ class AccountTypeService {
       final postsQuery = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+          )
           .get();
 
       return (limit - postsQuery.docs.length).clamp(0, limit);
@@ -327,29 +296,21 @@ class AccountTypeService {
 
   /// Stream user's account type changes
   Stream<AccountType> watchAccountType(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists) return AccountType.personal;
-          final data = doc.data()!;
-          return AccountType.fromString(data['accountType']);
-        });
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return AccountType.personal;
+      final data = doc.data()!;
+      return AccountType.fromString(data['accountType']);
+    });
   }
 
   /// Stream user's verification status changes
   Stream<VerificationStatus> watchVerificationStatus(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists) return VerificationStatus.none;
-          final data = doc.data()!;
-          if (data['verification'] == null) return VerificationStatus.none;
-          return VerificationStatus.fromString(data['verification']['status']);
-        });
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return VerificationStatus.none;
+      final data = doc.data()!;
+      if (data['verification'] == null) return VerificationStatus.none;
+      return VerificationStatus.fromString(data['verification']['status']);
+    });
   }
 
   /// Get display information for account type (for UI)
@@ -362,15 +323,6 @@ class AccountTypeService {
           'icon': 'person',
           'color': 0xFF2196F3, // Blue
           'badgeColor': 0xFF2196F3,
-        };
-
-      case AccountType.professional:
-        return {
-          'name': 'Professional Account',
-          'description': 'For freelancers and service providers',
-          'icon': 'badge',
-          'color': 0xFF9C27B0, // Purple
-          'badgeColor': 0xFF9C27B0,
         };
 
       case AccountType.business:

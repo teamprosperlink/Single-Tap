@@ -41,9 +41,9 @@ service cloud.firestore {
       // Unauthenticated users can read if document has device-related fields (needed for device session logout)
       allow read: if isAuthenticated() ||
                      (resource != null && (
-                       resource.data.get('activeDeviceToken') != null ||  // Has device field
-                       resource.data.get('forceLogout') != null ||         // Has logout flag
-                       resource.data.get('deviceInfo') != null              // Has device info
+                       resource.data.get('activeDeviceToken', null) != null ||  // Has device field
+                       resource.data.get('forceLogout', null) != null ||         // Has logout flag
+                       resource.data.get('deviceInfo', null) != null              // Has device info
                      ));
 
       // Only the user can create their own profile
@@ -98,8 +98,7 @@ service cloud.firestore {
       // Catalog subcollection (business product/service listings)
       match /catalog/{itemId} {
         allow read: if isAuthenticated();
-        allow create: if isOwner(userId) &&
-          request.resource.data.userId == request.auth.uid;
+        allow create: if isOwner(userId);
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }

@@ -87,7 +87,7 @@ class CatalogService {
   // ── Write ──
 
   Future<String?> addItem(CatalogItem item) async {
-    if (_currentUserId == null) return null;
+    if (_currentUserId == null) throw Exception('User not authenticated');
     try {
       // Check item limit — don't block add if count query fails
       try {
@@ -102,12 +102,12 @@ class CatalogService {
       final docRef = await _catalogRef(item.userId).add(item.toMap());
 
       // Re-sync business post so new catalog item is matchable
-      UnifiedPostService().syncBusinessPost(item.userId);
+      unawaited(UnifiedPostService().syncBusinessPost(item.userId));
 
       return docRef.id;
     } catch (e) {
       debugPrint('Error adding catalog item: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -117,6 +117,10 @@ class CatalogService {
     try {
       data['updatedAt'] = Timestamp.fromDate(DateTime.now());
       await _catalogRef(userId).doc(itemId).update(data);
+
+      // Re-sync business post so updated catalog item is matchable
+      unawaited(UnifiedPostService().syncBusinessPost(userId));
+
       return true;
     } catch (e) {
       debugPrint('Error updating catalog item: $e');
@@ -143,7 +147,7 @@ class CatalogService {
       await _catalogRef(userId).doc(itemId).delete();
 
       // Re-sync business post after catalog change
-      UnifiedPostService().syncBusinessPost(userId);
+      unawaited(UnifiedPostService().syncBusinessPost(userId));
 
       return true;
     } catch (e) {

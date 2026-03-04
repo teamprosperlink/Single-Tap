@@ -54,7 +54,7 @@ class ExtendedUserProfile {
   final AccountType accountType;
   final AccountStatus accountStatus;
   final VerificationStatus verificationStatus;
-  final String? businessName; // For Professional/Business accounts
+  final String? businessName; // For Business accounts
   final String? category; // Professional category or Business industry
 
   // Calculated field
@@ -90,7 +90,6 @@ class ExtendedUserProfile {
   });
 
   // Helper getters
-  bool get isProfessional => accountType == AccountType.professional;
   bool get isBusiness => accountType == AccountType.business;
   bool get isPersonal => accountType == AccountType.personal;
   bool get isVerifiedAccount => verificationStatus == VerificationStatus.verified;
@@ -113,13 +112,10 @@ class ExtendedUserProfile {
       }).toList();
     }
 
-    // Extract business name from professional or business profile
+    // Extract business name from business profile
     String? businessName;
     String? category;
-    if (map['professionalProfile'] != null) {
-      businessName = map['professionalProfile']['businessName'];
-      category = map['professionalProfile']['category'];
-    } else if (map['businessProfile'] != null) {
+    if (map['businessProfile'] != null) {
       businessName = map['businessProfile']['businessName'] ?? map['businessProfile']['companyName'];
       category = map['businessProfile']['softLabel'] ?? map['businessProfile']['industry'];
     }

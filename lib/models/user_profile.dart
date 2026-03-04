@@ -3,15 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Account type enum for user accounts
 enum AccountType {
   personal,
-  professional,
   business;
 
   String get displayName {
     switch (this) {
       case AccountType.personal:
         return 'Personal Account';
-      case AccountType.professional:
-        return 'Professional Account';
       case AccountType.business:
         return 'Business Account';
     }
@@ -19,9 +16,6 @@ enum AccountType {
 
   static AccountType fromString(String? value) {
     switch (value?.toLowerCase()) {
-      case 'professional':
-      case 'professional account':
-        return AccountType.professional;
       case 'business':
       case 'business account':
         return AccountType.business;
@@ -95,59 +89,6 @@ enum VerificationStatus {
   }
 }
 
-/// Professional profile data for professional accounts
-class ProfessionalProfile {
-  final String? businessName;
-  final String? category;
-  final List<String> specializations;
-  final double? hourlyRate;
-  final String? currency;
-  final int? yearsOfExperience;
-  final List<String> portfolioUrls;
-  final List<String> certifications;
-  final List<String> servicesOffered;
-
-  ProfessionalProfile({
-    this.businessName,
-    this.category,
-    this.specializations = const [],
-    this.hourlyRate,
-    this.currency,
-    this.yearsOfExperience,
-    this.portfolioUrls = const [],
-    this.certifications = const [],
-    this.servicesOffered = const [],
-  });
-
-  factory ProfessionalProfile.fromMap(Map<String, dynamic>? map) {
-    if (map == null) return ProfessionalProfile();
-    return ProfessionalProfile(
-      businessName: map['businessName'],
-      category: map['category'],
-      specializations: List<String>.from(map['specializations'] ?? []),
-      hourlyRate: map['hourlyRate']?.toDouble(),
-      currency: map['currency'],
-      yearsOfExperience: map['yearsOfExperience'],
-      portfolioUrls: List<String>.from(map['portfolioUrls'] ?? []),
-      certifications: List<String>.from(map['certifications'] ?? []),
-      servicesOffered: List<String>.from(map['servicesOffered'] ?? []),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'businessName': businessName,
-      'category': category,
-      'specializations': specializations,
-      'hourlyRate': hourlyRate,
-      'currency': currency,
-      'yearsOfExperience': yearsOfExperience,
-      'portfolioUrls': portfolioUrls,
-      'certifications': certifications,
-      'servicesOffered': servicesOffered,
-    };
-  }
-}
 
 /// Business hours for a single day
 class DayHours {
@@ -451,7 +392,6 @@ class UserProfile {
   // Account type fields
   final AccountType accountType;
   final AccountStatus accountStatus;
-  final ProfessionalProfile? professionalProfile;
   final BusinessProfile? businessProfile;
   final VerificationData verification;
 
@@ -459,8 +399,7 @@ class UserProfile {
   String? get photoUrl => profileImageUrl;
 
   // Helper getters
-  bool get isProfessional => accountType == AccountType.professional;
-  bool get isBusiness => accountType == AccountType.business;
+  bool get isBusiness => businessProfile != null;
   bool get isPersonal => accountType == AccountType.personal;
   bool get isVerifiedAccount => verification.status == VerificationStatus.verified;
   bool get isPendingVerification => verification.status == VerificationStatus.pending;
@@ -486,7 +425,6 @@ class UserProfile {
     this.additionalInfo,
     this.accountType = AccountType.personal,
     this.accountStatus = AccountStatus.active,
-    this.professionalProfile,
     this.businessProfile,
     VerificationData? verification,
   }) : id = id ?? uid,
@@ -525,9 +463,6 @@ class UserProfile {
       // Account type fields
       accountType: AccountType.fromString(data['accountType']),
       accountStatus: AccountStatus.fromString(data['accountStatus']),
-      professionalProfile: data['professionalProfile'] != null
-          ? ProfessionalProfile.fromMap(data['professionalProfile'])
-          : null,
       businessProfile: data['businessProfile'] != null
           ? BusinessProfile.fromMap(data['businessProfile'])
           : null,
@@ -567,9 +502,6 @@ class UserProfile {
       // Account type fields
       accountType: AccountType.fromString(data['accountType']),
       accountStatus: AccountStatus.fromString(data['accountStatus']),
-      professionalProfile: data['professionalProfile'] != null
-          ? ProfessionalProfile.fromMap(data['professionalProfile'])
-          : null,
       businessProfile: data['businessProfile'] != null
           ? BusinessProfile.fromMap(data['businessProfile'])
           : null,
@@ -599,8 +531,6 @@ class UserProfile {
       // Account type fields
       'accountType': accountType.name,
       'accountStatus': accountStatus.name,
-      if (professionalProfile != null)
-        'professionalProfile': professionalProfile!.toMap(),
       if (businessProfile != null)
         'businessProfile': businessProfile!.toMap(),
       'verification': verification.toMap(),
@@ -629,7 +559,6 @@ class UserProfile {
     Map<String, dynamic>? additionalInfo,
     AccountType? accountType,
     AccountStatus? accountStatus,
-    ProfessionalProfile? professionalProfile,
     BusinessProfile? businessProfile,
     VerificationData? verification,
   }) {
@@ -654,7 +583,6 @@ class UserProfile {
       additionalInfo: additionalInfo ?? this.additionalInfo,
       accountType: accountType ?? this.accountType,
       accountStatus: accountStatus ?? this.accountStatus,
-      professionalProfile: professionalProfile ?? this.professionalProfile,
       businessProfile: businessProfile ?? this.businessProfile,
       verification: verification ?? this.verification,
     );

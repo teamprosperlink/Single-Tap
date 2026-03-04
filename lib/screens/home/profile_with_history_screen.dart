@@ -782,7 +782,7 @@ class _ProfileWithHistoryScreenState
                           ),
 
                           // ── Rich Business Profile Section ──
-                          if (AccountType.fromString(_userProfile?['accountType']) == AccountType.business)
+                          if (_userProfile?['businessProfile'] != null)
                             _buildBusinessProfileSection(),
 
                           // Account Type Card (non-interactive)

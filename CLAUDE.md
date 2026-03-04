@@ -1,4 +1,9 @@
-# CLAUDE.md — Supper App
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+<!-- Internal project title -->
+# Supper App
 
 ## STRICT RULES (READ FIRST, ALWAYS OBEY)
 
@@ -23,7 +28,9 @@ _Update ONLY this section before each session:_
 
 **Supper** — Flutter AI-powered matching app. Users type natural language, Gemini AI understands intent, creates embeddings, and matches people semantically.
 
-**Stack:** Flutter 3.35.7 / Dart 3.9.2 / Firebase / Gemini AI / WebRTC
+**Stack:** Flutter 3.35.7 / Dart 3.9.2 / Firebase / Gemini AI / WebRTC / Riverpod
+
+**Account types:** `personal`, `professional` (individual specialist), `business` (catalog + bookings + reviews)
 
 ## Key Commands
 
@@ -42,13 +49,15 @@ flutter clean && flutter pub get  # Full reset
 
 **Data flow:** User input → UnifiedIntentProcessor → Gemini AI → UnifiedPostService → posts/{postId} → UnifiedMatchingService → Matches
 
-**Matching:** 70% semantic similarity (768-dim embeddings) + 15% location + 15% intent complementarity
+**Matching score:** semantic similarity (768-dim embeddings) × 0.70 keyword damping + 15% intent complementarity bonus + 5% location bonus − 15% lifestyle penalty. Surface threshold: 0.60 (configurable in `lib/res/config/api_config.dart`).
 
-**Key services:** UnifiedPostService (posts), GeminiService (AI), LocationService (GPS), FirebaseProvider (all Firebase), ConnectionService, NotificationService
+**Key services (all singletons):** UnifiedPostService (posts), GeminiService (AI), LocationService (GPS), FirebaseProvider (all Firebase), CatalogService, ConnectionService, NotificationService
 
-**Database:** posts/ (single source of truth), users/, conversations/, notifications/, connection_requests/
+**State management:** Riverpod — `StreamProvider` for real-time Firestore, `FutureProvider` for one-time fetches. Providers defined in `lib/providers/`.
 
-**Navigation:** Discover (`UniversalMatchingScreen`) → Messages (`ConversationsScreen`) → Live Connect (`LiveConnectTabScreen`) → Profile (`ProfileWithHistoryScreen`)
+**Database:** posts/ (single source of truth), users/, users/{id}/catalog/, conversations/, notifications/, connection_requests/
+
+**Navigation (5 tabs):** Home/Discover (`UniversalMatchingScreen`) → Messages (`ConversationsScreen`) → Live Connect (`LiveConnectTabScreen`) → Networking → Profile (`ProfileWithHistoryScreen`)
 
 ## Critical Constraints
 
@@ -56,7 +65,9 @@ flutter clean && flutter pub get  # Full reset
 - Always use `limit()` on Firestore queries
 - Always use `FirebaseProvider` — never create new Firebase instances
 - Never use old collections (user_intents, intents, processed_intents)
-- API keys in `lib/config/api_config.dart` — move to env vars for production
+- Services follow singleton pattern: `static final _instance` with factory constructor — never call `ServiceName()` constructors directly
+- After catalog add/delete, call `UnifiedPostService().syncBusinessPost(userId)` to keep catalog matchable
+- API keys loaded via `flutter_dotenv` from `.env` at runtime; accessed via `lib/res/config/api_config.dart`
 - Never show exact GPS coordinates (privacy)
 
 ## Detailed Documentation

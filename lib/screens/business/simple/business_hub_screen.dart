@@ -6,6 +6,7 @@ import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/account_type_service.dart';
+import '../../../services/unified_post_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
 import 'business_setup_flow.dart';
 import 'business_info_edit.dart';
@@ -28,6 +29,17 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   final _accountService = AccountTypeService();
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
   bool _hasItems = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-sync business post on every open so isActive stays true
+    // and catalog changes are reflected in search results.
+    final uid = _userId;
+    if (uid != null) {
+      UnifiedPostService().syncBusinessPost(uid);
+    }
+  }
 
   void _addItem() {
     Navigator.push(
@@ -166,9 +178,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
 
         final userData =
             userSnapshot.data?.data() as Map<String, dynamic>?;
-        final isBusiness =
-            AccountType.fromString(userData?['accountType']) ==
-                AccountType.business;
+        final isBusiness = userData?['businessProfile'] != null;
 
         if (!isBusiness) {
           return _buildEnableBusinessView();

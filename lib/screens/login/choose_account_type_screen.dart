@@ -12,7 +12,7 @@ class ChooseAccountTypeScreen extends StatefulWidget {
 class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
   int selectedIndex = -1;
 
-  final List<String> accountTypes = ["Personal Account", "Business Account"];
+  final List<String> accountTypes = ["Personal Account"];
 
   void _onCardTap(int index) {
     setState(() {
@@ -100,35 +100,6 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
                         ),
                         _FeatureItem(emoji: "📤", text: "Share - Post, Ideas"),
                         _FeatureItem(emoji: "✅", text: "Trust - Verify Rate"),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Business Account Card
-                    _AccountTypeCard(
-                      isSelected: selectedIndex == 1,
-                      onTap: () => _onCardTap(1),
-                      icon: _buildBusinessIcon(),
-                      title: "Business / Organization",
-                      subtitle: "For Business and Organization",
-                      features: const [
-                        _FeatureItem(
-                          emoji: "🔍",
-                          text: "List - Services, Products",
-                        ),
-                        _FeatureItem(
-                          emoji: "📁",
-                          text: "Propose - Full Projects",
-                        ),
-                        _FeatureItem(emoji: "🪪", text: "Showcase - Portfolio"),
-                        _FeatureItem(
-                          emoji: "📧",
-                          text: "Manage - Clients, Discussions",
-                        ),
-                        _FeatureItem(
-                          emoji: "📋",
-                          text: "Deliver - End - to End Output",
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -220,28 +191,6 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
     );
   }
 
-  Widget _buildBusinessIcon() {
-    return Container(
-      width: 45,
-      height: 45,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFD97706), Color(0xFF92400E)],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFD97706).withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Icon(Icons.work_rounded, color: Colors.white, size: 25),
-    );
-  }
 }
 
 class _AccountTypeCard extends StatelessWidget {

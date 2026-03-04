@@ -176,7 +176,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         }
 
         // Load business account state
-        _isBusinessAccount = AccountType.fromString(profileData['accountType']) == AccountType.business;
+        _isBusinessAccount = profileData['businessProfile'] != null;
         if (profileData['businessProfile'] != null) {
           _businessProfile = BusinessProfile.fromMap(
             Map<String, dynamic>.from(profileData['businessProfile']),

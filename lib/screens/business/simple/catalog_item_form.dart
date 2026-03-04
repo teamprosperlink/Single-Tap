@@ -139,7 +139,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Could not add item. You may have reached the 100 item limit.'),
+                  'Could not add item. You have reached the 100 item limit.'),
               backgroundColor: Colors.red,
             ),
           );

@@ -20,6 +20,20 @@ class UnifiedPostService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GeminiService _geminiService = GeminiService();
 
+  // Generic transactional/marketplace words that should NOT count as domain
+  // keyword evidence — they appear in virtually every post regardless of domain.
+  static const Set<String> _compHitStopWords = {
+    'sale', 'sell', 'selling', 'sold',
+    'free', 'available', 'avail',
+    'need', 'want', 'have', 'offer', 'offering', 'offers',
+    'seek', 'seeking', 'find', 'looking', 'provide', 'providing',
+    'give', 'giving', 'take', 'taking', 'help', 'helping',
+    'hire', 'hiring', 'work', 'working',
+    'good', 'best', 'near', 'like', 'this', 'that', 'some',
+    'used', 'item', 'service', 'services', 'product',
+    'from', 'with', 'make', 'making', 'also', 'more',
+  };
+
   // Incompatible lifestyle-value pairs (order-independent)
   static const List<List<String>> _incompatibleValues = [
     ['vegan', 'meat_based'],
@@ -129,7 +143,12 @@ class UnifiedPostService {
 
       _validatePost(post);
 
-      final docRef = await _firestore.collection('posts').add(post.toFirestore());
+      // Include action_type at top level so Firestore can filter on it
+      final postData = {
+        ...post.toFirestore(),
+        'action_type': post.intentAnalysis['action_type'] ?? 'neutral',
+      };
+      final docRef = await _firestore.collection('posts').add(postData);
       debugPrint(' Post created successfully: ${docRef.id}');
 
       return {
@@ -357,6 +376,12 @@ Field rules:
       'give','giving','get','getting','hire','hiring','rent','renting',
       'needing','require','requiring','request','requesting',
       'available','help','helping',
+      // AI-generated description words — appear in every post's auto-description
+      // and cause false keyword overlap between completely unrelated posts.
+      'user','users','person','someone','individual','people',
+      'wants','needs','possesses','indicates','suggesting',
+      'currency','units','approximately','regarding','currently',
+      'also','more','about',
     };
     return text
         .toLowerCase()
@@ -633,7 +658,7 @@ Field rules:
         },
         'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': null,
-        'isActive': bp['isLive'] ?? true,
+        'isActive': true,
         'location': userData['location'] ?? address,
         'latitude': userData['latitude'],
         'longitude': userData['longitude'],
@@ -642,6 +667,7 @@ Field rules:
         'clarificationAnswers': {},
         'userName': businessName,
         'userPhoto': userPhoto,
+        'action_type': 'offering',
       };
 
       await _firestore
@@ -693,26 +719,30 @@ Field rules:
       final complementaryIntents = List<String>.from(
         sourcePost.intentAnalysis['complementary_intents'] ?? [],
       );
-      List<double> searchEmbedding;
+      // Build search text before any async work
+      final String searchText;
       if (complementaryIntents.isNotEmpty) {
-        final searchText =
+        searchText =
             '${complementaryIntents.join('. ')} ${sourcePost.searchKeywords.join(' ')}';
         debugPrint('[Path A] complementary: $searchText');
-        searchEmbedding = await _geminiService.generateEmbedding(searchText);
       } else {
-        // Path B: No complementary_intents (AI failed or fallback).
-        // Build a composite search text for a better search vector.
-        final fallbackText = '${sourcePost.title} ${sourcePost.description} '
+        searchText = '${sourcePost.title} ${sourcePost.description} '
             '${sourcePost.searchKeywords.join(' ')}';
-        debugPrint('[Path B] fallback text: $fallbackText');
-        searchEmbedding = await _geminiService.generateEmbedding(fallbackText);
+        debugPrint('[Path B] fallback: $searchText');
       }
 
-      final querySnapshot = await _firestore
-          .collection('posts')
-          .where('isActive', isEqualTo: true)
-          .limit(ApiConfig.matchQueryLimit)
-          .get();
+      // Parallel: generate embedding while Firestore fetches candidates
+      final fetchResults = await Future.wait<dynamic>([
+        _geminiService.generateEmbedding(searchText),
+        _firestore
+            .collection('posts')
+            .where('isActive', isEqualTo: true)
+            .limit(ApiConfig.matchQueryLimit)
+            .get(),
+      ]);
+      final searchEmbedding = fetchResults[0] as List<double>;
+      final querySnapshot =
+          fetchResults[1] as QuerySnapshot<Map<String, dynamic>>;
 
       final List<PostModel> matches = [];
       final sourceSide = inferSide(sourcePost);
@@ -748,7 +778,9 @@ Field rules:
         int compHits = 0;
         for (final ci in complementaryIntents) {
           for (final word in ci.toLowerCase().split(' ')) {
-            if (word.length > 3 && candidateKw.contains(word)) {
+            if (word.length > 3 &&
+                !_compHitStopWords.contains(word) &&
+                candidateKw.contains(word)) {
               compHits++;
               break;
             }
@@ -767,13 +799,17 @@ Field rules:
         // Relevance = best of semantic OR keyword signal
         final relevance = max(semSim, kwScore * ApiConfig.matchKeywordDamping);
 
-        debugPrint('  "${candidate.title}" sem=${semSim.toStringAsFixed(3)} '
-            'kw=$shared compHits=$compHits kwScore=${kwScore.toStringAsFixed(2)} '
-            'rel=${relevance.toStringAsFixed(3)}');
-
         // Pre-filter: neither signal shows relevance
         if (relevance < ApiConfig.matchPreFilterThreshold) {
-          debugPrint('    SKIP: low relevance');
+          skipLowRel++;
+          continue;
+        }
+
+        // Keyword gate: without keyword evidence the semantic embedding alone is
+        // not specific enough — it confuses cross-category items (watch vs monitor,
+        // Ferrari vs water bottle). Require either direct keyword overlap, a
+        // domain-specific compHit, or near-identical semantic similarity (≥0.85).
+        if (shared.isEmpty && compHits == 0 && semSim < 0.85) {
           skipLowRel++;
           continue;
         }
@@ -785,7 +821,6 @@ Field rules:
         if (sourceSide == candidateSide &&
             sourceSide != 'neutral' &&
             !(sourceSymmetric && candidateSymmetric)) {
-          debugPrint('    SKIP: same-side ($sourceSide)');
           skipSameSide++;
           continue;
         }
@@ -800,7 +835,6 @@ Field rules:
         if ((srcEx == 'free' && cndEx == 'paid') ||
             (srcEx == 'paid' && cndEx == 'free') ||
             (srcEx == 'equity' && cndEx == 'paid')) {
-          debugPrint('    SKIP: exchange ($srcEx vs $cndEx)');
           skipExchange++;
           continue;
         }
@@ -830,15 +864,13 @@ Field rules:
             (relevance + intentBonus + locBonus - penalty).clamp(0.0, 1.0);
 
         if (finalScore < ApiConfig.matchFinalThreshold) {
-          debugPrint('    SKIP: score ${finalScore.toStringAsFixed(2)}');
           skipThreshold++;
           continue;
         }
 
         matches.add(candidate.copyWith(similarityScore: finalScore));
-        debugPrint('    MATCHED! ${finalScore.toStringAsFixed(2)} '
-            '(rel=${relevance.toStringAsFixed(2)} intent=$complementary '
-            'pen=${penalty.toStringAsFixed(2)})');
+        debugPrint('  MATCHED: "${candidate.title}" score=${finalScore.toStringAsFixed(2)} '
+            '(sem=${semSim.toStringAsFixed(2)} kw=${kwScore.toStringAsFixed(2)})');
       }
 
       debugPrint('=== STATS: user=$skipUser embed=$skipEmbed '
@@ -888,7 +920,9 @@ Field rules:
     int compHits = 0;
     for (final ci in complementaryIntents) {
       for (final word in ci.toLowerCase().split(' ')) {
-        if (word.length > 3 && candidateKw.contains(word)) {
+        if (word.length > 3 &&
+            !_compHitStopWords.contains(word) &&
+            candidateKw.contains(word)) {
           compHits++;
           break;
         }
@@ -905,6 +939,9 @@ Field rules:
 
     final relevance = max(semSim, kwScore * ApiConfig.matchKeywordDamping);
     if (relevance < ApiConfig.matchPreFilterThreshold) return null;
+
+    // Keyword gate: no domain-specific keyword evidence + weak semantic = skip
+    if (shared.isEmpty && compHits == 0 && semSim < 0.85) return null;
 
     // Same-side block
     final candidateSide = inferSide(candidate);

@@ -79,7 +79,7 @@ class CatalogItem {
       imageUrl: map['imageUrl'],
       type: CatalogItemType.fromString(map['type']),
       isAvailable: map['isAvailable'] ?? true,
-      viewCount: map['viewCount'] ?? 0,
+      viewCount: (map['viewCount'] as num?)?.toInt() ?? 0,
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -88,7 +88,7 @@ class CatalogItem {
           : DateTime.now(),
       category: map['category'],
       isFeatured: map['isFeatured'] ?? false,
-      duration: map['duration'],
+      duration: (map['duration'] as num?)?.toInt(),
       tags: List<String>.from(map['tags'] ?? []),
     );
   }

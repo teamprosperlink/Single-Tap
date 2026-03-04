@@ -34,97 +34,6 @@ class VerifiedBadge extends StatelessWidget {
   }
 }
 
-/// Professional badge - purple badge for professional accounts
-class ProfessionalBadge extends StatelessWidget {
-  final double size;
-  final bool showLabel;
-  final bool compact;
-
-  const ProfessionalBadge({
-    super.key,
-    this.size = 16,
-    this.showLabel = false,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (compact) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: const Color(0xFF9C27B0).withValues(alpha: 0.3),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.workspace_premium,
-              size: size * 0.75,
-              color: const Color(0xFF9C27B0),
-            ),
-            if (showLabel) ...[
-              const SizedBox(width: 4),
-              Text(
-                'PRO',
-                style: TextStyle(
-                  color: const Color(0xFF9C27B0),
-                  fontSize: size * 0.65,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: showLabel ? 8 : 4,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF9C27B0).withValues(alpha: 0.2),
-            const Color(0xFF7B1FA2).withValues(alpha: 0.15),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFF9C27B0).withValues(alpha: 0.4),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.workspace_premium,
-            size: size,
-            color: const Color(0xFF9C27B0),
-          ),
-          if (showLabel) ...[
-            const SizedBox(width: 4),
-            Text(
-              'Professional',
-              style: TextStyle(
-                color: const Color(0xFF9C27B0),
-                fontSize: size * 0.75,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// Business badge - gold/orange badge for business accounts
 class BusinessBadge extends StatelessWidget {
   final double size;
@@ -293,7 +202,7 @@ class AccountTypeBadge extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // For professional/business accounts
+    // For business accounts
     final isVerified = verificationStatus == VerificationStatus.verified;
     final isPending = verificationStatus == VerificationStatus.pending;
 
@@ -301,9 +210,7 @@ class AccountTypeBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Account type badge
-        if (accountType == AccountType.professional)
-          ProfessionalBadge(size: size, showLabel: showLabel, compact: compact)
-        else if (accountType == AccountType.business)
+        if (accountType == AccountType.business)
           BusinessBadge(size: size, showLabel: showLabel, compact: compact),
 
         // Verification status
@@ -347,19 +254,13 @@ class UsernameBadge extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // Professional/Business accounts - show type indicator
+    // Business accounts - show type indicator
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (accountType == AccountType.professional)
-            Icon(
-              Icons.workspace_premium,
-              size: size,
-              color: const Color(0xFF9C27B0),
-            )
-          else if (accountType == AccountType.business)
+          if (accountType == AccountType.business)
             Icon(
               Icons.business,
               size: size,
@@ -404,12 +305,6 @@ class AccountTypeCard extends StatelessWidget {
         icon = Icons.person;
         title = 'Personal Account';
         subtitle = 'For individual buyers and sellers';
-        break;
-      case AccountType.professional:
-        primaryColor = const Color(0xFF9C27B0);
-        icon = Icons.workspace_premium;
-        title = 'Professional Account';
-        subtitle = 'Freelancer & Service Provider';
         break;
       case AccountType.business:
         primaryColor = const Color(0xFFFF9800);
