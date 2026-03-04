@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../../providers/other providers/app_providers.dart';
 
 class LocationSettingsScreen extends ConsumerStatefulWidget {

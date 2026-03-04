@@ -90,7 +90,7 @@ void main() {
       expect(find.byIcon(Icons.person), findsOneWidget);
       expect(find.text('Discover'), findsOneWidget);
       expect(find.text('Messages'), findsOneWidget);
-      expect(find.text('Live Connect'), findsOneWidget);
+      expect(find.text('Networking'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
     });
 

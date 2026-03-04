@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../widgets/safe_circle_avatar.dart';
-import '../../services/other services/group_video_call_service.dart';
+import '../../services/other_services/group_video_call_service.dart';
 
 /// WhatsApp-style Group Video Call Screen
 /// Supports up to 8 participants with grid layout

@@ -272,22 +272,22 @@ class PostModel {
     if ((myActionType == 'selling' || myActionType == 'offering') &&
         (otherActionType == 'buying' || otherActionType == 'seeking')) {
       // Seller's price should be within buyer's range
-      if (price != null && other.priceMax != null) {
-        return price! <= other.priceMax!;
-      }
       if (price != null && other.priceMin != null && other.priceMax != null) {
         return price! >= other.priceMin! && price! <= other.priceMax!;
+      }
+      if (price != null && other.priceMax != null) {
+        return price! <= other.priceMax!;
       }
     }
 
     if ((myActionType == 'buying' || myActionType == 'seeking') &&
         (otherActionType == 'selling' || otherActionType == 'offering')) {
       // Buyer's range should include seller's price
-      if (other.price != null && priceMax != null) {
-        return other.price! <= priceMax!;
-      }
       if (other.price != null && priceMin != null && priceMax != null) {
         return other.price! >= priceMin! && other.price! <= priceMax!;
+      }
+      if (other.price != null && priceMax != null) {
+        return other.price! <= priceMax!;
       }
     }
 

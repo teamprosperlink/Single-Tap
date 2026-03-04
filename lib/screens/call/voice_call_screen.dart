@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_profile.dart';
 import '../../widgets/floating_particles.dart';
-import '../../services/other services/voice_call_service.dart';
+import '../../services/other_services/voice_call_service.dart';
 import '../../services/floating_call_service.dart';
 
 class VoiceCallScreen extends StatefulWidget {

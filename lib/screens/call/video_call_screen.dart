@@ -4,7 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_profile.dart';
 import '../../widgets/safe_circle_avatar.dart';
-import '../../services/other services/video_call_service.dart';
+import '../../services/other_services/video_call_service.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String callId;

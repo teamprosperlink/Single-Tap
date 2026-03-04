@@ -5,7 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'firebase_provider.dart';
-import 'location services/gemini_service.dart';
+import 'ai_services/gemini_service.dart';
 import 'unified_post_service.dart';
 import 'universal_intent_service.dart';
 import '../res/config/api_config.dart';

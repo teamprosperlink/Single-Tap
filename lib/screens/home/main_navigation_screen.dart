@@ -22,7 +22,7 @@ import '../business/simple/business_hub_screen.dart';
 // import '../call/incoming_video_call_screen.dart';
 
 // services
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../../services/notification_service.dart';
 import '../../models/message_model.dart';
 

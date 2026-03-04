@@ -29,7 +29,7 @@ import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../models/message_model.dart';
 import '../../services/notification_service.dart';
-import '../../services/chat services/conversation_service.dart';
+import '../../services/chat_services/conversation_service.dart';
 import '../../services/hybrid_chat_service.dart';
 import '../../services/active_chat_service.dart';
 import '../../providers/other providers/app_providers.dart';

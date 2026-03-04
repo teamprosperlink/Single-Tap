@@ -7,7 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supper/main.dart';
 import 'package:supper/firebase_options.dart';
-import '../test_helpers.dart';
+import '../test/test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

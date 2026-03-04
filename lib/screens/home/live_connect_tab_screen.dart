@@ -17,7 +17,7 @@ import '../../models/user_profile.dart';
 import '../../models/extended_user_profile.dart';
 import '../../widgets/profile widgets/profile_detail_bottom_sheet.dart';
 import '../../services/connection_service.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 
 class LiveConnectTabScreen extends ConsumerStatefulWidget {
   final bool activateNearMeFilter; // Flag to activate "Near Me" filter on init

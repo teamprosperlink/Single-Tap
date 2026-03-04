@@ -11,7 +11,7 @@ import '../../res/config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_manager.dart';
 import '../../services/account_type_service.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../business/simple/business_setup_flow.dart';
 import '../business/simple/business_info_edit.dart';
 import '../../models/user_profile.dart';

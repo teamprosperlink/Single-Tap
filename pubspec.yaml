@@ -45,9 +45,6 @@ dependencies:
   firebase_crashlytics: ^4.2.1
   firebase_analytics: ^11.3.3
 
-  # Error tracking
-  sentry_flutter: ^8.10.1
-
   # Gemini AI
   google_generative_ai: ^0.4.7
 

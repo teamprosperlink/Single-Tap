@@ -38,13 +38,7 @@ service cloud.firestore {
     // ============================================================
     match /users/{userId} {
       // Authenticated users can read full profiles (for discovery)
-      // Unauthenticated users can read if document has device-related fields (needed for device session logout)
-      allow read: if isAuthenticated() ||
-                     (resource != null && (
-                       resource.data.get('activeDeviceToken', null) != null ||  // Has device field
-                       resource.data.get('forceLogout', null) != null ||         // Has logout flag
-                       resource.data.get('deviceInfo', null) != null              // Has device info
-                     ));
+      allow read: if isAuthenticated();
 
       // Only the user can create their own profile
       allow create: if isOwner(userId);
@@ -60,9 +54,10 @@ service cloud.firestore {
                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'accountStatus']) ||
                         request.resource.data.accountStatus == 'pendingVerification' ||
                         request.resource.data.accountType == 'personal')) ||
-                       // Allow updating ONLY device fields (even unauthenticated)
-                       // This enables Device B to send logout signal after being signed out
-                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                       // Allow updating ONLY device fields (must be authenticated)
+                       // This enables Device B to send logout signal when a new device signs in
+                       (isAuthenticated() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                          'activeDeviceToken',
                          'deviceName',
                          'deviceInfo',

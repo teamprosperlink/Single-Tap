@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../res/config/app_colors.dart';
 import '../../services/notification_service.dart';
-import '../../services/other services/group_voice_call_service.dart';
+import '../../services/other_services/group_voice_call_service.dart';
 import '../../services/floating_call_service.dart';
 import '../../widgets/floating_particles.dart';
 

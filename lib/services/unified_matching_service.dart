@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../res/config/api_config.dart';
-import 'cache services/cache_service.dart';
+import 'cache_services/cache_service.dart';
 
 /// Unified Matching Service
 /// Consolidates all matching logic into a single, optimized service

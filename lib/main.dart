@@ -21,14 +21,14 @@ import 'screens/call/voice_call_screen.dart';
 import 'models/user_profile.dart';
 
 import 'services/auth_service.dart';
-import 'services/profile services/profile_service.dart';
+import 'services/profile_services/profile_service.dart';
 import 'services/user_manager.dart';
 import 'services/notification_service.dart';
-import 'services/chat services/conversation_service.dart';
-import 'services/location services/location_service.dart';
+import 'services/chat_services/conversation_service.dart';
+import 'services/location_services/location_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/analytics_service.dart';
-import 'services/error services/error_tracking_service.dart';
+import 'services/error_services/error_tracking_service.dart';
 import 'providers/other providers/theme_provider.dart';
 import 'res/utils/app_optimizer.dart';
 import 'res/utils/memory_manager.dart';
@@ -276,14 +276,15 @@ void main() async {
   // Load environment variables
   await dotenv.load(fileName: ".env");
 
-  // Initialize Sentry for error tracking (wraps the entire app)
+  // Initialize Firebase only once (must be before Crashlytics)
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // Initialize Crashlytics for error tracking (wraps the entire app)
   await ErrorTrackingService.initialize(() async {
-    // Initialize Firebase only once
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
 
     // CRITICAL: Register background message handler IMMEDIATELY after Firebase init
     // This must be done before runApp() for background notifications to work

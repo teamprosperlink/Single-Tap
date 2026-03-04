@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../services/location services/location_service.dart';
+import '../../services/location_services/location_service.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
