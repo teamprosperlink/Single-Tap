@@ -18,6 +18,7 @@ import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
 import '../screens/home/product/my_orders_screen.dart';
 import '../screens/home/main_navigation_screen.dart';
+import '../screens/business/simple/customer_bookings_screen.dart';
 
 /// ChatGPT-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
@@ -264,6 +265,22 @@ class AppDrawerState extends State<AppDrawer> {
                           MainNavigationScreen.scaffoldKey.currentState
                               ?.openEndDrawer();
                         });
+                      },
+                    ),
+
+                    _buildFeatureCard(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'My Bookings',
+                      color: const Color(0xFF3B82F6),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CustomerBookingsScreen(),
+                          ),
+                        );
                       },
                     ),
 

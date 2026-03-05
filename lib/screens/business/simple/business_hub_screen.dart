@@ -7,6 +7,7 @@ import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/account_type_service.dart';
 import '../../../services/unified_post_service.dart';
+import '../../../services/booking_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
 import 'business_setup_flow.dart';
 import 'business_info_edit.dart';
@@ -287,6 +288,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         slivers: [
           // Collapsing app bar with cover image
           _buildSliverAppBar(bp, location, isDark),
+
+
 
           // Quick Actions
           SliverToBoxAdapter(child: _buildQuickActions(bp, isDark)),
@@ -641,17 +644,26 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
             },
           ),
           const SizedBox(width: 10),
-          _quickAction(
-            icon: Icons.calendar_month_outlined,
-            label: 'Bookings',
-            color: const Color(0xFF3B82F6),
-            cardBg: cardBg,
-            textColor: textColor,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const BookingsScreen()),
+          FutureBuilder<int>(
+            future: _userId != null
+                ? BookingService().getPendingCount(_userId!)
+                : Future.value(0),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return _quickAction(
+                icon: Icons.calendar_month_outlined,
+                label: 'Bookings',
+                color: const Color(0xFF3B82F6),
+                cardBg: cardBg,
+                textColor: textColor,
+                badge: count > 0 ? count.toString() : null,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const BookingsScreen()),
+                  );
+                },
               );
             },
           ),

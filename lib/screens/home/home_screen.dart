@@ -18,6 +18,8 @@ import 'product/see_all_products_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../../widgets/voice_orb.dart';
 import '../profile/profile_view_screen.dart';
+import '../business/simple/public_business_profile_screen.dart';
+import '../../services/catalog_service.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -1830,8 +1832,6 @@ class HomeScreenState extends State<HomeScreen>
   Widget _buildMatchCard(Map<String, dynamic> match, bool isDarkMode) {
     final userProfile = match['userProfile'] as Map<String, dynamic>? ?? {};
     final matchScore = (match['matchScore'] ?? 0.0) * 100;
-    // Resolve name: top-level key first (set by _enrichMatchesWithProfiles),
-    // then fall back to profile fields.
     final userName = (match['userName'] as String?)?.isNotEmpty == true
         ? match['userName'] as String
         : (userProfile['name'] as String?)?.isNotEmpty == true
@@ -1841,7 +1841,6 @@ class HomeScreenState extends State<HomeScreen>
               'Unknown User';
     final userId = match['userId'];
 
-    // Business post detection (set by syncBusinessPost via enrichment)
     final isBusinessPost = match['isBusinessPost'] == true;
     final businessName = match['businessName'] as String?;
     final displayName = isBusinessPost && businessName != null && businessName.isNotEmpty
@@ -1857,6 +1856,308 @@ class HomeScreenState extends State<HomeScreen>
         userProfile['photoURL'] ??
         userProfile['profileImageUrl'];
 
+    // For business posts, show a richer card
+    if (isBusinessPost && userId != null) {
+      return _buildBusinessMatchCard(
+        match: match,
+        userId: userId,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        matchScore: matchScore,
+        isDarkMode: isDarkMode,
+      );
+    }
+
+    return _buildPersonalMatchCard(
+      match: match,
+      userProfile: userProfile,
+      userName: userName,
+      displayName: displayName,
+      userId: userId,
+      photoUrl: photoUrl,
+      matchScore: matchScore,
+      isDarkMode: isDarkMode,
+    );
+  }
+
+  Widget _buildBusinessMatchCard({
+    required Map<String, dynamic> match,
+    required String userId,
+    required String displayName,
+    required String? photoUrl,
+    required double matchScore,
+    required bool isDarkMode,
+  }) {
+    final userProfile = match['userProfile'] as Map<String, dynamic>? ?? {};
+    final bpMap = userProfile['businessProfile'] as Map<String, dynamic>?;
+    final softLabel = bpMap?['softLabel'] as String?;
+    final averageRating = (bpMap?['averageRating'] ?? 0.0) is int
+        ? (bpMap!['averageRating'] as int).toDouble()
+        : (bpMap?['averageRating'] ?? 0.0) as double;
+    final totalReviews = bpMap?['totalReviews'] ?? 0;
+    final coverImageUrl = bpMap?['coverImageUrl'] as String?;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      elevation: 2,
+      color: isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PublicBusinessProfileScreen(userId: userId),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cover image header
+            SizedBox(
+              height: 100,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (coverImageUrl != null)
+                    Image.network(
+                      coverImageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+                        ),
+                      ),
+                    ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.1),
+                          Colors.black.withValues(alpha: 0.6),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Match score badge
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.auto_awesome, size: 12, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${matchScore.toStringAsFixed(0)}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Business name overlay
+                  Positioned(
+                    bottom: 8,
+                    left: 12,
+                    right: 12,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.storefront, size: 16, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Info row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(
+                children: [
+                  if (softLabel != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        softLabel,
+                        style: const TextStyle(
+                          color: Color(0xFF22C55E),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (averageRating > 0) ...[
+                    const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${averageRating.toStringAsFixed(1)} ($totalReviews)',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (userProfile['city'] != null &&
+                      userProfile['city'].toString().isNotEmpty) ...[
+                    Icon(Icons.location_on, size: 13,
+                        color: isDarkMode ? Colors.white38 : Colors.black38),
+                    const SizedBox(width: 2),
+                    Expanded(
+                      child: Text(
+                        userProfile['city'].toString(),
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.white54 : Colors.black45,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                  if (match['distance'] != null) ...[
+                    Icon(Icons.near_me, size: 13,
+                        color: isDarkMode ? Colors.white38 : Colors.black38),
+                    const SizedBox(width: 2),
+                    Text(
+                      _formatDistance(match['distance'] as double),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white54 : Colors.black45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Catalog items preview (async)
+            _BusinessCatalogPreviewWidget(userId: userId, isDark: isDarkMode),
+
+            // Action buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PublicBusinessProfileScreen(userId: userId),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.storefront_outlined, size: 16),
+                      label: const Text('View Business'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF22C55E),
+                        side: const BorderSide(color: Color(0xFF22C55E)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        final otherUser = UserProfile.fromMap(
+                          match['userProfile'] as Map<String, dynamic>? ?? {},
+                          userId,
+                        );
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EnhancedChatScreen(otherUser: otherUser),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: const Text('Message'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF3B82F6),
+                        side: const BorderSide(color: Color(0xFF3B82F6)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalMatchCard({
+    required Map<String, dynamic> match,
+    required Map<String, dynamic> userProfile,
+    required String userName,
+    required String displayName,
+    required String? userId,
+    required String? photoUrl,
+    required double matchScore,
+    required bool isDarkMode,
+  }) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       elevation: 2,
@@ -1865,9 +2166,7 @@ class HomeScreenState extends State<HomeScreen>
       child: InkWell(
         onTap: () async {
           HapticFeedback.lightImpact();
-
           final otherUser = UserProfile.fromMap(userProfile, match['userId']);
-
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -1895,39 +2194,22 @@ class HomeScreenState extends State<HomeScreen>
                       runSpacing: 4,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: isBusinessPost
-                                ? const Color(0xFFFF9800)
-                                : Theme.of(context).primaryColor,
+                            color: Theme.of(context).primaryColor,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isBusinessPost) ...[
-                                const Icon(Icons.storefront, size: 13, color: Colors.white),
-                                const SizedBox(width: 5),
-                              ],
-                              Text(
-                                displayName.toUpperCase(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            displayName.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.blue.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
@@ -1935,11 +2217,7 @@ class HomeScreenState extends State<HomeScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.auto_awesome,
-                                size: 14,
-                                color: Colors.blue[600],
-                              ),
+                              Icon(Icons.auto_awesome, size: 14, color: Colors.blue[600]),
                               const SizedBox(width: 4),
                               Text(
                                 '${matchScore.toStringAsFixed(0)}% match',
@@ -1955,10 +2233,7 @@ class HomeScreenState extends State<HomeScreen>
                         if (userProfile['city'] != null &&
                             userProfile['city'].toString().isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
@@ -1966,11 +2241,7 @@ class HomeScreenState extends State<HomeScreen>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.location_on,
-                                  size: 14,
-                                  color: Colors.green[600],
-                                ),
+                                Icon(Icons.location_on, size: 14, color: Colors.green[600]),
                                 const SizedBox(width: 4),
                                 Text(
                                   userProfile['city'].toString(),
@@ -1985,10 +2256,7 @@ class HomeScreenState extends State<HomeScreen>
                           ),
                         if (match['distance'] != null)
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.orange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
@@ -1996,11 +2264,7 @@ class HomeScreenState extends State<HomeScreen>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.near_me,
-                                  size: 14,
-                                  color: Colors.orange[600],
-                                ),
+                                Icon(Icons.near_me, size: 14, color: Colors.orange[600]),
                                 const SizedBox(width: 4),
                                 Text(
                                   _formatDistance(match['distance'] as double),
@@ -2038,9 +2302,7 @@ class HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      match['title'] ??
-                          match['description'] ??
-                          'Looking for match',
+                      match['title'] ?? match['description'] ?? 'Looking for match',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -2057,9 +2319,7 @@ class HomeScreenState extends State<HomeScreen>
                           match['description'],
                           style: TextStyle(
                             fontSize: 13,
-                            color: isDarkMode
-                                ? Colors.grey[400]
-                                : Colors.grey[600],
+                            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -2068,7 +2328,6 @@ class HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
-              // Action buttons: Chat + View Profile
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -2076,15 +2335,11 @@ class HomeScreenState extends State<HomeScreen>
                     child: OutlinedButton.icon(
                       onPressed: () {
                         HapticFeedback.lightImpact();
-                        final otherUser = UserProfile.fromMap(
-                          userProfile,
-                          match['userId'],
-                        );
+                        final otherUser = UserProfile.fromMap(userProfile, match['userId']);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                EnhancedChatScreen(otherUser: otherUser),
+                            builder: (_) => EnhancedChatScreen(otherUser: otherUser),
                           ),
                         );
                       },
@@ -2114,8 +2369,7 @@ class HomeScreenState extends State<HomeScreen>
                         final profile = UserProfile.fromFirestore(userDoc);
                         nav.push(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                ProfileViewScreen(userProfile: profile),
+                            builder: (_) => ProfileViewScreen(userProfile: profile),
                           ),
                         );
                       },
@@ -2135,6 +2389,107 @@ class HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Business catalog preview in match cards ──
+
+class _BusinessCatalogPreviewWidget extends StatefulWidget {
+  final String userId;
+  final bool isDark;
+
+  const _BusinessCatalogPreviewWidget({
+    required this.userId,
+    required this.isDark,
+  });
+
+  @override
+  State<_BusinessCatalogPreviewWidget> createState() =>
+      _BusinessCatalogPreviewWidgetState();
+}
+
+class _BusinessCatalogPreviewWidgetState
+    extends State<_BusinessCatalogPreviewWidget> {
+  List<Map<String, dynamic>>? _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final items =
+          await CatalogService().getAvailableItems(widget.userId, limit: 3);
+      if (!mounted) return;
+      setState(() {
+        _items = items
+            .map((i) => {'name': i.name, 'price': i.formattedPrice, 'type': i.type.name})
+            .toList();
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items == null || _items!.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: SizedBox(
+        height: 48,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _items!.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final item = _items![index];
+            final isService = item['type'] == 'service';
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    item['name'] ?? '',
+                    style: TextStyle(
+                      color: widget.isDark ? Colors.white : Colors.black,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    item['price'] ?? '',
+                    style: TextStyle(
+                      color: isService
+                          ? const Color(0xFF3B82F6)
+                          : const Color(0xFF22C55E),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

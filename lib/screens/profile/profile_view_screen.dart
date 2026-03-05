@@ -66,7 +66,10 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
             SingleChildScrollView(
               child: Column(
                 children: [
-                  _buildImageSection(),
+                  if (widget.userProfile.isBusiness)
+                    _buildBusinessCoverSection()
+                  else
+                    _buildImageSection(),
                   _buildProfileInfo(),
                   if (widget.post != null) _buildPostDetails(),
                   if (widget.userProfile.isBusiness) _buildCatalogSection(),
@@ -134,6 +137,153 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBusinessCoverSection() {
+    final bp = widget.userProfile.businessProfile ?? BusinessProfile();
+
+    return SizedBox(
+      height: 280,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (bp.coverImageUrl != null && bp.coverImageUrl!.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: bp.coverImageUrl!,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => _businessCoverGradient(),
+              errorWidget: (_, __, ___) => _businessCoverGradient(),
+            )
+          else
+            _businessCoverGradient(),
+          // Gradient overlay
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.0, 0.4, 1.0],
+                colors: [
+                  Colors.black.withValues(alpha: 0.3),
+                  Colors.black.withValues(alpha: 0.1),
+                  Colors.black.withValues(alpha: 0.7),
+                ],
+              ),
+            ),
+          ),
+          // Business name + info overlay
+          Positioned(
+            bottom: 20,
+            left: 20,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bp.businessName ?? widget.userProfile.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (bp.hours != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bp.isCurrentlyOpen
+                              ? const Color(0xFF22C55E).withValues(alpha: 0.9)
+                              : Colors.red.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          bp.isCurrentlyOpen ? 'Open' : 'Closed',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (bp.softLabel != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          bp.softLabel!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (bp.averageRating > 0) ...[
+                      const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${bp.averageRating.toStringAsFixed(1)} (${bp.totalReviews})',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (widget.userProfile.location != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined,
+                          size: 13, color: Colors.white.withValues(alpha: 0.8)),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          widget.userProfile.location!,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _businessCoverGradient() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
         ),
       ),
     );
@@ -414,90 +564,87 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Personal info ──
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.userProfile.name,
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          UsernameBadge(
-                            accountType: widget.userProfile.accountType,
-                            verificationStatus:
-                                widget.userProfile.verification.status,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (widget.userProfile.accountType !=
-                    AccountType.personal) ...[
-                  const SizedBox(height: 12),
-                  AccountTypeBadge(
-                    accountType: widget.userProfile.accountType,
-                    verificationStatus:
-                        widget.userProfile.verification.status,
-                    showLabel: true,
-                    size: 18,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                if (widget.userProfile.location != null)
+          // ── Personal info (hidden for business owners) ──
+          if (bp == null)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      Icon(Icons.location_on,
-                          size: 20, color: subtitleColor),
-                      const SizedBox(width: 4),
                       Expanded(
-                        child: Text(
-                          widget.userProfile.location!,
-                          style:
-                              TextStyle(fontSize: 16, color: subtitleColor),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.userProfile.name,
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            UsernameBadge(
+                              accountType: widget.userProfile.accountType,
+                              verificationStatus:
+                                  widget.userProfile.verification.status,
+                              size: 20,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                if (widget.post != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.post!.title,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
+                  if (widget.userProfile.accountType !=
+                      AccountType.personal) ...[
+                    const SizedBox(height: 12),
+                    AccountTypeBadge(
+                      accountType: widget.userProfile.accountType,
+                      verificationStatus:
+                          widget.userProfile.verification.status,
+                      showLabel: true,
+                      size: 18,
                     ),
-                  ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (widget.userProfile.location != null)
+                    Row(
+                      children: [
+                        Icon(Icons.location_on,
+                            size: 20, color: subtitleColor),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            widget.userProfile.location!,
+                            style:
+                                TextStyle(fontSize: 16, color: subtitleColor),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (widget.post != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.post!.title,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
 
           // ── Business info (integrated) ──
           if (bp != null) ...[
-            Divider(
-              color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
-              height: 1,
-            ),
 
             // Cover image
             if (bp.coverImageUrl != null)
