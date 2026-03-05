@@ -53,6 +53,10 @@ class CatalogService {
           handleError: (error, stackTrace, sink) {
             debugPrint('Error streaming catalog: $error');
             sink.add(<CatalogItem>[]);
+            // Permission-denied never self-resolves; stop retrying to prevent crash
+            if (error.toString().contains('permission-denied')) {
+              sink.close();
+            }
           },
         ));
   }

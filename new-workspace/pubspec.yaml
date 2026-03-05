@@ -1,0 +1,21 @@
+appId: com.plink.supper
+---
+# Master test suite - runs all test flows sequentially
+- launchApp:
+    clearState: true
+- runFlow: .maestro/01_onboarding_account_selection.yaml
+- runFlow: .maestro/02_signup_flow.yaml
+- runFlow: .maestro/03_login_flow.yaml
+- runFlow: .maestro/04_negative_login_test.yaml
+- runFlow: .maestro/05_forgot_password_flow.yaml
+- runFlow: .maestro/06_home_screen_ai_chat.yaml
+- runFlow: .maestro/07_navigation_tabs.yaml
+- runFlow: .maestro/08_app_drawer.yaml
+- runFlow: .maestro/09_profile_edit.yaml
+- runFlow: .maestro/10_business_setup.yaml
+- runFlow: .maestro/11_catalog_management.yaml
+- runFlow: .maestro/12_messaging_chat.yaml
+- runFlow: .maestro/13_bookings_flow.yaml
+- runFlow: .maestro/14_settings_personalization.yaml
+- runFlow: .maestro/15_full_e2e_journey.yaml
+- runFlow: .maestro/16_logout_flow.yaml

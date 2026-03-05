@@ -1,0 +1,74 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Bottom Navigation Tabs
+# Verifies all 5 bottom navigation tabs work correctly
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Verify Home tab is selected by default
+- assertVisible: "Home"
+- assertVisible: "SingleTap"
+
+# ---- TAB 1: Chat ----
+# Step 3: Tap Chat tab
+- tapOn: "Chat"
+- waitForAnimationToEnd
+
+# Step 4: Verify Messages screen
+- assertVisible: "Messages"
+- assertVisible: "Chats"
+- assertVisible: "Groups"
+- assertVisible: "Calls"
+
+# Step 5: Take screenshot
+- takeScreenshot: 07_tab_chat
+
+# ---- TAB 2: Nearby ----
+# Step 6: Tap Nearby tab
+- tapOn: "Nearby"
+- waitForAnimationToEnd
+
+# Step 7: Verify Nearby screen
+- assertVisible: "Nearby"
+
+# Step 8: Take screenshot
+- takeScreenshot: 07_tab_nearby
+
+# ---- TAB 3: Networking ----
+# Step 9: Tap Networking tab
+- tapOn: "Networking"
+- waitForAnimationToEnd
+
+# Step 10: Verify Networking screen
+- assertVisible: "Networking"
+
+# Step 11: Take screenshot
+- takeScreenshot: 07_tab_networking
+
+# ---- TAB 4: Business ----
+# Step 12: Tap Business tab
+- tapOn: "Business"
+- waitForAnimationToEnd
+
+# Step 13: Verify Business screen
+- assertVisible: "Business"
+
+# Step 14: Take screenshot
+- takeScreenshot: 07_tab_business
+
+# ---- Back to Home ----
+# Step 15: Navigate back to Home tab
+- tapOn: "Home"
+- waitForAnimationToEnd
+
+# Step 16: Verify Home screen
+- assertVisible: "SingleTap"
+- assertVisible: "Ask me anything..."
+
+# Step 17: Final screenshot
+- takeScreenshot: 07_navigation_complete

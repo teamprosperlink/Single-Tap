@@ -1,0 +1,96 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Messaging / Chat Flow
+# Verifies conversations screen, chat tabs, and message sending
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Navigate to Chat tab
+- tapOn: "Chat"
+- waitForAnimationToEnd
+
+# Step 3: Verify Messages screen
+- assertVisible: "Messages"
+
+# Step 4: Verify chat tabs
+- assertVisible: "Chats"
+- assertVisible: "Groups"
+- assertVisible: "Calls"
+
+# Step 5: Verify search field
+- assertVisible: "Search conversations..."
+
+# Step 6: Take screenshot of conversations list
+- takeScreenshot: 12_conversations_screen
+
+# ---- TEST CHAT TABS ----
+
+# Step 7: Tap Groups tab
+- tapOn: "Groups"
+- waitForAnimationToEnd
+- takeScreenshot: 12_groups_tab
+
+# Step 8: Tap Calls tab
+- tapOn: "Calls"
+- waitForAnimationToEnd
+- takeScreenshot: 12_calls_tab
+
+# Step 9: Go back to Chats tab
+- tapOn: "Chats"
+- waitForAnimationToEnd
+
+# ---- TEST SEARCH ----
+
+# Step 10: Tap search field
+- tapOn: "Search conversations..."
+- inputText: "test"
+- waitForAnimationToEnd
+
+# Step 11: Take screenshot of search results
+- takeScreenshot: 12_conversation_search
+
+# Step 12: Clear search
+- tapOn: "Search conversations..."
+- inputText: ""
+
+# ---- TEST CREATE GROUP ----
+
+# Step 13: Tap Groups tab
+- tapOn: "Groups"
+- waitForAnimationToEnd
+
+# Step 14: Look for create group option (FAB or button)
+# If a "+" or create button exists, test it
+- tapOn:
+    text: "New Group"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 15: If we navigated to create group screen
+- assertVisible:
+    text: "Group name"
+    optional: true
+
+# Step 16: Take screenshot
+- takeScreenshot: 12_create_group
+
+# Step 17: Go back
+- back
+- waitForAnimationToEnd
+
+# ---- TEST OPENING A CONVERSATION ----
+
+# Step 18: Go to Chats tab
+- tapOn: "Chats"
+- waitForAnimationToEnd
+
+# Step 19: If there are conversations, tap the first one
+# This is optional as there may not be conversations in test env
+
+# Step 20: Take final screenshot
+- takeScreenshot: 12_messaging_complete

@@ -12,7 +12,6 @@ import '../../services/auth_service.dart';
 import '../../services/user_manager.dart';
 import '../../services/account_type_service.dart';
 import '../../services/location_services/location_service.dart';
-import '../business/simple/business_setup_flow.dart';
 import '../business/simple/business_info_edit.dart';
 import '../../models/user_profile.dart';
 
@@ -1259,7 +1258,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                     final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const BusinessSetupFlow(),
+                                        builder: (_) => const BusinessInfoEdit(),
                                       ),
                                     );
                                     if (result == true && mounted) {

@@ -1,0 +1,172 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Settings & Personalization
+# Verifies all settings sections and personalization options
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Open drawer to navigate to Settings
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 3: Scroll to Settings
+- scroll
+
+# Step 4: Tap Settings
+- tapOn: "Settings"
+- waitForAnimationToEnd
+
+# Step 5: Verify Settings screen
+- assertVisible: "Settings"
+
+# ---- ACCOUNT SECTION ----
+
+# Step 6: Verify Account settings
+- assertVisible: "Discoverable on Live Connect"
+- assertVisible: "Allow others to find you in nearby people"
+- assertVisible: "Privacy"
+- assertVisible: "Security"
+- assertVisible: "Blocked Users"
+
+# Step 7: Take screenshot of account settings
+- takeScreenshot: 14_settings_account
+
+# ---- NOTIFICATIONS SECTION ----
+
+# Step 8: Scroll to Notifications
+- scroll
+
+# Step 9: Verify Notification toggles
+- assertVisible: "Message Notifications"
+- assertVisible: "Match Notifications"
+- assertVisible: "Connection Requests"
+- assertVisible: "Promotional"
+
+# Step 10: Toggle a notification setting
+- tapOn: "Promotional"
+- waitForAnimationToEnd
+
+# Step 11: Take screenshot
+- takeScreenshot: 14_settings_notifications
+
+# ---- APP SETTINGS SECTION ----
+
+# Step 12: Scroll to App Settings
+- scroll
+
+# Step 13: Verify App Settings
+- assertVisible: "Location"
+- assertVisible: "Storage & Data"
+- assertVisible: "Clear Cache"
+
+# Step 14: Take screenshot
+- takeScreenshot: 14_settings_app
+
+# ---- COMING SOON SECTION ----
+
+# Step 15: Scroll down more
+- scroll
+
+# Step 16: Verify Coming Soon items
+- assertVisible:
+    text: "Premium"
+    optional: true
+- assertVisible:
+    text: "Events"
+    optional: true
+
+# ---- SUPPORT SECTION ----
+
+# Step 17: Scroll to Support section
+- scroll
+
+# Step 18: Verify Support items
+- assertVisible: "About"
+- assertVisible: "Terms of Service"
+- assertVisible: "Privacy Policy"
+- assertVisible: "Send Feedback"
+
+# Step 19: Take screenshot
+- takeScreenshot: 14_settings_support
+
+# Step 20: Go back to home
+- back
+- waitForAnimationToEnd
+
+# ---- PERSONALIZATION ----
+
+# Step 21: Open drawer again
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 22: Scroll to Personalization
+- scroll
+
+# Step 23: Tap Personalization
+- tapOn: "Personalization"
+- waitForAnimationToEnd
+
+# Step 24: Verify Personalization screen
+- assertVisible: "Personalization"
+
+# Step 25: Verify personalization options
+- assertVisible: "Export your data"
+- assertVisible: "Delete chat history"
+- assertVisible: "Clear memory"
+
+# Step 26: Scroll down
+- scroll
+
+# Step 27: Verify more options
+- assertVisible: "Change password"
+- assertVisible: "Active sessions"
+- assertVisible: "Edit profile"
+
+# Step 28: Scroll further
+- scroll
+
+# Step 29: Verify account management options
+- assertVisible: "Deactivate account"
+- assertVisible: "Delete account"
+
+# Step 30: Take screenshot
+- takeScreenshot: 14_personalization
+
+# Step 31: Test Change Password navigation
+- tapOn: "Change password"
+- waitForAnimationToEnd
+
+# Step 32: Verify Change Password screen
+- assertVisible: "Change Password"
+- assertVisible: "Current Password"
+- assertVisible: "New Password"
+- assertVisible: "Confirm New Password"
+
+# Step 33: Take screenshot
+- takeScreenshot: 14_change_password
+
+# Step 34: Go back
+- back
+- waitForAnimationToEnd
+
+# Step 35: Go back to home
+- back
+- waitForAnimationToEnd
+
+# Step 36: Final screenshot
+- takeScreenshot: 14_settings_complete

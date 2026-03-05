@@ -1,0 +1,80 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Onboarding & Account Type Selection Flow
+# Verifies the splash → onboarding → account selection journey
+# =============================================================
+
+# Step 1: Launch app fresh
+- launchApp:
+    clearState: true
+
+# Step 2: Wait for splash screen animation to complete
+- waitForAnimationToEnd
+
+# Step 3: Verify onboarding screen loads
+- assertVisible: "Welcome to Supper"
+
+# Step 4: Verify Skip button is visible
+- assertVisible: "Skip"
+
+# Step 5: Swipe through onboarding pages
+- swipe:
+    direction: LEFT
+    duration: 500
+
+- waitForAnimationToEnd
+- assertVisible: "Find Anything"
+
+- swipe:
+    direction: LEFT
+    duration: 500
+
+- waitForAnimationToEnd
+- assertVisible: "Connect Instantly"
+
+- swipe:
+    direction: LEFT
+    duration: 500
+
+- waitForAnimationToEnd
+- assertVisible: "Get Started"
+
+# Step 6: Tap Get Started button
+- tapOn: "Get Started"
+- waitForAnimationToEnd
+
+# Step 7: Verify account type selection screen
+- assertVisible: "Select an account type"
+- assertVisible: "Tell us if you're here as an individual or a business"
+
+# Step 8: Verify Personal/Individual option is available
+- assertVisible: "Personal / Individual"
+- assertVisible: "For Individual buyer and sellers"
+
+# Step 9: Verify feature list items
+- assertVisible: "Explore - Ideas, People, Products"
+- assertVisible: "Match - Needs, Travel, Room"
+- assertVisible: "Connect - Chat, Calls"
+- assertVisible: "Share - Post, Ideas"
+- assertVisible: "Trust - Verify Rate"
+
+# Step 10: Verify Continue button exists
+- assertVisible: "Continue"
+
+# Step 11: Try to continue without selecting - should show error
+- tapOn: "Continue"
+- assertVisible: "Please select an account type"
+
+# Step 12: Select Personal / Individual
+- tapOn: "Personal / Individual"
+
+# Step 13: Tap Continue
+- tapOn: "Continue"
+- waitForAnimationToEnd
+
+# Step 14: Verify we reached login/signup screen
+- assertVisible: "Log In"
+
+# Step 15: Take screenshot for verification
+- takeScreenshot: 01_account_selection_complete

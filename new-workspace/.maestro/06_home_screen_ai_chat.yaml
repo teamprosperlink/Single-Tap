@@ -1,0 +1,59 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Home Screen & AI Chat Interaction
+# Verifies home screen elements and AI assistant functionality
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app (assumes user is logged in)
+- launchApp
+
+# Step 2: Wait for home screen to load
+- waitForAnimationToEnd
+
+# Step 3: Verify home screen elements
+- assertVisible: "Home"
+- assertVisible: "SingleTap"
+
+# Step 4: Verify AI greeting message
+- assertVisible:
+    text: "Hi! I'm your Supper assistant"
+    optional: true
+
+# Step 5: Verify AI input field
+- assertVisible: "Ask me anything..."
+
+# Step 6: Verify AI Voice Assistant banner
+- assertVisible: "AI Voice Assistant"
+- assertVisible: "Tap to search with your voice"
+
+# Step 7: Type a query in the AI chat
+- tapOn: "Ask me anything..."
+- inputText: "I need a laptop under 50000"
+
+# Step 8: Submit the query (press enter/send)
+- pressKey: Enter
+
+# Step 9: Wait for AI response
+- waitForAnimationToEnd
+
+# Step 10: Take screenshot of AI chat response
+- takeScreenshot: 06_home_ai_chat_response
+
+# Step 11: Test voice assistant navigation
+- tapOn: "AI Voice Assistant"
+- waitForAnimationToEnd
+
+# Step 12: Verify voice assistant screen
+- assertVisible: "AI Voice Assistant"
+
+# Step 13: Go back to home
+- back
+- waitForAnimationToEnd
+
+# Step 14: Verify we're back on home
+- assertVisible: "Ask me anything..."
+
+# Step 15: Take final screenshot
+- takeScreenshot: 06_home_screen_complete

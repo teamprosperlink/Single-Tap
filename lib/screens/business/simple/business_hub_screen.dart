@@ -9,7 +9,6 @@ import '../../../services/account_type_service.dart';
 import '../../../services/unified_post_service.dart';
 import '../../../services/booking_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
-import 'business_setup_flow.dart';
 import 'business_info_edit.dart';
 import 'catalog_item_form.dart';
 import 'catalog_management_screen.dart';
@@ -29,16 +28,17 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   final _catalogService = CatalogService();
   final _accountService = AccountTypeService();
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
-  bool _hasItems = false;
+  Future<int>? _pendingCountFuture;
+  Stream<List<CatalogItem>>? _catalogStream;
 
   @override
   void initState() {
     super.initState();
-    // Re-sync business post on every open so isActive stays true
-    // and catalog changes are reflected in search results.
     final uid = _userId;
     if (uid != null) {
       UnifiedPostService().syncBusinessPost(uid);
+      _pendingCountFuture = BookingService().getPendingCount(uid);
+      _catalogStream = _catalogService.streamCatalog(uid);
     }
   }
 
@@ -255,7 +255,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const BusinessSetupFlow()),
+                          builder: (_) => const BusinessInfoEdit()),
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -284,104 +284,121 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
-      body: CustomScrollView(
-        slivers: [
-          // Collapsing app bar with cover image
-          _buildSliverAppBar(bp, location, isDark),
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              // Collapsing app bar with cover image
+              _buildSliverAppBar(bp, location, isDark),
 
+              // Quick Actions
+              SliverToBoxAdapter(child: _buildQuickActions(bp, isDark)),
 
+              // Profile completeness (hidden when 100%)
+              SliverToBoxAdapter(
+                child: _buildProfileCompleteness(bp, isDark),
+              ),
 
-          // Quick Actions
-          SliverToBoxAdapter(child: _buildQuickActions(bp, isDark)),
-
-          // Profile completeness (hidden when 100%)
-          SliverToBoxAdapter(
-            child: _buildProfileCompleteness(bp, isDark),
-          ),
-
-          // Catalog header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'My Catalog',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  StreamBuilder<List<CatalogItem>>(
-                    stream: _catalogService.streamCatalog(_userId!),
-                    builder: (context, snap) {
-                      final count = snap.data?.length ?? 0;
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    const CatalogManagementScreen()),
+              // Catalog header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        'My Catalog',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      StreamBuilder<List<CatalogItem>>(
+                        stream: _catalogStream,
+                        builder: (context, snap) {
+                          final count = snap.data?.length ?? 0;
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CatalogManagementScreen()),
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                Text(
+                                  '$count items',
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.5)
+                                        : Colors.black.withValues(alpha: 0.4),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.4)
+                                      : Colors.black.withValues(alpha: 0.3),
+                                ),
+                              ],
+                            ),
                           );
                         },
-                        child: Row(
-                          children: [
-                            Text(
-                              '$count items',
-                              style: TextStyle(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.5)
-                                    : Colors.black.withValues(alpha: 0.4),
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.chevron_right,
-                              size: 18,
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.4)
-                                  : Colors.black.withValues(alpha: 0.3),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+
+              // Catalog grid
+              _buildCatalogGrid(isDark),
+
+              // Bottom padding (nav bar 60 + FAB ~56 + safe area + margin)
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.of(context).padding.bottom + 140,
+                ),
+              ),
+            ],
           ),
 
-          // Catalog grid
-          _buildCatalogGrid(isDark),
-
-          // Bottom padding (nav bar 60 + FAB ~56 + safe area + margin)
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: MediaQuery.of(context).padding.bottom + 140,
+          // Add Item button — positioned, no animation
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 76,
+            child: Material(
+              color: const Color(0xFF22C55E),
+              borderRadius: BorderRadius.circular(16),
+              elevation: 4,
+              child: InkWell(
+                onTap: _addItem,
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text('Add Item',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15)),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
       ),
-      floatingActionButton: _hasItems
-          ? Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).padding.bottom + 60,
-              ),
-              child: FloatingActionButton.extended(
-                onPressed: _addItem,
-                backgroundColor: const Color(0xFF22C55E),
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text('Add Item',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            )
-          : null,
     );
   }
 
@@ -645,9 +662,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           ),
           const SizedBox(width: 10),
           FutureBuilder<int>(
-            future: _userId != null
-                ? BookingService().getPendingCount(_userId!)
-                : Future.value(0),
+            future: _pendingCountFuture ?? Future.value(0),
             builder: (context, snap) {
               final count = snap.data ?? 0;
               return _quickAction(
@@ -877,24 +892,14 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     final textColor = isDark ? Colors.white : Colors.black;
 
     return StreamBuilder<List<CatalogItem>>(
-      stream: _catalogService.streamCatalog(_userId!),
+      stream: _catalogStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          );
+        // Still waiting for first data — show nothing to avoid layout jump
+        if (!snapshot.hasData) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 
-        final items = snapshot.data ?? [];
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _hasItems != items.isNotEmpty) {
-            setState(() => _hasItems = items.isNotEmpty);
-          }
-        });
+        final items = snapshot.data!;
 
         if (items.isEmpty) {
           return SliverToBoxAdapter(
@@ -937,19 +942,12 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                       height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _addItem,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add First Item'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF22C55E),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap + Add Item to get started',
+                    style: TextStyle(
+                      color: const Color(0xFF22C55E).withValues(alpha: 0.7),
+                      fontSize: 13,
                     ),
                   ),
                 ],

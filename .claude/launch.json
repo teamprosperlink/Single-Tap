@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flutter-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "flutter", "run", "-d", "chrome", "--web-port", "8080"],
+      "port": 8080
+    },
+    {
+      "name": "firebase-emulators",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "firebase", "emulators:start", "--only", "functions"],
+      "port": 5001
+    },
+    {
+      "name": "flutter-android",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "flutter", "run"],
+      "port": 0
+    }
+  ]
+}

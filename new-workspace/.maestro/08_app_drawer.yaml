@@ -1,0 +1,114 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: App Drawer (Side Menu)
+# Verifies all drawer items and navigation
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Verify we're on home screen
+- assertVisible: "SingleTap"
+
+# Step 3: Open the end drawer (hamburger menu icon on top right)
+# The drawer slides from the right side
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 4: Verify drawer feature cards
+- assertVisible: "New Chat"
+- assertVisible: "Downloads"
+- assertVisible: "My Orders"
+- assertVisible: "My Bookings"
+- assertVisible: "Library"
+- assertVisible: "Chat History"
+
+# Step 5: Take screenshot of drawer
+- takeScreenshot: 08_drawer_features
+
+# Step 6: Scroll down to see profile menu options
+- scroll
+
+# Step 7: Verify profile menu items
+- assertVisible: "Profile"
+- assertVisible: "Upgrade Plan"
+- assertVisible: "Personalization"
+- assertVisible: "Settings"
+- assertVisible: "Help"
+- assertVisible: "Log out"
+
+# Step 8: Take screenshot of profile menu
+- takeScreenshot: 08_drawer_profile_menu
+
+# ---- Test New Chat ----
+# Step 9: Tap New Chat
+- tapOn: "New Chat"
+- waitForAnimationToEnd
+
+# Step 10: Verify navigated to new chat / home input
+- assertVisible: "Ask me anything..."
+
+# ---- Test My Bookings ----
+# Step 11: Open drawer again
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 12: Tap My Bookings
+- tapOn: "My Bookings"
+- waitForAnimationToEnd
+
+# Step 13: Verify My Bookings screen
+- assertVisible: "My Bookings"
+- assertVisible: "Upcoming"
+- assertVisible: "Completed"
+- assertVisible: "Cancelled"
+
+# Step 14: Take screenshot
+- takeScreenshot: 08_my_bookings
+
+# Step 15: Go back
+- back
+- waitForAnimationToEnd
+
+# ---- Test Settings ----
+# Step 16: Open drawer again
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 17: Scroll to Settings
+- scroll
+
+# Step 18: Tap Settings
+- tapOn: "Settings"
+- waitForAnimationToEnd
+
+# Step 19: Verify Settings screen
+- assertVisible: "Settings"
+
+# Step 20: Take screenshot
+- takeScreenshot: 08_settings_from_drawer
+
+# Step 21: Go back to home
+- back
+- waitForAnimationToEnd
+
+# Step 22: Final screenshot
+- takeScreenshot: 08_drawer_test_complete

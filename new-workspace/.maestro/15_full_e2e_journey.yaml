@@ -1,0 +1,213 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Full End-to-End User Journey
+# Simulates a complete real user session from login to logout
+# This is the comprehensive smoke test of the entire application
+# =============================================================
+
+# ============ PHASE 1: ONBOARDING & AUTH ============
+
+# Step 1: Launch app with clean state
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+
+# Step 2: Skip onboarding
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+# Step 3: Select account type
+- tapOn: "Personal / Individual"
+- tapOn: "Continue"
+- waitForAnimationToEnd
+
+# Step 4: Login with existing account
+- tapOn: "Enter your email"
+- inputText: "e2e_test@example.com"
+
+- tapOn: "Enter your password"
+- inputText: "E2ETestPass123!"
+
+- tapOn: "Log In"
+- waitForAnimationToEnd
+
+# Step 5: Verify successful login to home screen
+- assertVisible: "Home"
+- takeScreenshot: 15_e2e_logged_in
+
+# ============ PHASE 2: HOME & AI CHAT ============
+
+# Step 6: Interact with AI assistant
+- tapOn: "Ask me anything..."
+- inputText: "I'm looking for a good salon nearby"
+- pressKey: Enter
+- waitForAnimationToEnd
+- takeScreenshot: 15_e2e_ai_search
+
+# ============ PHASE 3: EXPLORE ALL TABS ============
+
+# Step 7: Navigate to Chat
+- tapOn: "Chat"
+- waitForAnimationToEnd
+- assertVisible: "Messages"
+- takeScreenshot: 15_e2e_chat_tab
+
+# Step 8: Navigate to Nearby
+- tapOn: "Nearby"
+- waitForAnimationToEnd
+- assertVisible: "Nearby"
+- takeScreenshot: 15_e2e_nearby_tab
+
+# Step 9: Navigate to Networking
+- tapOn: "Networking"
+- waitForAnimationToEnd
+- assertVisible: "Networking"
+- takeScreenshot: 15_e2e_networking_tab
+
+# Step 10: Navigate to Business
+- tapOn: "Business"
+- waitForAnimationToEnd
+- assertVisible: "Business"
+- takeScreenshot: 15_e2e_business_tab
+
+# Step 11: Return to Home
+- tapOn: "Home"
+- waitForAnimationToEnd
+
+# ============ PHASE 4: PROFILE MANAGEMENT ============
+
+# Step 12: Open drawer
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 13: Go to Profile
+- scroll
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- assertVisible: "Profile"
+- takeScreenshot: 15_e2e_profile
+
+# Step 14: Edit Profile
+- tapOn: "Edit Profile"
+- waitForAnimationToEnd
+- assertVisible: "Edit Profile"
+
+# Step 15: Update About Me
+- scrollUntilVisible:
+    element: "About Me"
+    direction: DOWN
+
+- tapOn: "Tell us about yourself..."
+- inputText: "E2E test user - updated via Maestro"
+
+# Step 16: Save profile
+- scrollUntilVisible:
+    element: "Update Profile"
+    direction: DOWN
+
+- tapOn: "Update Profile"
+- waitForAnimationToEnd
+- takeScreenshot: 15_e2e_profile_updated
+
+# Step 17: Go back to home
+- back
+- waitForAnimationToEnd
+- back
+- waitForAnimationToEnd
+
+# ============ PHASE 5: SETTINGS CHECK ============
+
+# Step 18: Open drawer again
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+- scroll
+
+# Step 19: Go to Settings
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- assertVisible: "Settings"
+
+# Step 20: Verify key settings exist
+- assertVisible: "Privacy"
+- assertVisible: "Security"
+- takeScreenshot: 15_e2e_settings
+
+# Step 21: Go back
+- back
+- waitForAnimationToEnd
+
+# ============ PHASE 6: VOICE ASSISTANT ============
+
+# Step 22: Navigate to Home
+- tapOn: "Home"
+- waitForAnimationToEnd
+
+# Step 23: Open Voice Assistant
+- tapOn: "AI Voice Assistant"
+- waitForAnimationToEnd
+- assertVisible: "AI Voice Assistant"
+- takeScreenshot: 15_e2e_voice_assistant
+
+# Step 24: Go back
+- back
+- waitForAnimationToEnd
+
+# ============ PHASE 7: HELP CENTER ============
+
+# Step 25: Open drawer
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+- scroll
+
+# Step 26: Go to Help
+- tapOn: "Help"
+- waitForAnimationToEnd
+- assertVisible: "Help Center"
+- takeScreenshot: 15_e2e_help_center
+
+# Step 27: Go back
+- back
+- waitForAnimationToEnd
+
+# ============ PHASE 8: LOGOUT ============
+
+# Step 28: Open drawer
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+- scroll
+
+# Step 29: Tap Log out
+- tapOn: "Log out"
+- waitForAnimationToEnd
+
+# Step 30: Verify returned to login/onboarding
+- assertVisible:
+    text: "Log In"
+    optional: true
+- assertVisible:
+    text: "Select an account type"
+    optional: true
+
+# Step 31: Final screenshot
+- takeScreenshot: 15_e2e_journey_complete

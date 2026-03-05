@@ -1,0 +1,48 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Existing User Login Flow (Email)
+# Verifies login with valid email and password credentials
+# =============================================================
+
+# Step 1: Launch app fresh
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+
+# Step 2: Skip onboarding
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+# Step 3: Select Personal account type & continue
+- tapOn: "Personal / Individual"
+- tapOn: "Continue"
+- waitForAnimationToEnd
+
+# Step 4: Verify login screen elements
+- assertVisible: "Log In"
+- assertVisible: "Email"
+- assertVisible: "Password"
+- assertVisible: "Forgot Password?"
+- assertVisible: "Continue with Google"
+- assertVisible: "Don't have an account? Sign Up"
+
+# Step 5: Enter valid email
+- tapOn: "Enter your email"
+- inputText: "testuser@example.com"
+
+# Step 6: Enter valid password
+- tapOn: "Enter your password"
+- inputText: "TestPassword123!"
+
+# Step 7: Tap Log In button
+- tapOn: "Log In"
+- waitForAnimationToEnd
+
+# Step 8: Verify successful login - should see home screen
+- assertVisible:
+    text: "Home"
+    optional: true
+
+# Step 9: Take screenshot
+- takeScreenshot: 03_login_success

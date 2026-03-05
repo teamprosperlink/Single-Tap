@@ -1,0 +1,147 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Catalog Management (Add, Edit, Delete Items)
+# Verifies catalog CRUD operations for business accounts
+# Prerequisites: User must have a business profile set up
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Navigate to Business tab
+- tapOn: "Business"
+- waitForAnimationToEnd
+
+# ---- ADD FIRST CATALOG ITEM ----
+
+# Step 3: Look for Add Item or Add First Item button
+- tapOn:
+    text: "Add Item"
+    optional: true
+- tapOn:
+    text: "Add First Item"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 4: Verify catalog item form
+- assertVisible: "Add New Item"
+
+# Step 5: Select item type - Service
+- tapOn: "Service"
+
+# Step 6: Enter item name
+- tapOn: "Item Name"
+- inputText: "Hair Styling"
+
+# Step 7: Enter description
+- tapOn: "Description"
+- inputText: "Professional hair styling service for all hair types"
+
+# Step 8: Scroll down
+- scroll
+
+# Step 9: Enter price
+- tapOn: "Price"
+- inputText: "500"
+
+# Step 10: Enter duration
+- tapOn: "Duration"
+- inputText: "45 min"
+
+# Step 11: Take screenshot of filled form
+- takeScreenshot: 11_catalog_add_service
+
+# Step 12: Scroll to save button
+- scrollUntilVisible:
+    element: "Save Item"
+    direction: DOWN
+
+# Step 13: Tap Save Item
+- tapOn: "Save Item"
+- waitForAnimationToEnd
+
+# Step 14: Take screenshot after save
+- takeScreenshot: 11_catalog_item_saved
+
+# ---- ADD SECOND ITEM (Product) ----
+
+# Step 15: Tap Add Item again
+- tapOn:
+    text: "Add Item"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 16: Select Product type
+- tapOn: "Product"
+
+# Step 17: Enter product details
+- tapOn: "Item Name"
+- inputText: "Hair Care Kit"
+
+- tapOn: "Description"
+- inputText: "Complete hair care package with shampoo and conditioner"
+
+- scroll
+
+- tapOn: "Price"
+- inputText: "1200"
+
+# Step 18: Save the product
+- scrollUntilVisible:
+    element: "Save Item"
+    direction: DOWN
+
+- tapOn: "Save Item"
+- waitForAnimationToEnd
+
+# Step 19: Take screenshot of catalog with items
+- takeScreenshot: 11_catalog_with_items
+
+# ---- VERIFY CATALOG FILTERS ----
+
+# Step 20: Navigate to My Catalog
+- tapOn:
+    text: "Catalog"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 21: Verify filter chips
+- assertVisible:
+    text: "Products"
+    optional: true
+- assertVisible:
+    text: "Services"
+    optional: true
+
+# Step 22: Search for item
+- tapOn:
+    text: "Search items..."
+    optional: true
+- inputText: "Hair"
+- waitForAnimationToEnd
+
+# Step 23: Take screenshot of search results
+- takeScreenshot: 11_catalog_search
+
+# ---- DELETE ITEM ----
+
+# Step 24: Long press on an item to get options
+- longPressOn:
+    text: "Hair Care Kit"
+    optional: true
+
+# Step 25: Tap Delete option
+- tapOn:
+    text: "Delete"
+    optional: true
+
+# Step 26: Confirm delete
+- tapOn:
+    text: "Delete"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 27: Final screenshot
+- takeScreenshot: 11_catalog_management_complete

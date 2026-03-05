@@ -1,0 +1,93 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Profile View & Edit Profile Flow
+# Verifies profile screen and editing user details
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Open drawer to navigate to Profile
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 3: Scroll to profile menu
+- scroll
+
+# Step 4: Tap Profile
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+# Step 5: Verify Profile screen
+- assertVisible: "Profile"
+
+# Step 6: Verify Edit Profile option exists
+- assertVisible: "Edit Profile"
+
+# Step 7: Take screenshot of profile screen
+- takeScreenshot: 09_profile_screen
+
+# Step 8: Tap Edit Profile
+- tapOn: "Edit Profile"
+- waitForAnimationToEnd
+
+# Step 9: Verify Edit Profile screen
+- assertVisible: "Edit Profile"
+
+# Step 10: Verify all profile fields are present
+- assertVisible: "Name"
+- assertVisible: "Email"
+- assertVisible: "Phone Number"
+- assertVisible: "About Me"
+- assertVisible: "Location"
+
+# Step 11: Scroll down to see more fields
+- scroll
+
+# Step 12: Verify additional fields
+- assertVisible: "Gender"
+- assertVisible: "Date of Birth"
+- assertVisible: "Occupation"
+
+# Step 13: Verify Update Profile button
+- assertVisible: "Update Profile"
+
+# Step 14: Take screenshot of edit profile form
+- takeScreenshot: 09_edit_profile_fields
+
+# Step 15: Edit the About Me field
+- tapOn: "Tell us about yourself..."
+- inputText: "Hello! I'm a Maestro test user exploring the Supper app."
+
+# Step 16: Edit phone number
+- tapOn: "+1 234 567 8900"
+- inputText: "+1 555 123 4567"
+
+# Step 17: Scroll down to tap Update Profile
+- scrollUntilVisible:
+    element: "Update Profile"
+    direction: DOWN
+
+# Step 18: Tap Update Profile
+- tapOn: "Update Profile"
+- waitForAnimationToEnd
+
+# Step 19: Verify success message
+- assertVisible:
+    text: "Profile updated successfully!"
+    optional: true
+
+# Step 20: Take screenshot
+- takeScreenshot: 09_profile_updated
+
+# Step 21: Go back
+- back
+- waitForAnimationToEnd

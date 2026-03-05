@@ -130,6 +130,9 @@ class BookingService {
           handleError: (error, stackTrace, sink) {
             debugPrint('Error streaming bookings: $error');
             sink.add(<BookingModel>[]);
+            if (error.toString().contains('permission-denied')) {
+              sink.close();
+            }
           },
         ));
   }
@@ -149,6 +152,9 @@ class BookingService {
           handleError: (error, stackTrace, sink) {
             debugPrint('Error streaming customer bookings: $error');
             sink.add(<BookingModel>[]);
+            if (error.toString().contains('permission-denied')) {
+              sink.close();
+            }
           },
         ));
   }

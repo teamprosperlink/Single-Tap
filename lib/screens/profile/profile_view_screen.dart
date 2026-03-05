@@ -15,6 +15,7 @@ import '../business/simple/catalog_item_detail.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../business/simple/write_review_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ProfileViewScreen extends StatefulWidget {
   final UserProfile userProfile;
@@ -1013,13 +1014,33 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     );
   }
 
+  String _buildSocialUrl(String platform, String value) {
+    if (value.startsWith('http')) return value;
+    // Strip leading @ if present
+    final handle = value.startsWith('@') ? value.substring(1) : value;
+    switch (platform) {
+      case 'instagram':
+        return 'https://instagram.com/$handle';
+      case 'facebook':
+        return 'https://facebook.com/$handle';
+      case 'twitter':
+        return 'https://x.com/$handle';
+      case 'linkedin':
+        return 'https://linkedin.com/in/$handle';
+      case 'youtube':
+        return 'https://youtube.com/@$handle';
+      default:
+        return 'https://$value';
+    }
+  }
+
   Widget _buildSocialLinksRow(Map<String, String> socialLinks, bool isDark) {
     const iconMap = {
-      'instagram': Icons.camera_alt_outlined,
-      'facebook': Icons.facebook_outlined,
-      'twitter': Icons.alternate_email,
-      'linkedin': Icons.work_outline,
-      'youtube': Icons.play_circle_outline,
+      'instagram': FontAwesomeIcons.instagram,
+      'facebook': FontAwesomeIcons.facebookF,
+      'twitter': FontAwesomeIcons.xTwitter,
+      'linkedin': FontAwesomeIcons.linkedinIn,
+      'youtube': FontAwesomeIcons.youtube,
     };
     const colorMap = {
       'instagram': Color(0xFFE1306C),
@@ -1049,8 +1070,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
           children: available.map((e) {
             final icon = iconMap[e.key] ?? Icons.link;
             final color = colorMap[e.key] ?? Colors.grey;
-            final url =
-                e.value.startsWith('http') ? e.value : 'https://${e.value}';
+            final url = _buildSocialUrl(e.key, e.value);
             return Padding(
               padding: const EdgeInsets.only(right: 12),
               child: GestureDetector(
@@ -1062,12 +1082,12 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: isDark ? 0.2 : 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: color.withValues(alpha: 0.35)),
+                    color: color.withValues(alpha: isDark ? 0.15 : 0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Center(
+                    child: FaIcon(icon, color: color, size: 20),
+                  ),
                 ),
               ),
             );

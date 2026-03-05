@@ -1,0 +1,56 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Negative Login Test (Wrong Password)
+# Verifies error handling for invalid credentials
+# =============================================================
+
+# Step 1: Launch app fresh
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+
+# Step 2: Skip onboarding
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+# Step 3: Select Personal account type & continue
+- tapOn: "Personal / Individual"
+- tapOn: "Continue"
+- waitForAnimationToEnd
+
+# Step 4: Verify login screen is displayed
+- assertVisible: "Log In"
+
+# Step 5: Enter valid email
+- tapOn: "Enter your email"
+- inputText: "testuser@example.com"
+
+# Step 6: Enter WRONG password
+- tapOn: "Enter your password"
+- inputText: "WrongPassword999!"
+
+# Step 7: Tap Log In
+- tapOn: "Log In"
+- waitForAnimationToEnd
+
+# Step 8: Verify error message is shown (user stays on login screen)
+- assertVisible: "Log In"
+
+# Step 9: Verify we did NOT navigate to home
+- assertNotVisible:
+    text: "Ask me anything..."
+    optional: true
+
+# Step 10: Try login with empty fields
+- tapOn: "Enter your email"
+- inputText: ""
+
+- tapOn: "Log In"
+- waitForAnimationToEnd
+
+# Step 11: Should still be on login screen
+- assertVisible: "Log In"
+
+# Step 12: Take screenshot of error state
+- takeScreenshot: 04_negative_login

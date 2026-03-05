@@ -1,0 +1,52 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: New User Signup Flow (Email)
+# Verifies user can create a new account with email/password
+# =============================================================
+
+# Step 1: Launch app fresh
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+
+# Step 2: Skip onboarding
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+# Step 3: Select Personal account type
+- tapOn: "Personal / Individual"
+- tapOn: "Continue"
+- waitForAnimationToEnd
+
+# Step 4: Switch to signup mode
+- tapOn: "Don't have an account? Sign Up"
+- waitForAnimationToEnd
+
+# Step 5: Verify signup screen elements
+- assertVisible: "Sign Up"
+
+# Step 6: Enter email address
+- tapOn: "Enter your email"
+- inputText: "testuser_maestro@example.com"
+
+# Step 7: Enter password
+- tapOn: "Enter your password"
+- inputText: "TestPassword123!"
+
+# Step 8: Accept terms of service
+- tapOn: "I agree to the Terms of Service and Privacy Policy"
+
+# Step 9: Tap Sign Up button
+- tapOn: "Sign Up"
+- waitForAnimationToEnd
+
+# Step 10: Handle name entry dialog (appears after signup)
+- assertVisible: "Name"
+- tapOn:
+    id: "name_field"
+    optional: true
+- inputText: "Maestro Test User"
+
+# Step 11: Take screenshot of signup result
+- takeScreenshot: 02_signup_complete

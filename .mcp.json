@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mobile": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"],
+      "env": {
+        "ANDROID_HOME": "C:\\Users\\kiran\\AppData\\Local\\Android\\Sdk"
+      }
+    }
+  }
+}

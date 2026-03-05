@@ -93,6 +93,20 @@ service firebase.storage {
       allow delete: if isOwner(userId);
     }
     
+    // Catalog images - Business product/service photos
+    match /catalog_images/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && isImage() && isValidImageSize();
+      allow delete: if isOwner(userId);
+    }
+
+    // Business cover images
+    match /business_covers/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && isImage() && isValidImageSize();
+      allow delete: if isOwner(userId);
+    }
+
     // Call recordings (future feature)
     match /call_recordings/{callId}/{fileName} {
       allow read: if isAuthenticated();

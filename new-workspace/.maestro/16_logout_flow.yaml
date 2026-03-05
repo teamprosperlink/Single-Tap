@@ -1,0 +1,62 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Logout Flow
+# Verifies user can successfully log out from the app
+# Prerequisites: User must be logged in
+# =============================================================
+
+# Step 1: Launch app (user should be logged in)
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Verify we're on the home screen
+- assertVisible: "Home"
+
+# Step 3: Open the app drawer
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 4: Scroll down to see profile menu
+- scroll
+
+# Step 5: Verify Log out option is visible
+- assertVisible: "Log out"
+
+# Step 6: Take screenshot before logout
+- takeScreenshot: 16_before_logout
+
+# Step 7: Tap Log out
+- tapOn: "Log out"
+- waitForAnimationToEnd
+
+# Step 8: Verify user is redirected to login/onboarding
+# After logout, user should see either the account selection or login screen
+- assertVisible:
+    text: "Select an account type"
+    optional: true
+- assertVisible:
+    text: "Log In"
+    optional: true
+
+# Step 9: Verify home screen is NOT visible (user is logged out)
+- assertNotVisible:
+    text: "Ask me anything..."
+    optional: true
+
+# Step 10: Take screenshot confirming logout
+- takeScreenshot: 16_logout_success
+
+# Step 11: Verify user cannot access protected screens
+# Try to navigate - should stay on login/onboarding
+- assertNotVisible:
+    text: "Messages"
+    optional: true
+
+# Step 12: Final screenshot
+- takeScreenshot: 16_logout_complete

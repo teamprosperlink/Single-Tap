@@ -1,0 +1,113 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Bookings Flow (Customer + Business Owner)
+# Verifies booking service, viewing bookings, and managing them
+# Prerequisites: User must be logged in, business profile exists
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# ---- CUSTOMER BOOKINGS VIEW ----
+
+# Step 2: Open drawer to access My Bookings
+- swipe:
+    direction: LEFT
+    duration: 500
+    startPercentage: 95
+    endPercentage: 30
+
+- waitForAnimationToEnd
+
+# Step 3: Tap My Bookings
+- tapOn: "My Bookings"
+- waitForAnimationToEnd
+
+# Step 4: Verify Customer Bookings screen
+- assertVisible: "My Bookings"
+
+# Step 5: Verify booking tabs
+- assertVisible: "Upcoming"
+- assertVisible: "Completed"
+- assertVisible: "Cancelled"
+
+# Step 6: Take screenshot of customer bookings
+- takeScreenshot: 13_customer_bookings
+
+# Step 7: Tap Completed tab
+- tapOn: "Completed"
+- waitForAnimationToEnd
+- assertVisible: "Completed bookings will appear here"
+
+# Step 8: Tap Cancelled tab
+- tapOn: "Cancelled"
+- waitForAnimationToEnd
+- assertVisible: "Cancelled bookings will appear here"
+
+# Step 9: Go back to Upcoming
+- tapOn: "Upcoming"
+- waitForAnimationToEnd
+
+# Step 10: Take screenshot
+- takeScreenshot: 13_customer_bookings_tabs
+
+# Step 11: Go back
+- back
+- waitForAnimationToEnd
+
+# ---- BUSINESS OWNER BOOKINGS VIEW ----
+
+# Step 12: Navigate to Business tab
+- tapOn: "Business"
+- waitForAnimationToEnd
+
+# Step 13: Tap Bookings button (if visible in business hub)
+- tapOn:
+    text: "Bookings"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 14: Verify Business Bookings screen
+- assertVisible:
+    text: "Bookings"
+    optional: true
+
+# Step 15: Verify owner booking tabs
+- assertVisible:
+    text: "Pending"
+    optional: true
+- assertVisible:
+    text: "Confirmed"
+    optional: true
+- assertVisible:
+    text: "History"
+    optional: true
+
+# Step 16: Check Pending tab empty state
+- assertVisible:
+    text: "New booking requests will appear here"
+    optional: true
+
+# Step 17: Tap Confirmed tab
+- tapOn:
+    text: "Confirmed"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 18: Tap History tab
+- tapOn:
+    text: "History"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 19: Take screenshot
+- takeScreenshot: 13_business_bookings
+
+# Step 20: Go back
+- back
+- waitForAnimationToEnd
+
+# Step 21: Final screenshot
+- takeScreenshot: 13_bookings_flow_complete
