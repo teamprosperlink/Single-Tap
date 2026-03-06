@@ -545,6 +545,54 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // CHAT HISTORY COLLECTION (Home screen conversations)
+    // ============================================================
+    match /chat_history/{chatId} {
+      // Owner can read their chat history
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // Owner can create chat history
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // Owner can update their chat history
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // Owner can delete their chat history
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated() &&
+          get(/databases/$(database)/documents/chat_history/$(chatId)).data.userId == request.auth.uid;
+      }
+    }
+
+    // ============================================================
+    // PROJECTS COLLECTION (Library feature)
+    // ============================================================
+    match /projects/{projectId} {
+      // Owner can read their projects
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // Owner can create projects
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // Owner can update their projects
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // Owner can delete their projects
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================
     // DEPRECATED COLLECTIONS (Allow read for migration, deny write)
     // ============================================================
 

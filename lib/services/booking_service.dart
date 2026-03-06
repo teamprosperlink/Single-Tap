@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -121,20 +120,13 @@ class BookingService {
           whereIn: filters.map((f) => f.name).toList());
     }
 
-    return query.snapshots().map((snap) => snap.docs
-        .map((doc) => BookingModel.fromFirestore(doc))
-        .toList())
-        .transform(StreamTransformer<List<BookingModel>,
-            List<BookingModel>>.fromHandlers(
-          handleData: (data, sink) => sink.add(data),
-          handleError: (error, stackTrace, sink) {
-            debugPrint('Error streaming bookings: $error');
-            sink.add(<BookingModel>[]);
-            if (error.toString().contains('permission-denied')) {
-              sink.close();
-            }
-          },
-        ));
+    return query
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList())
+        .handleError((error) {
+          debugPrint('Error streaming bookings: $error');
+        });
   }
 
   Stream<List<BookingModel>> streamCustomerBookings(String customerId) {
@@ -143,20 +135,11 @@ class BookingService {
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => BookingModel.fromFirestore(doc))
-            .toList())
-        .transform(StreamTransformer<List<BookingModel>,
-            List<BookingModel>>.fromHandlers(
-          handleData: (data, sink) => sink.add(data),
-          handleError: (error, stackTrace, sink) {
-            debugPrint('Error streaming customer bookings: $error');
-            sink.add(<BookingModel>[]);
-            if (error.toString().contains('permission-denied')) {
-              sink.close();
-            }
-          },
-        ));
+        .map((snap) =>
+            snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList())
+        .handleError((error) {
+          debugPrint('Error streaming customer bookings: $error');
+        });
   }
 
   // ── Queries ──

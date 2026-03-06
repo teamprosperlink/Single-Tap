@@ -635,7 +635,7 @@ Field rules:
         'intentAnalysis': {
           'primary_intent': 'Business offering $softLabel services/products',
           'action_type': 'offering',
-          'domain': 'services',
+          'domain': softLabel.isNotEmpty ? softLabel.toLowerCase() : 'services',
           'service_type': 'in_person',
           'is_symmetric': false,
           'exchange_model': 'paid',
@@ -650,7 +650,7 @@ Field rules:
         'keywords': keywords,
         'metadata': {
           'createdBy': 'BusinessProfileSync',
-          'version': '1.0',
+          'version': '2.0',
           'isBusinessPost': true,
           'businessName': businessName,
           'softLabel': softLabel,
@@ -680,6 +680,24 @@ Field rules:
       );
     } catch (e) {
       debugPrint('Error syncing business post: $e');
+    }
+  }
+
+  /// Re-sync the current user's business post if it was created with an older
+  /// version (stale embeddings / missing domain). Called on business hub load.
+  Future<void> resyncIfStale(String userId) async {
+    try {
+      final doc = await _firestore.collection('posts').doc('business_$userId').get();
+      if (!doc.exists) return;
+      final data = doc.data()!;
+      final metadata = data['metadata'] as Map<String, dynamic>?;
+      final version = metadata?['version'] as String?;
+      if (version != '2.0') {
+        debugPrint('Business post stale (version=$version), re-syncing...');
+        await syncBusinessPost(userId);
+      }
+    } catch (e) {
+      debugPrint('Error checking business post staleness: $e');
     }
   }
 
@@ -809,7 +827,25 @@ Field rules:
         // not specific enough — it confuses cross-category items (watch vs monitor,
         // Ferrari vs water bottle). Require either direct keyword overlap, a
         // domain-specific compHit, or near-identical semantic similarity (≥0.85).
-        if (shared.isEmpty && compHits == 0 && semSim < 0.85) {
+        if (shared.isEmpty && compHits == 0 && semSim < 0.80) {
+          skipLowRel++;
+          continue;
+        }
+
+        // ── Domain mismatch detection ──────────────────────────────────
+        final sourceDomain = (sourcePost.intentAnalysis['domain'] ?? '')
+            .toString().toLowerCase();
+        final candidateDomain = (candidate.intentAnalysis['domain'] ?? '')
+            .toString().toLowerCase();
+        final bothSpecificDomains = sourceDomain.isNotEmpty &&
+            candidateDomain.isNotEmpty &&
+            sourceDomain != 'services' && candidateDomain != 'services' &&
+            sourceDomain != 'general' && candidateDomain != 'general';
+        final domainMismatch = bothSpecificDomains &&
+            sourceDomain != candidateDomain;
+
+        // Hard block: different specific domains + no keyword evidence
+        if (domainMismatch && shared.isEmpty && compHits == 0) {
           skipLowRel++;
           continue;
         }
@@ -849,7 +885,7 @@ Field rules:
             (sourceSymmetric && candidateSymmetric) ||
             sourceSide == 'neutral' ||
             candidateSide == 'neutral';
-        final hasEvidence = semSim >= 0.65 || (kwScore > 0 && semSim >= 0.55);
+        final hasEvidence = semSim >= 0.70 || (kwScore > 0 && semSim >= 0.55);
         final intentBonus =
             complementary && hasEvidence ? ApiConfig.matchIntentBonus : 0.0;
 
@@ -859,9 +895,13 @@ Field rules:
         // ── Lifestyle penalty ──────────────────────────────────────────
         final penalty = _lifestylePenalty(sourcePost, candidate);
 
+        // ── Domain mismatch penalty ─────────────────────────────────
+        final domainPenalty = (domainMismatch && kwScore == 0)
+            ? ApiConfig.matchDomainMismatchPenalty : 0.0;
+
         // ── Final score ────────────────────────────────────────────────
         final finalScore =
-            (relevance + intentBonus + locBonus - penalty).clamp(0.0, 1.0);
+            (relevance + intentBonus + locBonus - penalty - domainPenalty).clamp(0.0, 1.0);
 
         if (finalScore < ApiConfig.matchFinalThreshold) {
           skipThreshold++;
@@ -870,7 +910,8 @@ Field rules:
 
         matches.add(candidate.copyWith(similarityScore: finalScore));
         debugPrint('  MATCHED: "${candidate.title}" score=${finalScore.toStringAsFixed(2)} '
-            '(sem=${semSim.toStringAsFixed(2)} kw=${kwScore.toStringAsFixed(2)})');
+            '(sem=${semSim.toStringAsFixed(2)} kw=${kwScore.toStringAsFixed(2)} '
+            'domain=$candidateDomain domPenalty=${domainPenalty.toStringAsFixed(2)})');
       }
 
       debugPrint('=== STATS: user=$skipUser embed=$skipEmbed '

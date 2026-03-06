@@ -47,18 +47,12 @@ class CatalogService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => CatalogItem.fromFirestore(doc)).toList())
-        .transform(StreamTransformer<List<CatalogItem>,
-            List<CatalogItem>>.fromHandlers(
-          handleData: (data, sink) => sink.add(data),
-          handleError: (error, stackTrace, sink) {
-            debugPrint('Error streaming catalog: $error');
-            sink.add(<CatalogItem>[]);
-            // Permission-denied never self-resolves; stop retrying to prevent crash
-            if (error.toString().contains('permission-denied')) {
-              sink.close();
-            }
-          },
-        ));
+        .handleError((error) {
+          debugPrint('Error streaming catalog: $error');
+          // Permission-denied errors are swallowed — stream emits nothing
+          // further. Firestore may retry internally but the error won't
+          // propagate to StreamBuilders or crash the app.
+        });
   }
 
   Future<List<CatalogItem>> getAvailableItems(String userId, {int limit = 50}) async {

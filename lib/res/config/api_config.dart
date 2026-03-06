@@ -48,6 +48,9 @@ class ApiConfig {
   /// Lifestyle clash penalty.
   static const double matchLifestylePenalty = 0.15;
 
+  /// Domain mismatch penalty (e.g. plumbing vs hair salon).
+  static const double matchDomainMismatchPenalty = 0.10;
+
   /// Keyword-signal damping factor (kwScore * this vs semantic).
   static const double matchKeywordDamping = 0.70;
 

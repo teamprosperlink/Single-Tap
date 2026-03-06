@@ -36,7 +36,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     super.initState();
     final uid = _userId;
     if (uid != null) {
-      UnifiedPostService().syncBusinessPost(uid);
+      UnifiedPostService().resyncIfStale(uid);
       _pendingCountFuture = BookingService().getPendingCount(uid);
       _catalogStream = _catalogService.streamCatalog(uid);
     }
