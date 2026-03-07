@@ -476,14 +476,8 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
 
     // Build subtitle text
     String subtitle = '';
-    if (item.type == CatalogItemType.service && item.duration != null) {
-      final hours = item.duration! ~/ 60;
-      final mins = item.duration! % 60;
-      subtitle = hours > 0
-          ? (mins > 0
-              ? 'Duration: ${hours}h ${mins}m'
-              : 'Duration: $hours Hours')
-          : 'Duration: $mins min';
+    if (item.type == CatalogItemType.service && item.formattedDuration != null) {
+      subtitle = 'Duration: ${item.formattedDuration}';
     } else if (item.category != null && item.category!.isNotEmpty) {
       subtitle = item.category!;
     } else {

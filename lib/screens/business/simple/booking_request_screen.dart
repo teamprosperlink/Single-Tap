@@ -206,7 +206,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${widget.item.duration} min',
+                        widget.item.formattedDuration ?? '',
                         style: TextStyle(color: subtitleColor, fontSize: 12),
                       ),
                     ),

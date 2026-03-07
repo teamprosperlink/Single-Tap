@@ -22,10 +22,11 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-  final _durationController = TextEditingController();
-
   CatalogItemType _type = CatalogItemType.service;
   bool _isAvailable = true;
+  int _durationDays = 0;
+  int _durationHours = 0;
+  int _durationMinutes = 0;
   String _currency = 'INR';
   File? _imageFile;
   String? _existingImageUrl;
@@ -45,7 +46,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
       _currency = item.currency;
       _existingImageUrl = item.imageUrl;
       if (item.duration != null) {
-        _durationController.text = item.duration.toString();
+        _durationDays = item.duration! ~/ (24 * 60);
+        _durationHours = (item.duration! % (24 * 60)) ~/ 60;
+        _durationMinutes = item.duration! % 60;
       }
     }
   }
@@ -55,7 +58,6 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _durationController.dispose();
     super.dispose();
   }
 
@@ -74,16 +76,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     }
   }
 
-  int? _parseDuration(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return null;
-    // Support "45", "45 min", "1.5h", "90min"
-    final numOnly = double.tryParse(trimmed.replaceAll(RegExp(r'[^0-9.]'), ''));
-    if (numOnly == null) return null;
-    if (trimmed.toLowerCase().contains('h')) {
-      return (numOnly * 60).round();
-    }
-    return numOnly.round();
+  int? _computeDuration() {
+    final total = _durationDays * 24 * 60 + _durationHours * 60 + _durationMinutes;
+    return total > 0 ? total : null;
   }
 
   Future<void> _save() async {
@@ -103,7 +98,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
 
       final priceText = _priceController.text.trim();
       final price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
-      final duration = _showDuration ? _parseDuration(_durationController.text) : null;
+      final duration = _showDuration ? _computeDuration() : null;
 
       if (widget.isEditing) {
         await _catalogService.updateItem(userId, widget.item!.id, {
@@ -344,77 +339,62 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
 
             const SizedBox(height: 12),
 
-            // ── Price + Duration row ──
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Price
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Price',
-                          style: TextStyle(
-                              color: textColor,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _priceController,
-                        style: TextStyle(color: textColor),
-                        decoration: _inputDecoration('0.00', isDark).copyWith(
-                          prefixIcon: Padding(
-                            padding: const EdgeInsets.only(left: 12, right: 4),
-                            child: Text(currencySymbol,
-                                style: TextStyle(
-                                    color: subtitleColor,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500)),
-                          ),
-                          prefixIconConstraints:
-                              const BoxConstraints(minWidth: 0, minHeight: 0),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ],
-                  ),
+            // ── Price ──
+            Text('Price',
+                style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _priceController,
+              style: TextStyle(color: textColor),
+              decoration: _inputDecoration('0.00', isDark).copyWith(
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 4),
+                  child: Text(currencySymbol,
+                      style: TextStyle(
+                          color: subtitleColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500)),
                 ),
-
-                // Duration (Service / Booking only)
-                if (_showDuration) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Duration',
-                            style: TextStyle(
-                                color: textColor,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _durationController,
-                          style: TextStyle(color: textColor),
-                          decoration:
-                              _inputDecoration('e.g., 45 min', isDark).copyWith(
-                            prefixIcon: Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 12, right: 4),
-                              child: Icon(Icons.access_time,
-                                  size: 18, color: subtitleColor),
-                            ),
-                            prefixIconConstraints:
-                                const BoxConstraints(minWidth: 0, minHeight: 0),
-                          ),
-                          keyboardType: TextInputType.text,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 0, minHeight: 0),
+              ),
+              keyboardType: TextInputType.number,
             ),
+
+            // ── Duration (Service only) ──
+            if (_showDuration) ...[
+              const SizedBox(height: 16),
+              Text('Duration',
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, size: 18, color: subtitleColor),
+                    const SizedBox(width: 8),
+                    _durationSegment('Days', _durationDays, 0, 30,
+                        (v) => setState(() => _durationDays = v), isDark, textColor, subtitleColor),
+                    const SizedBox(width: 8),
+                    _durationSegment('Hours', _durationHours, 0, 23,
+                        (v) => setState(() => _durationHours = v), isDark, textColor, subtitleColor),
+                    const SizedBox(width: 8),
+                    _durationSegment('Min', _durationMinutes, 0, 59,
+                        (v) => setState(() => _durationMinutes = v), isDark, textColor, subtitleColor),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 20),
 
@@ -485,6 +465,44 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _durationSegment(String label, int value, int min, int max,
+      ValueChanged<int> onChanged, bool isDark, Color textColor, Color subtitleColor) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(color: subtitleColor, fontSize: 11)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF3A3A3C) : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.08),
+              ),
+            ),
+            child: DropdownButton<int>(
+              value: value,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              dropdownColor: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+              style: TextStyle(color: textColor, fontSize: 14),
+              items: List.generate(max - min + 1, (i) => i + min)
+                  .map((v) => DropdownMenuItem(
+                      value: v, child: Center(child: Text('$v'))))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

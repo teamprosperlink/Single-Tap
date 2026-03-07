@@ -248,7 +248,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                       Icon(Icons.timer_outlined,
                           size: 16, color: subtitleColor),
                       const SizedBox(width: 8),
-                      Text('${booking.duration} min',
+                      Text(booking.formattedDuration ?? '',
                           style:
                               TextStyle(color: subtitleColor, fontSize: 13)),
                     ],

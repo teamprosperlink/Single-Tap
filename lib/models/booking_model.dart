@@ -153,6 +153,18 @@ class BookingModel {
     );
   }
 
+  String? get formattedDuration {
+    if (duration == null) return null;
+    final d = duration! ~/ (24 * 60);
+    final h = (duration! % (24 * 60)) ~/ 60;
+    final m = duration! % 60;
+    final parts = <String>[];
+    if (d > 0) parts.add('$d ${d == 1 ? 'day' : 'days'}');
+    if (h > 0) parts.add('$h ${h == 1 ? 'hour' : 'hours'}');
+    if (m > 0) parts.add('$m min');
+    return parts.isEmpty ? '0 min' : parts.join(' ');
+  }
+
   String get formattedDate {
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
