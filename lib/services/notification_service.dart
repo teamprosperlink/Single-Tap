@@ -63,7 +63,7 @@ class NotificationService {
       // Process any pending notification from background tap
       _processPendingNotification();
     } catch (e) {
-      // Continue app execution even if notifications fail
+      debugPrint('NotificationService.initialize() failed: $e');
     }
   }
 
@@ -650,7 +650,7 @@ class NotificationService {
         }
       }
     } catch (e) {
-      // Error creating notification channels
+      debugPrint('Failed to create notification channels: $e');
     }
   }
 
@@ -704,7 +704,7 @@ class NotificationService {
               });
         }
       } catch (e) {
-        // Error refreshing FCM token
+        debugPrint('FCM token refresh failed: $e');
       }
     });
   }
@@ -1622,7 +1622,7 @@ class NotificationService {
       await _fcm.deleteToken();
       _fcmToken = null;
     } catch (e) {
-      // Error clearing FCM token
+      debugPrint('Failed to clear FCM token on logout: $e');
     }
   }
 

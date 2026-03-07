@@ -9,19 +9,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io' show Platform;
 import '../res/utils/photo_url_helper.dart';
+import '../res/config/api_config.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Properly initialize GoogleSignIn with Firebase scopes
-    clientId: '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
-    scopes: [
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email',
-    ],
-  );
+  static GoogleSignIn? _googleSignInInstance;
+  static GoogleSignIn get _googleSignIn {
+    _googleSignInInstance ??= GoogleSignIn(
+      clientId: ApiConfig.googleClientId,
+      scopes: [
+        'email',
+        'profile',
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
+    );
+    return _googleSignInInstance!;
+  }
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   static const String _deviceTokenKey = 'device_login_token';
 

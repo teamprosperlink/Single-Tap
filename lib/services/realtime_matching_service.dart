@@ -66,6 +66,7 @@ class RealtimeMatchingService {
           .collection('posts')
           .where('userId', isEqualTo: currentUserId)
           .where('isActive', isEqualTo: true)
+          .limit(50)
           .get();
 
       if (userPosts.docs.isEmpty) return;

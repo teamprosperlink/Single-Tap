@@ -752,6 +752,10 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _authStateSubscription?.cancel(); // Also cancel auth subscription
       debugPrint('[RemoteLogout]  All subscriptions cancelled');
 
+      // Clean up singleton services to prevent memory leaks on re-login
+      LocationService().reset();
+      await UserManager().signOut();
+
       // Clear flags BEFORE logout
       debugPrint('[RemoteLogout] Clearing state flags...');
       _hasInitializedServices = false;
@@ -1052,7 +1056,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           onTimeout: () {},
         );
       } catch (e) {
-        // Profile service error (non-fatal)
+        debugPrint('ensureProfileExists failed: $e');
       }
 
       // Claim this device's session on startup so the device monitoring
@@ -1062,7 +1066,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       try {
         await _authService.saveCurrentDeviceSession();
       } catch (e) {
-        // Non-fatal — monitoring will still work
+        debugPrint('saveCurrentDeviceSession failed: $e');
       }
 
       await Future.delayed(const Duration(milliseconds: 100));
@@ -1074,7 +1078,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       // Start listening for notifications from other users
       _startNotificationListener();
     } catch (e) {
-      // User services init failed
+      debugPrint('_initializeUserServices failed: $e');
     }
   }
 

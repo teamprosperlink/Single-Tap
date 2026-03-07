@@ -1,5 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 /// ChatService - Handles all chat-related operations
 ///
@@ -232,7 +233,7 @@ class ChatService {
       // Update unread count for this user
       await chatRef.update({'unreadCount.$userId': 0});
     } catch (e) {
-      // Silently ignore errors
+      debugPrint('markMessagesAsRead failed: $e');
     }
   }
 

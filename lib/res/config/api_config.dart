@@ -9,6 +9,9 @@ class ApiConfig {
   /// Google Gemini API Key - loaded from environment variables
   static String get geminiApiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
 
+  /// Google Sign-In Client ID - loaded from environment variables
+  static String get googleClientId => dotenv.env['GOOGLE_CLIENT_ID'] ?? '';
+
   /// Gemini model names
   static const String geminiFlashModel = 'gemini-2.5-flash';
   static const String geminiEmbeddingModel = 'gemini-embedding-001';
