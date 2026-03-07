@@ -33,54 +33,73 @@ class ProfileViewsScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(_userId)
-            .collection('profileViews')
-            .orderBy('viewedAt', descending: true)
-            .limit(200)
             .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        builder: (context, userSnapshot) {
+          final userData =
+              userSnapshot.data?.data() as Map<String, dynamic>?;
+          final bpMap =
+              userData?['businessProfile'] as Map<String, dynamic>?;
+          final counterViews = bpMap?['profileViews'] as int? ?? 0;
 
-          if (snapshot.hasError) {
-            debugPrint('ProfileViews error: ${snapshot.error}');
-            return Column(
-              children: [
-                _buildViewsHeader(0, isDark, textColor, subtitleColor),
-                Expanded(
-                    child:
-                        _buildEmptyState(isDark, textColor, subtitleColor)),
-              ],
-            );
-          }
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(_userId)
+                .collection('profileViews')
+                .orderBy('viewedAt', descending: true)
+                .limit(200)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  userSnapshot.connectionState ==
+                      ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          final docs = snapshot.data?.docs ?? [];
-          final grouped = _groupViewsByViewer(docs);
+              if (snapshot.hasError) {
+                debugPrint('ProfileViews error: ${snapshot.error}');
+                return Column(
+                  children: [
+                    _buildViewsHeader(
+                        counterViews, isDark, textColor, subtitleColor),
+                    Expanded(
+                        child: _buildEmptyState(
+                            isDark, textColor, subtitleColor)),
+                  ],
+                );
+              }
 
-          return Column(
-            children: [
-              _buildViewsHeader(
-                  docs.length, isDark, textColor, subtitleColor),
-              Expanded(
-                child: grouped.isEmpty
-                    ? _buildEmptyState(isDark, textColor, subtitleColor)
-                    : ListView.separated(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                        itemCount: grouped.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          return _buildViewItem(grouped[index], isDark,
-                              textColor, subtitleColor);
-                        },
-                      ),
-              ),
-            ],
+              final docs = snapshot.data?.docs ?? [];
+              final grouped = _groupViewsByViewer(docs);
+              final totalViews =
+                  counterViews > 0 ? counterViews : docs.length;
+
+              return Column(
+                children: [
+                  _buildViewsHeader(
+                      totalViews, isDark, textColor, subtitleColor),
+                  Expanded(
+                    child: grouped.isEmpty
+                        ? _buildEmptyState(isDark, textColor, subtitleColor)
+                        : ListView.separated(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                            itemCount: grouped.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              return _buildViewItem(grouped[index],
+                                  isDark, textColor, subtitleColor);
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
