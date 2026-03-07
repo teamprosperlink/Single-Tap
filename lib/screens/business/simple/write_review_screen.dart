@@ -52,14 +52,23 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       return;
     }
 
+    // Fetch real name/photo from Firestore user profile
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users').doc(user.uid).get();
+    final uData = userDoc.data();
+    final reviewerName = uData?['name'] as String? ??
+        uData?['displayName'] as String? ?? 'Anonymous';
+    final reviewerPhoto = uData?['profileImageUrl'] as String? ??
+        uData?['photoUrl'] as String?;
+
     final reviewId =
         FirebaseFirestore.instance.collection('business_reviews').doc().id;
 
     final review = ReviewModel(
       id: reviewId,
       reviewerId: user.uid,
-      reviewerName: user.displayName ?? 'Anonymous',
-      reviewerPhoto: user.photoURL,
+      reviewerName: reviewerName,
+      reviewerPhoto: reviewerPhoto,
       professionalId: widget.businessUserId,
       rating: _rating,
       reviewText: _reviewController.text.trim(),

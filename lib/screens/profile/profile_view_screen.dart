@@ -34,18 +34,31 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
   bool get _isOwnProfile =>
       FirebaseAuth.instance.currentUser?.uid == widget.userProfile.uid;
 
+  Future<void> _logProfileViewWithFirestoreData(String viewerUid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(viewerUid).get();
+      final data = doc.data();
+      final name = data?['name'] as String? ??
+          data?['displayName'] as String? ?? 'Someone';
+      final photo = data?['profileImageUrl'] as String? ??
+          data?['photoUrl'] as String?;
+      CatalogService().logProfileView(
+        profileOwnerId: widget.userProfile.uid,
+        viewerId: viewerUid,
+        viewerName: name,
+        viewerPhotoUrl: photo,
+      );
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.userProfile.isBusiness && !_isOwnProfile) {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
-        CatalogService().logProfileView(
-          profileOwnerId: widget.userProfile.uid,
-          viewerId: currentUser.uid,
-          viewerName: currentUser.displayName ?? 'Someone',
-          viewerPhotoUrl: currentUser.photoURL,
-        );
+        _logProfileViewWithFirestoreData(currentUser.uid);
       }
     }
   }

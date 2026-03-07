@@ -13,6 +13,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/user_profile.dart';
 import '../screens/chat/enhanced_chat_screen.dart';
+import '../screens/profile/profile_view_screen.dart';
 import '../screens/call/voice_call_screen.dart';
 import '../screens/call/group_audio_call_screen.dart';
 import '../screens/call/incoming_group_audio_call_screen.dart';
@@ -58,8 +59,28 @@ class NotificationService {
       await _initializeCallKit();
 
       // Note: Group call listener is started from MainNavigationScreen after user login
+
+      // Process any pending notification from background tap
+      _processPendingNotification();
     } catch (e) {
       // Continue app execution even if notifications fail
+    }
+  }
+
+  /// Process notification payload stored from a background tap
+  void _processPendingNotification() {
+    if (_pendingNotificationPayload != null) {
+      final payload = _pendingNotificationPayload;
+      _pendingNotificationPayload = null;
+      try {
+        final data = jsonDecode(payload!) as Map<String, dynamic>;
+        // Delay to ensure navigator is ready
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          _navigateBasedOnNotificationType(data);
+        });
+      } catch (e) {
+        debugPrint('  Error processing pending notification: $e');
+      }
     }
   }
 
@@ -561,6 +582,8 @@ class NotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveBackgroundNotificationResponse:
+          onBackgroundNotificationResponse,
     );
 
     // Create notification channels for Android
@@ -800,6 +823,10 @@ class NotificationService {
         debugPrint('  🤝 Navigating to connections');
         await _navigateToConnections(data);
         break;
+      case 'match':
+        debugPrint('  🎯 Navigating to match');
+        await _navigateToMatch(data);
+        break;
       default:
         debugPrint('     Unknown notification type: $type');
         break;
@@ -834,6 +861,36 @@ class NotificationService {
       }
     } catch (e) {
       // Error navigating to chat
+    }
+  }
+
+  /// Navigate to matched user's profile
+  Future<void> _navigateToMatch(Map<String, dynamic> data) async {
+    final matchedUserId = data['matchedUserId'] as String?;
+
+    if (matchedUserId == null) {
+      return;
+    }
+
+    try {
+      final userDoc =
+          await _firestore.collection('users').doc(matchedUserId).get();
+      if (!userDoc.exists) {
+        return;
+      }
+
+      final matchedUser = UserProfile.fromFirestore(userDoc);
+
+      if (navigatorKey.currentState != null) {
+        navigatorKey.currentState!.push(
+          MaterialPageRoute(
+            builder: (context) =>
+                ProfileViewScreen(userProfile: matchedUser),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('  Error navigating to match: $e');
     }
   }
 
@@ -1207,12 +1264,13 @@ class NotificationService {
 
   /// Handle local notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    if (response.payload != null) {
+    debugPrint('  Notification tapped - payload: ${response.payload}');
+    if (response.payload != null && response.payload!.isNotEmpty) {
       try {
         final data = jsonDecode(response.payload!) as Map<String, dynamic>;
         _navigateBasedOnNotificationType(data);
       } catch (e) {
-        // Error parsing notification payload
+        debugPrint('  Error parsing notification payload: $e');
       }
     }
   }
@@ -1745,6 +1803,19 @@ class NotificationService {
     }
   }
 }
+
+/// Top-level handler for notification taps when app is in background/terminated.
+/// Must be a top-level or static function for flutter_local_notifications.
+@pragma('vm:entry-point')
+void onBackgroundNotificationResponse(NotificationResponse response) {
+  // Store the payload so it can be processed when app is fully loaded
+  if (response.payload != null) {
+    _pendingNotificationPayload = response.payload;
+  }
+}
+
+/// Stores notification payload from background tap until app is ready to navigate
+String? _pendingNotificationPayload;
 
 // Background message handler - must be top-level function
 @pragma('vm:entry-point')

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 enum VoiceOrbState { idle, listening, processing, speaking }
 
@@ -15,258 +14,288 @@ class VoiceOrb extends StatefulWidget {
 }
 
 class _VoiceOrbState extends State<VoiceOrb> with TickerProviderStateMixin {
-  late AnimationController _pulseController;
+  late AnimationController _breatheController;
   late AnimationController _rotateController;
-  late AnimationController _waveController;
-  late Animation<double> _pulseAnimation;
+  late AnimationController _glowPulseController;
 
   @override
   void initState() {
     super.initState();
 
-    // Pulse animation for breathing effect
-    _pulseController = AnimationController(
+    _breatheController = AnimationController(
+      duration: const Duration(milliseconds: 2500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _rotateController = AnimationController(
+      duration: const Duration(milliseconds: 8000),
+      vsync: this,
+    )..repeat();
+
+    _glowPulseController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    // Rotation for processing state
-    _rotateController = AnimationController(
-      duration: const Duration(milliseconds: 3000),
-      vsync: this,
-    );
-
-    // Wave animation for speaking state
-    _waveController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-
-    _updateAnimationState();
+    _syncAnimationSpeeds();
   }
 
   @override
   void didUpdateWidget(VoiceOrb oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state) {
-      _updateAnimationState();
-    }
+    if (oldWidget.state != widget.state) _syncAnimationSpeeds();
   }
 
-  void _updateAnimationState() {
+  void _syncAnimationSpeeds() {
     switch (widget.state) {
       case VoiceOrbState.idle:
-        _pulseController.repeat(reverse: true);
-        _rotateController.stop();
-        _waveController.stop();
-        break;
+        _breatheController.duration = const Duration(milliseconds: 2500);
+        _rotateController.duration = const Duration(milliseconds: 8000);
+        _glowPulseController.duration = const Duration(milliseconds: 2000);
       case VoiceOrbState.listening:
-        _pulseController.repeat(reverse: true);
-        _rotateController.stop();
-        _waveController.stop();
-        break;
+        _breatheController.duration = const Duration(milliseconds: 1000);
+        _rotateController.duration = const Duration(milliseconds: 3000);
+        _glowPulseController.duration = const Duration(milliseconds: 600);
       case VoiceOrbState.processing:
-        _pulseController.stop();
-        _rotateController.repeat();
-        _waveController.stop();
-        break;
+        _breatheController.duration = const Duration(milliseconds: 1600);
+        _rotateController.duration = const Duration(milliseconds: 2000);
+        _glowPulseController.duration = const Duration(milliseconds: 800);
       case VoiceOrbState.speaking:
-        _pulseController.stop();
-        _rotateController.stop();
-        _waveController.repeat(reverse: true);
-        break;
+        _breatheController.duration = const Duration(milliseconds: 1200);
+        _rotateController.duration = const Duration(milliseconds: 4000);
+        _glowPulseController.duration = const Duration(milliseconds: 700);
     }
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _breatheController.dispose();
     _rotateController.dispose();
-    _waveController.dispose();
+    _glowPulseController.dispose();
     super.dispose();
+  }
+
+  // Color sets per state
+  List<Color> _primaryColors() {
+    switch (widget.state) {
+      case VoiceOrbState.idle:
+        return const [Color(0xFF7C3AED), Color(0xFF3B82F6), Color(0xFF06B6D4)];
+      case VoiceOrbState.listening:
+        return const [Color(0xFF06B6D4), Color(0xFF8B5CF6), Color(0xFF38BDF8)];
+      case VoiceOrbState.processing:
+        return const [Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFF8B5CF6)];
+      case VoiceOrbState.speaking:
+        return const [Color(0xFF10B981), Color(0xFF06B6D4), Color(0xFF8B5CF6)];
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: Listenable.merge([
-        _pulseController,
+        _breatheController,
         _rotateController,
-        _waveController,
+        _glowPulseController,
       ]),
-      builder: (context, child) {
+      builder: (context, _) {
+        final breathe = Curves.easeInOut.transform(_breatheController.value);
+        final rotate = _rotateController.value * 2 * math.pi;
+        final glowPulse = _glowPulseController.value;
+        final colors = _primaryColors();
+        final isActive = widget.state != VoiceOrbState.idle;
+
+        final orbSize = widget.size * 0.58;
+        final scale = 1.0 + breathe * (isActive ? 0.06 : 0.03);
+
         return SizedBox(
           width: widget.size,
           height: widget.size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Outer glow rings
-              if (widget.state == VoiceOrbState.listening)
-                ..._buildRippleRings(),
+          child: Center(
+            child: Transform.scale(
+              scale: scale,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Layer 1: Soft wide ambient glow
+                  _buildGlowLayer(
+                    size: orbSize * 2.2,
+                    colors: colors,
+                    opacity: 0.08 + glowPulse * (isActive ? 0.08 : 0.03),
+                    blur: 50,
+                  ),
 
-              // Main orb
-              Transform.scale(
-                scale:
-                    widget.state == VoiceOrbState.idle ||
-                        widget.state == VoiceOrbState.listening
-                    ? _pulseAnimation.value
-                    : 1.0,
-                child: Transform.rotate(
-                  angle: widget.state == VoiceOrbState.processing
-                      ? _rotateController.value * 2 * math.pi
-                      : 0,
-                  child: Container(
-                    width: widget.size * 0.7,
-                    height: widget.size * 0.7,
+                  // Layer 2: Medium glow ring
+                  _buildGlowLayer(
+                    size: orbSize * 1.5,
+                    colors: colors,
+                    opacity: 0.12 + glowPulse * (isActive ? 0.12 : 0.04),
+                    blur: 30,
+                  ),
+
+                  // Layer 3: Tight glow halo
+                  _buildGlowLayer(
+                    size: orbSize * 1.15,
+                    colors: colors,
+                    opacity: 0.25 + glowPulse * (isActive ? 0.15 : 0.05),
+                    blur: 15,
+                  ),
+
+                  // Main orb body with rotating gradient
+                  Container(
+                    width: orbSize,
+                    height: orbSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: _getGradient(),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _getGlowColor().withValues(alpha: 0.6),
-                          blurRadius: 40,
-                          spreadRadius: 10,
-                        ),
-                        BoxShadow(
-                          color: _getGlowColor().withValues(alpha: 0.3),
-                          blurRadius: 80,
-                          spreadRadius: 20,
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: BackdropFilter(
-                        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.1),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              width: 2,
-                            ),
-                          ),
-                        ),
+                      gradient: SweepGradient(
+                        transform: GradientRotation(rotate),
+                        colors: [
+                          colors[0],
+                          colors[1],
+                          colors[2],
+                          colors[0],
+                        ],
+                        stops: const [0.0, 0.33, 0.67, 1.0],
                       ),
                     ),
                   ),
-                ),
-              ),
 
-              // Wave particles for speaking state
-              if (widget.state == VoiceOrbState.speaking)
-                ..._buildWaveParticles(),
-            ],
+                  // Glass overlay for depth
+                  Container(
+                    width: orbSize,
+                    height: orbSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.35, -0.35),
+                        radius: 0.9,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.30),
+                          Colors.white.withValues(alpha: 0.05),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.15),
+                        ],
+                        stops: const [0.0, 0.3, 0.6, 1.0],
+                      ),
+                    ),
+                  ),
+
+                  // Rim highlight
+                  Container(
+                    width: orbSize,
+                    height: orbSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(
+                          alpha: 0.15 + glowPulse * 0.1,
+                        ),
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
+
+                  // Listening: expanding pulse rings
+                  if (widget.state == VoiceOrbState.listening)
+                    ..._buildPulseRings(orbSize, colors[1]),
+
+                  // Processing: spinning arc
+                  if (widget.state == VoiceOrbState.processing)
+                    _buildSpinArc(orbSize, colors),
+                ],
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  List<Widget> _buildRippleRings() {
-    return List.generate(3, (index) {
-      final delay = index * 0.2;
-      final animation = Tween<double>(begin: 0.5, end: 1.2).animate(
-        CurvedAnimation(
-          parent: _pulseController,
-          curve: Interval(delay, 1.0, curve: Curves.easeOut),
-        ),
-      );
+  Widget _buildGlowLayer({
+    required double size,
+    required List<Color> colors,
+    required double opacity,
+    required double blur,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withValues(alpha: opacity),
+            blurRadius: blur,
+            spreadRadius: blur * 0.3,
+          ),
+          BoxShadow(
+            color: colors.last.withValues(alpha: opacity * 0.6),
+            blurRadius: blur * 0.7,
+            spreadRadius: blur * 0.15,
+          ),
+        ],
+      ),
+    );
+  }
 
-      return Transform.scale(
-        scale: animation.value,
-        child: Container(
-          width: widget.size * 0.7,
-          height: widget.size * 0.7,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(
-                0xFF8B5CF6,
-              ).withValues(alpha: (1 - animation.value) * 0.5),
-              width: 2,
-            ),
+  List<Widget> _buildPulseRings(double orbSize, Color color) {
+    return List.generate(2, (i) {
+      // Stagger each ring using breathe controller offset
+      final t = (_breatheController.value + i * 0.5) % 1.0;
+      final ringScale = 1.0 + t * 0.4;
+      final ringOpacity = (1.0 - t) * 0.3;
+
+      return Container(
+        width: orbSize * ringScale,
+        height: orbSize * ringScale,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: color.withValues(alpha: ringOpacity),
+            width: 2.0 - t * 1.0,
           ),
         ),
       );
     });
   }
 
-  List<Widget> _buildWaveParticles() {
-    return List.generate(8, (index) {
-      final angle = (index / 8) * 2 * math.pi;
-      final distance = 60 + math.sin(_waveController.value * math.pi) * 20;
-
-      return Transform.translate(
-        offset: Offset(math.cos(angle) * distance, math.sin(angle) * distance),
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.8),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF06B6D4).withValues(alpha: 0.6),
-                blurRadius: 8,
-                spreadRadius: 2,
-              ),
-            ],
+  Widget _buildSpinArc(double orbSize, List<Color> colors) {
+    return SizedBox(
+      width: orbSize * 1.18,
+      height: orbSize * 1.18,
+      child: Transform.rotate(
+        angle: _rotateController.value * 2 * math.pi,
+        child: CustomPaint(
+          painter: _ArcPainter(
+            color: colors[0],
+            strokeWidth: 2.5,
           ),
         ),
-      );
-    });
+      ),
+    );
+  }
+}
+
+class _ArcPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+
+  _ArcPainter({required this.color, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    // Two arcs on opposite sides
+    canvas.drawArc(rect, 0, math.pi * 0.6, false, paint);
+    paint.color = color.withValues(alpha: 0.4);
+    canvas.drawArc(rect, math.pi, math.pi * 0.4, false, paint);
   }
 
-  Gradient _getGradient() {
-    switch (widget.state) {
-      case VoiceOrbState.idle:
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-        );
-      case VoiceOrbState.listening:
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0EA5E9), Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-        );
-      case VoiceOrbState.processing:
-        return LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: const [
-            Color(0xFFFFAA00),
-            Color(0xFFFF6B6B),
-            Color(0xFF8B5CF6),
-          ],
-          transform: GradientRotation(_rotateController.value * math.pi),
-        );
-      case VoiceOrbState.speaking:
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF10B981), Color(0xFF06B6D4)],
-        );
-    }
-  }
-
-  Color _getGlowColor() {
-    switch (widget.state) {
-      case VoiceOrbState.idle:
-        return const Color(0xFF8B5CF6);
-      case VoiceOrbState.listening:
-        return const Color(0xFF0EA5E9);
-      case VoiceOrbState.processing:
-        return const Color(0xFFFFAA00);
-      case VoiceOrbState.speaking:
-        return const Color(0xFF10B981);
-    }
-  }
+  @override
+  bool shouldRepaint(_ArcPainter oldDelegate) => false;
 }

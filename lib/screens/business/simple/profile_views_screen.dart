@@ -39,34 +39,44 @@ class ProfileViewsScreen extends StatelessWidget {
             .doc(_userId)
             .collection('profileViews')
             .orderBy('viewedAt', descending: true)
-            .limit(100)
+            .limit(200)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
+          if (snapshot.hasError) {
+            debugPrint('ProfileViews error: ${snapshot.error}');
+            return Column(
+              children: [
+                _buildViewsHeader(0, isDark, textColor, subtitleColor),
+                Expanded(
+                    child:
+                        _buildEmptyState(isDark, textColor, subtitleColor)),
+              ],
+            );
+          }
+
           final docs = snapshot.data?.docs ?? [];
+          final grouped = _groupViewsByViewer(docs);
 
           return Column(
             children: [
-              // Total views header
-              _buildViewsHeader(docs.length, isDark, textColor, subtitleColor),
-
-              // Views list
+              _buildViewsHeader(
+                  docs.length, isDark, textColor, subtitleColor),
               Expanded(
-                child: docs.isEmpty
+                child: grouped.isEmpty
                     ? _buildEmptyState(isDark, textColor, subtitleColor)
                     : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                        itemCount: docs.length,
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        itemCount: grouped.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final data =
-                              docs[index].data() as Map<String, dynamic>;
-                          return _buildViewItem(
-                              data, isDark, textColor, subtitleColor);
+                          return _buildViewItem(grouped[index], isDark,
+                              textColor, subtitleColor);
                         },
                       ),
               ),
@@ -121,78 +131,130 @@ class ProfileViewsScreen extends StatelessWidget {
     );
   }
 
+  List<Map<String, dynamic>> _groupViewsByViewer(
+      List<QueryDocumentSnapshot> docs) {
+    final Map<String, Map<String, dynamic>> grouped = {};
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final viewerId = data['viewerId'] as String? ?? doc.id;
+      if (grouped.containsKey(viewerId)) {
+        grouped[viewerId]!['viewCount'] =
+            (grouped[viewerId]!['viewCount'] as int) + 1;
+      } else {
+        grouped[viewerId] = {
+          'viewerId': viewerId,
+          'viewerName': data['viewerName'],
+          'viewerPhotoUrl': data['viewerPhotoUrl'],
+          'viewedAt': data['viewedAt'],
+          'viewCount': 1,
+        };
+      }
+    }
+    final result = grouped.values.toList();
+    result.sort((a, b) {
+      final aTime = a['viewedAt'] as Timestamp?;
+      final bTime = b['viewedAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+    return result;
+  }
+
   Widget _buildViewItem(Map<String, dynamic> data, bool isDark,
       Color textColor, Color subtitleColor) {
-    final viewerName = data['viewerName'] as String? ?? 'Someone';
-    final viewerPhotoUrl = data['viewerPhotoUrl'] as String?;
+    final viewerId = data['viewerId'] as String?;
+    final fallbackName = data['viewerName'] as String? ?? 'Someone';
+    final fallbackPhoto = data['viewerPhotoUrl'] as String?;
+    final viewCount = data['viewCount'] as int? ?? 1;
     final viewedAt = data['viewedAt'] != null
         ? (data['viewedAt'] as Timestamp).toDate()
         : null;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: isDark
-                ? const Color(0xFF2C2C2E)
-                : const Color(0xFFF0F0F5),
-            backgroundImage: viewerPhotoUrl != null && viewerPhotoUrl.isNotEmpty
-                ? CachedNetworkImageProvider(viewerPhotoUrl)
-                : null,
-            child: viewerPhotoUrl == null || viewerPhotoUrl.isEmpty
-                ? Text(
-                    viewerName.isNotEmpty ? viewerName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: Color(0xFF8B5CF6),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+    // Look up real viewer profile from Firestore
+    return FutureBuilder<DocumentSnapshot>(
+      future: viewerId != null
+          ? FirebaseFirestore.instance.collection('users').doc(viewerId).get()
+          : null,
+      builder: (context, snap) {
+        final userData = snap.data?.data() as Map<String, dynamic>?;
+        final viewerName = userData?['name'] as String? ??
+            userData?['displayName'] as String? ??
+            fallbackName;
+        final viewerPhoto = userData?['profileImageUrl'] as String? ??
+            userData?['photoUrl'] as String? ??
+            fallbackPhoto;
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: isDark
+                    ? const Color(0xFF2C2C2E)
+                    : const Color(0xFFF0F0F5),
+                backgroundImage:
+                    viewerPhoto != null && viewerPhoto.isNotEmpty
+                        ? CachedNetworkImageProvider(viewerPhoto)
+                        : null,
+                child: viewerPhoto == null || viewerPhoto.isEmpty
+                    ? Text(
+                        viewerName.isNotEmpty
+                            ? viewerName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Color(0xFF8B5CF6),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+
+              // Name + time
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      viewerName,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-
-          // Name + time
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  viewerName,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 2),
+                    Text(
+                      viewedAt != null
+                          ? 'Viewed $viewCount ${viewCount == 1 ? 'time' : 'times'} · ${_formatTime(viewedAt)}'
+                          : 'Viewed $viewCount ${viewCount == 1 ? 'time' : 'times'}',
+                      style: TextStyle(color: subtitleColor, fontSize: 12),
+                    ),
+                  ],
                 ),
-                if (viewedAt != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatTime(viewedAt),
-                    style: TextStyle(color: subtitleColor, fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
 
-          // Time ago
-          if (viewedAt != null)
-            Text(
-              _timeAgo(viewedAt),
-              style: TextStyle(color: subtitleColor, fontSize: 12),
-            ),
-        ],
-      ),
+              // Time ago
+              if (viewedAt != null)
+                Text(
+                  _timeAgo(viewedAt),
+                  style: TextStyle(color: subtitleColor, fontSize: 12),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

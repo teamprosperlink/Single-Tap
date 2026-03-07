@@ -54,14 +54,20 @@ class _PublicBusinessProfileScreenState
           await _catalogService.getAvailableItems(widget.userId, limit: 50);
       final summary = await _reviewService.getRatingSummary(widget.userId);
 
-      // Log profile view (skips self)
+      // Log profile view (skips self) — fetch viewer's Firestore profile
+      // for accurate name/photo instead of Firebase Auth fields
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null && currentUser.uid != widget.userId) {
+        final viewerDoc = await FirebaseFirestore.instance
+            .collection('users').doc(currentUser.uid).get();
+        final vData = viewerDoc.data();
         _catalogService.logProfileView(
           profileOwnerId: widget.userId,
           viewerId: currentUser.uid,
-          viewerName: currentUser.displayName ?? 'User',
-          viewerPhotoUrl: currentUser.photoURL,
+          viewerName: vData?['name'] as String? ??
+              vData?['displayName'] as String? ?? 'User',
+          viewerPhotoUrl: vData?['profileImageUrl'] as String? ??
+              vData?['photoUrl'] as String?,
         );
       }
 

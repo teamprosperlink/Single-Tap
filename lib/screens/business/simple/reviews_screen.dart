@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/review_model.dart';
 import '../../../services/review_service.dart';
@@ -189,118 +190,135 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       Color subtitleColor) {
     final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Reviewer info
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: isDark
-                    ? const Color(0xFF2C2C2E)
-                    : const Color(0xFFF0F0F5),
-                backgroundImage: review.reviewerPhoto != null
-                    ? CachedNetworkImageProvider(review.reviewerPhoto!)
-                    : null,
-                child: review.reviewerPhoto == null
-                    ? Text(
-                        review.reviewerName.isNotEmpty
-                            ? review.reviewerName[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                            color: Color(0xFFF59E0B),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(review.reviewerName,
-                        style: TextStyle(
-                            color: textColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                    Text(review.formattedDate,
-                        style:
-                            TextStyle(color: subtitleColor, fontSize: 11)),
-                  ],
-                ),
-              ),
-              // Stars
-              Row(
-                children: List.generate(5, (i) {
-                  return Icon(
-                    i < review.rating.round()
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    size: 16,
-                    color: const Color(0xFFF59E0B),
-                  );
-                }),
-              ),
-            ],
+    // Look up real reviewer profile from Firestore
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('users').doc(review.reviewerId).get(),
+      builder: (context, snap) {
+        final userData = snap.data?.data() as Map<String, dynamic>?;
+        final reviewerName = userData?['name'] as String? ??
+            userData?['displayName'] as String? ??
+            review.reviewerName;
+        final reviewerPhoto = userData?['profileImageUrl'] as String? ??
+            userData?['photoUrl'] as String? ??
+            review.reviewerPhoto;
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(12),
           ),
-
-          // Review text
-          if (review.reviewText.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(review.reviewText,
-                style: TextStyle(color: textColor, fontSize: 14, height: 1.4)),
-          ],
-
-          // Owner response
-          if (review.professionalResponse != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Reviewer info
+              Row(
                 children: [
-                  Text('Your Response',
-                      style: TextStyle(
-                          color: subtitleColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(review.professionalResponse!,
-                      style: TextStyle(
-                          color: textColor, fontSize: 13, height: 1.3)),
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isDark
+                        ? const Color(0xFF2C2C2E)
+                        : const Color(0xFFF0F0F5),
+                    backgroundImage:
+                        reviewerPhoto != null && reviewerPhoto.isNotEmpty
+                            ? CachedNetworkImageProvider(reviewerPhoto)
+                            : null,
+                    child: reviewerPhoto == null || reviewerPhoto.isEmpty
+                        ? Text(
+                            reviewerName.isNotEmpty
+                                ? reviewerName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                                color: Color(0xFFF59E0B),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(reviewerName,
+                            style: TextStyle(
+                                color: textColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                        Text(review.formattedDate,
+                            style:
+                                TextStyle(color: subtitleColor, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  // Stars
+                  Row(
+                    children: List.generate(5, (i) {
+                      return Icon(
+                        i < review.rating.round()
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 16,
+                        color: const Color(0xFFF59E0B),
+                      );
+                    }),
+                  ),
                 ],
               ),
-            ),
-          ],
 
-          // Reply button (only if no response yet)
-          if (review.professionalResponse == null) ...[
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => _showReplySheet(review),
-              child: const Text('Reply',
-                  style: TextStyle(
-                      color: Color(0xFF3B82F6),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ],
-      ),
+              // Review text
+              if (review.reviewText.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(review.reviewText,
+                    style:
+                        TextStyle(color: textColor, fontSize: 14, height: 1.4)),
+              ],
+
+              // Owner response
+              if (review.professionalResponse != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Your Response',
+                          style: TextStyle(
+                              color: subtitleColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(review.professionalResponse!,
+                          style: TextStyle(
+                              color: textColor, fontSize: 13, height: 1.3)),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Reply button (only if no response yet)
+              if (review.professionalResponse == null) ...[
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => _showReplySheet(review),
+                  child: const Text('Reply',
+                      style: TextStyle(
+                          color: Color(0xFF3B82F6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 

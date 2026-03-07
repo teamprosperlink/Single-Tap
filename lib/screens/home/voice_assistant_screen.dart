@@ -229,34 +229,36 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
             AudioVisualizer(
               isActive: _service.state == VoiceAssistantState.listening ||
                   _service.state == VoiceAssistantState.speaking,
-              height: 40,
-              barCount: 30,
+              height: 32,
+              barCount: 40,
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
 
             GestureDetector(
               onTap: _onOrbTap,
               child: VoiceOrb(
                 state: _mapToOrbState(_service.state),
-                size: 120,
+                size: 140,
               ),
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
 
-            Text(
-              _statusText,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
               style: TextStyle(
                 color: _service.errorHint.isNotEmpty
                     ? const Color(0xFFFF9800)
-                    : Colors.white.withValues(alpha: 0.6),
+                    : Colors.white.withValues(alpha: 0.5),
                 fontSize: 13,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.5,
               ),
+              child: Text(_statusText),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
           ],
 
           // Text input fallback
