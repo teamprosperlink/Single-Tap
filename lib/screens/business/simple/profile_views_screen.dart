@@ -76,7 +76,7 @@ class ProfileViewsScreen extends StatelessWidget {
               final docs = snapshot.data?.docs ?? [];
               final grouped = _groupViewsByViewer(docs);
               final totalViews =
-                  counterViews > 0 ? counterViews : docs.length;
+                  docs.isNotEmpty ? docs.length : counterViews;
 
               return Column(
                 children: [

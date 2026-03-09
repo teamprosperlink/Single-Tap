@@ -49,7 +49,9 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
         viewerName: name,
         viewerPhotoUrl: photo,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('logProfileView failed: $e');
+    }
   }
 
   @override

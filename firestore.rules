@@ -63,6 +63,14 @@ service cloud.firestore {
                          'deviceInfo',
                          'forceLogout',
                          'lastSessionUpdate'
+                       ])) ||
+                       // Allow any authenticated user to increment business stat counters
+                       // (profile views, catalog views, enquiry count)
+                       (isAuthenticated() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'businessProfile.profileViews',
+                         'businessProfile.catalogViews',
+                         'businessProfile.enquiryCount'
                        ]));
 
       // Only owner can delete their profile
