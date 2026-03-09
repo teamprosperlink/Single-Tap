@@ -618,7 +618,7 @@ exports.onConnectionRequestCreated = onDocumentCreated(
 /**
  * FORCE LOGOUT FUNCTION - Device Login Collision Handler
  *
- * Handles the WhatsApp-style single device login by triggering force logout
+ * Handles the SingleTap-style single device login by triggering force logout
  * on other devices when a new device logs in with the same account.
  *
  * Called from: lib/services/auth_service.dart logoutFromOtherDevices()

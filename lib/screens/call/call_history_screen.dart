@@ -3,8 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../../res/config/app_colors.dart';
 import '../../models/user_profile.dart';
-import '../../widgets/safe_circle_avatar.dart';
+import '../../widgets/common widgets/safe_circle_avatar.dart';
 import 'voice_call_screen.dart';
 
 class CallHistoryScreen extends StatefulWidget {
@@ -47,9 +48,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.splashDark3,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: _isSelectionMode
             ? IconButton(
@@ -79,8 +80,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             // Delete selected button
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed:
-                  _selectedCallIds.isEmpty ? null : _deleteSelectedCalls,
+              onPressed: _selectedCallIds.isEmpty ? null : _deleteSelectedCalls,
             ),
           ] else ...[
             // Enter selection mode button
@@ -92,79 +92,89 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           ],
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('calls')
-            .where('participants', arrayContains: _currentUserId)
-            .orderBy('createdAt', descending: true)
-            .limit(100)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.blue),
-            );
-          }
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.splashGradient),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('calls')
+              .where('participants', arrayContains: _currentUserId)
+              .orderBy('createdAt', descending: true)
+              .limit(100)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.blue),
+              );
+            }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading calls',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final calls = snapshot.data?.docs ?? [];
-
-          if (calls.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.call_outlined,
-                    size: 64,
-                    color: Colors.white.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No call history',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 18,
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red.shade300,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Your calls will appear here',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 14,
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading calls',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
+                  ],
+                ),
+              );
+            }
 
-          return ListView.builder(
-            itemCount: calls.length,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemBuilder: (context, index) {
-              final callDoc = calls[index];
-              final callData = callDoc.data() as Map<String, dynamic>;
-              return _buildCallItem(callDoc.id, callData);
-            },
-          );
-        },
+            final calls = snapshot.data?.docs ?? [];
+
+            if (calls.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.call_outlined,
+                      size: 64,
+                      color: Colors.white.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No call history',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your calls will appear here',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              itemCount: calls.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemBuilder: (context, index) {
+                final callDoc = calls[index];
+                final callData = callDoc.data() as Map<String, dynamic>;
+                return _buildCallItem(callDoc.id, callData);
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -267,11 +277,22 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           }
         },
         child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected
-                ? Colors.blue.withValues(alpha: 0.2)
-                : Colors.transparent,
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: isSelected ? 0.2 : 0.1),
+                Colors.white.withValues(alpha: isSelected ? 0.12 : 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isSelected ? 0.3 : 0.15),
+              width: 1,
+            ),
           ),
           child: Row(
             children: [
@@ -316,10 +337,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         const SizedBox(width: 4),
                         Text(
                           statusText,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: statusColor, fontSize: 13),
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -531,6 +549,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       'participants': [_currentUserId, userId],
       'status': 'calling',
       'type': 'audio',
+      'source': 'Call History',
       'timestamp': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });

@@ -19,6 +19,7 @@ class GroupChatService {
     required String groupName,
     required List<String> memberIds,
     String? groupPhotoUrl,
+    String? source,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
@@ -74,6 +75,8 @@ class GroupChatService {
         'unreadCount': {for (var id in allMembers) id: 0},
         'isTyping': {for (var id in allMembers) id: false},
         'readBy': <String, dynamic>{}, // Per-user read tracking
+        if (source != null && source.isNotEmpty)
+          'metadata': {'source': source},
       });
 
       // Add system message for group creation

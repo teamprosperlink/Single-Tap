@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/main_navigation_screen.dart';
 
-/// ChatGPT-style Projects / Library screen
+/// SingleTap-style Projects / Library screen
 class LibraryScreen extends StatefulWidget {
   final Function(String chatId)? onLoadChat;
   final Function(String projectId)? onNewChatInProject;
@@ -41,12 +41,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
           .get();
 
       final projects = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
       for (var doc in snapshot.docs) {
+        // Deduplicate by doc.id
+        if (!seenIds.add(doc.id)) continue;
         final data = doc.data();
-        projects.add({
-          'id': doc.id,
-          ...data,
-        });
+        projects.add({'id': doc.id, ...data});
       }
 
       // Sort: newest first
@@ -104,7 +104,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -119,19 +121,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Project?', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Delete Project?',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: Text(
           'This will delete "$projectName" and remove all chats from this project. The chats themselves won\'t be deleted.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+            child: Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -141,7 +149,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     try {
       // Remove projectId from all associated chats
-      final project = _projects.firstWhere((p) => p['id'] == projectId, orElse: () => {});
+      final project = _projects.firstWhere(
+        (p) => p['id'] == projectId,
+        orElse: () => {},
+      );
       final chatIds = List<String>.from(project['chatIds'] ?? []);
       for (final chatId in chatIds) {
         await _firestore.collection('chat_history').doc(chatId).update({
@@ -159,7 +170,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -176,14 +189,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Rename Project', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Rename Project',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Project name',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+            hintStyle: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.4)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.08),
             border: OutlineInputBorder(
@@ -195,11 +211,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+            child: Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.7)),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save', style: TextStyle(color: Colors.blue)),
+            child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', color: Colors.blue)),
           ),
         ],
       ),
@@ -232,10 +251,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               decoration: const BoxDecoration(
                 color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white,
-                    width: 1,
-                  ),
+                  bottom: BorderSide(color: Colors.white, width: 1),
                 ),
               ),
               child: AppBar(
@@ -245,13 +261,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     HapticFeedback.lightImpact();
                     Navigator.pop(context);
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                      MainNavigationScreen.scaffoldKey.currentState
+                          ?.openEndDrawer();
                     });
                   },
                 ),
                 title: const Text(
                   'Library',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -284,10 +302,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
           // Content
           SafeArea(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
                 : _projects.isEmpty
-                    ? _buildEmptyState()
-                    : _buildProjectsList(),
+                ? _buildEmptyState()
+                : _buildProjectsList(),
           ),
         ],
       ),
@@ -297,7 +317,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Project',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -324,6 +344,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             'No Projects Yet',
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.8),
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -336,6 +357,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               'Create projects to organize your chats, add custom instructions, and keep related conversations together.',
               textAlign: TextAlign.center,
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 14,
                 height: 1.4,
@@ -368,6 +390,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   Text(
                     'Create Project',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -471,6 +494,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       Text(
                         name,
                         style: const TextStyle(
+                          fontFamily: 'Poppins',
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -490,6 +514,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           Text(
                             '$chatCount chat${chatCount != 1 ? 's' : ''}',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 12,
                             ),
@@ -498,6 +523,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             Text(
                               '  \u00B7  $timeAgo',
                               style: TextStyle(
+                                fontFamily: 'Poppins',
                                 color: Colors.white.withValues(alpha: 0.3),
                                 fontSize: 12,
                               ),
@@ -516,7 +542,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     size: 20,
                   ),
                   color: const Color(0xFF2D2D3D),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   onSelected: (value) {
                     switch (value) {
                       case 'rename':
@@ -530,7 +558,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   itemBuilder: (_) => [
                     _buildMenuItem(Icons.edit_outlined, 'Rename', 'rename'),
                     const PopupMenuDivider(),
-                    _buildMenuItem(Icons.delete_outline, 'Delete', 'delete', isDestructive: true),
+                    _buildMenuItem(
+                      Icons.delete_outline,
+                      'Delete',
+                      'delete',
+                      isDestructive: true,
+                    ),
                   ],
                 ),
               ],
@@ -540,6 +573,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               Text(
                 description,
                 style: TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 13,
                   height: 1.3,
@@ -554,15 +588,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  PopupMenuItem<String> _buildMenuItem(IconData icon, String label, String value, {bool isDestructive = false}) {
+  PopupMenuItem<String> _buildMenuItem(
+    IconData icon,
+    String label,
+    String value, {
+    bool isDestructive = false,
+  }) {
     return PopupMenuItem<String>(
       value: value,
       height: 44,
       child: Row(
         children: [
-          Icon(icon, color: isDestructive ? Colors.red : Colors.white70, size: 20),
+          Icon(
+            icon,
+            color: isDestructive ? Colors.red : Colors.white70,
+            size: 20,
+          ),
           const SizedBox(width: 12),
-          Text(label, style: TextStyle(color: isDestructive ? Colors.red : Colors.white, fontSize: 14)),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: isDestructive ? Colors.red : Colors.white,
+              fontSize: 14,
+            ),
+          ),
         ],
       ),
     );
@@ -656,7 +706,12 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text(
         'New Project',
-        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       content: SingleChildScrollView(
         child: SizedBox(
@@ -669,10 +724,13 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               TextField(
                 controller: _nameController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Project name',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
+                  hintStyle: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withValues(alpha: 0.35),
+                  ),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.08),
                   border: OutlineInputBorder(
@@ -681,9 +739,16 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF016CFF), width: 1.5),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF016CFF),
+                      width: 1.5,
+                    ),
                   ),
-                  prefixIcon: Icon(Icons.edit, color: Colors.white.withValues(alpha: 0.4), size: 20),
+                  prefixIcon: Icon(
+                    Icons.edit,
+                    color: Colors.white.withValues(alpha: 0.4),
+                    size: 20,
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -691,7 +756,12 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               // Icon picker
               Text(
                 'Icon',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -710,12 +780,19 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                             : Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
                         border: isSelected
-                            ? Border.all(color: Color(_selectedColor), width: 1.5)
-                            : Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            ? Border.all(
+                                color: Color(_selectedColor),
+                                width: 1.5,
+                              )
+                            : Border.all(
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
                       ),
                       child: Icon(
                         opt['icon'] as IconData,
-                        color: isSelected ? Color(_selectedColor) : Colors.white.withValues(alpha: 0.5),
+                        color: isSelected
+                            ? Color(_selectedColor)
+                            : Colors.white.withValues(alpha: 0.5),
                         size: 20,
                       ),
                     ),
@@ -729,7 +806,10 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+          child: Text(
+            'Cancel',
+            style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.6)),
+          ),
         ),
         TextButton(
           onPressed: () {
@@ -741,7 +821,9 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                   backgroundColor: Colors.red.shade700,
                   behavior: SnackBarBehavior.floating,
                   margin: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               );
               return;
@@ -752,7 +834,14 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
               'icon': _selectedIcon,
             });
           },
-          child: const Text('Create', style: TextStyle(color: Color(0xFF016CFF), fontWeight: FontWeight.w600)),
+          child: const Text(
+            'Create',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Color(0xFF016CFF),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
@@ -800,12 +889,12 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
       final chats = <Map<String, dynamic>>[];
 
       for (final chatId in chatIds) {
-        final doc = await _firestore.collection('chat_history').doc(chatId).get();
+        final doc = await _firestore
+            .collection('chat_history')
+            .doc(chatId)
+            .get();
         if (doc.exists) {
-          chats.add({
-            'id': doc.id,
-            ...doc.data()!,
-          });
+          chats.add({'id': doc.id, ...doc.data()!});
         }
       }
 
@@ -845,14 +934,20 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
 
       final existingChatIds = Set<String>.from(_project['chatIds'] ?? []);
 
+      final seenChatIds = <String>{};
       final availableChats = allChats.docs
-          .where((doc) => !existingChatIds.contains(doc.id))
-          .map((doc) => {
+          .where((doc) => seenChatIds.add(doc.id) && !existingChatIds.contains(doc.id))
+          .map(
+            (doc) {
+              final data = doc.data();
+              return {
                 'id': doc.id,
-                'title': doc.data()['title'] ?? 'Chat',
-                'createdAt': doc.data()['createdAt'],
+                'title': data['title'] ?? 'Chat',
+                'createdAt': data['createdAt'],
                 'selected': false,
-              })
+              };
+            },
+          )
           .toList();
 
       if (availableChats.isEmpty) {
@@ -863,7 +958,9 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
               backgroundColor: Colors.orange.shade700,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -912,11 +1009,15 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${selectedIds.length} chat${selectedIds.length > 1 ? 's' : ''} added'),
+            content: Text(
+              '${selectedIds.length} chat${selectedIds.length > 1 ? 's' : ''} added',
+            ),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -965,10 +1066,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
               decoration: const BoxDecoration(
                 color: Color.fromRGBO(64, 64, 64, 1),
                 border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white,
-                    width: 1,
-                  ),
+                  bottom: BorderSide(color: Colors.white, width: 1),
                 ),
               ),
               child: AppBar(
@@ -982,6 +1080,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                 title: Text(
                   name,
                   style: const TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -1020,14 +1119,17 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                 // Chats list
                 Expanded(
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        )
                       : _projectChats.isEmpty
-                          ? _buildEmptyChatsState(color)
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                              itemCount: _projectChats.length,
-                              itemBuilder: (context, index) => _buildChatTile(_projectChats[index], color),
-                            ),
+                      ? _buildEmptyChatsState(color)
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                          itemCount: _projectChats.length,
+                          itemBuilder: (context, index) =>
+                              _buildChatTile(_projectChats[index], color),
+                        ),
                 ),
               ],
             ),
@@ -1041,7 +1143,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text(
           'New Chat',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -1068,12 +1170,20 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           const SizedBox(height: 14),
           Text(
             'No chats in this project',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 16),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 16,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Start a new chat or add existing ones',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 13),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 20),
           // Start New Chat button
@@ -1101,7 +1211,12 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   SizedBox(width: 6),
                   Text(
                     'Start New Chat',
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -1125,7 +1240,12 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   const SizedBox(width: 6),
                   Text(
                     'Add Existing Chats',
-                    style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -1166,27 +1286,46 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
           color: Colors.red.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 22),
+        child: const Icon(
+          Icons.remove_circle_outline,
+          color: Colors.red,
+          size: 22,
+        ),
       ),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: const Color(0xFF1E1E2E),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Remove from project?', style: TextStyle(color: Colors.white, fontSize: 16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'Remove from project?',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
+            ),
             content: Text(
               'This will remove "$title" from the project. The chat itself won\'t be deleted.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 14,
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text('Cancel', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.6)),
+                ),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Remove', style: TextStyle(color: Colors.red)),
+                child: const Text(
+                  'Remove',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+                ),
               ),
             ],
           ),
@@ -1223,7 +1362,11 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.chat_bubble_outline, color: Colors.white.withValues(alpha: 0.7), size: 18),
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1232,7 +1375,12 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1240,20 +1388,27 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
                       const SizedBox(height: 2),
                       Text(
                         timeStr,
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.2), size: 20),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.white.withValues(alpha: 0.2),
+                size: 20,
+              ),
             ],
           ),
         ),
       ),
     );
   }
-
 }
 
 // ──────────────────────────────────────────────────────────
@@ -1300,14 +1455,22 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                 const Expanded(
                   child: Text(
                     'Add Chats to Project',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 if (_selectedIds.isNotEmpty)
                   GestureDetector(
                     onTap: () => Navigator.pop(context, _selectedIds.toList()),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF6C63FF), Color(0xFF9C63FF)],
@@ -1316,7 +1479,12 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                       ),
                       child: Text(
                         'Add (${_selectedIds.length})',
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -1349,8 +1517,14 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                     });
                   },
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 3,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF6C63FF).withValues(alpha: 0.12)
@@ -1374,10 +1548,16 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                             borderRadius: BorderRadius.circular(6),
                             border: isSelected
                                 ? null
-                                : Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                : Border.all(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                  ),
                           ),
                           child: isSelected
-                              ? const Icon(Icons.check, color: Colors.white, size: 16)
+                              ? const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 16,
+                                )
                               : null,
                         ),
                         const SizedBox(width: 12),
@@ -1385,7 +1565,10 @@ class _AddChatsBottomSheetState extends State<_AddChatsBottomSheet> {
                           child: Text(
                             title,
                             style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.7),
+                              fontFamily: 'Poppins',
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.7),
                               fontSize: 14,
                             ),
                             maxLines: 1,

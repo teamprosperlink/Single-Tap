@@ -27,19 +27,19 @@ class TermsOfServiceScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _buildSection(
               '1. Acceptance of Terms',
-              'By accessing and using Supper, you accept and agree to be bound by the terms and provision of this agreement.',
+              'By accessing and using SingleTap, you accept and agree to be bound by the terms and provision of this agreement.',
             ),
             _buildSection(
               '2. Use License',
-              'Permission is granted to temporarily use Supper for personal, non-commercial purposes only.',
+              'Permission is granted to temporarily use SingleTap for personal, non-commercial purposes only.',
             ),
             _buildSection(
               '3. User Conduct',
-              'You agree to use Supper only for lawful purposes and in a way that does not infringe the rights of, restrict or inhibit anyone else\'s use and enjoyment of the service.',
+              'You agree to use SingleTap only for lawful purposes and in a way that does not infringe the rights of, restrict or inhibit anyone else\'s use and enjoyment of the service.',
             ),
             _buildSection(
               '4. User Content',
-              'You retain all rights to any content you submit, post or display on or through Supper. By submitting content, you grant us a worldwide, non-exclusive license to use, modify, and display that content.',
+              'You retain all rights to any content you submit, post or display on or through SingleTap. By submitting content, you grant us a worldwide, non-exclusive license to use, modify, and display that content.',
             ),
             _buildSection(
               '5. Prohibited Activities',
@@ -51,11 +51,11 @@ class TermsOfServiceScreen extends StatelessWidget {
             ),
             _buildSection(
               '7. Disclaimer',
-              'Supper is provided "as is" without any warranties, expressed or implied. We do not warrant that the service will be uninterrupted or error-free.',
+              'SingleTap is provided "as is" without any warranties, expressed or implied. We do not warrant that the service will be uninterrupted or error-free.',
             ),
             _buildSection(
               '8. Limitation of Liability',
-              'In no event shall Supper be liable for any damages arising out of the use or inability to use the service.',
+              'In no event shall SingleTap be liable for any damages arising out of the use or inability to use the service.',
             ),
             _buildSection(
               '9. Changes to Terms',

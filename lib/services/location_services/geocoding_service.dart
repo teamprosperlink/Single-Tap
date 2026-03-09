@@ -70,25 +70,6 @@ class GeocodingService {
     }
   }
 
-  /// Get default location data when services fail
-  // ignore: unused_element
-  static Map<String, dynamic> _getDefaultLocation(
-    double latitude,
-    double longitude,
-  ) {
-    return {
-      'formatted': 'Location detected',
-      'area': '',
-      'city': 'Location detected',
-      'state': '',
-      'pincode': '',
-      'country': '',
-      'latitude': latitude,
-      'longitude': longitude,
-      'display': 'Location detected',
-    };
-  }
-
   /// Get address using OpenStreetMap Nominatim API
   static Future<Map<String, dynamic>?> _getNominatimAddress(
     double latitude,
@@ -104,7 +85,7 @@ class GeocodingService {
             url,
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'Supper App/1.0', // Required by Nominatim
+              'User-Agent': 'SingleTap App/1.0', // Required by Nominatim
             },
           )
           .timeout(const Duration(seconds: 10));
@@ -348,37 +329,6 @@ class GeocodingService {
     }
   }
 
-  /// Fallback: Get approximate location using IP address (for web)
-  // ignore: unused_element
-  static Future<Map<String, dynamic>?> _getIPBasedLocation() async {
-    try {
-      // Using ipapi.co (free, works with HTTPS)
-      final url = Uri.parse(AppAssets.ipApiGeocode);
-      final response = await http.get(url).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        return {
-          'formatted': '${data['city']}, ${data['region']}',
-          'area': data['city'] ?? '',
-          'city': data['city'] ?? '',
-          'state': data['region'] ?? '',
-          'pincode': data['postal'] ?? '',
-          'country': data['country_name'] ?? '',
-          'latitude': data['latitude'] ?? 0.0,
-          'longitude': data['longitude'] ?? 0.0,
-          'display': '${data['city'] ?? 'Location'}, ${data['region'] ?? ''}',
-        };
-      }
-
-      return null;
-    } catch (e) {
-      debugPrint('GeocodingService: IP location error: $e');
-      return null;
-    }
-  }
-
   /// Search for location by text query (for search functionality)
   static Future<List<Map<String, dynamic>>> searchLocation(String query) async {
     try {
@@ -395,7 +345,7 @@ class GeocodingService {
             url,
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'Supper App/1.0',
+              'User-Agent': 'SingleTap App/1.0',
             },
           )
           .timeout(const Duration(seconds: 10));

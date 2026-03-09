@@ -251,23 +251,23 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Delete $count ${count == 1 ? 'file' : 'files'}?',
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         content: Text(
           '$count ${count == 1 ? 'file' : 'files'} will be permanently deleted from your device.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -345,7 +345,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             Expanded(
               child: Text(
                 fileName,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -353,12 +353,12 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         ),
         content: Text(
           'Audio file saved on ${_formatFileDate(file)}',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.white70)),
+            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
         ],
       ),
@@ -385,7 +385,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             Expanded(
               child: Text(
                 fileName,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -393,7 +393,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         ),
         content: Text(
           '$ext file saved on ${_formatFileDate(file)}',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14),
         ),
         actions: [
           TextButton(
@@ -464,6 +464,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                         ? Text(
                             '${_selectedPaths.length} selected',
                             style: const TextStyle(
+                              fontFamily: 'Poppins',
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
@@ -472,6 +473,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                         : const Text(
                             'Downloads',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -484,6 +486,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                               child: Text(
                                 'Select All',
                                 style: TextStyle(
+                                  fontFamily: 'Poppins',
                                   color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 13,
                                 ),
@@ -503,10 +506,12 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white.withValues(alpha: 0.5),
                     labelStyle: const TextStyle(
+                      fontFamily: 'Poppins',
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                     unselectedLabelStyle: const TextStyle(
+                      fontFamily: 'Poppins',
                       fontSize: 14,
                       fontWeight: FontWeight.normal,
                     ),
@@ -584,6 +589,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                                 Text(
                                   '${_selectedPaths.length} ${_selectedPaths.length == 1 ? 'file' : 'files'}',
                                   style: TextStyle(
+                                    fontFamily: 'Poppins',
                                     color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 14,
                                   ),
@@ -700,7 +706,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             ),
             child: Icon(
               icon,
-              color: Colors.white.withValues(alpha: 0.4),
+              color: Colors.white.withValues(alpha: 0.6),
               size: 48,
             ),
           ),
@@ -708,6 +714,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           Text(
             title,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.7),
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -718,6 +725,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.4),
               fontSize: 14,
             ),
@@ -813,7 +821,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
         color: Colors.white.withValues(alpha: 0.05),
         child: const Icon(
           Icons.broken_image_outlined,
-          color: Colors.white24,
+          color: Colors.white54,
           size: 28,
         ),
       ),
@@ -828,7 +836,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           color: Colors.white.withValues(alpha: 0.05),
           child: const Icon(
             Icons.videocam_rounded,
-            color: Colors.white24,
+            color: Colors.white54,
             size: 32,
           ),
         ),
@@ -882,6 +890,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                 Text(
                   fileName,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -893,8 +902,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                 Text(
                   '$ext  •  ${_formatFileDate(file)}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    fontSize: 10,
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -920,7 +930,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
             ),
             child: const Icon(
               Icons.audiotrack_rounded,
-              color: Colors.white54,
+              color: Colors.white70,
               size: 20,
             ),
           ),
@@ -933,6 +943,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                 Text(
                   fileName,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -944,8 +955,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                 Text(
                   _formatFileDate(file),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    fontSize: 10,
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -981,7 +993,7 @@ class _FullScreenImageViewer extends StatelessWidget {
         ),
         title: Text(
           file.path.split('/').last,
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 14),
           overflow: TextOverflow.ellipsis,
         ),
       ),

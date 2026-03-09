@@ -9,7 +9,7 @@ import '../home/main_navigation_screen.dart';
 import '../login/change_password_screen.dart';
 import 'profile_edit_screen.dart';
 import '../../services/auth_service.dart';
-import '../../widgets/coming_soon_widget.dart';
+import '../../widgets/common widgets/coming_soon_widget.dart';
 
 class PersonalizationScreen extends StatefulWidget {
   const PersonalizationScreen({super.key});
@@ -77,7 +77,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -102,7 +105,8 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
     showComingSoonDialog(
       context,
       featureName: 'Export Data',
-      description: 'Download a copy of all your data including profile, messages, and activity.',
+      description:
+          'Download a copy of all your data including profile, messages, and activity.',
       icon: Icons.download_outlined,
     );
   }
@@ -113,19 +117,25 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Chat History', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Delete Chat History',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: const Text(
           'This will permanently delete all your AI chat conversations. This action cannot be undone.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -165,19 +175,28 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Clear Memory', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Clear Memory',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: const Text(
           'This will clear the app cache and temporary files. Your account data will not be affected.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear', style: TextStyle(color: Color(0xFF6366f1))),
+            child: const Text(
+              'Clear',
+              style: TextStyle(fontFamily: 'Poppins', color: Color(0xFF6366f1)),
+            ),
           ),
         ],
       ),
@@ -231,19 +250,28 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Log Out All Devices', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Log Out All Devices',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: const Text(
           'This will sign out all other devices logged into your account. You will remain logged in on this device.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Log Out All', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Log Out All',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -277,19 +305,28 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Deactivate Account', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Deactivate Account',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+        ),
         content: const Text(
           'Your account will be temporarily disabled. You can reactivate it by logging in again. Your data will be preserved.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Deactivate', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Deactivate',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -326,19 +363,25 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+        ),
         content: const Text(
           'This will permanently delete your account and ALL your data including messages, profile, and connections. This action CANNOT be undone.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continue', style: TextStyle(color: Colors.red)),
+            child: const Text('Continue', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
           ),
         ],
       ),
@@ -353,13 +396,16 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a1a2e),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Type DELETE to confirm', style: TextStyle(color: Colors.red)),
+        title: const Text(
+          'Type DELETE to confirm',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+        ),
         content: TextField(
           controller: confirmController,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Type DELETE',
-            hintStyle: const TextStyle(color: Colors.white38),
+            hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
@@ -373,7 +419,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -381,7 +430,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
                 Navigator.pop(context, true);
               }
             },
-            child: const Text('Delete Forever', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete Forever',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -455,6 +507,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
         title: const Text(
           'Personalization',
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -481,10 +534,12 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
               labelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
               unselectedLabelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 15,
                 fontWeight: FontWeight.normal,
               ),
@@ -522,9 +577,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
+              child: Container(color: Colors.black.withValues(alpha: 0.6)),
             ),
           ),
 
@@ -649,7 +702,8 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
             showComingSoonDialog(
               context,
               featureName: 'Active Sessions',
-              description: 'View and manage all devices where you are logged in.',
+              description:
+                  'View and manage all devices where you are logged in.',
               icon: Icons.devices_outlined,
             );
           },
@@ -675,7 +729,8 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
             showComingSoonDialog(
               context,
               featureName: 'Login History',
-              description: 'View your recent login activity and device details.',
+              description:
+                  'View your recent login activity and device details.',
               icon: Icons.history_outlined,
             );
           },
@@ -726,6 +781,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
     return Text(
       title,
       style: const TextStyle(
+        fontFamily: 'Poppins',
         color: Colors.white,
         fontSize: 18,
         fontWeight: FontWeight.bold,
@@ -751,9 +807,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Row(
           children: [
@@ -779,7 +833,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
                   Text(
                     title,
                     style: TextStyle(
-                      color: isDestructive ? Colors.red : Colors.white.withValues(alpha: 0.9),
+                      fontFamily: 'Poppins',
+                      color: isDestructive
+                          ? Colors.red
+                          : Colors.white.withValues(alpha: 0.9),
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
@@ -788,6 +845,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
                   Text(
                     subtitle,
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 14,
                     ),
@@ -819,9 +877,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -831,11 +887,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
               color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: Icon(icon, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -845,6 +897,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
                 Text(
                   title,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
@@ -854,6 +907,7 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
                 Text(
                   subtitle,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
                   ),

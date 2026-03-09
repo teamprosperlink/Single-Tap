@@ -20,8 +20,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       color: Colors.blue,
       faqs: [
         _FAQ(
-          question: 'What is Supper?',
-          answer: 'Supper is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
+          question: 'What is SingleTap?',
+          answer: 'SingleTap is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
         ),
         _FAQ(
           question: 'How do I create a post?',
@@ -150,7 +150,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         ),
         title: const Text(
           'Help Center',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: PreferredSize(
@@ -237,6 +237,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               Text(
                 category.title,
                 style: const TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -288,6 +289,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     child: Text(
                       faq.question,
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -307,6 +309,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 child: Text(
                   faq.answer,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
                     height: 1.5,

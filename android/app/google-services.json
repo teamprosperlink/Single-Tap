@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "1027499426345",
+    "firebase_url": "https://suuper2-default-rtdb.firebaseio.com",
+    "project_id": "suuper2",
+    "storage_bucket": "suuper2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1027499426345:android:1b44360b28008567375238",
+        "android_client_info": {
+          "package_name": "com.plink.supper"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1027499426345-lvsfhuj1c95eu5u11m8jaoqvn9fagvgn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plink.supper",
+            "certificate_hash": "5f61eefbd832b98c8ed46cf21a9cbfc59cfa7835"
+          }
+        },
+        {
+          "client_id": "1027499426345-uj2uoctvap5lkod1546l0upb08e4vq67.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plink.supper",
+            "certificate_hash": "c88b8ddb77fc4d8fab82d200bb9b4ea198f965a7"
+          }
+        },
+        {
+          "client_id": "1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr0I1xu3pMGTB7ngUvs0jtZc5uqnI8I8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1027499426345-v7of0f2hqdj0rtt70epdvjv07hlkpo2g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.plink.supper"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -60,8 +60,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Use release keystore for debug builds too, so Google Sign-In SHA-1
+            // matches across all machines (keystore is part of the project)
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(

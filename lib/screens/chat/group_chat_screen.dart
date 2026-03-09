@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,7 +19,6 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../services/group_chat_service.dart';
 import '../../services/notification_service.dart';
@@ -96,7 +94,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Search
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
+  List<Map<String, dynamic>> _searchResults = [];
+  int _currentSearchIndex = 0;
+  List<Map<String, dynamic>> _allMessages = [];
+
+  // Cached messages stream to prevent re-subscription on setState
+  late final Stream<QuerySnapshot> _messagesStream;
 
   // Reply
   Map<String, dynamic>? _replyToMessage;
@@ -150,6 +155,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     _scrollController.addListener(_onScroll);
     _scrollController.addListener(_scrollListener);
     _loadChatTheme();
+
+    // Cache messages stream to prevent re-subscription on setState
+    _messagesStream = _firestore
+        .collection('conversations')
+        .doc(widget.groupId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(_messagesPerPage)
+        .snapshots();
 
     // Strategy: Try loading counter with progressive delays
     // This handles the case where Firebase Auth takes time to initialize
@@ -228,6 +242,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     _messageController.dispose();
     _scrollController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     _messageFocusNode.dispose();
     // Clear typing status on dispose
     _groupChatService.clearTypingStatus(widget.groupId);
@@ -394,8 +409,72 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       if (!_isSearching) {
         _searchController.clear();
         _searchQuery = '';
+        _searchResults.clear();
+        _currentSearchIndex = 0;
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            FocusScope.of(context).requestFocus(_searchFocusNode);
+          }
+        });
       }
     });
+  }
+
+  void _performSearch(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _searchResults.clear();
+        _currentSearchIndex = 0;
+      } else {
+        _searchResults = _allMessages.where((msg) {
+          final text = msg['text'] as String? ?? '';
+          return text.toLowerCase().contains(query.toLowerCase());
+        }).toList();
+        _currentSearchIndex = _searchResults.isNotEmpty ? 0 : -1;
+
+        if (_searchResults.isNotEmpty) {
+          _scrollToSearchResult(_searchResults[_currentSearchIndex]);
+        }
+      }
+    });
+  }
+
+  void _previousSearchResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      if (_currentSearchIndex > 0) {
+        _currentSearchIndex--;
+      } else {
+        _currentSearchIndex = _searchResults.length - 1;
+      }
+    });
+    _scrollToSearchResult(_searchResults[_currentSearchIndex]);
+  }
+
+  void _nextSearchResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      if (_currentSearchIndex < _searchResults.length - 1) {
+        _currentSearchIndex++;
+      } else {
+        _currentSearchIndex = 0;
+      }
+    });
+    _scrollToSearchResult(_searchResults[_currentSearchIndex]);
+  }
+
+  void _scrollToSearchResult(Map<String, dynamic> targetMessage) {
+    final index = _allMessages.indexOf(targetMessage);
+    if (index != -1) {
+      final position = (_allMessages.length - index - 1) * 100.0;
+      _scrollController.animateTo(
+        position.clamp(0.0, _scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   // Handle mention (@) detection
@@ -499,31 +578,35 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     return mentions;
   }
 
-  // Build text with highlighted mentions
+  // Build text with highlighted mentions and search highlighting
   Widget _buildTextWithMentions(
     String text,
     bool isMe,
     bool isDarkMode,
     bool isDeleted,
   ) {
+    final baseStyle = TextStyle(fontFamily: 'Poppins', 
+      color: isDeleted
+          ? Colors.grey
+          : (isMe
+                ? Colors.white
+                : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
+      fontSize: 16,
+      height: 1.35,
+      fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
+    );
+
+    // If searching and no mentions, use search highlight only
     final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
     final matches = regex.allMatches(text);
 
+    if (matches.isEmpty && _isSearching && _searchQuery.isNotEmpty) {
+      return _buildHighlightedText(text, _searchQuery, baseStyle);
+    }
+
     if (matches.isEmpty) {
-      // No mentions, return simple text
-      return Text(
-        text,
-        style: TextStyle(
-          color: isDeleted
-              ? Colors.grey
-              : (isMe
-                    ? Colors.white
-                    : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-          fontSize: 16,
-          height: 1.35,
-          fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
-        ),
-      );
+      // No mentions, no search - return simple text
+      return Text(text, style: baseStyle);
     }
 
     // Build rich text with highlighted mentions
@@ -536,7 +619,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         spans.add(
           TextSpan(
             text: text.substring(lastIndex, match.start),
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDeleted
                   ? Colors.grey
                   : (isMe
@@ -551,7 +634,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       spans.add(
         TextSpan(
           text: match.group(0), // @Username
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isMe
                 ? Colors.white
                 : AppColors.iosBlue, // Blue highlight for mentions
@@ -571,7 +654,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       spans.add(
         TextSpan(
           text: text.substring(lastIndex),
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: isDeleted
                 ? Colors.grey
                 : (isMe
@@ -584,7 +667,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(
+        style: TextStyle(fontFamily: 'Poppins', 
           fontSize: 16,
           height: 1.35,
           fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
@@ -592,6 +675,48 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         children: spans,
       ),
     );
+  }
+
+  Widget _buildHighlightedText(String text, String query, TextStyle baseStyle) {
+    if (query.isEmpty) return Text(text, style: baseStyle);
+
+    final queryLower = query.toLowerCase();
+    final textLower = text.toLowerCase();
+
+    if (!textLower.contains(queryLower)) {
+      return Text(text, style: baseStyle);
+    }
+
+    final spans = <TextSpan>[];
+    int start = 0;
+
+    while (start < text.length) {
+      final index = textLower.indexOf(queryLower, start);
+      if (index == -1) {
+        spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+        break;
+      }
+
+      if (index > start) {
+        spans.add(
+          TextSpan(text: text.substring(start, index), style: baseStyle),
+        );
+      }
+
+      spans.add(
+        TextSpan(
+          text: text.substring(index, index + query.length),
+          style: baseStyle.copyWith(
+            backgroundColor: Colors.yellow.withValues(alpha: 0.5),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+
+      start = index + query.length;
+    }
+
+    return RichText(text: TextSpan(children: spans));
   }
 
   // Start group audio call
@@ -615,10 +740,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       final activeCallsQuery = await _firestore
           .collection('group_calls')
           .where('participants', arrayContains: currentUserId)
-          .where('status', whereIn: ['calling', 'ringing', 'active', 'connected'])
+          .where(
+            'status',
+            whereIn: ['calling', 'ringing', 'active', 'connected'],
+          )
           .get();
 
-      debugPrint('📞 Found ${activeCallsQuery.docs.length} potentially active calls');
+      debugPrint(
+        '📞 Found ${activeCallsQuery.docs.length} potentially active calls',
+      );
 
       // Smart check: verify if user is ACTUALLY active in each call
       bool userIsReallyInActiveCall = false;
@@ -630,7 +760,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         final timestamp = data?['createdAt'] as Timestamp?;
         final status = data?['status'] as String?;
 
-        debugPrint('  Call $callId: status=$status, timestamp=${timestamp?.toDate()}');
+        debugPrint(
+          '  Call $callId: status=$status, timestamp=${timestamp?.toDate()}',
+        );
 
         // Mark stale calls (older than 2 minutes OR no timestamp)
         if (timestamp == null || timestamp.toDate().isBefore(twoMinutesAgo)) {
@@ -660,7 +792,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             callsToCleanup.add(callId);
           }
         } catch (e) {
-          debugPrint('    → Error checking participant, marking for cleanup: $e');
+          debugPrint(
+            '    → Error checking participant, marking for cleanup: $e',
+          );
           callsToCleanup.add(callId);
         }
       }
@@ -786,7 +920,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       await batch.commit();
       debugPrint('  Initialized ${uniqueMembers.length} participant documents');
 
-      // Add optimistic call system message to UI immediately (WhatsApp style)
+      // Add optimistic call system message to UI immediately (SingleTap style)
       final optimisticCallMessageId =
           'optimistic_call_${DateTime.now().millisecondsSinceEpoch}';
       final optimisticCallMessage = {
@@ -815,7 +949,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) _scrollToBottom();
       });
 
-      // Send system message to chat - WhatsApp style with caller info
+      // Send system message to chat - SingleTap style with caller info
       debugPrint('  Creating call system message...');
       final systemMessageId = await _groupChatService.sendSystemMessage(
         groupId: widget.groupId,
@@ -955,9 +1089,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E),
+                    color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24, width: 1),
+                    border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.5),
@@ -969,6 +1103,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       // Camera Photo option
                       _buildPopupOption(
                         icon: Icons.camera_alt,
@@ -1037,7 +1186,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             const SizedBox(width: 16),
             Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins', 
                 color: isDestructive ? Colors.red : Colors.white,
                 fontSize: 16,
               ),
@@ -1874,19 +2023,24 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1A1A2E) : Colors.white,
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDarkMode ? Colors.white24 : Colors.grey[300]!,
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white, width: 1),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white70, size: 22),
+                ),
+              ),
               Text(
                 'Choose Chat Theme',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1931,7 +2085,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                       const SizedBox(width: 8),
                       Text(
                         'None (Default)',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: isDarkMode ? Colors.white : Colors.black,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -1952,7 +2106,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               const SizedBox(height: 16),
               Text(
                 'Theme Colors',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.white70 : Colors.grey[700],
                   fontSize: 14,
                 ),
@@ -2010,7 +2164,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 onPressed: () => Navigator.pop(context),
                 child: Text(
                   'Cancel',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: isDarkMode ? Colors.white70 : Colors.grey[700],
                   ),
                 ),
@@ -2475,8 +2629,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.3),
@@ -2488,6 +2643,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       _buildMessageOption(
                         icon: Icons.reply,
                         label: 'Reply',
@@ -2558,7 +2728,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           label: 'Save Audio',
                           onTap: () {
                             Navigator.pop(context);
-                            final url = (message['voiceUrl'] as String?) ??
+                            final url =
+                                (message['voiceUrl'] as String?) ??
                                 (message['audioUrl'] as String);
                             _saveAudio(url);
                           },
@@ -2638,7 +2809,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               const SizedBox(width: 20),
               Text(
                 label,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   color: isDestructive ? Colors.red : Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -2884,12 +3055,23 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       String fileName;
       if (originalFileName != null && originalFileName.isNotEmpty) {
-        fileName = 'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
+        fileName =
+            'plink_${DateTime.now().millisecondsSinceEpoch}_$originalFileName';
       } else {
         final uri = Uri.parse(fileUrl);
         final urlPath = uri.path.toLowerCase();
         String ext = '.pdf';
-        for (final e in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']) {
+        for (final e in [
+          '.pdf',
+          '.doc',
+          '.docx',
+          '.xls',
+          '.xlsx',
+          '.ppt',
+          '.pptx',
+          '.txt',
+          '.csv',
+        ]) {
           if (urlPath.contains(e)) {
             ext = e;
             break;
@@ -2950,8 +3132,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2C3E50),
+                    color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.3),
@@ -2963,6 +3146,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Close button
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4, right: 8),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
                       _buildMessageOption(
                         icon: Icons.check_circle_outline,
                         label: 'Select',
@@ -3004,8 +3202,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     debugPrint('currentUserId: $currentUserId');
 
     bool messageDeleted = false;
-    // ignore: unused_local_variable
-    bool callDeleted = false;
 
     // 1. Add current user to deletedFor array in message document
     try {
@@ -3027,24 +3223,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (callId != null && callId.isNotEmpty) {
       try {
         // First check if document exists
-        final callDoc = await _firestore.collection('group_calls').doc(callId).get();
+        final callDoc = await _firestore
+            .collection('group_calls')
+            .doc(callId)
+            .get();
         if (callDoc.exists) {
           await _firestore.collection('group_calls').doc(callId).update({
             'deletedFor': FieldValue.arrayUnion([currentUserId]),
           });
-          callDeleted = true;
           debugPrint('group_calls deletedFor updated successfully');
         } else {
           debugPrint('group_calls document does not exist: $callId');
-          // Still consider it success since message is hidden
-          callDeleted = true;
         }
       } catch (e) {
         debugPrint('Error updating group_calls deletedFor: $e');
-        // Don't show error if message was deleted successfully
-        if (messageDeleted) {
-          callDeleted = true; // Consider it partial success
-        }
       }
     } else {
       // No callId, try to find by systemMessageId
@@ -3061,15 +3253,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           await callQuery.docs.first.reference.update({
             'deletedFor': FieldValue.arrayUnion([currentUserId]),
           });
-          callDeleted = true;
           debugPrint('Found and updated group_calls by systemMessageId');
         } else {
           debugPrint('No group_calls found by systemMessageId');
-          callDeleted = messageDeleted; // Success if message was deleted
         }
       } catch (e) {
         debugPrint('Error finding group_calls by systemMessageId: $e');
-        callDeleted = messageDeleted;
       }
     }
 
@@ -3088,7 +3277,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  /// Show WhatsApp-style delete dialog with glass effect
+  /// Show SingleTap-style delete dialog with glass effect
   Future<String?> _showDeleteDialog({
     required String title,
     required bool showDeleteForEveryone,
@@ -3102,13 +3291,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 color: Colors.white.withValues(alpha: 0.15),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.white, width: 1),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -3128,7 +3317,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   const SizedBox(height: 16),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -3138,7 +3327,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   const Text(
                     'Choose how to delete',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 20),
                   if (showDeleteForEveryone) ...[
@@ -3154,7 +3343,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         child: const Center(
                           child: Text(
                             'Delete for everyone',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -3182,7 +3371,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             child: const Center(
                               child: Text(
                                 'Cancel',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -3205,7 +3394,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             child: const Center(
                               child: Text(
                                 'Delete for me',
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -3254,7 +3443,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  /// Delete message for everyone - WhatsApp style "This message was deleted"
+  /// Delete message for everyone - SingleTap style "This message was deleted"
   Future<void> _deleteMessageForEveryone(String messageId) async {
     debugPrint('=== _deleteMessageForEveryone START ===');
     debugPrint('messageId: $messageId');
@@ -3325,7 +3514,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
       if (callId != null && callId.isNotEmpty) {
         try {
-          debugPrint('Attempting to delete group_calls doc with callId: $callId');
+          debugPrint(
+            'Attempting to delete group_calls doc with callId: $callId',
+          );
           await _firestore.collection('group_calls').doc(callId).delete();
           debugPrint('SUCCESS: Deleted group call document: $callId');
         } catch (e) {
@@ -3341,19 +3532,25 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               .where('groupId', isEqualTo: widget.groupId)
               .limit(1)
               .get();
-          debugPrint('Found ${callQuery.docs.length} group_calls docs by systemMessageId');
+          debugPrint(
+            'Found ${callQuery.docs.length} group_calls docs by systemMessageId',
+          );
           for (final doc in callQuery.docs) {
             await doc.reference.delete();
-            debugPrint('SUCCESS: Deleted group call by systemMessageId: ${doc.id}');
+            debugPrint(
+              'SUCCESS: Deleted group call by systemMessageId: ${doc.id}',
+            );
           }
         } catch (e) {
-          debugPrint('ERROR: Failed to find/delete group call by systemMessageId: $e');
+          debugPrint(
+            'ERROR: Failed to find/delete group call by systemMessageId: $e',
+          );
         }
       } else {
         debugPrint('NOT A CALL MESSAGE - skipping group_calls deletion');
       }
 
-      // Mark message as deleted (WhatsApp style - shows "This message was deleted")
+      // Mark message as deleted (SingleTap style - shows "This message was deleted")
       debugPrint('Marking message as deleted in Firestore...');
       await _firestore
           .collection('conversations')
@@ -3493,8 +3690,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         // Sort and filter client-side (no index needed!)
         final sortedDocs = snapshot.data!.docs.toList()
           ..sort((a, b) {
-            final aTime = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-            final bTime = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final aTime =
+                (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final bTime =
+                (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
             if (aTime == null || bTime == null) return 0;
             return bTime.compareTo(aTime);
           });
@@ -3521,7 +3720,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         // Safety net: auto-end stale calls older than 39 sec with no active participants
         final createdAt = callData['createdAt'] as Timestamp?;
         if (createdAt != null) {
-          final callAge = DateTime.now().difference(createdAt.toDate()).inSeconds;
+          final callAge = DateTime.now()
+              .difference(createdAt.toDate())
+              .inSeconds;
           if (callAge > 45) {
             // Check if any participants are active before auto-ending
             activeCallDoc.reference
@@ -3529,16 +3730,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 .where('isActive', isEqualTo: true)
                 .get()
                 .then((snap) {
-              if (snap.docs.isEmpty) {
-                debugPrint('Safety net: Auto-ending stale call $callId (age: ${callAge}s, no active participants)');
-                _firestore.collection('group_calls').doc(callId).update({
-                  'status': 'ended',
-                  'endedAt': FieldValue.serverTimestamp(),
+                  if (snap.docs.isEmpty) {
+                    debugPrint(
+                      'Safety net: Auto-ending stale call $callId (age: ${callAge}s, no active participants)',
+                    );
+                    _firestore.collection('group_calls').doc(callId).update({
+                      'status': 'ended',
+                      'endedAt': FieldValue.serverTimestamp(),
+                    });
+                  }
+                })
+                .catchError((e) {
+                  debugPrint('Safety net: Error checking stale call: $e');
                 });
-              }
-            }).catchError((e) {
-              debugPrint('Safety net: Error checking stale call: $e');
-            });
           }
         }
 
@@ -3561,7 +3765,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00A884),
                   borderRadius: BorderRadius.circular(12),
@@ -3613,7 +3820,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       width: 2,
                                     ),
                                     color: Colors.grey[300],
-                                    image: photoUrl != null && photoUrl.isNotEmpty
+                                    image:
+                                        photoUrl != null && photoUrl.isNotEmpty
                                         ? DecorationImage(
                                             image: CachedNetworkImageProvider(
                                               photoUrl,
@@ -3627,7 +3835,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                           child: Text(
                                             (_memberNames[userId] ?? '?')[0]
                                                 .toUpperCase(),
-                                            style: const TextStyle(
+                                            style: const TextStyle(fontFamily: 'Poppins', 
                                               fontSize: 14,
                                               fontWeight: FontWeight.bold,
                                               color: Color(0xFF00A884),
@@ -3648,7 +3856,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         children: [
                           const Text(
                             'Tap to join call',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -3659,7 +3867,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             count > 0
                                 ? '$count members in call'
                                 : 'Waiting for others...',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 13,
                             ),
@@ -3678,7 +3886,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                       ),
                       child: const Text(
                         'Join',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: Color(0xFF00A884),
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -3797,19 +4005,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           appBar: _buildAppBar(isDarkMode, currentUserId),
           body: Stack(
             children: [
-              // Default background - always shows (for default theme)
+              // Gradient Background
               Positioned.fill(
-                child: Image.asset(
-                  AppAssets.homeBackgroundImage,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: AppColors.splashGradient,
+                  ),
                 ),
-              ),
-
-              // Dark overlay - always shows (for default theme)
-              Positioned.fill(
-                child: Container(color: AppColors.darkOverlay(alpha: 0.6)),
               ),
 
               // Content
@@ -3818,8 +4020,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                     false, // Remove bottom padding to eliminate space below input
                 child: Column(
                   children: [
-                    // Search bar when searching
-                    if (_isSearching) _buildSearchBar(isDarkMode),
+                    // Search results bar when searching
+                    if (_isSearching) _buildSearchResultsBar(isDarkMode),
                     // Active Call Banner
                     _buildActiveCallBanner(isDarkMode),
                     // Messages list with pagination
@@ -3845,13 +4047,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               )
                             : null, // No decoration for default theme (shows bg image)
                         child: StreamBuilder<QuerySnapshot>(
-                          stream: _firestore
-                              .collection('conversations')
-                              .doc(widget.groupId)
-                              .collection('messages')
-                              .orderBy('timestamp', descending: true)
-                              .limit(_messagesPerPage)
-                              .snapshots(),
+                          stream: _messagesStream,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
                                     ConnectionState.waiting &&
@@ -3861,9 +4057,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               );
                             }
 
-                            final messages = snapshot.data?.docs ?? [];
-                            // Reduced logging to prevent spam
-                            // debugPrint('💬 StreamBuilder received ${messages.length} messages from Firestore');
+                            // Deduplicate by message ID
+                            final seenMsgIds = <String>{};
+                            final messages = (snapshot.data?.docs ?? [])
+                                .where((doc) => seenMsgIds.add(doc.id))
+                                .toList();
 
                             if (messages.isNotEmpty) {
                               _lastDocument = messages.last;
@@ -3945,8 +4143,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               return true;
                             }).toList();
 
-                            // Filter by search query
-                            if (_searchQuery.isNotEmpty) {
+                            // Store all messages for search
+                            _allMessages = allMessages;
+
+                            // Filter messages if searching
+                            if (_isSearching && _searchQuery.isNotEmpty) {
                               allMessages = allMessages.where((msg) {
                                 final text = msg['text'] as String? ?? '';
                                 return text.toLowerCase().contains(
@@ -4100,7 +4301,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       onPressed: _loadMoreMessages,
                                       child: Text(
                                         'Load earlier messages',
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           color: Theme.of(context).primaryColor,
                                         ),
                                       ),
@@ -4179,11 +4380,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         ),
       ),
       bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(0.5),
-        child: Container(
-          height: 0.5,
-          color: const Color(0x4DFFFFFF), // Fixed white with 30% opacity
-        ),
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: Colors.white),
       ),
       leading: IconButton(
         icon: Icon(
@@ -4202,14 +4400,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       title: _isMultiSelectMode
           ? Text(
               '${_selectedMessageIds.length} selected',
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white, // Always white for solid dark appbar
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
             )
           : _isSearching
-          ? null
+          ? _buildSearchField(isDarkMode)
           : StreamBuilder<DocumentSnapshot>(
               stream: _firestore
                   .collection('conversations')
@@ -4275,7 +4473,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           children: [
                             Text(
                               _currentGroupName,
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: isDarkMode ? Colors.white : Colors.black,
@@ -4285,7 +4483,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               typingText.isNotEmpty
                                   ? typingText
                                   : '${_memberNames.length} members',
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 12,
                                 color: typingText.isNotEmpty
                                     ? Theme.of(context).primaryColor
@@ -4328,18 +4526,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             tooltip: 'Delete',
           ),
         ] else if (!_isSearching) ...[
-          // Video call button (disabled)
-          IconButton(
-            icon: Icon(
-              Icons.videocam_rounded,
-              color: Colors.white70.withValues(
-                alpha: 0.5,
-              ), // Always white for solid dark appbar
-              size: 24,
-            ),
-            onPressed: null,
-            tooltip: 'Video Call',
-          ),
           // Audio call button
           IconButton(
             icon: Icon(
@@ -4366,22 +4552,61 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  Widget _buildSearchBar(bool isDarkMode) {
+  Widget _buildSearchField(bool isDarkMode) {
+    return GlassTextField(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      hintText: 'Search messages...',
+      showBlur: false,
+      decoration: const BoxDecoration(),
+      contentPadding: EdgeInsets.zero,
+      textAlign: TextAlign.center,
+      onChanged: (value) {
+        _performSearch(value);
+      },
+    );
+  }
+
+  Widget _buildSearchResultsBar(bool isDarkMode) {
     return Container(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 18, bottom: 0),
-      color: isDarkMode ? AppColors.darkCard : Colors.grey[100],
-      child: GlassTextField(
-        controller: _searchController,
-        autofocus: true,
-        hintText: 'Search messages...',
-        prefixIcon: Icon(
-          Icons.search,
-          color: isDarkMode ? Colors.grey[600] : Colors.grey,
-        ),
-        borderRadius: 12,
-        onChanged: (value) {
-          setState(() => _searchQuery = value);
-        },
+      decoration: const BoxDecoration(color: Colors.transparent),
+      child: Row(
+        children: [
+          Text(
+            _searchResults.isEmpty && _searchQuery.isNotEmpty
+                ? 'No results'
+                : _searchResults.isEmpty
+                ? 'Type to search'
+                : '${_currentSearchIndex + 1} of ${_searchResults.length}',
+            style: TextStyle(fontFamily: 'Poppins', 
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+              fontSize: 14,
+            ),
+          ),
+          const Spacer(),
+          if (_searchResults.isNotEmpty) ...[
+            IconButton(
+              icon: Icon(
+                Icons.keyboard_arrow_up,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+              ),
+              onPressed: _previousSearchResult,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+              ),
+              onPressed: _nextSearchResult,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -4399,7 +4624,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           const SizedBox(height: 16),
           Text(
             _searchQuery.isNotEmpty ? 'No messages found' : 'No messages yet',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: 18,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -4409,7 +4634,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             _searchQuery.isNotEmpty
                 ? 'Try a different search'
                 : 'Start the conversation!',
-            style: TextStyle(
+            style: TextStyle(fontFamily: 'Poppins', 
               color: isDarkMode ? Colors.grey[700] : Colors.grey[400],
             ),
           ),
@@ -4458,7 +4683,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               children: [
                 Text(
                   isMe ? 'You' : senderName,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Color(0xFFE91E63), // Pink color
                     fontWeight: FontWeight.w600,
@@ -4467,7 +4692,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _replyToMessage!['text'] ?? 'Photo',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -4529,7 +4754,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               children: [
                 const Text(
                   'Editing message',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 13,
                     color: Colors.orange,
                     fontWeight: FontWeight.w600,
@@ -4538,7 +4763,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _editingMessage!['text'] ?? '',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 14,
                     color: Colors.grey[300], // Always light for dark background
                   ),
@@ -4847,7 +5072,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
   Widget _buildMessageInput(bool isDarkMode) {
     final hasText = _messageController.text.trim().isNotEmpty;
-    final themeColors = chatThemes[_currentTheme] ?? chatThemes['default']!;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -4991,18 +5215,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             margin: const EdgeInsets.only(bottom: 2),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: themeColors,
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.25),
+                                  Colors.white.withValues(alpha: 0.15),
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: themeColors[0].withValues(alpha: 0.4),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              border: Border.all(color: Colors.white, width: 1),
                             ),
                             child: _isSending
                                 ? const SizedBox(
@@ -5068,7 +5289,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                           _formatRecordingTime(
                                             _recordingDuration,
                                           ),
-                                          style: const TextStyle(
+                                          style: const TextStyle(fontFamily: 'Poppins', 
                                             color: Colors.white,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -5210,13 +5431,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               child: !PhotoUrlHelper.isValidUrl(photo)
                   ? Text(
                       name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
                     )
                   : null,
             ),
             title: Text(
               name,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: 'Poppins', 
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -5266,7 +5487,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   ]) {
     final actionType = messageData?['actionType'] as String?;
 
-    // WhatsApp-style call message
+    // SingleTap-style call message
     if (actionType == 'call') {
       final callerId = messageData?['callerId'] as String?;
       final callerName = messageData?['callerName'] as String?;
@@ -5275,6 +5496,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       final timestamp = messageData?['timestamp'] as Timestamp?;
       final callId =
           messageData?['callId'] as String?; // Get call ID to check if active
+      final messageId = messageData?['id'] as String?;
+      final isSelected = messageId != null && _selectedMessageIds.contains(messageId);
 
       // Check if current user is the caller
       final isCallerCurrentUser = callerId == _currentUserId;
@@ -5312,19 +5535,21 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             : 'Incoming call • $durationText$participantText';
       }
 
-      // WhatsApp-style positioning: right for caller, left for others
-      return Padding(
-        padding: const EdgeInsets.only(
-          top: 6,
-          bottom: 6,
-          right: 16,
-          left: 16,
-        ), // Better spacing for call messages
-        child: Align(
-          alignment: isCallerCurrentUser
-              ? Alignment
-                    .centerRight // My call → RIGHT
-              : Alignment.centerLeft, // Others' call → LEFT
+      // SingleTap-style positioning: right for caller, left for others
+      return GestureDetector(
+        onTap: _isMultiSelectMode && messageId != null
+            ? () => _toggleMessageSelection(messageId)
+            : null,
+        child: Container(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: 0.1)
+              : Colors.transparent,
+          padding: const EdgeInsets.only(
+            top: 6,
+            bottom: 6,
+            right: 16,
+            left: 16,
+          ), // Better spacing for call messages
           child: Row(
             mainAxisAlignment: isCallerCurrentUser
                 ? MainAxisAlignment
@@ -5332,36 +5557,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 : MainAxisAlignment.start, // Others' call → LEFT
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile circle for receiver
-              if (!isCallerCurrentUser) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundImage:
-                        PhotoUrlHelper.isValidUrl(_memberPhotos[callerId])
-                        ? CachedNetworkImageProvider(_memberPhotos[callerId]!)
-                        : null,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).primaryColor.withValues(alpha: 0.1),
-                    child: !PhotoUrlHelper.isValidUrl(_memberPhotos[callerId])
-                        ? Text(
-                            callerName != null && callerName.isNotEmpty
-                                ? callerName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          )
-                        : null,
+              // Selection checkbox
+              if (_isMultiSelectMode) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, right: 4, bottom: 4),
+                  child: Icon(
+                    isSelected ? Icons.check_circle : Icons.circle_outlined,
+                    color: isSelected ? Colors.blue : Colors.grey,
+                    size: 24,
                   ),
                 ),
-                const SizedBox(width: 8),
               ],
               Column(
                 crossAxisAlignment: isCallerCurrentUser
@@ -5371,7 +5576,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   GestureDetector(
-                    onTap: () => _handleCallCardTap(callId, callDuration),
+                    onTap: _isMultiSelectMode && messageId != null
+                        ? () => _toggleMessageSelection(messageId)
+                        : () => _handleCallCardTap(callId, callDuration),
                     onLongPress: () => _showCallDeleteOptions(messageData),
                     child: Container(
                       constraints: BoxConstraints(
@@ -5382,25 +5589,25 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        gradient: isCallerCurrentUser
-                            ? LinearGradient(
-                                colors:
-                                    chatThemes[_currentTheme] ??
-                                    chatThemes['default']!,
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : null,
-                        color: !isCallerCurrentUser
-                            ? Colors.black.withValues(alpha: 0.6)
-                            : null,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isCallerCurrentUser
-                              ? Colors.blue
-                              : Colors.black.withValues(alpha: 0.6),
-                          width: 1,
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.25),
+                            Colors.white.withValues(alpha: 0.15),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(20),
+                          topRight: const Radius.circular(20),
+                          bottomLeft: isCallerCurrentUser
+                              ? const Radius.circular(20)
+                              : const Radius.circular(4),
+                          bottomRight: isCallerCurrentUser
+                              ? const Radius.circular(4)
+                              : const Radius.circular(20),
+                        ),
+                        border: Border.all(color: Colors.white, width: 1),
                       ),
                       child: Column(
                         crossAxisAlignment: isCallerCurrentUser
@@ -5414,7 +5621,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           if (!isCallerCurrentUser && callerName != null) ...[
                             Text(
                               callerName,
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -5459,7 +5666,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   children: [
                                     Text(
                                       callText,
-                                      style: const TextStyle(
+                                      style: const TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
                                         color: Colors.white,
@@ -5472,7 +5679,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                         DateFormat(
                                           'MMM d, h:mm a',
                                         ).format(timestamp.toDate()),
-                                        style: TextStyle(
+                                        style: TextStyle(fontFamily: 'Poppins', 
                                           fontSize: 11,
                                           color: Colors.white.withValues(
                                             alpha: 0.7,
@@ -5510,7 +5717,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           SizedBox(width: 4),
                           Text(
                             'Join',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -5534,12 +5741,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.6),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 1),
         ),
         child: Text(
           text,
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: 'Poppins', 
             fontSize: 12,
             color: Colors.white,
             fontStyle: FontStyle.italic,
@@ -5565,10 +5780,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     int? voiceDuration,
   }) {
     final senderName = _memberNames[senderId] ?? 'Unknown';
-    final senderPhoto = _memberPhotos[senderId];
     final totalMembers = _memberNames.length;
     final readCount = readBy.length;
-    final themeColors = chatThemes[_currentTheme] ?? chatThemes['default']!;
     final hasContent =
         text.isNotEmpty ||
         imageUrl != null ||
@@ -5612,35 +5825,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   ),
                 ),
               ],
-              if (!isMe) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundImage: PhotoUrlHelper.isValidUrl(senderPhoto)
-                        ? CachedNetworkImageProvider(senderPhoto!)
-                        : null,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).primaryColor.withValues(alpha: 0.1),
-                    child: !PhotoUrlHelper.isValidUrl(senderPhoto)
-                        ? Text(
-                            senderName.isNotEmpty
-                                ? senderName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
               Flexible(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -5656,7 +5840,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           maxWidth: MediaQuery.of(context).size.width * 0.5,
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(20),
+                            topRight: const Radius.circular(20),
+                            bottomLeft: isMe
+                                ? const Radius.circular(20)
+                                : const Radius.circular(4),
+                            bottomRight: isMe
+                                ? const Radius.circular(4)
+                                : const Radius.circular(20),
+                          ),
                           child: BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                             child: Container(
@@ -5670,33 +5863,37 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                     : 6,
                               ),
                               decoration: BoxDecoration(
-                                // Only show gradient/color background if there's text
-                                // For image-only messages, use transparent background
-                                gradient: (isMe && text.isNotEmpty)
+                                gradient:
+                                    (text.isNotEmpty &&
+                                        imageUrl == null &&
+                                        videoUrl == null &&
+                                        voiceUrl == null)
                                     ? LinearGradient(
-                                        colors: themeColors,
+                                        colors: [
+                                          Colors.white.withValues(alpha: 0.25),
+                                          Colors.white.withValues(alpha: 0.15),
+                                        ],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                       )
                                     : null,
-                                color: (!isMe && text.isNotEmpty)
-                                    ? Colors.black.withValues(alpha: 0.6)
+                                border:
+                                    (text.isNotEmpty &&
+                                        imageUrl == null &&
+                                        videoUrl == null &&
+                                        voiceUrl == null)
+                                    ? Border.all(color: Colors.white, width: 1)
                                     : null,
-                                border: (isMe && text.isNotEmpty)
-                                    ? Border.all(color: Colors.blue, width: 2)
-                                    : null,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: text.isNotEmpty
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.05,
-                                          ),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ]
-                                    : null,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(20),
+                                  topRight: const Radius.circular(20),
+                                  bottomLeft: isMe
+                                      ? const Radius.circular(20)
+                                      : const Radius.circular(4),
+                                  bottomRight: isMe
+                                      ? const Radius.circular(4)
+                                      : const Radius.circular(20),
+                                ),
                               ),
                               child: Column(
                                 crossAxisAlignment: isMe
@@ -5712,7 +5909,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       voiceUrl == null) ...[
                                     Text(
                                       senderName,
-                                      style: const TextStyle(
+                                      style: const TextStyle(fontFamily: 'Poppins', 
                                         fontSize: 12,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -5743,35 +5940,49 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       onTap: isOptimistic
                                           ? null
                                           : () {
-                                              if (messageData['isLocalFile'] == true) {
+                                              if (messageData['isLocalFile'] ==
+                                                  true) {
                                                 Navigator.push(
                                                   context,
                                                   MaterialPageRoute(
                                                     builder: (_) => Scaffold(
-                                                      backgroundColor: Colors.black,
+                                                      backgroundColor:
+                                                          Colors.black,
                                                       appBar: AppBar(
-                                                        backgroundColor: Colors.transparent,
+                                                        backgroundColor:
+                                                            Colors.transparent,
                                                         elevation: 0,
                                                         leading: IconButton(
-                                                          icon: const Icon(Icons.close, color: Colors.white),
-                                                          onPressed: () => Navigator.pop(context),
+                                                          icon: const Icon(
+                                                            Icons.close,
+                                                            color: Colors.white,
+                                                          ),
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                context,
+                                                              ),
                                                         ),
                                                       ),
                                                       body: Center(
-                                                        child: InteractiveViewer(
-                                                          minScale: 0.5,
-                                                          maxScale: 4.0,
-                                                          child: Image.file(
-                                                            File(imageUrl),
-                                                            fit: BoxFit.contain,
-                                                          ),
-                                                        ),
+                                                        child:
+                                                            InteractiveViewer(
+                                                              minScale: 0.5,
+                                                              maxScale: 4.0,
+                                                              child: Image.file(
+                                                                File(imageUrl),
+                                                                fit: BoxFit
+                                                                    .contain,
+                                                              ),
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
                                                 );
                                               } else {
-                                                PhotoViewerDialog.show(context, imageUrl);
+                                                PhotoViewerDialog.show(
+                                                  context,
+                                                  imageUrl,
+                                                );
                                               }
                                             },
                                       child: Container(
@@ -5781,17 +5992,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                 ? Colors.orange.withValues(
                                                     alpha: 0.5,
                                                   )
-                                                : isMe
-                                                ? AppColors.iosBlue
-                                                : Colors.black.withValues(
-                                                    alpha: 0.6,
+                                                : Colors.white.withValues(
+                                                    alpha: 0.3,
                                                   ),
-                                            width: 2,
+                                            width: 1,
                                           ),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
@@ -5805,23 +6018,24 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                         horizontal: 8,
                                                         vertical: 6,
                                                       ),
-                                                  color: Colors.black.withValues(
-                                                    alpha: 0.6,
-                                                  ),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(
+                                                    style: const TextStyle(fontFamily: 'Poppins', 
                                                       fontSize: 12,
                                                       color: Colors.white,
-                                                      fontWeight: FontWeight.w600,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
                                               ConstrainedBox(
-                                                constraints: const BoxConstraints(
-                                                  maxHeight: 180,
-                                                  maxWidth: 220,
-                                                ),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      maxHeight: 180,
+                                                      maxWidth: 220,
+                                                    ),
                                                 child: Stack(
                                                   alignment: Alignment.center,
                                                   children: [
@@ -5837,22 +6051,26 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                             imageUrl: imageUrl,
                                                             width: 200,
                                                             fit: BoxFit.cover,
-                                                            placeholder: (context, url) => Container(
-                                                              width: 200,
-                                                              height: 180,
-                                                              color: isDarkMode
-                                                                  ? Colors
-                                                                        .grey[800]
-                                                                  : Colors
-                                                                        .grey[300],
-                                                              child: const Center(
-                                                                child:
-                                                                    CircularProgressIndicator(
+                                                            placeholder:
+                                                                (
+                                                                  context,
+                                                                  url,
+                                                                ) => Container(
+                                                                  width: 200,
+                                                                  height: 180,
+                                                                  color:
+                                                                      isDarkMode
+                                                                      ? Colors
+                                                                            .grey[800]
+                                                                      : Colors
+                                                                            .grey[300],
+                                                                  child: const Center(
+                                                                    child: CircularProgressIndicator(
                                                                       strokeWidth:
                                                                           2,
                                                                     ),
-                                                              ),
-                                                            ),
+                                                                  ),
+                                                                ),
                                                             errorWidget:
                                                                 (
                                                                   context,
@@ -5861,8 +6079,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                                 ) => const Icon(
                                                                   Icons
                                                                       .error_outline,
-                                                                  color:
-                                                                      Colors.red,
+                                                                  color: Colors
+                                                                      .red,
                                                                 ),
                                                           ),
                                                     // Show uploading overlay for optimistic messages
@@ -5884,7 +6102,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                                   AlwaysStoppedAnimation<
                                                                     Color
                                                                   >(
-                                                                    Colors.orange,
+                                                                    Colors
+                                                                        .orange,
                                                                   ),
                                                             ),
                                                           ),
@@ -5924,12 +6143,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                 ? Colors.orange.withValues(
                                                     alpha: 0.5,
                                                   )
-                                                : isMe
-                                                ? AppColors.iosBlue
-                                                : Colors.black.withValues(
-                                                    alpha: 0.6,
+                                                : Colors.white.withValues(
+                                                    alpha: 0.3,
                                                   ),
-                                            width: 2,
+                                            width: 1,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             8,
@@ -5956,7 +6173,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                       .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(
+                                                    style: const TextStyle(fontFamily: 'Poppins', 
                                                       fontSize: 12,
                                                       color: Colors.white,
                                                       fontWeight:
@@ -6110,7 +6327,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           if (timestamp != null)
                             Text(
                               DateFormat('h:mm a').format(timestamp.toDate()),
-                              style: TextStyle(
+                              style: TextStyle(fontFamily: 'Poppins', 
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: isDarkMode
@@ -6162,7 +6379,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
 
-    // Waveform bar heights pattern (30 bars for WhatsApp style)
+    // Waveform bar heights pattern (30 bars for SingleTap style)
     final heights = [
       6.0,
       10.0,
@@ -6196,19 +6413,29 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       8.0,
     ];
 
-    // Audio player WhatsApp style - gradient background
+    // Audio player SingleTap style - glass background
     return Container(
       constraints: const BoxConstraints(maxWidth: 220),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? LinearGradient(
-                colors: chatThemes[_currentTheme] ?? chatThemes['default']!,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        color: !isMe ? Colors.black.withValues(alpha: 0.6) : null,
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white, width: 1),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
+          bottomLeft: isMe
+              ? const Radius.circular(20)
+              : const Radius.circular(4),
+          bottomRight: isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(20),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6226,7 +6453,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ),
               child: Text(
                 senderName,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: 'Poppins', 
                   fontSize: 12,
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -6283,11 +6510,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             isCurrentlyPlaying
                                 ? Icons.pause_rounded
                                 : Icons.play_arrow_rounded,
-                            color: isMe
-                                ? (chatThemes[_currentTheme] ??
-                                          chatThemes['default']!)
-                                      .first
-                                : const Color(0xFF3A3A3A),
+                            color: const Color(0xFF3A3A3A),
                             size: 20,
                           ),
                   ),
@@ -6322,7 +6545,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 // Duration
                 Text(
                   formatDuration(voiceDuration),
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
@@ -6452,7 +6675,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             children: [
               Text(
                 replySenderName,
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: isMe ? Colors.white : Theme.of(context).primaryColor,
@@ -6460,7 +6683,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ),
               Text(
                 replyData['text'] ?? ' Photo',
-                style: TextStyle(
+                style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 12,
                   color: isMe
                       ? Colors.white.withValues(alpha: 0.8)
@@ -6476,14 +6699,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  // Build message status icon (WhatsApp-like ticks)
+  // Build message status icon (SingleTap-like ticks)
   Widget _buildMessageStatusIcon(
     dynamic status,
     int readCount,
     int totalMembers,
     bool isDarkMode,
   ) {
-    // WhatsApp group chat tick logic:
+    // SingleTap group chat tick logic:
     // Single grey tick ✓ = Sent to server (only sender has read, readCount = 1)
     // Double grey tick ✓✓ = Delivered/read by some members (readCount > 1 but < totalMembers)
     // Double blue tick ✓✓ = Read by ALL members (readCount >= totalMembers)
@@ -6624,9 +6847,9 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           margin: const EdgeInsets.symmetric(horizontal: 40),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: const Color.fromRGBO(32, 32, 32, 1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
+            border: Border.all(color: Colors.white, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -6638,10 +6861,21 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Audio Player UI - WhatsApp style
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white70, size: 22),
+                ),
+              ),
+              // Audio Player UI - SingleTap style
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF007AFF), width: 2),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
                   borderRadius: BorderRadius.circular(32),
                 ),
                 child: Container(
@@ -6663,21 +6897,12 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: Colors.white.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF5856D6,
-                                ).withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ],
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
                           ),
                           child: Icon(
                             _isPlaying
@@ -6733,7 +6958,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                                     height: heights[index],
                                     decoration: BoxDecoration(
                                       color: isActive
-                                          ? const Color(0xFF007AFF)
+                                          ? Colors.white
                                           : Colors.white30,
                                       borderRadius: BorderRadius.circular(2),
                                     ),
@@ -6745,7 +6970,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                             // Duration text
                             Text(
                               _formatTime(widget.duration),
-                              style: const TextStyle(
+                              style: const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white70,
                                 fontSize: 11,
                               ),
@@ -6795,7 +7020,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Delete',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.redAccent,
                               fontWeight: FontWeight.w600,
                             ),
@@ -6817,21 +7042,19 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.25),
+                            Colors.white.withValues(alpha: 0.15),
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF5856D6,
-                            ).withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ],
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -6844,7 +7067,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                           SizedBox(width: 6),
                           Text(
                             'Send',
-                            style: TextStyle(
+                            style: TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
@@ -7002,7 +7225,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
         ),
         title: const Text(
           'Forward to...',
-          style: TextStyle(
+          style: TextStyle(fontFamily: 'Poppins', 
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -7025,7 +7248,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                 ),
                 child: Text(
                   'Send (${_selectedUsers.length})',
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -7047,10 +7270,10 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
               onChanged: (value) {
                 setState(() => _searchQuery = value);
               },
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+              style: TextStyle(fontFamily: 'Poppins', color: isDarkMode ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 hintText: 'Search contacts...',
-                hintStyle: TextStyle(
+                hintStyle: TextStyle(fontFamily: 'Poppins', 
                   color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                 ),
                 prefixIcon: Icon(
@@ -7109,13 +7332,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                         child: !PhotoUrlHelper.isValidUrl(user['photoUrl'])
                             ? Text(
                                 user['name'][0].toUpperCase(),
-                                style: const TextStyle(fontSize: 10),
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 10),
                               )
                             : null,
                       ),
                       label: Text(
                         user['name'].split(' ').first,
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: 'Poppins', 
                           color: isDarkMode ? Colors.white : Colors.black,
                           fontSize: 12,
                         ),
@@ -7140,7 +7363,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                 ? Center(
                     child: Text(
                       'No contacts found',
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: 'Poppins', 
                         color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                         fontSize: 16,
                       ),
@@ -7162,13 +7385,13 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                           child: !PhotoUrlHelper.isValidUrl(contact['photoUrl'])
                               ? Text(
                                   contact['name'][0].toUpperCase(),
-                                  style: const TextStyle(fontSize: 18),
+                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 18),
                                 )
                               : null,
                         ),
                         title: Text(
                           contact['name'],
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: 'Poppins', 
                             color: isDarkMode ? Colors.white : Colors.black,
                             fontWeight: FontWeight.w500,
                           ),
@@ -7178,7 +7401,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                                 contact['email'].isNotEmpty
                             ? Text(
                                 contact['email'],
-                                style: TextStyle(
+                                style: TextStyle(fontFamily: 'Poppins', 
                                   color: isDarkMode
                                       ? Colors.grey[400]
                                       : Colors.grey[600],

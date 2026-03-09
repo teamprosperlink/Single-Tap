@@ -111,7 +111,10 @@ class SafetyTipsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.withValues(alpha: 0.2), Colors.purple.withValues(alpha: 0.2)],
+          colors: [
+            Colors.blue.withValues(alpha: 0.2),
+            Colors.purple.withValues(alpha: 0.2),
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
@@ -141,7 +144,7 @@ class SafetyTipsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Follow these tips to stay safe while using Supper',
+                  'Follow these tips to stay safe while using SingleTap',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
@@ -197,30 +200,32 @@ class SafetyTipsScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ...tips.map((tip) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: color.withValues(alpha: 0.8),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        tip,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 14,
-                          height: 1.4,
+              ...tips.map(
+                (tip) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: color.withValues(alpha: 0.8),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          tip,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 14,
+                            height: 1.4,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              )),
+              ),
             ],
           ),
         ),
@@ -233,7 +238,10 @@ class SafetyTipsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.red.withValues(alpha: 0.2), Colors.orange.withValues(alpha: 0.2)],
+          colors: [
+            Colors.red.withValues(alpha: 0.2),
+            Colors.orange.withValues(alpha: 0.2),
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
@@ -267,7 +275,11 @@ class SafetyTipsScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(Icons.phone, color: Colors.white.withValues(alpha: 0.7), size: 18),
+              Icon(
+                Icons.phone,
+                color: Colors.white.withValues(alpha: 0.7),
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Emergency: 911 (US) / 112 (EU) / 999 (UK)',

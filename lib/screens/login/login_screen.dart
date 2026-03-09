@@ -6,9 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auth_service.dart' show AuthService;
 // Old BusinessService removed
 import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
-import '../../widgets/country_code_picker_sheet.dart';
-import '../../widgets/device_login_dialog.dart';
+import '../../widgets/common widgets/country_code_picker_sheet.dart';
+import '../../widgets/common widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
 // Old BusinessSetupScreen removed — business setup now via profile edit toggle
 import 'forgot_password_screen.dart';
@@ -33,8 +32,6 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _isSignUpMode = false;
   bool _acceptTerms = false;
-  String _passwordStrength = ''; // ignore: unused_field, prefer_final_fields
-  final Color _passwordStrengthColor = Colors.grey; // ignore: unused_field
 
   // Store login data when switching to signup
   String _savedLoginEmail = '';
@@ -119,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen>
     _animationController.forward();
     _fadeController.forward();
 
-    _passwordController.addListener(_checkPasswordStrength);
     _emailOrPhoneController.addListener(_onInputChanged);
   }
 
@@ -142,24 +138,6 @@ class _LoginScreenState extends State<LoginScreen>
     _animationController.dispose();
     _fadeController.dispose();
     super.dispose();
-  }
-
-  void _checkPasswordStrength() {
-    String password = _passwordController.text;
-    if (password.isEmpty) {
-      setState(() {
-        _passwordStrength = '';
-      });
-      return;
-    }
-
-    // ignore: unused_local_variable
-    int strength = 0;
-    if (password.length >= 8) strength++;
-    if (password.contains(RegExp(r'[a-z]'))) strength++;
-    if (password.contains(RegExp(r'[A-Z]'))) strength++;
-    if (password.contains(RegExp(r'[0-9]'))) strength++;
-    if (password.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]'))) strength++;
   }
 
   void _toggleSignUpMode() {
@@ -898,24 +876,13 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Image Background (same as forgot password screen)
+          // Gradient Background
           Positioned.fill(
-            child: Image.asset(
-              AppAssets.homeBackgroundImage,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.splashGradient,
-                  ),
-                );
-              },
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.splashGradient,
+              ),
             ),
-          ),
-
-          // Dark overlay
-          Positioned.fill(
-            child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
           ),
 
           // Content

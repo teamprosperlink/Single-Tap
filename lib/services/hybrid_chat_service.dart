@@ -12,7 +12,7 @@ import '../models/message_model.dart';
 
 /// Hybrid Chat Service - Combines local SQLite storage with Firebase sync
 ///
-/// This service provides WhatsApp-like messaging performance:
+/// This service provides SingleTap-like messaging performance:
 /// - Messages stored locally in SQLite (instant, free, offline-capable)
 /// - Firebase used only for message delivery/sync
 /// - Auto-syncs in background
@@ -435,7 +435,7 @@ class HybridChatService {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MESSAGE DELIVERY & READ STATUS (WhatsApp-style)
+  // MESSAGE DELIVERY & READ STATUS (SingleTap-style)
   // ═══════════════════════════════════════════════════════════════
   //
   // Status flow:

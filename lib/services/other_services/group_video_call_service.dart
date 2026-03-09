@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Group Video Call Service using WebRTC with SFU architecture
-/// Supports WhatsApp-style group video calls with multiple participants
+/// Supports SingleTap-style group video calls with multiple participants
 class GroupVideoCallService {
   static final GroupVideoCallService _instance =
       GroupVideoCallService._internal();
