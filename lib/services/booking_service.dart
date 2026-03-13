@@ -109,9 +109,7 @@ class BookingService {
     List<BookingStatus>? filters,
   }) {
     Query query = _bookingsRef
-        .where('businessOwnerId', isEqualTo: ownerId)
-        .orderBy('createdAt', descending: true)
-        .limit(100);
+        .where('businessOwnerId', isEqualTo: ownerId);
 
     if (filter != null) {
       query = query.where('status', isEqualTo: filter.name);
@@ -119,6 +117,8 @@ class BookingService {
       query = query.where('status',
           whereIn: filters.map((f) => f.name).toList());
     }
+
+    query = query.orderBy('createdAt', descending: true).limit(100);
 
     return query
         .snapshots()

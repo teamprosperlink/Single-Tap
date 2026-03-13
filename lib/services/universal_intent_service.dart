@@ -64,11 +64,19 @@ class UniversalIntentService {
     List<Map<String, dynamic>> enrichedMatches = [];
 
     for (var match in matches) {
-      // Get user profile
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(match.userId)
-          .get();
+      // Get user profile (force server to get latest data like cover images)
+      DocumentSnapshot<Map<String, dynamic>> userDoc;
+      try {
+        userDoc = await _firestore
+            .collection('users')
+            .doc(match.userId)
+            .get(const GetOptions(source: Source.server));
+      } catch (_) {
+        userDoc = await _firestore
+            .collection('users')
+            .doc(match.userId)
+            .get();
+      }
 
       if (userDoc.exists) {
         final userProfile = userDoc.data();

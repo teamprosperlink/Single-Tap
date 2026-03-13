@@ -20,6 +20,7 @@ import '../../widgets/voice_orb.dart';
 import '../profile/profile_view_screen.dart';
 import '../business/simple/public_business_profile_screen.dart';
 import '../../services/catalog_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -1924,10 +1925,19 @@ class HomeScreenState extends State<HomeScreen>
                 fit: StackFit.expand,
                 children: [
                   if (coverImageUrl != null)
-                    Image.network(
-                      coverImageUrl,
+                    CachedNetworkImage(
+                      imageUrl: coverImageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      width: double.infinity,
+                      height: 100,
+                      placeholder: (_, __) => Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
+                          ),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
                             colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
@@ -2421,17 +2431,27 @@ class _BusinessCatalogPreviewWidgetState
     _loadItems();
   }
 
+  @override
+  void didUpdateWidget(covariant _BusinessCatalogPreviewWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _loadItems();
+    }
+  }
+
   Future<void> _loadItems() async {
     try {
       final items =
-          await CatalogService().getAvailableItems(widget.userId, limit: 3);
+          await CatalogService().getAvailableItems(widget.userId);
       if (!mounted) return;
       setState(() {
         _items = items
             .map((i) => {'name': i.name, 'price': i.formattedPrice, 'type': i.type.name})
             .toList();
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error loading catalog preview: $e');
+    }
   }
 
   @override
