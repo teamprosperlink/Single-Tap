@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/post_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
-import '../../widgets/account_badges.dart';
+
 import '../../widgets/catalog_card_widget.dart';
 import '../../models/catalog_item.dart';
 import '../../services/catalog_service.dart';
@@ -603,13 +603,6 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            UsernameBadge(
-                              accountType: widget.userProfile.accountType,
-                              verificationStatus:
-                                  widget.userProfile.verification.status,
-                              size: 20,
-                            ),
                           ],
                         ),
                       ),
@@ -618,12 +611,12 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
                   if (widget.userProfile.accountType !=
                       AccountType.personal) ...[
                     const SizedBox(height: 12),
-                    AccountTypeBadge(
-                      accountType: widget.userProfile.accountType,
-                      verificationStatus:
-                          widget.userProfile.verification.status,
-                      showLabel: true,
-                      size: 18,
+                    Chip(
+                      label: Text(
+                        widget.userProfile.accountType.name,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ],
                   const SizedBox(height: 8),
