@@ -84,15 +84,26 @@ class AccountTypeService {
     }
   }
 
-  /// Update business profile fields
+  /// Update business profile fields (preserves server-managed counters)
   Future<bool> updateBusinessProfile(BusinessProfile profile) async {
     final user = _auth.currentUser;
     if (user == null) return false;
 
     try {
-      await _firestore.collection('users').doc(user.uid).update({
-        'businessProfile': profile.toMap(),
-      });
+      // Use dot-notation updates to avoid overwriting server-managed counters
+      // (profileViews, catalogViews, enquiryCount, averageRating, totalReviews)
+      final map = profile.toMap();
+      map.remove('profileViews');
+      map.remove('catalogViews');
+      map.remove('enquiryCount');
+      map.remove('averageRating');
+      map.remove('totalReviews');
+
+      final prefixed = <String, dynamic>{};
+      for (final entry in map.entries) {
+        prefixed['businessProfile.${entry.key}'] = entry.value;
+      }
+      await _firestore.collection('users').doc(user.uid).update(prefixed);
 
       // Re-sync searchable post with updated business info
       UnifiedPostService().syncBusinessPost(user.uid);
