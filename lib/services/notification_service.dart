@@ -254,7 +254,8 @@ class NotificationService {
                   groupName: groupName ?? 'Unknown Group',
                   userId: currentUserId,
                   userName: _auth.currentUser?.displayName ?? 'Unknown',
-                  participants: const [], // Empty - screen will fetch from Firestore
+                  participants:
+                      const [], // Empty - screen will fetch from Firestore
                 );
               },
               transitionDuration: Duration.zero, // Instant transition
@@ -625,18 +626,6 @@ class NotificationService {
             ),
           );
 
-          // Inquiries channel (for professionals)
-          await androidPlugin.createNotificationChannel(
-            const AndroidNotificationChannel(
-              'inquiries',
-              'Service Inquiries',
-              description: 'Notifications for new service inquiries',
-              importance: Importance.high,
-              playSound: true,
-              enableVibration: true,
-            ),
-          );
-
           // Connection requests channel
           await androidPlugin.createNotificationChannel(
             const AndroidNotificationChannel(
@@ -776,8 +765,6 @@ class NotificationService {
     switch (type) {
       case 'call':
         return 'calls';
-      case 'inquiry':
-        return 'inquiries';
       case 'connection_request':
         return 'connections';
       case 'message':
@@ -814,10 +801,6 @@ class NotificationService {
       case 'group_audio_call':
         debugPrint('    Navigating to group audio call');
         await _navigateToGroupCall(data);
-        break;
-      case 'inquiry':
-        debugPrint('  ❓ Navigating to inquiries');
-        await _navigateToInquiries(data);
         break;
       case 'connection_request':
         debugPrint('  🤝 Navigating to connections');
@@ -873,8 +856,10 @@ class NotificationService {
     }
 
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(matchedUserId).get();
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(matchedUserId)
+          .get();
       if (!userDoc.exists) {
         return;
       }
@@ -884,8 +869,7 @@ class NotificationService {
       if (navigatorKey.currentState != null) {
         navigatorKey.currentState!.push(
           MaterialPageRoute(
-            builder: (context) =>
-                ProfileViewScreen(userProfile: matchedUser),
+            builder: (context) => ProfileViewScreen(userProfile: matchedUser),
           ),
         );
       }
@@ -1060,7 +1044,9 @@ class NotificationService {
     // Don't show incoming call screen to the caller
     final currentUserId = _auth.currentUser?.uid;
     if (callerId == currentUserId) {
-      debugPrint('  _navigateToGroupCall: Current user is the caller, skipping');
+      debugPrint(
+        '  _navigateToGroupCall: Current user is the caller, skipping',
+      );
       return;
     }
 
@@ -1117,12 +1103,12 @@ class NotificationService {
       final participantsData = <Map<String, dynamic>>[];
       final rawParticipants =
           (await _firestore.collection('group_calls').doc(callId).get())
-                  .data()?['participants'];
+              .data()?['participants'];
       final participants = rawParticipants is List
           ? rawParticipants
           : rawParticipants is Map
-              ? rawParticipants.keys.toList()
-              : <dynamic>[];
+          ? rawParticipants.keys.toList()
+          : <dynamic>[];
 
       for (final participantId in participants) {
         try {
@@ -1183,11 +1169,6 @@ class NotificationService {
     }
   }
 
-  /// Navigate to inquiries screen (for professionals)
-  Future<void> _navigateToInquiries(Map<String, dynamic> data) async {
-    // TODO: Navigate to inquiries screen
-  }
-
   /// Navigate to connections/requests screen
   Future<void> _navigateToConnections(Map<String, dynamic> data) async {
     // TODO: Navigate to connections screen
@@ -1230,8 +1211,6 @@ class NotificationService {
           ? 'Chat Messages'
           : channelId == 'calls'
           ? 'Incoming Calls'
-          : channelId == 'inquiries'
-          ? 'Service Inquiries'
           : 'Notifications',
       channelDescription: 'Notification channel',
       importance: channelId == 'calls' ? Importance.max : Importance.high,
@@ -1340,8 +1319,8 @@ class NotificationService {
                 final participants = rawParts is List
                     ? rawParts
                     : rawParts is Map
-                        ? rawParts.keys.toList()
-                        : null;
+                    ? rawParts.keys.toList()
+                    : null;
                 final status = callData['status'] as String?;
 
                 debugPrint(
@@ -1445,8 +1424,8 @@ class NotificationService {
         final participants = rawParts is List
             ? rawParts
             : rawParts is Map
-                ? rawParts.keys.toList()
-                : null;
+            ? rawParts.keys.toList()
+            : null;
         debugPrint(
           '    - Doc ${doc.id}: status=$status, participants=$participants',
         );
@@ -1716,9 +1695,14 @@ class NotificationService {
 
     // Get Firestore token
     try {
-      final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
       final firestoreToken = userDoc.data()?['fcmToken'] as String?;
-      debugPrint('   Firestore FCM token: ${firestoreToken?.substring(0, 20)}...');
+      debugPrint(
+        '   Firestore FCM token: ${firestoreToken?.substring(0, 20)}...',
+      );
 
       if (localToken == firestoreToken) {
         debugPrint('  Tokens match - FCM setup is correct!');

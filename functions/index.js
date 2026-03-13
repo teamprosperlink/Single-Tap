@@ -9,7 +9,6 @@
  * Triggers:
  * 1. onMessageCreated - When User A sends a message to User B
  * 2. onCallCreated - When User A calls User B
- * 3. onInquiryCreated - When a client sends an inquiry to a professional
  */
 
 const { initializeApp } = require("firebase-admin/app");
@@ -476,81 +475,6 @@ exports.onGroupCallCreated = onDocumentCreated("group_calls/{callId}", async (ev
   logger.info(`Group call notifications sent to ${participants.length - 1} participants`);
   return null;
 });
-
-/**
- * INQUIRY NOTIFICATION (for Professional accounts)
- *
- * Triggers when a new inquiry is created for a professional.
- * Sends notification to the professional (service provider).
- *
- * Path: users/{professionalId}/inquiries/{inquiryId}
- */
-exports.onInquiryCreated = onDocumentCreated(
-  "users/{professionalId}/inquiries/{inquiryId}",
-  async (event) => {
-    const inquiryData = event.data.data();
-    const professionalId = event.params.professionalId;
-    const inquiryId = event.params.inquiryId;
-
-    logger.info(`New inquiry ${inquiryId} for professional ${professionalId}`);
-
-    // Get client who sent the inquiry
-    const clientId = inquiryData.clientId || inquiryData.userId;
-    if (!clientId) {
-      logger.warn("No client ID in inquiry, skipping");
-      return null;
-    }
-
-    // Don't notify if professional is sending inquiry to themselves
-    if (clientId === professionalId) {
-      logger.warn("Client is the professional, skipping");
-      return null;
-    }
-
-    // Get professional's FCM token
-    const professionalToken = await getUserFcmToken(professionalId);
-    if (!professionalToken) {
-      logger.warn(`No FCM token for professional ${professionalId}`);
-      return null;
-    }
-
-    // Get client's name
-    const clientName = await getUserName(clientId);
-
-    // Prepare notification
-    const serviceName = inquiryData.serviceName || "your service";
-    const message = inquiryData.message || "";
-
-    let notificationBody = `${clientName} sent an inquiry for ${serviceName}`;
-    if (message) {
-      const truncatedMessage =
-        message.length > 50 ? message.substring(0, 47) + "..." : message;
-      notificationBody = `${clientName}: "${truncatedMessage}"`;
-    }
-
-    // Send notification to professional ONLY
-    await sendNotification(
-      professionalToken,
-      {
-        title: "New Inquiry",
-        body: notificationBody,
-      },
-      {
-        type: "inquiry",
-        inquiryId: inquiryId,
-        clientId: clientId,
-        clientName: clientName,
-        serviceName: serviceName,
-        click_action: "FLUTTER_NOTIFICATION_CLICK",
-      }
-    );
-
-    logger.info(
-      `Inquiry notification sent to professional ${professionalId} from client ${clientId}`
-    );
-    return null;
-  }
-);
 
 /**
  * CONNECTION REQUEST NOTIFICATION
