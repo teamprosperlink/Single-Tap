@@ -121,9 +121,8 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
     setState(() => _isUploadingCover = true);
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return _coverImageUrl;
-      final url = await CatalogService().uploadCoverImage(_selectedCoverFile!, userId);
-      return url ?? _coverImageUrl;
+      if (userId == null) throw Exception('Not signed in');
+      return await CatalogService().uploadCoverImage(_selectedCoverFile!, userId);
     } finally {
       if (mounted) setState(() => _isUploadingCover = false);
     }

@@ -6,10 +6,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 class ProfileViewsScreen extends StatelessWidget {
   const ProfileViewsScreen({super.key});
 
-  String? get _userId => FirebaseAuth.instance.currentUser?.uid;
-
   @override
   Widget build(BuildContext context) {
+    final _userId = FirebaseAuth.instance.currentUser?.uid;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
     final textColor = isDark ? Colors.white : Colors.black;
@@ -67,8 +66,35 @@ class ProfileViewsScreen extends StatelessWidget {
                     _buildViewsHeader(
                         counterViews, isDark, textColor, subtitleColor),
                     Expanded(
-                        child: _buildEmptyState(
-                            isDark, textColor, subtitleColor)),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.info_outline,
+                                  size: 36, color: subtitleColor),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Viewer details unavailable',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Your total view count is shown above.\nDetailed viewer info will be available soon.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: subtitleColor, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               }

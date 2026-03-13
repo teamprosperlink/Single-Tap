@@ -49,9 +49,6 @@ class CatalogService {
             snap.docs.map((doc) => CatalogItem.fromFirestore(doc)).toList())
         .handleError((error) {
           debugPrint('Error streaming catalog: $error');
-          // Permission-denied errors are swallowed — stream emits nothing
-          // further. Firestore may retry internally but the error won't
-          // propagate to StreamBuilders or crash the app.
         });
   }
 
@@ -178,21 +175,16 @@ class CatalogService {
     }
   }
 
-  Future<String?> uploadCoverImage(File imageFile, String userId) async {
-    try {
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
-      final ref =
-          _storage.ref().child('business_covers/$userId/$fileName');
-      final uploadTask = await ref.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      return await uploadTask.ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Error uploading cover image: $e');
-      return null;
-    }
+  Future<String> uploadCoverImage(File imageFile, String userId) async {
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+    final ref =
+        _storage.ref().child('business_covers/$userId/$fileName');
+    final uploadTask = await ref.putFile(
+      imageFile,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    return await uploadTask.ref.getDownloadURL();
   }
 
   // ── Stats ──
