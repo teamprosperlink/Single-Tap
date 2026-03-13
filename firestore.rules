@@ -372,8 +372,8 @@ service cloud.firestore {
       // Reviewer can update their own review, OR owner can add response only
       allow update: if isAuthenticated() &&
         (resource.data.reviewerId == request.auth.uid ||
-         (resource.data.professionalId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['professionalResponse', 'responseDate'])));
+         (resource.data.businessId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['businessResponse', 'responseDate'])));
 
       // Reviewer can delete
       allow delete: if isAuthenticated() &&

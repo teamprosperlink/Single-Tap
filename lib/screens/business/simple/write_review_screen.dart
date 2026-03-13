@@ -69,7 +69,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       reviewerId: user.uid,
       reviewerName: reviewerName,
       reviewerPhoto: reviewerPhoto,
-      professionalId: widget.businessUserId,
+      businessId: widget.businessUserId,
       rating: _rating,
       reviewText: _reviewController.text.trim(),
     );

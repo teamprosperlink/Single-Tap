@@ -276,7 +276,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               ],
 
               // Owner response
-              if (review.professionalResponse != null) ...[
+              if (review.businessResponse != null) ...[
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(10),
@@ -295,7 +295,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                               fontSize: 11,
                               fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
-                      Text(review.professionalResponse!,
+                      Text(review.businessResponse!,
                           style: TextStyle(
                               color: textColor, fontSize: 13, height: 1.3)),
                     ],
@@ -304,7 +304,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               ],
 
               // Reply button (only if no response yet)
-              if (review.professionalResponse == null) ...[
+              if (review.businessResponse == null) ...[
                 const SizedBox(height: 8),
                 GestureDetector(
                   onTap: () => _showReplySheet(review),

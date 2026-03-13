@@ -53,14 +53,44 @@ class CatalogCardWidget extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+                  if (item.allImages.isNotEmpty)
                     Image.network(
-                      item.imageUrl!,
+                      item.allImages.first,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _placeholder(isDark),
                     )
                   else
                     _placeholder(isDark),
+                  // Multi-image indicator
+                  if (item.allImages.length > 1)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.photo_library,
+                                color: Colors.white, size: 12),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${item.allImages.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   // Availability badge
                   if (showAvailability && !item.isAvailable)
                     Positioned(

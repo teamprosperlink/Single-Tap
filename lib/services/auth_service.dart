@@ -763,7 +763,6 @@ class AuthService {
   String _parseAccountType(String? accountType) {
     if (accountType == null) return 'personal';
     final lower = accountType.toLowerCase();
-    if (lower.contains('professional')) return 'professional';
     if (lower.contains('business')) return 'business';
     return 'personal';
   }

@@ -50,8 +50,9 @@ class _PublicBusinessProfileScreenState
       if (!doc.exists || !mounted) return;
 
       final profile = UserProfile.fromFirestore(doc);
-      final items =
-          await _catalogService.getAvailableItems(widget.userId, limit: 50);
+      final allItems =
+          await _catalogService.getCatalog(widget.userId, limit: 50);
+      final items = allItems.where((i) => i.isAvailable).toList();
       final summary = await _reviewService.getRatingSummary(widget.userId);
 
       // Log profile view (skips self) — fetch viewer's Firestore profile
@@ -844,7 +845,7 @@ class _PublicBusinessProfileScreenState
               overflow: TextOverflow.ellipsis,
             ),
           ],
-          if (review.professionalResponse != null) ...[
+          if (review.businessResponse != null) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
@@ -867,7 +868,7 @@ class _PublicBusinessProfileScreenState
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    review.professionalResponse!,
+                    review.businessResponse!,
                     style: TextStyle(
                       color: isDark ? Colors.white70 : Colors.black87,
                       fontSize: 13,

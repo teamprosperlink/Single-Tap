@@ -24,11 +24,11 @@ class ReviewService {
           );
 
       // Recalculate rating summary
-      await _recalculateRatingSummary(review.professionalId);
+      await _recalculateRatingSummary(review.businessId);
 
       // Notify business owner
       await NotificationService().sendNotificationToUser(
-        userId: review.professionalId,
+        userId: review.businessId,
         title: 'New Review',
         body:
             '${review.reviewerName} left a ${review.rating.toInt()}-star review',
@@ -45,9 +45,9 @@ class ReviewService {
 
   // ── Stream Reviews ──
 
-  Stream<List<ReviewModel>> streamReviews(String professionalId) {
+  Stream<List<ReviewModel>> streamReviews(String businessId) {
     return _reviewsRef
-        .where('professionalId', isEqualTo: professionalId)
+        .where('businessId', isEqualTo: businessId)
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
@@ -68,7 +68,7 @@ class ReviewService {
   Future<bool> addOwnerResponse(String reviewId, String responseText) async {
     try {
       await _reviewsRef.doc(reviewId).update({
-        'professionalResponse': responseText,
+        'businessResponse': responseText,
         'responseDate': FieldValue.serverTimestamp(),
       });
       return true;
@@ -80,10 +80,10 @@ class ReviewService {
 
   // ── Rating Summary ──
 
-  Future<RatingSummary> getRatingSummary(String professionalId) async {
+  Future<RatingSummary> getRatingSummary(String businessId) async {
     try {
       final doc =
-          await _firestore.collection('users').doc(professionalId).get();
+          await _firestore.collection('users').doc(businessId).get();
       if (doc.exists) {
         final data = doc.data();
         if (data != null && data['ratingSummary'] != null) {
@@ -98,15 +98,15 @@ class ReviewService {
     }
   }
 
-  Future<void> _recalculateRatingSummary(String professionalId) async {
+  Future<void> _recalculateRatingSummary(String businessId) async {
     try {
       final snap = await _reviewsRef
-          .where('professionalId', isEqualTo: professionalId)
+          .where('businessId', isEqualTo: businessId)
           .where('isVisible', isEqualTo: true)
           .get();
 
       if (snap.docs.isEmpty) {
-        await _firestore.collection('users').doc(professionalId).update({
+        await _firestore.collection('users').doc(businessId).update({
           'ratingSummary': RatingSummary.empty().toMap(),
         });
         return;
@@ -130,7 +130,7 @@ class ReviewService {
         distribution: distribution,
       );
 
-      await _firestore.collection('users').doc(professionalId).update({
+      await _firestore.collection('users').doc(businessId).update({
         'ratingSummary': summary.toMap(),
       });
     } catch (e) {
@@ -141,10 +141,10 @@ class ReviewService {
   // ── Check if user already reviewed ──
 
   Future<bool> hasUserReviewed(
-      String professionalId, String reviewerId) async {
+      String businessId, String reviewerId) async {
     try {
       final snap = await _reviewsRef
-          .where('professionalId', isEqualTo: professionalId)
+          .where('businessId', isEqualTo: businessId)
           .where('reviewerId', isEqualTo: reviewerId)
           .limit(1)
           .get();

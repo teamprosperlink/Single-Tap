@@ -511,9 +511,9 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
-              child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+              child: item.allImages.isNotEmpty
                   ? Image.network(
-                      item.imageUrl!,
+                      item.allImages.first,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _itemIcon(item, isDark),
                     )

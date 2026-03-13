@@ -52,6 +52,7 @@ class CatalogItemDetail extends StatelessWidget {
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
+    final images = item.allImages;
 
     return Container(
       decoration: BoxDecoration(
@@ -77,20 +78,9 @@ class CatalogItemDetail extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Image
-                if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 10,
-                      child: Image.network(
-                        item.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            _placeholder(isDark),
-                      ),
-                    ),
-                  )
+                // Image carousel or placeholder
+                if (images.isNotEmpty)
+                  _ImageCarousel(images: images, isDark: isDark)
                 else
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
@@ -107,7 +97,9 @@ class CatalogItemDetail extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: item.type == CatalogItemType.service
                             ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
@@ -131,7 +123,9 @@ class CatalogItemDetail extends StatelessWidget {
                     if (!item.isAvailable)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
@@ -174,6 +168,22 @@ class CatalogItemDetail extends StatelessWidget {
                   ),
                 ),
 
+                // Duration for services
+                if (item.type == CatalogItemType.service &&
+                    item.formattedDuration != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.schedule, size: 16, color: subtitleColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        item.formattedDuration!,
+                        style: TextStyle(color: subtitleColor, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ],
+
                 // Description
                 if (item.description != null &&
                     item.description!.isNotEmpty) ...[
@@ -203,18 +213,17 @@ class CatalogItemDetail extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundImage:
-                            businessUser.profileImageUrl != null
-                                ? NetworkImage(
-                                    businessUser.profileImageUrl!)
-                                : null,
+                        backgroundImage: businessUser.profileImageUrl != null
+                            ? NetworkImage(businessUser.profileImageUrl!)
+                            : null,
                         child: businessUser.profileImageUrl == null
                             ? Text(
                                 businessUser.name.isNotEmpty
                                     ? businessUser.name[0].toUpperCase()
                                     : '?',
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               )
                             : null,
                       ),
@@ -232,13 +241,13 @@ class CatalogItemDetail extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            if (businessUser.businessProfile?.softLabel !=
-                                null)
+                            if (businessUser.businessProfile?.softLabel != null)
                               Text(
-                                businessUser
-                                    .businessProfile!.softLabel!,
+                                businessUser.businessProfile!.softLabel!,
                                 style: TextStyle(
-                                    color: subtitleColor, fontSize: 13),
+                                  color: subtitleColor,
+                                  fontSize: 13,
+                                ),
                               ),
                           ],
                         ),
@@ -287,11 +296,13 @@ class CatalogItemDetail extends StatelessWidget {
                                 ? 'Book Now'
                                 : 'Enquire',
                             style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: item.type == CatalogItemType.service
+                            backgroundColor:
+                                item.type == CatalogItemType.service
                                 ? const Color(0xFF3B82F6)
                                 : const Color(0xFF22C55E),
                             foregroundColor: Colors.white,
@@ -307,16 +318,15 @@ class CatalogItemDetail extends StatelessWidget {
                       ),
                     ),
                     // Call button
-                    if (businessUser.businessProfile?.contactPhone !=
-                        null) ...[
+                    if (businessUser.businessProfile?.contactPhone != null) ...[
                       const SizedBox(width: 12),
                       SizedBox(
                         height: 48,
                         width: 48,
                         child: OutlinedButton(
                           onPressed: () {
-                            final phone = businessUser
-                                .businessProfile!.contactPhone!;
+                            final phone =
+                                businessUser.businessProfile!.contactPhone!;
                             launchUrl(Uri.parse('tel:$phone'));
                           },
                           style: OutlinedButton.styleFrom(
@@ -325,13 +335,14 @@ class CatalogItemDetail extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             side: BorderSide(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.black12,
+                              color: isDark ? Colors.white24 : Colors.black12,
                             ),
                           ),
-                          child: Icon(Icons.phone_outlined,
-                              color: textColor, size: 20),
+                          child: Icon(
+                            Icons.phone_outlined,
+                            color: textColor,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ],
@@ -359,6 +370,199 @@ class CatalogItemDetail extends StatelessWidget {
               ? Colors.white.withValues(alpha: 0.3)
               : Colors.black.withValues(alpha: 0.2),
         ),
+      ),
+    );
+  }
+}
+
+/// Swipeable image carousel with dot indicators.
+class _ImageCarousel extends StatefulWidget {
+  final List<String> images;
+  final bool isDark;
+
+  const _ImageCarousel({required this.images, required this.isDark});
+
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  int _current = 0;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 16 / 10,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: widget.images.length,
+              onPageChanged: (i) => setState(() => _current = i),
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () => _showFullScreen(context, index),
+                  child: Image.network(
+                    widget.images[index],
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: widget.isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF0F0F0),
+                      child: const Center(
+                        child: Icon(Icons.broken_image, color: Colors.white38),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Dot indicators
+            if (widget.images.length > 1)
+              Positioned(
+                bottom: 10,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    widget.images.length,
+                    (i) => Container(
+                      width: i == _current ? 20 : 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: i == _current
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Image counter
+            if (widget.images.length > 1)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_current + 1}/${widget.images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullScreen(BuildContext context, int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _FullScreenGallery(
+          images: widget.images,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-screen zoomable image gallery.
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenGallery({required this.images, required this.initialIndex});
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late int _current;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: widget.images.length > 1
+            ? Text(
+                '${_current + 1} of ${widget.images.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              )
+            : null,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.images.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.network(
+                widget.images[index],
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white38,
+                  size: 64,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -23,6 +23,7 @@ class CatalogItem {
   final double? price;
   final String currency;
   final String? imageUrl;
+  final List<String> imageUrls; // multiple images
   final CatalogItemType type;
   final bool isAvailable;
   final int viewCount;
@@ -41,6 +42,7 @@ class CatalogItem {
     this.price,
     this.currency = 'INR',
     this.imageUrl,
+    this.imageUrls = const [],
     this.type = CatalogItemType.product,
     this.isAvailable = true,
     this.viewCount = 0,
@@ -52,6 +54,15 @@ class CatalogItem {
     this.tags = const [],
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
+
+  /// All images: combines imageUrls with legacy imageUrl for backward compat
+  List<String> get allImages {
+    final images = <String>[...imageUrls];
+    if (imageUrl != null && imageUrl!.isNotEmpty && !images.contains(imageUrl)) {
+      images.insert(0, imageUrl!);
+    }
+    return images;
+  }
 
   String? get formattedDuration {
     if (duration == null) return null;
@@ -89,6 +100,7 @@ class CatalogItem {
       price: map['price']?.toDouble(),
       currency: map['currency'] ?? 'INR',
       imageUrl: map['imageUrl'],
+      imageUrls: List<String>.from(map['imageUrls'] ?? []),
       type: CatalogItemType.fromString(map['type']),
       isAvailable: map['isAvailable'] ?? true,
       viewCount: (map['viewCount'] as num?)?.toInt() ?? 0,
@@ -113,6 +125,7 @@ class CatalogItem {
       'price': price,
       'currency': currency,
       'imageUrl': imageUrl,
+      'imageUrls': imageUrls,
       'type': type.name,
       'isAvailable': isAvailable,
       'viewCount': viewCount,
@@ -133,6 +146,7 @@ class CatalogItem {
     double? price,
     String? currency,
     String? imageUrl,
+    List<String>? imageUrls,
     CatalogItemType? type,
     bool? isAvailable,
     int? viewCount,
@@ -151,6 +165,7 @@ class CatalogItem {
       price: price ?? this.price,
       currency: currency ?? this.currency,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
       type: type ?? this.type,
       isAvailable: isAvailable ?? this.isAvailable,
       viewCount: viewCount ?? this.viewCount,

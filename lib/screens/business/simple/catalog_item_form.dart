@@ -25,12 +25,13 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
   CatalogItemType _type = CatalogItemType.service;
   bool _isAvailable = true;
   int _durationDays = 0;
-  int _durationHours = 0;
-  int _durationMinutes = 0;
+  final _durationDaysController = TextEditingController();
   String _currency = 'INR';
-  File? _imageFile;
-  String? _existingImageUrl;
+  final List<File> _newImageFiles = [];
+  List<String> _existingImageUrls = [];
   bool _isLoading = false;
+
+  static const int _maxImages = 5;
 
   @override
   void initState() {
@@ -44,11 +45,10 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
       _type = item.type;
       _isAvailable = item.isAvailable;
       _currency = item.currency;
-      _existingImageUrl = item.imageUrl;
+      _existingImageUrls = List<String>.from(item.allImages);
       if (item.duration != null) {
         _durationDays = item.duration! ~/ (24 * 60);
-        _durationHours = (item.duration! % (24 * 60)) ~/ 60;
-        _durationMinutes = item.duration! % 60;
+        _durationDaysController.text = _durationDays > 0 ? '$_durationDays' : '';
       }
     }
   }
@@ -58,26 +58,48 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _durationDaysController.dispose();
     super.dispose();
   }
 
   bool get _showDuration => _type == CatalogItemType.service;
 
-  Future<void> _pickImage() async {
+  int get _totalImageCount => _existingImageUrls.length + _newImageFiles.length;
+
+  Future<void> _pickImages() async {
+    final remaining = _maxImages - _totalImageCount;
+    if (remaining <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 5 images allowed'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
+    final picked = await picker.pickMultiImage(
       maxWidth: 1024,
       maxHeight: 1024,
       imageQuality: 80,
     );
-    if (picked != null) {
-      setState(() => _imageFile = File(picked.path));
+    if (picked.isNotEmpty) {
+      final toAdd = picked.take(remaining).map((x) => File(x.path)).toList();
+      setState(() => _newImageFiles.addAll(toAdd));
     }
   }
 
+  void _removeExistingImage(int index) {
+    setState(() => _existingImageUrls.removeAt(index));
+  }
+
+  void _removeNewImage(int index) {
+    setState(() => _newImageFiles.removeAt(index));
+  }
+
   int? _computeDuration() {
-    final total = _durationDays * 24 * 60 + _durationHours * 60 + _durationMinutes;
+    final total = _durationDays * 24 * 60;
     return total > 0 ? total : null;
   }
 
@@ -89,12 +111,13 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     setState(() => _isLoading = true);
 
     try {
-      String? imageUrl = _existingImageUrl;
+      // Upload new images
+      final newUrls = await _catalogService.uploadCatalogImages(
+          _newImageFiles, userId);
 
-      if (_imageFile != null) {
-        imageUrl =
-            await _catalogService.uploadCatalogImage(_imageFile!, userId);
-      }
+      // Combine existing + new
+      final allUrls = [..._existingImageUrls, ...newUrls];
+      final firstUrl = allUrls.isNotEmpty ? allUrls.first : null;
 
       final priceText = _priceController.text.trim();
       final price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
@@ -108,7 +131,8 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
               : null,
           'price': price,
           'currency': _currency,
-          'imageUrl': imageUrl,
+          'imageUrl': firstUrl,
+          'imageUrls': allUrls,
           'type': _type.name,
           'isAvailable': _isAvailable,
           'duration': duration,
@@ -123,7 +147,8 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
               : null,
           price: price,
           currency: _currency,
-          imageUrl: imageUrl,
+          imageUrl: firstUrl,
+          imageUrls: allUrls,
           type: _type,
           isAvailable: _isAvailable,
           duration: duration,
@@ -223,80 +248,21 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
 
             const SizedBox(height: 20),
 
-            // ── Item Image ──
-            Text('Item Image',
-                style: TextStyle(
-                    color: textColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                height: 160,
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.08),
-                  ),
-                  image: _imageFile != null
-                      ? DecorationImage(
-                          image: FileImage(_imageFile!), fit: BoxFit.cover)
-                      : (_existingImageUrl != null
-                          ? DecorationImage(
-                              image: NetworkImage(_existingImageUrl!),
-                              fit: BoxFit.cover)
-                          : null),
-                ),
-                child: (_imageFile == null && _existingImageUrl == null)
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.camera_alt_outlined,
-                                size: 32, color: subtitleColor),
-                            const SizedBox(height: 8),
-                            Text('Upload Images',
-                                style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500)),
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3B82F6)
-                                    .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text('Select Files',
-                                  style: TextStyle(
-                                      color: Color(0xFF3B82F6),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500)),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Align(
-                        alignment: Alignment.bottomRight,
-                        child: Container(
-                          margin: const EdgeInsets.all(8),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.camera_alt,
-                              color: Colors.white, size: 18),
-                        ),
-                      ),
-              ),
+            // ── Item Images ──
+            Row(
+              children: [
+                Text('Item Images',
+                    style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                Text('($_totalImageCount/$_maxImages)',
+                    style: TextStyle(color: subtitleColor, fontSize: 13)),
+              ],
             ),
+            const SizedBox(height: 10),
+            _buildImageSection(isDark, cardColor, textColor, subtitleColor),
 
             const SizedBox(height: 20),
 
@@ -373,26 +339,23 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                       fontSize: 15,
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),
-                  borderRadius: BorderRadius.circular(10),
+              TextFormField(
+                controller: _durationDaysController,
+                style: TextStyle(color: textColor),
+                decoration: _inputDecoration('e.g., 7', isDark).copyWith(
+                  suffixText: 'days',
+                  suffixStyle: TextStyle(color: subtitleColor, fontSize: 14),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.access_time, size: 18, color: subtitleColor),
-                    const SizedBox(width: 8),
-                    _durationSegment('Days', _durationDays, 0, 30,
-                        (v) => setState(() => _durationDays = v), isDark, textColor, subtitleColor),
-                    const SizedBox(width: 8),
-                    _durationSegment('Hours', _durationHours, 0, 23,
-                        (v) => setState(() => _durationHours = v), isDark, textColor, subtitleColor),
-                    const SizedBox(width: 8),
-                    _durationSegment('Min', _durationMinutes, 0, 59,
-                        (v) => setState(() => _durationMinutes = v), isDark, textColor, subtitleColor),
-                  ],
-                ),
+                keyboardType: TextInputType.number,
+                onChanged: (v) => _durationDays = int.tryParse(v) ?? 0,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final val = int.tryParse(v.trim());
+                  if (val == null || val < 1 || val > 30) {
+                    return 'Enter between 1 and 30 days';
+                  }
+                  return null;
+                },
               ),
             ],
 
@@ -469,37 +432,149 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     );
   }
 
-  Widget _durationSegment(String label, int value, int min, int max,
-      ValueChanged<int> onChanged, bool isDark, Color textColor, Color subtitleColor) {
-    return Expanded(
-      child: Column(
+  Widget _buildImageSection(
+      bool isDark, Color cardColor, Color textColor, Color subtitleColor) {
+    final hasImages = _existingImageUrls.isNotEmpty || _newImageFiles.isNotEmpty;
+
+    if (!hasImages) {
+      // Empty state — tap to add
+      return GestureDetector(
+        onTap: _pickImages,
+        child: Container(
+          height: 160,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.camera_alt_outlined, size: 32, color: subtitleColor),
+                const SizedBox(height: 8),
+                Text('Upload Images',
+                    style: TextStyle(
+                        color: textColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                Text('Up to $_maxImages photos',
+                    style: TextStyle(color: subtitleColor, fontSize: 12)),
+                const SizedBox(height: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('Select Files',
+                      style: TextStyle(
+                          color: Color(0xFF3B82F6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Image thumbnails grid
+    return SizedBox(
+      height: 110,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
         children: [
-          Text(label, style: TextStyle(color: subtitleColor, fontSize: 11)),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF3A3A3C) : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.08),
+          // Existing (uploaded) images
+          for (int i = 0; i < _existingImageUrls.length; i++)
+            _imageThumbnail(
+              isDark: isDark,
+              child: Image.network(_existingImageUrls[i],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.broken_image, color: Colors.white38)),
+              onRemove: () => _removeExistingImage(i),
+            ),
+          // New (local) images
+          for (int i = 0; i < _newImageFiles.length; i++)
+            _imageThumbnail(
+              isDark: isDark,
+              child: Image.file(_newImageFiles[i], fit: BoxFit.cover),
+              onRemove: () => _removeNewImage(i),
+            ),
+          // Add more button
+          if (_totalImageCount < _maxImages)
+            GestureDetector(
+              onTap: _pickImages,
+              child: Container(
+                width: 100,
+                height: 100,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFF0F0F0),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_photo_alternate_outlined,
+                        color: Color(0xFF3B82F6), size: 28),
+                    SizedBox(height: 4),
+                    Text('Add',
+                        style: TextStyle(
+                            color: Color(0xFF3B82F6),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
               ),
             ),
-            child: DropdownButton<int>(
-              value: value,
-              isExpanded: true,
-              underline: const SizedBox.shrink(),
-              dropdownColor: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-              style: TextStyle(color: textColor, fontSize: 14),
-              items: List.generate(max - min + 1, (i) => i + min)
-                  .map((v) => DropdownMenuItem(
-                      value: v, child: Center(child: Text('$v'))))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) onChanged(v);
-              },
+        ],
+      ),
+    );
+  }
+
+  Widget _imageThumbnail({
+    required bool isDark,
+    required Widget child,
+    required VoidCallback onRemove,
+  }) {
+    return Container(
+      width: 100,
+      height: 100,
+      margin: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox.expand(child: child),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 14),
+              ),
             ),
           ),
         ],

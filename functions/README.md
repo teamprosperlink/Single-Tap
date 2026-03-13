@@ -22,7 +22,7 @@ User A sends message → Message created in Firestore → Cloud Function trigger
 |----------|---------|-------------|
 | `onMessageCreated` | `conversations/{conversationId}/messages/{messageId}` | Sends notification when a new message is created |
 | `onCallCreated` | `calls/{callId}` | Sends notification when a voice call is initiated |
-| `onInquiryCreated` | `users/{professionalId}/inquiries/{inquiryId}` | Sends notification to professionals for new service inquiries |
+| `onInquiryCreated` | `users/{businessId}/inquiries/{inquiryId}` | Sends notification to business owners for new service inquiries |
 | `onConnectionRequestCreated` | `users/{userId}/connection_requests/{requestId}` | Sends notification for new connection requests |
 
 ## Deployment

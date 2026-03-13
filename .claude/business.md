@@ -189,7 +189,7 @@ Response visible publicly under review
 `ReviewModel` in `lib/models/review_model.dart`:
 - `rating` (1-5), `categoryRatings` (Communication, Quality, Value)
 - `reviewText`, `images`
-- `professionalResponse`, `responseDate`
+- `businessResponse`, `responseDate`
 - `isVerifiedPurchase` (linked to completed booking)
 
 ### Service (Already Exists)
@@ -411,9 +411,8 @@ bookings/{bookingId}          — All bookings
   └── createdAt, updatedAt
 
 business_reviews/{reviewId}   — All reviews
-  ├── reviewerId ↔ professionalId
+  ├── reviewerId ↔ businessId
   ├── rating, categoryRatings, reviewText
-  ├── professionalResponse
   └── isVerifiedPurchase
 
 conversations/{conversationId}
@@ -644,7 +643,7 @@ Cancelled tab:
 2. **Reviews on public profile (Phase 2):**
    - Show top 3 reviews inline on public business profile
    - "See All" → navigate to full `ReviewsScreen`
-   - Show owner responses (`professionalResponse`) below each review
+   - Show owner responses (`businessResponse`) below each review
 
 3. **Owner review management:**
    - In `reviews_screen.dart`, add "Reply" button on each review card

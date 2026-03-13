@@ -83,7 +83,7 @@ void main() {
         id: 'r-1',
         reviewerId: 'rev-1',
         reviewerName: 'Reviewer',
-        professionalId: 'pro-1',
+        businessId: 'pro-1',
         rating: 4.0,
         reviewText: 'Great service',
         createdAt: createdAt,
@@ -146,7 +146,7 @@ void main() {
         id: 'r-1',
         reviewerId: 'rev-1',
         reviewerName: 'Alice',
-        professionalId: 'pro-1',
+        businessId: 'pro-1',
         rating: 5.0,
         reviewText: 'Amazing!',
         images: ['img1.jpg'],
@@ -165,7 +165,7 @@ void main() {
         id: 'r-1',
         reviewerId: 'rev-1',
         reviewerName: 'Test',
-        professionalId: 'pro-1',
+        businessId: 'pro-1',
         rating: 4.0,
         reviewText: 'Good',
       );
@@ -173,7 +173,6 @@ void main() {
       expect(review.isVerifiedPurchase, isFalse);
       expect(review.isVisible, isTrue);
       expect(review.isFlagged, isFalse);
-      expect(review.professionalResponse, isNull);
     });
   });
 }

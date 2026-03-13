@@ -129,17 +129,19 @@ class CatalogService {
   Future<bool> deleteItem(String userId, String itemId) async {
     if (_currentUserId == null) return false;
     try {
-      // Delete image from storage if exists
+      // Delete all images from storage
       final doc = await _catalogRef(userId).doc(itemId).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>?;
+        // Delete legacy single imageUrl
         final imageUrl = data?['imageUrl'] as String?;
         if (imageUrl != null && imageUrl.isNotEmpty) {
-          try {
-            await _storage.refFromURL(imageUrl).delete();
-          } catch (e) {
-            debugPrint('Error deleting catalog image: $e');
-          }
+          await _deleteImageByUrl(imageUrl);
+        }
+        // Delete all imageUrls
+        final imageUrls = List<String>.from(data?['imageUrls'] ?? []);
+        for (final url in imageUrls) {
+          if (url != imageUrl) await _deleteImageByUrl(url);
         }
       }
       await _catalogRef(userId).doc(itemId).delete();
@@ -175,6 +177,26 @@ class CatalogService {
     } catch (e) {
       debugPrint('Error uploading catalog image: $e');
       return null;
+    }
+  }
+
+  /// Upload multiple catalog images and return their download URLs.
+  Future<List<String>> uploadCatalogImages(
+      List<File> imageFiles, String userId) async {
+    final urls = <String>[];
+    for (final file in imageFiles) {
+      final url = await uploadCatalogImage(file, userId);
+      if (url != null) urls.add(url);
+    }
+    return urls;
+  }
+
+  /// Delete a single image from Firebase Storage by URL.
+  Future<void> _deleteImageByUrl(String url) async {
+    try {
+      await _storage.refFromURL(url).delete();
+    } catch (e) {
+      debugPrint('Error deleting image: $e');
     }
   }
 
