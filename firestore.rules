@@ -125,6 +125,24 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // USER SUBCOLLECTIONS (top-level duplicates for reliable access)
+    // Firestore can fail to evaluate nested subcollection rules when
+    // the parent match block has complex update rules.
+    // ============================================================
+    match /users/{userId}/catalog/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/profileViews/{viewId} {
+      allow read: if isOwner(userId);
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // ============================================================
     // POSTS COLLECTION (Main data for matching - Single source of truth)
     // ============================================================
     match /posts/{postId} {

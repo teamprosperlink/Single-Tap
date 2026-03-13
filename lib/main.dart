@@ -310,6 +310,19 @@ void main() async {
       );
     }
 
+    // Force ID token refresh before any Firestore streams start.
+    // Without this, cached auth from persistence may have an expired token,
+    // causing PERMISSION_DENIED on subcollection/collection queries that
+    // don't have cached data (while parent doc reads succeed from cache).
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      try {
+        await currentUser.getIdToken(true);
+      } catch (e) {
+        debugPrint('Token refresh failed (will retry automatically): $e');
+      }
+    }
+
     // Run app immediately - defer ALL heavy initializations
     runApp(const ProviderScope(child: MyApp()));
 
