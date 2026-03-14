@@ -98,30 +98,36 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
 
-      // Catalog subcollection (business product/service listings)
-      match /catalog/{itemId} {
-        allow read: if isAuthenticated();
-        allow create: if isOwner(userId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
-      }
+      // NOTE: Catalog, profileViews, saved_posts, hiddenConversations rules
+      // are defined as TOP-LEVEL subcollection matches below (not nested here).
+      // Firestore's rules engine fails to evaluate nested subcollection rules
+      // when the parent match block has complex update conditions.
+    }
 
-      // Profile views subcollection (who viewed this business profile)
-      match /profileViews/{viewId} {
-        allow read: if isOwner(userId);
-        allow create: if isAuthenticated();
-        allow update, delete: if false;
-      }
+    // ============================================================
+    // USER SUBCOLLECTIONS (top-level duplicates for reliable access)
+    // Firestore can fail to evaluate nested subcollection rules when
+    // the parent match block has complex update rules.
+    // ============================================================
+    match /users/{userId}/catalog/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
 
-      // Saved posts subcollection
-      match /saved_posts/{postId} {
-        allow read, write: if isOwner(userId);
-      }
+    match /users/{userId}/profileViews/{viewId} {
+      allow read: if isOwner(userId);
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
 
-      // Hidden conversations subcollection
-      match /hiddenConversations/{conversationId} {
-        allow read, write: if isOwner(userId);
-      }
+    match /users/{userId}/saved_posts/{postId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/hiddenConversations/{conversationId} {
+      allow read, write: if isOwner(userId);
     }
 
     // ============================================================
@@ -372,8 +378,8 @@ service cloud.firestore {
       // Reviewer can update their own review, OR owner can add response only
       allow update: if isAuthenticated() &&
         (resource.data.reviewerId == request.auth.uid ||
-         (resource.data.businessId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['businessResponse', 'responseDate'])));
+         (resource.data.professionalId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['professionalResponse', 'responseDate'])));
 
       // Reviewer can delete
       allow delete: if isAuthenticated() &&

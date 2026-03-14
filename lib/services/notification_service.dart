@@ -47,11 +47,16 @@ class NotificationService {
   /// Track recent notification content to prevent duplicate displays within 5 seconds
   final Map<String, DateTime> _recentNotifications = {};
 
+  /// Session start time — notifications older than this are skipped
+  DateTime _sessionStartTime = DateTime.now();
+
   /// Optional callback for custom navigation handling
   NotificationNavigationCallback? onNotificationTap;
 
   Future<void> initialize() async {
     try {
+      _sessionStartTime = DateTime.now();
+
       await _requestPermissions();
       await _configureLocalNotifications();
       await _configureFCM();
@@ -1524,11 +1529,11 @@ class NotificationService {
   }
 
   /// Listen for notifications for the current user
+  /// Only emits newly added documents — not the full snapshot replay
   Stream<List<Map<String, dynamic>>> getUserNotificationsStream() {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return Stream.value([]);
 
-    // Simple query without compound index requirement
     return _firestore
         .collection('notifications')
         .where('userId', isEqualTo: currentUserId)
@@ -1536,34 +1541,63 @@ class NotificationService {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-          final notifications = snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return data;
-          }).toList();
+          // ONLY process newly added documents — prevents re-firing
+          // old notifications on every app open/resume
+          final newNotifications = snapshot.docChanges
+              .where((change) => change.type == DocumentChangeType.added)
+              .map((change) {
+                final data = change.doc.data()!;
+                data['id'] = change.doc.id;
+                return data;
+              })
+              .toList();
 
-          // Sort locally instead of in query (avoids index requirement)
-          notifications.sort((a, b) {
-            final aTime = a['createdAt'] as Timestamp?;
-            final bTime = b['createdAt'] as Timestamp?;
-            if (aTime == null && bTime == null) return 0;
-            if (aTime == null) return 1;
-            if (bTime == null) return -1;
-            return bTime.compareTo(aTime);
-          });
-
-          return notifications;
+          return newNotifications;
         });
   }
 
   /// Mark notification as read
   Future<void> markNotificationAsRead(String notificationId) async {
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        await _firestore.collection('notifications').doc(notificationId).update({
+          'read': true,
+        });
+        return;
+      } catch (e) {
+        if (attempt == 0) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        } else {
+          debugPrint('Failed to mark notification $notificationId as read: $e');
+        }
+      }
+    }
+  }
+
+  /// Batch-mark all old unread notifications as read on app start
+  /// Prevents old notifications from re-firing when the listener starts
+  Future<void> cleanupOldNotifications() async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
     try {
-      await _firestore.collection('notifications').doc(notificationId).update({
-        'read': true,
-      });
+      final oldUnread = await _firestore
+          .collection('notifications')
+          .where('userId', isEqualTo: currentUserId)
+          .where('read', isEqualTo: false)
+          .limit(50)
+          .get();
+
+      if (oldUnread.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final doc in oldUnread.docs) {
+        batch.update(doc.reference, {'read': true});
+      }
+      await batch.commit();
+      debugPrint('Cleaned up ${oldUnread.docs.length} old unread notifications');
     } catch (e) {
-      // Error marking notification as read
+      debugPrint('Error cleaning up old notifications: $e');
     }
   }
 
@@ -1576,6 +1610,21 @@ class NotificationService {
         _shownNotificationIds.contains(notificationId)) {
       debugPrint('  Skipping duplicate notification: $notificationId');
       return;
+    }
+
+    // Skip notifications created before this session started
+    // (they were already shown in a previous session)
+    final createdAt = notification['createdAt'] as Timestamp?;
+    if (createdAt != null) {
+      final notifTime = createdAt.toDate();
+      // 5-second buffer for client/server clock skew
+      if (notifTime.isBefore(_sessionStartTime.subtract(const Duration(seconds: 5)))) {
+        debugPrint('  Skipping old notification: $notificationId (created before session)');
+        if (notificationId != null) {
+          await markNotificationAsRead(notificationId);
+        }
+        return;
+      }
     }
 
     final title = notification['title'] as String? ?? 'Notification';

@@ -49,9 +49,9 @@ class CatalogService {
             snap.docs.map((doc) => CatalogItem.fromFirestore(doc)).toList())
         .handleError((error) {
           debugPrint('Error streaming catalog: $error');
-          // Permission-denied errors are swallowed — stream emits nothing
-          // further. Firestore may retry internally but the error won't
-          // propagate to StreamBuilders or crash the app.
+          if (error.toString().contains('permission-denied')) {
+            _auth.currentUser?.getIdToken(true);
+          }
         });
   }
 

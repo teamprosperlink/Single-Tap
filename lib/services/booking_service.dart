@@ -126,6 +126,9 @@ class BookingService {
             snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList())
         .handleError((error) {
           debugPrint('Error streaming bookings: $error');
+          if (error.toString().contains('permission-denied')) {
+            _auth.currentUser?.getIdToken(true);
+          }
         });
   }
 
@@ -139,6 +142,9 @@ class BookingService {
             snap.docs.map((doc) => BookingModel.fromFirestore(doc)).toList())
         .handleError((error) {
           debugPrint('Error streaming customer bookings: $error');
+          if (error.toString().contains('permission-denied')) {
+            _auth.currentUser?.getIdToken(true);
+          }
         });
   }
 
@@ -176,6 +182,10 @@ class BookingService {
       return snap.count ?? 0;
     } catch (e) {
       debugPrint('Error getting pending count: $e');
+      if (e.toString().contains('permission-denied')) {
+        // Token may be stale — refresh for next attempt
+        await _auth.currentUser?.getIdToken(true);
+      }
       return 0;
     }
   }

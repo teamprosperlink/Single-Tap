@@ -1046,6 +1046,22 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     try {
       debugPrint('[Init] Starting user services initialization');
 
+      // Force token refresh BEFORE any Firestore streams start.
+      // The token refresh in main() may not have propagated to
+      // Firestore SDK's internal credential cache by the time
+      // streams are created. This ensures fresh auth for all queries.
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          await user.getIdToken(true);
+          // Brief delay to let Firestore SDK pick up the refreshed token
+          await Future.delayed(const Duration(milliseconds: 200));
+          debugPrint('[Init] Token refreshed successfully');
+        } catch (e) {
+          debugPrint('[Init] Token refresh failed: $e');
+        }
+      }
+
       // Clean up old timers (NOT device session listener - it's managed separately)
       _sessionCheckTimer?.cancel();
       _autoCheckTimer?.cancel();
@@ -1076,15 +1092,20 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _conversationService.cleanupDuplicateConversations();
 
       // Start listening for notifications from other users
-      _startNotificationListener();
+      await _startNotificationListener();
     } catch (e) {
       debugPrint('_initializeUserServices failed: $e');
     }
   }
 
   /// Listen for notifications from Firestore and show them locally
-  void _startNotificationListener() {
+  Future<void> _startNotificationListener() async {
     _notificationSubscription?.cancel();
+
+    // Mark all existing unread notifications as read before listening
+    // This prevents old notifications from re-firing on app open
+    await _notificationService.cleanupOldNotifications();
+
     _notificationSubscription = _notificationService
         .getUserNotificationsStream()
         .listen(
