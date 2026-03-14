@@ -774,6 +774,19 @@ class _PublicBusinessProfileScreenState
     final subtitleColor =
         isDark ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.5);
 
+    return FutureBuilder<DocumentSnapshot>(
+      future: review.reviewerId.isNotEmpty
+          ? FirebaseFirestore.instance.collection('users').doc(review.reviewerId).get()
+          : null,
+      builder: (context, snap) {
+        final userData = snap.data?.data() as Map<String, dynamic>?;
+        final reviewerName = userData?['name'] as String? ??
+            userData?['displayName'] as String? ??
+            review.reviewerName;
+        final reviewerPhoto = userData?['profileImageUrl'] as String? ??
+            userData?['photoUrl'] as String? ??
+            review.reviewerPhoto;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -784,13 +797,13 @@ class _PublicBusinessProfileScreenState
               CircleAvatar(
                 radius: 14,
                 backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                backgroundImage: review.reviewerPhoto != null
-                    ? NetworkImage(review.reviewerPhoto!)
+                backgroundImage: reviewerPhoto != null && reviewerPhoto.isNotEmpty
+                    ? NetworkImage(reviewerPhoto)
                     : null,
-                child: review.reviewerPhoto == null
+                child: reviewerPhoto == null || reviewerPhoto.isEmpty
                     ? Text(
-                        review.reviewerName.isNotEmpty
-                            ? review.reviewerName[0].toUpperCase()
+                        reviewerName.isNotEmpty
+                            ? reviewerName[0].toUpperCase()
                             : '?',
                         style: const TextStyle(
                           color: Color(0xFF3B82F6),
@@ -806,7 +819,7 @@ class _PublicBusinessProfileScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      review.reviewerName,
+                      reviewerName,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 13,
@@ -887,6 +900,8 @@ class _PublicBusinessProfileScreenState
           ),
         ],
       ),
+    );
+      },
     );
   }
 

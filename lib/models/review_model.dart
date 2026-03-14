@@ -64,8 +64,10 @@ class ReviewModel {
     return ReviewModel(
       id: id,
       reviewerId: map['reviewerId'] ?? '',
-      reviewerName: map['reviewerName'] ?? 'Anonymous',
-      reviewerPhoto: map['reviewerPhoto'],
+      reviewerName: (map['reviewerName'] as String?)?.isNotEmpty == true
+          ? map['reviewerName'] : 'Anonymous',
+      reviewerPhoto: (map['reviewerPhoto'] as String?)?.isNotEmpty == true
+          ? map['reviewerPhoto'] : null,
       businessId: map['businessId'] ?? '',
       serviceId: map['serviceId'],
       serviceName: map['serviceName'],
