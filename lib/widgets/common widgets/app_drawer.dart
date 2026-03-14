@@ -4,21 +4,21 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../screens/profile/downloads_screen.dart';
-import '../screens/profile/library_screen.dart';
-import '../screens/profile/settings_screen.dart';
-import '../screens/profile/help_center_screen.dart';
-import '../screens/profile/upgrade_plan_screen.dart';
-import '../screens/profile/personalization_screen.dart';
-import '../screens/home/profile_with_history_screen.dart';
-import '../services/auth_service.dart';
-import '../services/notification_service.dart' show navigatorKey;
-import '../screens/login/onboarding_screen.dart';
+import '../../screens/profile/downloads_screen.dart';
+import '../../screens/profile/library_screen.dart';
+import '../../screens/profile/settings_screen.dart';
+import '../../screens/profile/help_center_screen.dart';
+import '../../screens/profile/upgrade_plan_screen.dart';
+import '../../screens/profile/personalization_screen.dart';
+import '../../screens/home/profile_with_history_screen.dart';
+import '../../services/auth_service.dart';
+import '../../services/notification_service.dart' show navigatorKey;
+import '../../screens/login/onboarding_screen.dart';
 import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
-import '../screens/home/product/my_orders_screen.dart';
-import '../screens/home/main_navigation_screen.dart';
-import '../screens/business/simple/customer_bookings_screen.dart';
+import '../../screens/product/my_orders_screen.dart';
+import '../../screens/home/main_navigation_screen.dart';
+import '../../screens/business/simple/customer_bookings_screen.dart';
 
 /// ChatGPT-style drawer widget for the app
 class AppDrawer extends StatefulWidget {

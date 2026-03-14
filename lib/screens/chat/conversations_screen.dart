@@ -2921,7 +2921,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           builder: (context) => EnhancedChatScreen(
             otherUser: otherUser,
             chatId: conversation.id,
-            source: existingSource,
           ),
         ),
       );
@@ -2951,7 +2950,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             builder: (context) => EnhancedChatScreen(
               otherUser: otherUser,
               chatId: conversation.id,
-              source: existingSource,
             ),
           ),
         );

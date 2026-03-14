@@ -1,0 +1,4 @@
+appId: com.plink.supper
+---
+- launchApp:
+    clearState: true

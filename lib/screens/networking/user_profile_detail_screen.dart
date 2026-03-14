@@ -1654,7 +1654,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       context,
       MaterialPageRoute(
         builder: (context) =>
-            EnhancedChatScreen(otherUser: userProfile, source: 'Networking'),
+            EnhancedChatScreen(otherUser: userProfile),
       ),
     );
   }

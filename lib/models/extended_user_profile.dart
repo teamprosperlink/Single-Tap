@@ -57,6 +57,13 @@ class ExtendedUserProfile {
   final String? businessName; // For Business accounts
   final String? category; // Professional category or Business industry
 
+  // Networking fields
+  final String? occupation;
+  final String? networkingCategory;
+  final String? networkingSubcategory;
+  final Map<String, String> categoryFilters;
+  final bool allowCalls;
+
   // Calculated field
   double? distance; // Will be calculated based on current user's location
 
@@ -87,11 +94,17 @@ class ExtendedUserProfile {
     this.verificationStatus = VerificationStatus.none,
     this.businessName,
     this.category,
+    this.occupation,
+    this.networkingCategory,
+    this.networkingSubcategory,
+    this.categoryFilters = const {},
+    this.allowCalls = false,
   });
 
   // Helper getters
   bool get isBusiness => accountType == AccountType.business;
   bool get isPersonal => accountType == AccountType.personal;
+  bool get isProfessional => false; // Professional type removed — kept for backward compat
   bool get isVerifiedAccount => verificationStatus == VerificationStatus.verified;
   bool get isPendingVerification => verificationStatus == VerificationStatus.pending;
 
@@ -159,6 +172,11 @@ class ExtendedUserProfile {
       verificationStatus: verificationStatus,
       businessName: businessName,
       category: category,
+      occupation: map['occupation'] as String?,
+      networkingCategory: map['networkingCategory'] as String?,
+      networkingSubcategory: map['networkingSubcategory'] as String?,
+      categoryFilters: Map<String, String>.from(map['categoryFilters'] ?? {}),
+      allowCalls: map['allowCalls'] ?? false,
     );
   }
 
@@ -218,5 +236,73 @@ class ExtendedUserProfile {
   // Get activity names
   List<String> get activityNames {
     return activities.map((a) => a.name).toList();
+  }
+
+  ExtendedUserProfile copyWith({
+    String? uid,
+    String? name,
+    String? photoUrl,
+    String? city,
+    String? location,
+    double? latitude,
+    double? longitude,
+    List<String>? interests,
+    bool? verified,
+    List<String>? connectionTypes,
+    List<Activity>? activities,
+    String? aboutMe,
+    bool? isOnline,
+    Timestamp? lastSeen,
+    int? age,
+    String? gender,
+    bool? discoveryModeEnabled,
+    List<String>? blockedUsers,
+    List<String>? connections,
+    int? connectionCount,
+    double? distance,
+    AccountType? accountType,
+    AccountStatus? accountStatus,
+    VerificationStatus? verificationStatus,
+    String? businessName,
+    String? category,
+    String? occupation,
+    String? networkingCategory,
+    String? networkingSubcategory,
+    Map<String, String>? categoryFilters,
+    bool? allowCalls,
+  }) {
+    return ExtendedUserProfile(
+      uid: uid ?? this.uid,
+      name: name ?? this.name,
+      photoUrl: photoUrl ?? this.photoUrl,
+      city: city ?? this.city,
+      location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      interests: interests ?? this.interests,
+      verified: verified ?? this.verified,
+      connectionTypes: connectionTypes ?? this.connectionTypes,
+      activities: activities ?? this.activities,
+      aboutMe: aboutMe ?? this.aboutMe,
+      isOnline: isOnline ?? this.isOnline,
+      lastSeen: lastSeen ?? this.lastSeen,
+      age: age ?? this.age,
+      gender: gender ?? this.gender,
+      discoveryModeEnabled: discoveryModeEnabled ?? this.discoveryModeEnabled,
+      blockedUsers: blockedUsers ?? this.blockedUsers,
+      connections: connections ?? this.connections,
+      connectionCount: connectionCount ?? this.connectionCount,
+      distance: distance ?? this.distance,
+      accountType: accountType ?? this.accountType,
+      accountStatus: accountStatus ?? this.accountStatus,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      businessName: businessName ?? this.businessName,
+      category: category ?? this.category,
+      occupation: occupation ?? this.occupation,
+      networkingCategory: networkingCategory ?? this.networkingCategory,
+      networkingSubcategory: networkingSubcategory ?? this.networkingSubcategory,
+      categoryFilters: categoryFilters ?? this.categoryFilters,
+      allowCalls: allowCalls ?? this.allowCalls,
+    );
   }
 }
