@@ -17,7 +17,7 @@ import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
-import 'near_by_posts _screen.dart';
+// import 'near_by_posts _screen.dart'; // TODO: file not yet created
 
 import 'edit_post_screen.dart';
 import 'create_post_screen.dart';
@@ -699,7 +699,7 @@ class _NearByScreenState extends State<NearByScreen>
               HapticFeedback.lightImpact();
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const MyPostsScreen()),
+                MaterialPageRoute(builder: (_) => const Scaffold(body: Center(child: Text('My Posts - Coming Soon')))),
               );
             },
             child: Container(
@@ -1961,7 +1961,7 @@ class _NearByScreenState extends State<NearByScreen>
         context,
         MaterialPageRoute(
           builder: (_) =>
-              EnhancedChatScreen(otherUser: userProfile, source: 'Nearby'),
+              EnhancedChatScreen(otherUser: userProfile),
         ),
       );
     } catch (e) {

@@ -37,7 +37,7 @@ import '../call/voice_call_screen.dart';
 // import '../call/video_call_screen.dart'; // Video calling disabled
 import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
-import '../../widgets/chat_common.dart';
+import '../../widgets/chat widgets/chat_common.dart';
 import '../../widgets/catalog_chat_bubble.dart';
 import '../home/main_navigation_screen.dart';
 import 'media_gallery_screen.dart';

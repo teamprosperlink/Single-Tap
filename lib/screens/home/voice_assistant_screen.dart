@@ -10,7 +10,7 @@ import '../../services/voice_assistant_service.dart';
 import '../../widgets/other widgets/user_avatar.dart';
 import '../../widgets/voice_orb.dart';
 import '../../widgets/audio_visualizer.dart';
-import 'conversations_screen.dart';
+import '../chat/conversations_screen.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});

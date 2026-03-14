@@ -9,13 +9,13 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../providers/other providers/theme_provider.dart';
 import '../../res/config/app_colors.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
-import '../../widgets/app_background.dart';
+import '../../widgets/common widgets/app_background.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../mixins/voice_search_mixin.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../models/user_profile.dart';
 import '../../models/extended_user_profile.dart';
-import '../../widgets/profile widgets/profile_detail_bottom_sheet.dart';
+import '../../widgets/common widgets/profile_detail_bottom_sheet.dart';
 import '../../services/connection_service.dart';
 import '../../services/location_services/location_service.dart';
 

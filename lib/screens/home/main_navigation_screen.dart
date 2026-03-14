@@ -11,8 +11,8 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 // Screens used in navigation
 import 'home_screen.dart';
 import 'live_connect_tab_screen.dart';
-import 'near_by_screen.dart';
-import 'conversations_screen.dart';
+import '../near by/near_by_screen.dart';
+import '../chat/conversations_screen.dart';
 
 // Business screens
 import '../business/simple/business_hub_screen.dart';
@@ -27,7 +27,7 @@ import '../../services/notification_service.dart';
 import '../../models/message_model.dart';
 
 // widgets
-import '../../widgets/app_drawer.dart';
+import '../../widgets/common widgets/app_drawer.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int? initialIndex;
