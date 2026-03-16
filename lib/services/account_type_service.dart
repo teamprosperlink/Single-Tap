@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_profile.dart';
+import 'unified_post_service.dart';
 
 /// Service for managing account types and related features
 class AccountTypeService {
@@ -73,9 +74,7 @@ class AccountTypeService {
       await _firestore.collection('users').doc(user.uid).update({
         'accountType': newType.name,
         'accountStatus': needsVerification ? 'pendingVerification' : 'active',
-        'verification': {
-          'status': needsVerification ? 'pending' : 'none',
-        },
+        'verification': {'status': needsVerification ? 'pending' : 'none'},
       });
 
       return true;
@@ -85,23 +84,7 @@ class AccountTypeService {
     }
   }
 
-  /// Update professional profile
-  Future<bool> updateProfessionalProfile(ProfessionalProfile profile) async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-
-    try {
-      await _firestore.collection('users').doc(user.uid).update({
-        'professionalProfile': profile.toMap(),
-      });
-      return true;
-    } catch (e) {
-      debugPrint('Error updating professional profile: $e');
-      return false;
-    }
-  }
-
-  /// Update business profile
+  /// Update business profile fields
   Future<bool> updateBusinessProfile(BusinessProfile profile) async {
     final user = _auth.currentUser;
     if (user == null) return false;
@@ -110,11 +93,87 @@ class AccountTypeService {
       await _firestore.collection('users').doc(user.uid).update({
         'businessProfile': profile.toMap(),
       });
+
+      // Re-sync searchable post with updated business info
+      UnifiedPostService().syncBusinessPost(user.uid);
+
       return true;
     } catch (e) {
       debugPrint('Error updating business profile: $e');
       return false;
     }
+  }
+
+  /// Enable business mode with profile data
+  Future<bool> enableBusinessMode(BusinessProfile profile) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'accountType': AccountType.business.name,
+        'accountStatus': 'pendingVerification',
+        'businessProfile': profile.toMap(),
+      });
+
+      // Create searchable post so this business appears in match results
+      UnifiedPostService().syncBusinessPost(user.uid);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error enabling business mode: $e');
+      return false;
+    }
+  }
+
+  /// Disable business mode (keeps data for re-enable)
+  Future<bool> disableBusinessMode() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'accountType': AccountType.personal.name,
+        'accountStatus': 'active',
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error disabling business mode: $e');
+      return false;
+    }
+  }
+
+  /// Update specific business profile fields
+  Future<bool> updateBusinessFields(Map<String, dynamic> updates) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      final prefixed = <String, dynamic>{};
+      for (final entry in updates.entries) {
+        prefixed['businessProfile.${entry.key}'] = entry.value;
+      }
+      await _firestore.collection('users').doc(user.uid).update(prefixed);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating business fields: $e');
+      return false;
+    }
+  }
+
+  /// Update cover image URL
+  Future<bool> updateCoverImage(String coverImageUrl) async {
+    return updateBusinessFields({'coverImageUrl': coverImageUrl});
+  }
+
+  /// Update social links
+  Future<bool> updateSocialLinks(Map<String, String> links) async {
+    return updateBusinessFields({'socialLinks': links});
+  }
+
+  /// Toggle business live status
+  Future<bool> toggleLiveStatus(bool isLive) async {
+    return updateBusinessFields({'isLive': isLive});
   }
 
   /// Check if a feature is available for an account type
@@ -141,25 +200,6 @@ class AccountTypeService {
           'analytics': false,
           'prioritySupport': false,
           'promotedListings': false,
-          'bulkUpload': false,
-        };
-
-      case AccountType.professional:
-        return {
-          'canBuySell': true,
-          'maxPostsPerDay': 20,
-          'canChat': true,
-          'canLiveConnect': true,
-          'verifiedBadge': true,
-          'portfolio': true,
-          'serviceListings': true,
-          'reviewsReceived': true,
-          'teamMembers': false,
-          'maxTeamMembers': 0,
-          'analytics': true,
-          'analyticsLevel': 'basic',
-          'prioritySupport': false,
-          'promotedListings': true,
           'bulkUpload': false,
         };
 
@@ -209,7 +249,10 @@ class AccountTypeService {
       final postsQuery = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+          )
           .get();
 
       return postsQuery.docs.length < limit;
@@ -238,7 +281,10 @@ class AccountTypeService {
       final postsQuery = await _firestore
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+          )
           .get();
 
       return (limit - postsQuery.docs.length).clamp(0, limit);
@@ -250,29 +296,21 @@ class AccountTypeService {
 
   /// Stream user's account type changes
   Stream<AccountType> watchAccountType(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists) return AccountType.personal;
-          final data = doc.data()!;
-          return AccountType.fromString(data['accountType']);
-        });
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return AccountType.personal;
+      final data = doc.data()!;
+      return AccountType.fromString(data['accountType']);
+    });
   }
 
   /// Stream user's verification status changes
   Stream<VerificationStatus> watchVerificationStatus(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists) return VerificationStatus.none;
-          final data = doc.data()!;
-          if (data['verification'] == null) return VerificationStatus.none;
-          return VerificationStatus.fromString(data['verification']['status']);
-        });
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return VerificationStatus.none;
+      final data = doc.data()!;
+      if (data['verification'] == null) return VerificationStatus.none;
+      return VerificationStatus.fromString(data['verification']['status']);
+    });
   }
 
   /// Get display information for account type (for UI)
@@ -285,15 +323,6 @@ class AccountTypeService {
           'icon': 'person',
           'color': 0xFF2196F3, // Blue
           'badgeColor': 0xFF2196F3,
-        };
-
-      case AccountType.professional:
-        return {
-          'name': 'Professional Account',
-          'description': 'For freelancers and service providers',
-          'icon': 'badge',
-          'color': 0xFF9C27B0, // Purple
-          'badgeColor': 0xFF9C27B0,
         };
 
       case AccountType.business:

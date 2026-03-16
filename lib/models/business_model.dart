@@ -1,5 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'business_category_config.dart';
+
+/// Business category enum for classifying business types
+enum BusinessCategory {
+  retail,
+  restaurant,
+  professional,
+  healthcare,
+  beauty,
+  fitness,
+  education,
+  technology,
+  manufacturing,
+  construction,
+  realEstate,
+  transportation,
+  entertainment,
+  hospitality,
+  financial,
+  nonProfit,
+  homeServices,
+  automotive,
+  agriculture,
+  other;
+
+  String get id => name;
+}
+
+/// Extension to parse BusinessCategory from string
+extension BusinessCategoryExtension on BusinessCategory {
+  static BusinessCategory? fromString(String? value) {
+    if (value == null) return null;
+    try {
+      return BusinessCategory.values.firstWhere((e) => e.name == value);
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 /// Business profile model for business accounts
 ///

@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Review model for professional accounts
+/// Review model for business accounts
 class ReviewModel {
   final String id;
   final String reviewerId;
   final String reviewerName;
   final String? reviewerPhoto;
-  final String professionalId;
+  final String businessId;
   final String? serviceId;
   final String? serviceName;
 
@@ -18,8 +18,8 @@ class ReviewModel {
   final String reviewText;
   final List<String> images;
 
-  // Response from professional
-  final String? professionalResponse;
+  // Response from business
+  final String? businessResponse;
   final DateTime? responseDate;
 
   // Verification
@@ -37,14 +37,14 @@ class ReviewModel {
     required this.reviewerId,
     required this.reviewerName,
     this.reviewerPhoto,
-    required this.professionalId,
+    required this.businessId,
     this.serviceId,
     this.serviceName,
     required this.rating,
     this.categoryRatings,
     required this.reviewText,
     this.images = const [],
-    this.professionalResponse,
+    this.businessResponse,
     this.responseDate,
     this.isVerifiedPurchase = false,
     this.isVisible = true,
@@ -66,7 +66,7 @@ class ReviewModel {
       reviewerId: map['reviewerId'] ?? '',
       reviewerName: map['reviewerName'] ?? 'Anonymous',
       reviewerPhoto: map['reviewerPhoto'],
-      professionalId: map['professionalId'] ?? '',
+      businessId: map['businessId'] ?? '',
       serviceId: map['serviceId'],
       serviceName: map['serviceName'],
       rating: (map['rating'] ?? 5.0).toDouble(),
@@ -79,7 +79,7 @@ class ReviewModel {
           : null,
       reviewText: map['reviewText'] ?? '',
       images: List<String>.from(map['images'] ?? []),
-      professionalResponse: map['professionalResponse'],
+      businessResponse: map['businessResponse'],
       responseDate: map['responseDate'] != null
           ? (map['responseDate'] as Timestamp).toDate()
           : null,
@@ -101,14 +101,14 @@ class ReviewModel {
       'reviewerId': reviewerId,
       'reviewerName': reviewerName,
       'reviewerPhoto': reviewerPhoto,
-      'professionalId': professionalId,
+      'businessId': businessId,
       'serviceId': serviceId,
       'serviceName': serviceName,
       'rating': rating,
       'categoryRatings': categoryRatings,
       'reviewText': reviewText,
       'images': images,
-      'professionalResponse': professionalResponse,
+      'businessResponse': businessResponse,
       'responseDate':
           responseDate != null ? Timestamp.fromDate(responseDate!) : null,
       'isVerifiedPurchase': isVerifiedPurchase,
@@ -148,14 +148,14 @@ class ReviewModel {
     String? reviewerId,
     String? reviewerName,
     String? reviewerPhoto,
-    String? professionalId,
+    String? businessId,
     String? serviceId,
     String? serviceName,
     double? rating,
     Map<String, double>? categoryRatings,
     String? reviewText,
     List<String>? images,
-    String? professionalResponse,
+    String? businessResponse,
     DateTime? responseDate,
     bool? isVerifiedPurchase,
     bool? isVisible,
@@ -168,14 +168,14 @@ class ReviewModel {
       reviewerId: reviewerId ?? this.reviewerId,
       reviewerName: reviewerName ?? this.reviewerName,
       reviewerPhoto: reviewerPhoto ?? this.reviewerPhoto,
-      professionalId: professionalId ?? this.professionalId,
+      businessId: businessId ?? this.businessId,
       serviceId: serviceId ?? this.serviceId,
       serviceName: serviceName ?? this.serviceName,
       rating: rating ?? this.rating,
       categoryRatings: categoryRatings ?? this.categoryRatings,
       reviewText: reviewText ?? this.reviewText,
       images: images ?? this.images,
-      professionalResponse: professionalResponse ?? this.professionalResponse,
+      businessResponse: businessResponse ?? this.businessResponse,
       responseDate: responseDate ?? this.responseDate,
       isVerifiedPurchase: isVerifiedPurchase ?? this.isVerifiedPurchase,
       isVisible: isVisible ?? this.isVisible,
@@ -186,7 +186,7 @@ class ReviewModel {
   }
 }
 
-/// Rating summary for a professional
+/// Rating summary for a business
 class RatingSummary {
   final double averageRating;
   final int totalReviews;
