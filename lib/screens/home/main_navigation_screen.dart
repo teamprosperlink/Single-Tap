@@ -856,30 +856,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     // Create bottom navigation bar widget with gradient like AppBar
     Widget buildBottomNavBar() {
-      return ClipRect(
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.95),
-                  Colors.black.withValues(alpha: 0.85),
-                  Colors.black.withValues(alpha: 0.7),
+                  Color.fromRGBO(40, 40, 40, 1),
+                  Color.fromRGBO(64, 64, 64, 1),
                 ],
               ),
-              border: const Border(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border(
                 top: BorderSide(color: Colors.white, width: 0.5),
               ),
             ),
             child: SafeArea(
               top: false,
               child: SizedBox(
-                height: 60,
+                height: 64,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildNavItem(
                       icon: Icons.home,
@@ -1003,8 +1004,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           padding: EdgeInsets.only(left: 16),
           child: Center(
             child: Text(
-              'SingleTap',
-              style: TextStyle(
+              'Single Tap',
+              style: TextStyle(fontFamily: 'Poppins',
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -1050,17 +1051,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           ),
         ],
         flexibleSpace: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
               ],
             ),
-            border: const Border(
+            border: Border(
               bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
@@ -1121,7 +1121,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: 'Poppins',
                 color: isActive
                     ? Colors.white
                     : Colors.white.withValues(alpha: 0.5),
