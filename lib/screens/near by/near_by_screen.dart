@@ -17,7 +17,6 @@ import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
-import '../../models/nearby_model.dart';
 import 'near_by_post_detail_screen.dart';
 import 'saved_nearby_screen.dart';
 
@@ -365,12 +364,19 @@ class _NearByScreenState extends State<NearByScreen>
             }
           }
 
-          // Parse with NearbyModel
-          final nearbyModel = NearbyModel.fromJson(decoded);
-          debugPrint('NearBy: NearbyModel parsed — buy=${nearbyModel.buy.length}, sell=${nearbyModel.sell.length}, seek=${nearbyModel.seek.length}, provide=${nearbyModel.provide.length}, total=${nearbyModel.totalCount}');
-
-          // Convert all listings to flat card maps
-          final allCards = nearbyModel.toFlatCards();
+          // Parse listings directly from decoded JSON
+          final allCards = <Map<String, dynamic>>[];
+          for (final key in ['buy', 'sell', 'seek', 'provide']) {
+            final items = decoded[key];
+            if (items is List) {
+              for (final item in items) {
+                if (item is Map<String, dynamic>) {
+                  allCards.add({...item, 'intent_type': key});
+                }
+              }
+            }
+          }
+          debugPrint('NearBy: parsed ${allCards.length} cards');
 
           // Categorize into tabs, deduplicate by listing_id AND
           // collapse near-identical listings from same user

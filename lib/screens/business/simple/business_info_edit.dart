@@ -9,8 +9,7 @@ import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/account_type_service.dart';
 import '../../../services/catalog_service.dart';
-import '../../../services/ai_services/gemini_service.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../../services/location_services/gemini_service.dart';
 import 'business_hours_edit.dart';
 
 class BusinessInfoEdit extends StatefulWidget {
@@ -586,19 +585,19 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
               child: Column(
                 children: [
                   _socialField(_instagramController, 'Instagram',
-                      FontAwesomeIcons.instagram, isDark, textColor),
+                      Icons.camera_alt, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_facebookController, 'Facebook',
-                      FontAwesomeIcons.facebookF, isDark, textColor),
+                      Icons.facebook, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_twitterController, 'X (Twitter)',
-                      FontAwesomeIcons.xTwitter, isDark, textColor),
+                      Icons.close, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_linkedinController, 'LinkedIn',
-                      FontAwesomeIcons.linkedinIn, isDark, textColor),
+                      Icons.work, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_youtubeController, 'YouTube',
-                      FontAwesomeIcons.youtube, isDark, textColor),
+                      Icons.play_circle_fill, isDark, textColor),
                 ],
               ),
             ),
@@ -830,7 +829,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
         ),
         prefixIcon: Padding(
             padding: const EdgeInsets.all(12),
-            child: FaIcon(icon,
+            child: Icon(icon,
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.4)
                     : Colors.black.withValues(alpha: 0.3),

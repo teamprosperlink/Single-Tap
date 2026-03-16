@@ -274,9 +274,7 @@ class AccountTypeBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Account type badge
-        if (accountType == AccountType.professional)
-          ProfessionalBadge(size: size, showLabel: showLabel, compact: compact)
-        else if (accountType == AccountType.business)
+        if (accountType == AccountType.business)
           BusinessBadge(size: size, showLabel: showLabel, compact: compact),
 
         // Verification status
@@ -326,13 +324,7 @@ class UsernameBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (accountType == AccountType.professional)
-            Icon(
-              Icons.workspace_premium,
-              size: size,
-              color: const Color(0xFF9C27B0),
-            )
-          else if (accountType == AccountType.business)
+          if (accountType == AccountType.business)
             Icon(Icons.business, size: size, color: const Color(0xFFFF9800)),
           if (isVerified) ...[
             const SizedBox(width: 2),
@@ -373,12 +365,6 @@ class AccountTypeCard extends StatelessWidget {
         icon = Icons.person;
         title = 'Personal Account';
         subtitle = 'For individual buyers and sellers';
-        break;
-      case AccountType.professional:
-        primaryColor = const Color(0xFF9C27B0);
-        icon = Icons.workspace_premium;
-        title = 'Professional Account';
-        subtitle = 'Freelancer & Service Provider';
         break;
       case AccountType.business:
         primaryColor = const Color(0xFFFF9800);

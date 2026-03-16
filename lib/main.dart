@@ -27,7 +27,6 @@ import 'services/notification_service.dart';
 import 'services/chat_services/conversation_service.dart';
 import 'services/location_services/location_service.dart';
 import 'services/connectivity_service.dart';
-import 'services/product_api_service.dart';
 import 'package:uuid/uuid.dart';
 import 'services/analytics_service.dart';
 import 'services/error services/error_tracking_service.dart';
@@ -326,8 +325,7 @@ Future<void> _initializeServicesInBackground() async {
     // Shorter delay - reduced from 500ms to 200ms for faster startup
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // Wake up Render backend early so product searches are fast
-    unawaited(ProductApiService().warmUp());
+    // Product API service removed during business migration
 
     // Initialize Firebase Analytics
     unawaited(AnalyticsService().initialize().catchError((e) {}));

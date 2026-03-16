@@ -100,7 +100,7 @@ class ExtendedUserProfile {
   });
 
   // Helper getters
-  bool get isProfessional => accountType == AccountType.professional;
+  bool get isProfessional => false; // Professional account type removed
   bool get isBusiness => accountType == AccountType.business;
   bool get isPersonal => accountType == AccountType.personal;
   bool get isVerifiedAccount => verificationStatus == VerificationStatus.verified;

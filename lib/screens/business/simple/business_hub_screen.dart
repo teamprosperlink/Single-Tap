@@ -15,7 +15,7 @@ import 'catalog_management_screen.dart';
 import 'profile_views_screen.dart';
 import 'bookings_screen.dart';
 import 'reviews_screen.dart';
-import '../../profile/profile_view_screen.dart';
+import 'public_business_profile_screen.dart';
 
 class BusinessHubScreen extends StatefulWidget {
   const BusinessHubScreen({super.key});
@@ -36,7 +36,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     super.initState();
     final uid = _userId;
     if (uid != null) {
-      UnifiedPostService().resyncIfStale(uid);
+      // TODO: resyncIfStale not available on this branch
       _pendingCountFuture = BookingService().getPendingCount(uid);
       _catalogStream = _catalogService.streamCatalog(uid);
     }
@@ -631,7 +631,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProfileViewScreen(userProfile: profile),
+        builder: (_) => PublicBusinessProfileScreen(userId: profile.uid),
       ),
     );
   }

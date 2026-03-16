@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/snackbar_helper.dart';
-import '../../services/product_api_service.dart';
+// import '../../services/product_api_service.dart'; // removed — service deleted
 import '../../services/ip_location_service.dart';
 import 'api_my_posts_screen.dart';
 
@@ -56,7 +56,7 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
     _descriptionController.addListener(() { if (mounted) setState(() {}); });
 
     // Pre-warm backend + pre-fetch location as soon as screen opens
-    ProductApiService().warmUp();
+    // TODO: ProductApiService removed — warmUp skipped
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _locationFuture = _detectLocation(user.uid);
@@ -335,52 +335,12 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
 
       final autoTitle = description.length > 30 ? '${description.substring(0, 27)}...' : description;
 
-      // ── Call API ──
-      debugPrint('CreatePost: calling API with ${base64Images.length} images, location=($lat,$lng)...');
-      final result = await ProductApiService().createPost(
-        query: autoTitle,
-        description: description,
-        price: price,
-        lat: lat,
-        lng: lng,
-        images: base64Images,
-        locationName: locationName,
-      );
-
-      debugPrint('CreatePost: API response success=${result['success']}, error=${result['error']}');
-
-      if (result['success'] != true) {
-        final errorMsg = result['error']?.toString() ?? 'Failed to create post';
-        if (mounted) {
-          SnackBarHelper.showError(context, errorMsg);
-        }
-        return;
-      }
-
-      // ── API succeeded — mark as created to prevent duplicates ──
-      _postCreated = true;
-      debugPrint('CreatePost: API success! listingId=${result['listingId']}');
-
-      // Clear search cache so next search fetches fresh results with new post
-      ProductApiService().resetCache();
-
-      // ── Save to Firestore (fire-and-forget — API already succeeded) ──
-      _savePostToFirestore(
-        currentUser: currentUser,
-        userData: userData,
-        result: result,
-        title: autoTitle,
-        description: description,
-        location: locationName,
-        lat: lat,
-        lng: lng,
-        price: price,
-      );
-
+      // TODO: ProductApiService removed — post creation stubbed
+      debugPrint('CreatePost: ProductApiService removed, skipping API call');
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'Post created successfully!');
-        _goBack();
+        SnackBarHelper.showError(context, 'Post creation via API is not available.');
       }
+      return;
     } catch (e, stackTrace) {
       debugPrint('CreatePost ERROR: $e');
       debugPrint('CreatePost STACK: $stackTrace');

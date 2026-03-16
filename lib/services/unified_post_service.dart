@@ -21,6 +21,12 @@ class UnifiedPostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  /// Sync business catalog to a matchable post (stub — full implementation on new-buiness)
+  Future<void> syncBusinessPost(String userId) async {
+    // TODO: Implement full catalog-to-post sync from new-buiness branch
+    debugPrint('syncBusinessPost called for $userId (stub)');
+  }
+
   /// Create a new post with automatic AI processing
   Future<Map<String, dynamic>> createPost({
     required String originalPrompt,

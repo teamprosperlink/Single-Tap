@@ -3,15 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/auth_service.dart' show AuthService;
-import '../../services/professional_service.dart';
-import '../../services/business_service.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/common widgets/country_code_picker_sheet.dart';
 import '../../widgets/common widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
-import '../professional/professional_setup_screen.dart';
-import '../business/business_setup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'otp_verification_screen.dart';
 
@@ -532,38 +528,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     try {
-      // Check for Professional account
-      if (accountType.contains('professional')) {
-        final professionalService = ProfessionalService();
-        final isSetupComplete = await professionalService
-            .isProfessionalSetupComplete();
-
-        if (!isSetupComplete) {
-          if (!mounted) return;
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const ProfessionalSetupScreen()),
-            (route) => false,
-          );
-          return;
-        }
-      }
-
-      // Check for Business account
-      if (accountType.contains('business')) {
-        final businessService = BusinessService();
-        final isSetupComplete = await businessService.isBusinessSetupComplete();
-
-        if (!isSetupComplete) {
-          if (!mounted) return;
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
-            (route) => false,
-          );
-          return;
-        }
-      }
-
-      // Default: go to main navigation with account type
+      // Go to main navigation with account type
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(

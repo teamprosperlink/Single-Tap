@@ -25,7 +25,6 @@ import '../../services/notification_service.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
-import '../../services/ai_chat_service.dart';
 import '../../res/config/api_config.dart';
 import '../call/group_audio_call_screen.dart';
 import '../../services/floating_call_service.dart';
@@ -414,16 +413,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           );
         });
 
-        // Check if message contains @Single Tap AI mention
-        if (AiChatService.containsAiMention(text)) {
-          final senderName = _memberNames[currentUserId] ?? 'User';
-          AiChatService().processAiMention(
-            conversationId: widget.groupId,
-            userMessage: text,
-            userName: senderName,
-            isGroupChat: true,
-          );
-        }
       }
     } catch (e) {
       debugPrint('Error sending message: $e');

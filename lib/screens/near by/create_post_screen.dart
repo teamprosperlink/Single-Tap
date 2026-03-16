@@ -8,7 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../services/ip_location_service.dart';
-import '../../services/product_api_service.dart';
+// import '../../services/product_api_service.dart'; // removed — service deleted
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -19,7 +19,6 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final ProductApiService _productApiService = ProductApiService();
   final ImagePicker _imagePicker = ImagePicker();
 
   final TextEditingController _descriptionController = TextEditingController();
@@ -233,29 +232,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final desc = _descriptionController.text.trim();
       final autoTitle = desc.length > 30 ? '${desc.substring(0, 27)}...' : desc;
 
-      // Call API via ProductApiService
-      if (mounted) setState(() => _loadingStage = 'Creating post...');
-      final result = await _productApiService.createPost(
-        query: desc,
-        category: 'sell',
-        title: autoTitle,
-        description: desc,
-        lat: lat,
-        lng: lng,
-        images: base64Images,
-        locationName: locationName,
-      );
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        _postCreated = true;
-        _showSnackBar('Post created successfully!', isError: false);
-        Navigator.pop(context, true);
-      } else {
-        final error = result['error'] as String? ?? 'Failed to create post';
-        _showSnackBar(error, isError: true);
+      // TODO: ProductApiService removed — post creation not available
+      if (mounted) {
+        _showSnackBar('Post creation via API is not available.', isError: true);
       }
+      return;
     } catch (e) {
       debugPrint('CreatePost: unexpected error: $e');
       if (mounted) {

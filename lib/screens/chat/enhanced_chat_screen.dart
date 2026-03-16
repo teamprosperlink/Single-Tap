@@ -37,7 +37,6 @@ import '../call/voice_call_screen.dart';
 import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat widgets/chat_common.dart';
-import '../../services/ai_chat_service.dart';
 import '../../res/config/api_config.dart';
 import 'media_gallery_screen.dart';
 import 'photo_viewer_dialog.dart';
@@ -3416,15 +3415,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         data: {'conversationId': _conversationId},
       );
 
-      // Check if message contains @Single Tap AI mention
-      if (AiChatService.containsAiMention(text)) {
-        AiChatService().processAiMention(
-          conversationId: _conversationId!,
-          userMessage: text,
-          userName: currentUserName,
-          isGroupChat: false,
-        );
-      }
+      // AI chat service removed during business migration
 
     } catch (e) {
       if (!mounted) return;

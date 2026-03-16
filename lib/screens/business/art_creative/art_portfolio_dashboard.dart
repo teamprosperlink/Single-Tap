@@ -2,9 +2,9 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:supper/services/firebase_provider.dart';
-import 'package:supper/res/config/app_colors.dart';
-import 'package:supper/widgets/business/coming_soon_widgets.dart';
+import '../../../services/firebase_provider.dart';
+import '../../../res/config/app_colors.dart';
+import '../../../widgets/business/coming_soon_widgets.dart';
 
 class ArtPortfolioDashboard extends StatefulWidget {
   final String businessId;

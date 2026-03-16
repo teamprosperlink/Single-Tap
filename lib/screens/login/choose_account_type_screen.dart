@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supper/screens/login/login_screen.dart';
+import 'login_screen.dart';
 import '../../res/config/app_colors.dart';
 
 class ChooseAccountTypeScreen extends StatefulWidget {

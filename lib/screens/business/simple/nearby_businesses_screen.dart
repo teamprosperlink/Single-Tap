@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../../../models/user_profile.dart';
-import '../../profile/profile_view_screen.dart';
+import 'public_business_profile_screen.dart';
 
 class NearbyBusinessesScreen extends StatefulWidget {
   final double? userLat;
@@ -165,8 +165,8 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ProfileViewScreen(
-                              userProfile: biz,
+                            builder: (_) => PublicBusinessProfileScreen(
+                              userId: biz.uid,
                             ),
                           ),
                         );

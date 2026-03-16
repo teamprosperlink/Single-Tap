@@ -13,7 +13,7 @@ import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../product/product_detail_screen.dart';
 import '../product/see_all_products_screen.dart';
-import '../../services/product_api_service.dart';
+// import '../../services/product_api_service.dart'; // removed — service deleted
 import '../../services/ip_location_service.dart';
 import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
@@ -104,7 +104,7 @@ class HomeScreenState extends State<HomeScreen>
     _initTts();
     _loadSavedPosts();
     // Clear old cache for fresh results (warmUp already called in main.dart)
-    ProductApiService().resetCache();
+    // TODO: ProductApiService removed — no cache to reset
 
     _controller = AnimationController(vsync: this);
 
@@ -841,18 +841,12 @@ class HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     try {
-      // Call backend API with timeout to prevent infinite loading
+      // TODO: ProductApiService removed — return empty results until replaced
       final sw = Stopwatch()..start();
-      final productResult = await ProductApiService()
-          .searchWithResponse(intent, bidirectionalMatching: true, lat: _currentUserLat, lng: _currentUserLng)
-          .timeout(const Duration(seconds: 250), onTimeout: () {
-        debugPrint('ProductAPI: overall timeout for "$intent"');
-        return <String, dynamic>{
-          'products': <Map<String, dynamic>>[],
-          'message': 'Search is taking too long. The server may be warming up — please try again in a moment.',
-          '_error': true,
-        };
-      });
+      final productResult = <String, dynamic>{
+        'products': <Map<String, dynamic>>[],
+        'message': '',
+      };
       final apiMessage = productResult['message'] as String? ?? '';
       final productCards =
           productResult['products'] as List<Map<String, dynamic>>? ?? [];
