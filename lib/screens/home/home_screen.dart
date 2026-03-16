@@ -18,6 +18,7 @@ import '../../services/ip_location_service.dart';
 import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../widgets/common widgets/app_drawer.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -430,19 +431,50 @@ class HomeScreenState extends State<HomeScreen>
     if (userId == null) return;
 
     try {
-      final messagesToSave = _conversation.map((msg) {
+      final messagesToSave = _conversation
+          // Skip skeleton/searching placeholders — they're transient UI states
+          .where((msg) => msg['type'] != 'skeleton_results' && msg['type'] != 'searching_text')
+          .map((msg) {
         // Convert DateTime to Timestamp for Firestore
         final timestamp = msg['timestamp'];
         final firestoreTimestamp = timestamp is DateTime
             ? Timestamp.fromDate(timestamp)
             : timestamp;
 
+        // Sanitize `data` for Firestore: keep only lightweight fields for
+        // match_results / no_results_create_post so the document stays small
+        // and avoids serialisation failures on deeply-nested API card data.
+        dynamic sanitizedData;
+        final rawData = msg['data'];
+        if (rawData is List) {
+          sanitizedData = (rawData).map<Map<String, dynamic>>((card) {
+            if (card is Map<String, dynamic>) {
+              return <String, dynamic>{
+                'name': card['name'],
+                'image': card['image'],
+                'price': card['price'],
+                'listing_id': card['listing_id'],
+                'user_id': card['user_id'],
+                'match_score': card['match_score'],
+                'match_type': card['match_type'],
+                'location': card['location'],
+              };
+            }
+            return <String, dynamic>{};
+          }).toList();
+        } else if (rawData is Map) {
+          sanitizedData = Map<String, dynamic>.from(rawData);
+        } else {
+          sanitizedData = rawData;
+        }
+
         return <String, dynamic>{
           'text': msg['text'],
           'isUser': msg['isUser'],
           'timestamp': firestoreTimestamp,
           'type': msg['type'],
-          'data': msg['data'],
+          'data': sanitizedData,
+          if (msg['query'] != null) 'query': msg['query'],
         };
       }).toList();
 
@@ -459,12 +491,16 @@ class HomeScreenState extends State<HomeScreen>
 
       if (_currentChatId == null) {
         // Create new chat history document
+        // Use Timestamp.now() instead of FieldValue.serverTimestamp() so the
+        // createdAt value is immediately available in the local Firestore cache
+        // for drawer sorting (server timestamp is null until the server confirms).
+        final now = Timestamp.now();
         final chatData = <String, dynamic>{
           'userId': userId,
           'title': title,
           'messages': messagesToSave,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'createdAt': now,
+          'updatedAt': now,
         };
         if (_currentProjectId != null) {
           chatData['projectId'] = _currentProjectId;
@@ -473,7 +509,7 @@ class HomeScreenState extends State<HomeScreen>
             .collection('chat_history')
             .add(chatData);
         _currentChatId = docRef.id;
-        debugPrint('New chat created: $_currentChatId');
+        debugPrint('ChatHistory: new chat created $_currentChatId (title="$title")');
 
         // If linked to a project, add chatId to the project's chatIds
         if (_currentProjectId != null) {
@@ -499,13 +535,18 @@ class HomeScreenState extends State<HomeScreen>
             .collection('chat_history')
             .doc(_currentChatId)
             .update({
+              'title': title,
               'messages': messagesToSave,
-              'updatedAt': FieldValue.serverTimestamp(),
+              'updatedAt': Timestamp.now(),
             });
-        debugPrint('Chat updated: $_currentChatId');
+        debugPrint('ChatHistory: updated $_currentChatId (${messagesToSave.length} msgs)');
       }
-    } catch (e) {
+
+      // Refresh drawer's chat history list so new entry appears immediately
+      AppDrawer.globalKey.currentState?.refreshChatHistory();
+    } catch (e, stack) {
       debugPrint('Error auto-saving conversation: $e');
+      debugPrint('Stack: $stack');
     }
   }
 
@@ -818,6 +859,9 @@ class HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
+
+    // Auto-save voice conversation to chat history
+    _autoSaveConversation(message);
   }
 
   /// Process intent and find matches. Shows shimmer skeleton cards instantly
@@ -1756,6 +1800,9 @@ class HomeScreenState extends State<HomeScreen>
       _isProcessing = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    // Auto-save regenerated conversation to chat history
+    _autoSaveConversation(userMessage);
   }
 
   /// Reusable action row for assistant messages

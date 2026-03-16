@@ -323,7 +323,18 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
 
   Map<String, dynamic> get post => widget.post;
 
-  String get _title => (post['title'] ?? post['name'] ?? post['originalPrompt'] ?? 'No Title').toString();
+  String get _title {
+    final model = (post['model'] ?? '').toString().trim();
+    if (model.isNotEmpty) return model;
+    final name = (post['title'] ?? post['name'] ?? post['originalPrompt'] ?? 'No Title').toString().trim();
+    final rawBrand = (post['brand'] ?? '').toString().trim();
+    String cleaned = name;
+    if (rawBrand.isNotEmpty && cleaned.toLowerCase().startsWith(rawBrand.toLowerCase())) {
+      cleaned = cleaned.substring(rawBrand.length).trim();
+    }
+    cleaned = cleaned.replaceFirst(RegExp(r'^(inc\.?|ltd\.?|corp\.?|co\.?|llc\.?|pvt\.?)\s*', caseSensitive: false), '').trim();
+    return cleaned.isNotEmpty ? cleaned : name;
+  }
   String get _description {
     // Prefer reasoning from API, fallback to description
     final reasoning = (post['smart_message'] ?? '').toString().trim();
@@ -331,6 +342,10 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
     return reasoning.isNotEmpty ? reasoning : desc;
   }
   String get _category => (post['category'] ?? '').toString().trim();
+  String get _brandName {
+    final raw = (post['brand'] ?? '').toString().trim();
+    return raw.replaceAll(RegExp(r'\s*(inc\.?|ltd\.?|corp\.?|co\.?|llc\.?|pvt\.?)$', caseSensitive: false), '').trim();
+  }
   bool get _isDonation => post['isDonation'] == true;
 
   bool get _isSimilarMatch => (post['match_type'] ?? '').toString() == 'similar';
@@ -352,13 +367,15 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
   }
 
   bool get _hasProductDetails {
-    final brand = (post['brand'] ?? '').toString().trim();
+    final brand = _brandName;
     final model = (post['model'] ?? '').toString().trim();
     final itemType = (post['item_type'] ?? post['itemType'] ?? '').toString().trim();
     final condition = (post['condition'] ?? '').toString().trim();
     final subintent = (post['subintent'] ?? post['feedCategory'] ?? post['intent'] ?? '').toString().trim();
     final price = post['price'];
-    final location = (post['location'] ?? '').toString().trim();
+    final locR = (post['location'] ?? '').toString().trim();
+    final locT = (post['target_location'] ?? '').toString().trim();
+    final location = locR.isNotEmpty ? locR : locT;
     final domain = post['domain'];
     final domainStr = (domain is List && domain.isNotEmpty) ? domain.first.toString() : (domain is String ? domain : '');
     return brand.isNotEmpty || model.isNotEmpty || itemType.isNotEmpty ||
@@ -368,13 +385,15 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
 
   List<Widget> get _productDetailRows {
     final rows = <Widget>[];
-    final brand = (post['brand'] ?? '').toString().trim();
+    final brand = _brandName;
     final model = (post['model'] ?? '').toString().trim();
     final itemType = (post['item_type'] ?? post['itemType'] ?? '').toString().trim();
     final condition = (post['condition'] ?? '').toString().trim();
     final subintent = (post['subintent'] ?? post['feedCategory'] ?? post['intent'] ?? '').toString().trim();
     final rawPrice = post['price'];
-    final location = (post['location'] ?? '').toString().trim();
+    final locRaw2 = (post['location'] ?? '').toString().trim();
+    final locTarget2 = (post['target_location'] ?? '').toString().trim();
+    final location = locRaw2.isNotEmpty ? locRaw2 : locTarget2;
     final domain = post['domain'];
     final domainStr = (domain is List && domain.isNotEmpty) ? domain.first.toString() : (domain is String ? domain : '');
     final distText = widget.distanceText.isNotEmpty ? widget.distanceText : _computedDistance;
@@ -395,7 +414,15 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
     }
     if (domainStr.isNotEmpty) rows.add(_detailRow('Domain', _titleCaseStr(domainStr)));
     if (location.isNotEmpty) rows.add(_detailRow('Location', _titleCaseStr(location)));
-    if (distText.isNotEmpty) rows.add(_detailRow('Distance', distText));
+    // Distance: prefer widget.distanceText, then computed, then API distance_km
+    final distFromApi = post['distance_km'];
+    String finalDist = distText;
+    if (finalDist.isEmpty && distFromApi != null && distFromApi is num && distFromApi > 0) {
+      finalDist = distFromApi < 1
+          ? '${(distFromApi * 1000).round()} m away'
+          : '${distFromApi.toStringAsFixed(1)} km away';
+    }
+    if (finalDist.isNotEmpty) rows.add(_detailRow('Distance', finalDist));
 
     return rows;
   }
@@ -607,10 +634,28 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
                                   height: 1.25,
                                 ),
                               ),
+                              // Brand Name
+                              if (_brandName.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  _brandName,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.grey[400],
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
 
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 12),
 
-                              // Price, Category, Location chips
+                              // Price
+                              _buildPriceWidget(),
+
+                              const SizedBox(height: 12),
+
+                              // Category, Type chips
                               _buildInfoChipsRow(),
 
                               const SizedBox(height: 22),
@@ -1125,41 +1170,44 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
     }
   }
 
-  IconData get _currencyIcon {
-    final code = (post['currency'] ?? 'INR').toString();
-    switch (code) {
-      case 'USD': return Icons.attach_money_rounded;
-      case 'EUR': return Icons.euro_rounded;
-      case 'GBP': return Icons.currency_pound_rounded;
-      default: return Icons.currency_rupee_rounded;
+
+  Widget _buildPriceWidget() {
+    final rawPrice = post['price'];
+    if (_isDonation) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.pinkAccent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.25)),
+        ),
+        child: const Text(
+          'Free',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.pinkAccent, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+      );
     }
+    if (rawPrice == null) return const SizedBox.shrink();
+    final formattedPrice = rawPrice is num
+        ? (rawPrice == rawPrice.toInt() ? rawPrice.toInt().toString() : rawPrice.toStringAsFixed(2))
+        : rawPrice.toString();
+    if (formattedPrice.isEmpty || formattedPrice == '0') return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        '$_currencySymbol$formattedPrice',
+        style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+    );
   }
 
   Widget _buildInfoChipsRow() {
     final chips = <Map<String, dynamic>>[];
-    final rawPrice = post['price'];
-    final formattedPrice = rawPrice is num
-        ? (rawPrice == rawPrice.toInt() ? rawPrice.toInt().toString() : rawPrice.toStringAsFixed(2))
-        : rawPrice?.toString() ?? '';
-
-    // Price chip
-    if (_isDonation) {
-      chips.add({
-        'icon': Icons.volunteer_activism_rounded,
-        'text': 'Free',
-        'color': Colors.pinkAccent,
-        'bgColor': Colors.pinkAccent.withValues(alpha: 0.12),
-        'borderColor': Colors.pinkAccent.withValues(alpha: 0.25),
-      });
-    } else if (rawPrice != null && formattedPrice.isNotEmpty && formattedPrice != '0') {
-      chips.add({
-        'icon': _currencyIcon,
-        'text': '$_currencySymbol$formattedPrice',
-        'color': Colors.white,
-        'bgColor': _accent.withValues(alpha: 0.12),
-        'borderColor': _accent.withValues(alpha: 0.25),
-      });
-    }
 
     // Category chip (buy/sell/seek/provide/mutual)
     if (_category.isNotEmpty) {
@@ -1194,7 +1242,7 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
     }
 
     // Brand chip (e.g., Apple, Samsung)
-    final brand = (post['brand'] ?? '').toString().trim();
+    final brand = _brandName;
     if (brand.isNotEmpty) {
       chips.add({
         'icon': Icons.verified_rounded,
@@ -1219,117 +1267,37 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
 
     if (chips.isEmpty) return const SizedBox.shrink();
 
-    // Location chip
-    Widget? locationChip;
-    final isOwnPost = post['userId'] == _auth.currentUser?.uid;
-    if (isOwnPost) {
-      final locationName = (post['location'] ?? '').toString().trim();
-      if (locationName.isNotEmpty) {
-        locationChip = _buildSingleChip(
-          icon: Icons.location_on_outlined,
-          text: locationName,
-          color: _accent,
-          bgColor: Colors.white.withValues(alpha: 0.07),
-          borderColor: Colors.white.withValues(alpha: 0.12),
-        );
-      }
-    } else {
-      final locationName = (post['location'] ?? '').toString().trim();
-      final distText = widget.distanceText.isNotEmpty ? widget.distanceText : _computedDistance;
-      final distFromApi = post['distance_km'];
-      final distParts = <String>[
-        if (locationName.isNotEmpty) locationName,
-        if (distText.isNotEmpty) distText
-        else if (distFromApi != null && distFromApi is num && distFromApi > 0)
-          '${distFromApi.toStringAsFixed(1)} km',
-      ];
-      if (distParts.isNotEmpty) {
-        locationChip = _buildSingleChip(
-          icon: locationName.isNotEmpty ? Icons.location_on_outlined : Icons.near_me_rounded,
-          text: distParts.join(' \u2022 '),
-          color: _accent,
-          bgColor: Colors.white.withValues(alpha: 0.07),
-          borderColor: Colors.white.withValues(alpha: 0.12),
-        );
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
-          child: Row(
-            children: chips.map((chip) {
-              return Container(
-                margin: const EdgeInsets.only(right: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: chip['bgColor'] as Color,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: chip['borderColor'] as Color),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(chip['icon'] as IconData, color: chip['color'] as Color, size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      chip['text'] as String,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: chip['color'] as Color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        if (locationChip != null) ...[
-          const SizedBox(height: 10),
-          locationChip,
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSingleChip({
-    required IconData icon,
-    required String text,
-    required Color color,
-    required Color bgColor,
-    required Color borderColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const ClampingScrollPhysics(),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 15),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
+        children: chips.map((chip) {
+          return Container(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: chip['bgColor'] as Color,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: chip['borderColor'] as Color),
             ),
-          ),
-        ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(chip['icon'] as IconData, color: chip['color'] as Color, size: 15),
+                const SizedBox(width: 6),
+                Text(
+                  chip['text'] as String,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: chip['color'] as Color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }

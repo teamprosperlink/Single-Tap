@@ -32,6 +32,13 @@ class NetworkingWidgets {
               ),
             )
           : null,
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(0.5),
+        child: Container(
+          height: 0.5,
+          color: Colors.white,
+        ),
+      ),
       flexibleSpace: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -41,9 +48,6 @@ class NetworkingWidgets {
               Color.fromRGBO(40, 40, 40, 1),
               Color.fromRGBO(64, 64, 64, 1),
             ],
-          ),
-          border: Border(
-            bottom: BorderSide(color: Colors.white, width: 0.5),
           ),
         ),
       ),

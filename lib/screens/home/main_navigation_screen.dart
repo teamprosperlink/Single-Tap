@@ -1124,7 +1124,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
+                            color: const Color(0xFF3B82F6),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.2),
@@ -1133,7 +1133,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           ),
                           child: Text(
                             networkingCategory,
-                            style: const TextStyle(fontFamily: 'Poppins', 
+                            style: const TextStyle(fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1159,7 +1159,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
+                            color: const Color(0xFF3B82F6),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.2),
@@ -1168,7 +1168,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           ),
                           child: Text(
                             timeAgo,
-                            style: const TextStyle(fontFamily: 'Poppins', 
+                            style: const TextStyle(fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,

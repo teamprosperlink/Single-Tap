@@ -263,7 +263,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 Positioned(
                   top: 6,
                   left: 6,
-                  child: NetworkingWidgets.glassBadge(requestType),
+                  child: NetworkingWidgets.glassBadge(
+                    requestType,
+                    backgroundColor: const Color(0xFF3B82F6),
+                  ),
                 ),
 
               // Top-right: Time ago badge
@@ -271,7 +274,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 Positioned(
                   top: 6,
                   right: 6,
-                  child: NetworkingWidgets.glassBadge(timeAgo),
+                  child: NetworkingWidgets.glassBadge(
+                    timeAgo,
+                    backgroundColor: const Color(0xFF3B82F6),
+                  ),
                 ),
 
               // Glassmorphism info card at bottom (matching Smart tab style)

@@ -441,15 +441,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
         ],
         const SizedBox(height: 6),
 
-        // Distance row
-        if (user.formattedDistance != null)
+        // Location name row
+        if (user.location != null && user.location!.isNotEmpty)
           Row(
             children: [
               const Icon(Icons.location_on, color: Colors.white, size: 16),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
-                  user.formattedDistance!,
+                  user.location!,
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                   style: TextStyle(fontFamily: 'Poppins',
@@ -596,42 +596,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       ),
     );
   }
-
-  // ── Category-specific filter labels (what details each category can have) ──
-  static const Map<String, List<String>> _categoryFilterLabels = {
-    'Professional': [
-      'Experience Level',
-      'Employment Type',
-      'Work Mode',
-      'Industry',
-    ],
-    'Business': [
-      'Business Stage',
-      'Company Size',
-      'Business Model',
-      'Industry Sector',
-    ],
-    'Social': ['Availability', 'Interests', 'Vibe'],
-    'Educational': ['Skill Level', 'Format', 'Subject', 'Language'],
-    'Creative': ['Skill Level', 'Collaboration', 'Portfolio'],
-    'Tech': ['Experience Level', 'Tech Stack', 'Purpose'],
-    'Industry': [
-      'Business Role',
-      'Company Size',
-      'Trade Type',
-      'Certifications',
-    ],
-    'Investment & Finance': [
-      'Experience',
-      'Risk Appetite',
-      'Investment Horizon',
-      'Purpose',
-    ],
-    'Event & Meetup': ['Event Format', 'When', 'Time of Day', 'Price'],
-    'Community': ['Involvement', 'Commitment', 'Cause Area', 'Skills Offered'],
-    'Personal Development': ['Level', 'Format', 'Session Duration', 'Goal'],
-    'Global / NRI': ['Destination', 'Service Type', 'Urgency', 'Language'],
-  };
 
   /// Maps user occupation to the most relevant networking category
   String? _deriveFromOccupation(String? occupation) {
@@ -823,8 +787,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     if (category == null) return [];
 
     final widgets = <Widget>[];
-    final subs = NetworkingConstants.categorySubcategories[category] ?? [];
-
     // Category badge
     widgets.add(_buildNetworkingBadge(category));
     widgets.add(const SizedBox(height: 16));
@@ -839,124 +801,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     if (user.categoryFilters.isNotEmpty) {
       widgets.add(_buildCategoryDetailsCard(category, user.categoryFilters));
       widgets.add(const SizedBox(height: 24));
-    } else {
-      // Show subcategories for this category
-      if (subs.isNotEmpty) {
-        widgets.add(NetworkingWidgets.sectionTitle('$category Subcategories'));
-        widgets.add(const SizedBox(height: 12));
-        widgets.add(_buildSubcategoryChips(category, subs));
-        widgets.add(const SizedBox(height: 16));
-      }
-
-      // Show category attributes
-      final filterLabels = _categoryFilterLabels[category];
-      if (filterLabels != null && filterLabels.isNotEmpty) {
-        widgets.add(_buildCategoryFilterLabelsCard(category, filterLabels));
-        widgets.add(const SizedBox(height: 24));
-      }
     }
 
     return widgets;
-  }
-
-  Widget _buildSubcategoryChips(String category, List<String> subcategories) {
-    return NetworkingWidgets.tagChipWrap(subcategories);
-  }
-
-  Widget _buildCategoryFilterLabelsCard(
-    String category,
-    List<String> filterLabels,
-  ) {
-    final catColors = NetworkingConstants.getCategoryColors(category);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) =>
-                        LinearGradient(colors: catColors).createShader(bounds),
-                    child: const Icon(
-                      Icons.tune_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '$category Attributes',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: filterLabels.map((label) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.circle,
-                          size: 6,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          label,
-                          style: const TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildNetworkingBadge(String category) {

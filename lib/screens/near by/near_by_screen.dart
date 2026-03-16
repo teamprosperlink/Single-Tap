@@ -81,6 +81,8 @@ class NearByScreen extends StatefulWidget {
   static Map<String, List<Map<String, dynamic>>> _cachedPostsByTab = {};
   static double? _cachedLat;
   static double? _cachedLng;
+  static double? get cachedLat => _cachedLat;
+  static double? get cachedLng => _cachedLng;
   static bool _hasEverLoaded = false;
 
   @override
@@ -371,6 +373,61 @@ class _NearByScreenState extends State<NearByScreen>
 
           // Convert all listings to flat card maps
           final allCards = nearbyModel.toFlatCards();
+
+          // Enrich cards with user locations from Firestore for distance calc
+          if (_myLat != null && _myLng != null) {
+            // Collect unique user_ids
+            final userIds = <String>{};
+            for (final card in allCards) {
+              final uid = (card['user_id'] ?? '').toString();
+              if (uid.isNotEmpty) userIds.add(uid);
+            }
+
+            // Batch-fetch user locations (also check api_user_mappings for Firebase UIDs)
+            final userLocations = <String, Map<String, double>>{};
+            for (final uid in userIds) {
+              try {
+                // Try direct user doc first
+                var userDoc = await _firestore.collection('users').doc(uid).get();
+                if (!userDoc.exists) {
+                  // Try api_user_mappings to resolve Firebase UID
+                  final mappingDoc = await _firestore.collection('api_user_mappings').doc(uid).get();
+                  final fbUid = mappingDoc.data()?['firebaseUid']?.toString();
+                  if (fbUid != null && fbUid.isNotEmpty) {
+                    userDoc = await _firestore.collection('users').doc(fbUid).get();
+                  }
+                }
+                if (userDoc.exists) {
+                  final uData = userDoc.data();
+                  final lat = (uData?['latitude'] as num?)?.toDouble();
+                  final lng = (uData?['longitude'] as num?)?.toDouble();
+                  if (lat != null && lng != null) {
+                    userLocations[uid] = {'lat': lat, 'lng': lng};
+                  }
+                }
+              } catch (e) {
+                debugPrint('NearBy: Failed to fetch location for $uid: $e');
+              }
+            }
+
+            // Inject lat/lng and calculated distance into cards
+            for (final card in allCards) {
+              final uid = (card['user_id'] ?? '').toString();
+              final loc = userLocations[uid];
+              if (loc != null) {
+                card['latitude'] = loc['lat'];
+                card['longitude'] = loc['lng'];
+                final dist = _calcDistance(loc['lat'], loc['lng']);
+                if (dist != null && dist > 0) {
+                  card['distance_km'] = dist;
+                  card['distanceText'] = dist < 1
+                      ? '${(dist * 1000).toInt()} m'
+                      : '${dist.toStringAsFixed(1)} km';
+                }
+              }
+            }
+            debugPrint('NearBy: Enriched ${userLocations.length}/${userIds.length} users with locations');
+          }
 
           // Categorize into tabs, deduplicate by listing_id AND
           // collapse near-identical listings from same user
@@ -785,7 +842,7 @@ class _NearByScreenState extends State<NearByScreen>
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
-                child: const Icon(Icons.bookmark_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.bookmark_border_rounded,size: 20),
               ),
             ),
           ),
@@ -942,7 +999,16 @@ class _NearByScreenState extends State<NearByScreen>
     final title = _toTitleCase(rawName);
     final brand = rawBrand.isNotEmpty ? _toTitleCase(rawBrand) : '';
     final feedCategory = (post['feedCategory'] ?? '').toString();
-    final locationStr = (post['location'] ?? '').toString();
+    // Location — try flat string, then target_location
+    String locationStr = (post['location'] ?? '').toString().trim();
+    if (locationStr.isEmpty) {
+      final tgt = post['target_location'];
+      if (tgt is Map) {
+        locationStr = (tgt['canonical_name'] ?? tgt['name'] ?? tgt['city'] ?? '').toString().trim();
+      } else if (tgt is String && tgt.isNotEmpty) {
+        locationStr = tgt.trim();
+      }
+    }
     final rawImgs = post['images'];
     final images = (rawImgs is List) ? rawImgs : <dynamic>[];
     final rawImageUrl = post['imageUrl'];
@@ -981,19 +1047,22 @@ class _NearByScreenState extends State<NearByScreen>
       domainStr = rawDomain;
     }
 
-    final postLat = (post['latitude'] as num?)?.toDouble();
-    final postLng = (post['longitude'] as num?)?.toDouble();
-    final calcDist = _calcDistance(postLat, postLng);
-    final apiDistKm = (post['distance_km'] as num?)?.toDouble();
-    final distance = calcDist ?? apiDistKm;
-    final distanceText = distance != null && distance > 0
-        ? (distance < 1
+    // Distance — use pre-formatted text from toCard(), fallback to GPS calc
+    String distanceText = (post['distanceText'] ?? '').toString();
+    if (distanceText.isEmpty) {
+      final postLat = (post['latitude'] as num?)?.toDouble();
+      final postLng = (post['longitude'] as num?)?.toDouble();
+      final calcDist = _calcDistance(postLat, postLng);
+      final apiDistKm = (post['distance_km'] as num?)?.toDouble();
+      final distance = calcDist ?? apiDistKm;
+      if (distance != null && distance > 0) {
+        distanceText = distance < 1
             ? '${(distance * 1000).toInt()} m'
-            : '${distance.toStringAsFixed(1)} km')
-        : '';
+            : '${distance.toStringAsFixed(1)} km';
+      }
+    }
 
-    // Debug: trace what values the card will actually display
-    debugPrint('CARD_DEBUG[$postId] → title=$title, brand=$brand, priceText=$priceText, rawPrice=${post['price']}, rawBudget=${post['budget']}, location=$locationStr, distText=$distanceText, lat=$postLat, lng=$postLng, domain=$domainStr, imageUrl=$imageUrl');
+    debugPrint('CARD_DEBUG[$postId] → title=$title, distText=$distanceText, distKm=${post['distance_km']}, preFormatted=${post['distanceText']}, location=$locationStr');
 
     return Container(
         height: 200,

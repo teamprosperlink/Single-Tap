@@ -111,6 +111,7 @@ class AppDrawerState extends State<AppDrawer> {
       }
 
       // Sort: pinned first, then by createdAt (newest first)
+      // Null timestamps treated as newest (just created, server hasn't confirmed yet)
       chats.sort((a, b) {
         final aPinned = a['isPinned'] == true;
         final bPinned = b['isPinned'] == true;
@@ -119,8 +120,8 @@ class AppDrawerState extends State<AppDrawer> {
         final aTime = a['createdAt'] as Timestamp?;
         final bTime = b['createdAt'] as Timestamp?;
         if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return 1;
-        if (bTime == null) return -1;
+        if (aTime == null) return -1; // null = newest → show first
+        if (bTime == null) return 1;
         return bTime.compareTo(aTime);
       });
 

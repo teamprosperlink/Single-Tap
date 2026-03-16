@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'near_by_post_detail_screen.dart';
+import 'near_by_screen.dart';
 
 // Floating card animation — same as networking screen
 class _FloatingCard extends StatefulWidget {
@@ -66,6 +68,51 @@ class SavedNearbyScreen extends StatefulWidget {
 class _SavedNearbyScreenState extends State<SavedNearbyScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
+  double? _myLat;
+  double? _myLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserLocation();
+  }
+
+  Future<void> _loadUserLocation() async {
+    // Try cached location from NearByScreen first
+    _myLat = NearByScreen.cachedLat;
+    _myLng = NearByScreen.cachedLng;
+    if (_myLat != null && _myLng != null) return;
+
+    // Fallback: read from user's Firestore profile
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      final data = doc.data();
+      if (data != null) {
+        _myLat = (data['latitude'] as num?)?.toDouble();
+        _myLng = (data['longitude'] as num?)?.toDouble();
+        if (mounted) setState(() {});
+      }
+    } catch (e) {
+      debugPrint('SavedNearby: Failed to load user location: $e');
+    }
+  }
+
+  double? _calcDistance(double? lat2, double? lng2) {
+    if (_myLat == null || _myLng == null || lat2 == null || lng2 == null) {
+      return null;
+    }
+    const r = 6371.0;
+    final dLat = (lat2 - _myLat!) * (pi / 180);
+    final dLng = (lng2 - _myLng!) * (pi / 180);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_myLat! * (pi / 180)) *
+            cos(lat2 * (pi / 180)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
 
   Future<void> _unsavePost(String postId) async {
     final uid = _auth.currentUser?.uid;
@@ -253,9 +300,12 @@ class _SavedNearbyScreenState extends State<SavedNearbyScreen> {
     required String postId,
     required Map<String, dynamic> post,
   }) {
-    final rawModel = (post['model'] ?? '').toString();
-    final rawBrand = (post['brand'] ?? '').toString();
-    final rawTitle = (post['title'] ?? post['originalPrompt'] ?? 'No Title').toString();
+    final rawModel = (post['model'] ?? '').toString().trim();
+    final rawBrand = (post['brand'] ?? '').toString().trim()
+        .replaceAll(RegExp(r'\s*(inc\.?|ltd\.?|corp\.?|co\.?|llc\.?|pvt\.?|private\.?|limited\.?)\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[.,]+$'), '')
+        .trim();
+    final rawTitle = (post['title'] ?? post['subintent'] ?? post['intent'] ?? post['originalPrompt'] ?? 'No Title').toString().trim();
     final title = _toTitleCase(rawModel.isNotEmpty ? rawModel : rawTitle);
     final brand = rawBrand.isNotEmpty ? _toTitleCase(rawBrand) : '';
     final feedCategory = (post['feedCategory'] ?? '').toString();
@@ -294,6 +344,33 @@ class _SavedNearbyScreenState extends State<SavedNearbyScreen> {
       domainStr = rawDomain.first.toString();
     } else if (rawDomain is String && rawDomain.isNotEmpty) {
       domainStr = rawDomain;
+    }
+
+    // Distance — use pre-formatted text from toCard(), fallback to GPS calc
+    String distanceText = (post['distanceText'] ?? '').toString();
+    if (distanceText.isNotEmpty && !distanceText.contains('away')) {
+      distanceText = '$distanceText away';
+    }
+    if (distanceText.isEmpty) {
+      final distKmRaw = post['distance_km'];
+      num? distKm = distKmRaw is num ? distKmRaw : num.tryParse(distKmRaw?.toString() ?? '');
+      if (distKm == null || distKm <= 0) {
+        final rawLoc = post['_raw_location'];
+        double? postLat, postLng;
+        if (rawLoc is Map) {
+          postLat = (rawLoc['lat'] as num?)?.toDouble();
+          postLng = (rawLoc['lng'] as num?)?.toDouble();
+        }
+        postLat ??= (post['latitude'] as num?)?.toDouble();
+        postLng ??= (post['longitude'] as num?)?.toDouble();
+        final calc = _calcDistance(postLat, postLng);
+        if (calc != null && calc > 0) distKm = calc;
+      }
+      if (distKm != null && distKm > 0) {
+        distanceText = distKm < 1
+            ? '${(distKm * 1000).round()} m away'
+            : '${distKm.toStringAsFixed(1)} km away';
+      }
     }
 
     return Container(
@@ -506,6 +583,24 @@ class _SavedNearbyScreenState extends State<SavedNearbyScreen> {
                             fontWeight: FontWeight.w700,
                             height: 1.2,
                           ),
+                        ),
+                      ],
+                      if (distanceText.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(Icons.near_me_rounded, color: Colors.grey[500], size: 10),
+                            const SizedBox(width: 3),
+                            Text(
+                              distanceText,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.grey[500],
+                                fontSize: 9.5,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],

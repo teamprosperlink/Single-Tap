@@ -97,7 +97,7 @@ class NearbyModel {
 class NearbyListing {
   String listingId;
   String userId;
-  int distanceKm;
+  num distanceKm;
   Map<String, dynamic> data; // raw data map — fully dynamic
   DateTime? createdAt;
   List<String> images;
@@ -145,7 +145,7 @@ class NearbyListing {
     return NearbyListing(
       listingId: json['listing_id']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? '',
-      distanceKm: (json['distance_km'] as num?)?.toInt() ?? 0,
+      distanceKm: (json['distance_km'] as num?) ?? 0,
       data: dataMap,
       createdAt: created,
       images: imgs,
@@ -172,7 +172,22 @@ class NearbyListing {
         ? List<String>.from(
             (data['category'] as List).map((x) => x.toString()))
         : <String>[];
-    final location = data['location']?.toString() ?? '';
+    // Extract location name — handle Map or String
+    String location = '';
+    final rawLoc = data['location'];
+    if (rawLoc is Map) {
+      location = (rawLoc['canonical_name'] ?? rawLoc['name'] ?? rawLoc['city'] ?? '').toString().trim();
+    } else if (rawLoc is String && rawLoc.isNotEmpty) {
+      location = rawLoc.trim();
+    }
+    if (location.isEmpty) {
+      final targetLoc = data['target_location'];
+      if (targetLoc is Map) {
+        location = (targetLoc['canonical_name'] ?? targetLoc['name'] ?? targetLoc['city'] ?? '').toString().trim();
+      } else if (targetLoc is String && targetLoc.isNotEmpty) {
+        location = targetLoc.trim();
+      }
+    }
     final reasoning = data['reasoning']?.toString() ?? '';
     final targetsubintent = data['targetsubintent']?.toString() ?? '';
 
@@ -326,15 +341,44 @@ class NearbyListing {
         feedCategory == 'provide';
     final postType = isService ? 'Services' : 'Products';
 
+    // Extract flat lat/lng from location map
+    double? postLat;
+    double? postLng;
+    final locMap = data['location'];
+    if (locMap is Map) {
+      postLat = (locMap['lat'] as num?)?.toDouble();
+      postLng = (locMap['lng'] as num?)?.toDouble();
+    }
+    final tgtLocMap = data['target_location'];
+    if ((postLat == null || postLng == null) && tgtLocMap is Map) {
+      postLat ??= (tgtLocMap['lat'] as num?)?.toDouble();
+      postLng ??= (tgtLocMap['lng'] as num?)?.toDouble();
+    }
+
+    // Pre-format distance text from API value
+    final String distanceText = distanceKm > 0
+        ? (distanceKm < 1
+            ? '${(distanceKm * 1000).round()} m'
+            : '${distanceKm.toStringAsFixed(1)} km')
+        : '';
+
+    debugPrint('TOCARD[$listingId] distanceKm=$distanceKm distanceText=$distanceText lat=$postLat lng=$postLng location=$location');
+
     return {
       'listing_id': listingId,
       'user_id': userId,
       'distance_km': distanceKm,
+      'distanceText': distanceText,
+      'latitude': postLat,
+      'longitude': postLng,
       'title': title,
       'brand': brand,
       'model': model,
       'price': priceStr.isNotEmpty ? num.tryParse(priceStr) ?? priceStr : '',
       'location': location,
+      'target_location': data['target_location'],
+      '_raw_location': data['location'],
+      '_raw_target_location': data['target_location'],
       'domain': domain,
       'category': category,
       'intent': intent,

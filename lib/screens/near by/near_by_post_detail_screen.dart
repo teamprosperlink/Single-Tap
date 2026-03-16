@@ -351,7 +351,25 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
 
   Map<String, dynamic> get post => widget.post;
 
-  String get _title => (post['title'] ?? post['name'] ?? post['originalPrompt'] ?? 'No Title').toString();
+  String get _title {
+    // Prefer model name (e.g., "iphone 14 pro") like the Home screen card
+    final model = (post['model'] ?? '').toString().trim();
+    if (model.isNotEmpty) return model;
+    final name = (post['title'] ?? post['name'] ?? post['originalPrompt'] ?? 'No Title').toString().trim();
+    // Strip brand (raw) prefix and company suffixes
+    final rawBrand = (post['brand'] ?? '').toString().trim();
+    String cleaned = name;
+    if (rawBrand.isNotEmpty && cleaned.toLowerCase().startsWith(rawBrand.toLowerCase())) {
+      cleaned = cleaned.substring(rawBrand.length).trim();
+    }
+    cleaned = cleaned.replaceFirst(RegExp(r'^(inc\.?|ltd\.?|corp\.?|co\.?|llc\.?|pvt\.?)\s*', caseSensitive: false), '').trim();
+    return cleaned.isNotEmpty ? cleaned : name;
+  }
+
+  String get _brand {
+    final raw = (post['brand'] ?? '').toString().trim();
+    return raw.replaceAll(RegExp(r'\s*(inc\.?|ltd\.?|corp\.?|co\.?|llc\.?|pvt\.?)$', caseSensitive: false), '').trim();
+  }
 
   String get _description {
     final reasoning = (post['reasoning'] ?? post['smart_message'] ?? '').toString().trim();
@@ -575,10 +593,28 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
                                   height: 1.25,
                                 ),
                               ),
+                              // Brand Name
+                              if (_brand.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  _brand,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.grey[400],
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
 
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 12),
 
-                              // Price, Category, Location chips
+                              // Price
+                              _buildPriceWidget(),
+
+                              const SizedBox(height: 12),
+
+                              // Category, Type chips
                               _buildInfoChipsRow(),
 
                               const SizedBox(height: 22),
@@ -621,11 +657,7 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                _buildGlassCard(
-                                  child: Column(
-                                    children: _productDetailRows,
-                                  ),
-                                ),
+                                _buildProductDetailsCard(),
                                 const SizedBox(height: 16),
                               ],
 
@@ -692,13 +724,13 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
   // ── Product Details ──
 
   bool get _hasProductDetails {
-    final brand = (post['brand'] ?? '').toString().trim();
+    final brand = _brand;
     final model = (post['model'] ?? '').toString().trim();
     final itemType = (post['item_type'] ?? post['itemType'] ?? '').toString().trim();
     final condition = (post['condition'] ?? '').toString().trim();
     final subintent = (post['subintent'] ?? post['feedCategory'] ?? '').toString().trim();
     final price = post['price'];
-    final location = (post['location'] ?? '').toString().trim();
+    final location = _extractLocationName();
     final domain = post['domain'];
     final domainStr = (domain is List && domain.isNotEmpty) ? domain.first.toString() : (domain is String ? domain : '');
     return brand.isNotEmpty || model.isNotEmpty || itemType.isNotEmpty ||
@@ -706,71 +738,160 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
         price != null || location.isNotEmpty || domainStr.isNotEmpty;
   }
 
-  List<Widget> get _productDetailRows {
-    final rows = <Widget>[];
-    final brand = (post['brand'] ?? '').toString().trim();
+  Widget _buildProductDetailsCard() {
+    final rows = <MapEntry<String, String>>[];
+    final brand = _brand;
     final model = (post['model'] ?? '').toString().trim();
     final itemType = (post['item_type'] ?? post['itemType'] ?? '').toString().trim();
     final condition = (post['condition'] ?? '').toString().trim();
     final subintent = (post['subintent'] ?? post['feedCategory'] ?? '').toString().trim();
     final rawPrice = post['price'];
-    final location = (post['location'] ?? '').toString().trim();
+    final location = _extractLocationName();
+    debugPrint('LOCATION_DEBUG: location="$location", post[location]=${post['location']}, post[target_location]=${post['target_location']}, post[_raw_location]=${post['_raw_location']}, reasoning=${(post['reasoning'] ?? '').toString().substring(0, (post['reasoning'] ?? '').toString().length.clamp(0, 100))}');
     final domain = post['domain'];
     final domainStr = (domain is List && domain.isNotEmpty) ? domain.first.toString() : (domain is String ? domain : '');
     final distText = widget.distanceText.isNotEmpty ? widget.distanceText : _computedDistance;
 
-    if (brand.isNotEmpty) rows.add(_detailRow('Brand', brand));
-    if (model.isNotEmpty) rows.add(_detailRow('Model', model));
-    if (itemType.isNotEmpty) rows.add(_detailRow('Type', _titleCaseStr(itemType)));
-    if (condition.isNotEmpty) rows.add(_detailRow('Condition', _titleCaseStr(condition)));
-    if (subintent.isNotEmpty) rows.add(_detailRow('Listing Type', _titleCaseStr(subintent)));
+    if (brand.isNotEmpty) rows.add(MapEntry('Brand', _titleCaseStr(brand)));
+    if (model.isNotEmpty) rows.add(MapEntry('Model', model));
+    if (itemType.isNotEmpty) rows.add(MapEntry('Type', _titleCaseStr(itemType)));
+    if (condition.isNotEmpty) rows.add(MapEntry('Condition', _titleCaseStr(condition)));
+    if (subintent.isNotEmpty) rows.add(MapEntry('Listing Type', _titleCaseStr(subintent)));
     if (rawPrice != null) {
       final priceNum = (rawPrice is num) ? rawPrice.toDouble() : double.tryParse(rawPrice.toString());
       if (priceNum != null && priceNum > 0) {
         final formatted = priceNum == priceNum.roundToDouble()
             ? '$_currencySymbol${priceNum.toInt()}'
             : '$_currencySymbol${priceNum.toStringAsFixed(2)}';
-        rows.add(_detailRow('Budget', formatted));
+        rows.add(MapEntry('Budget', formatted));
       }
     }
-    if (domainStr.isNotEmpty) rows.add(_detailRow('Domain', _titleCaseStr(domainStr)));
-    if (location.isNotEmpty) rows.add(_detailRow('Location', _titleCaseStr(location)));
-    if (distText.isNotEmpty) rows.add(_detailRow('Distance', distText));
+    if (domainStr.isNotEmpty) rows.add(MapEntry('Domain', _titleCaseStr(domainStr)));
+    if (location.isNotEmpty) rows.add(MapEntry('Location', _titleCaseStr(location)));
+    // Distance: prefer widget.distanceText, then computed, then API distance_km
+    final distFromApi = post['distance_km'];
+    String finalDist = distText;
+    if (finalDist.isEmpty && distFromApi != null && distFromApi is num && distFromApi > 0) {
+      finalDist = distFromApi < 1
+          ? '${(distFromApi * 1000).round()} m away'
+          : '${distFromApi.toStringAsFixed(1)} km away';
+    }
+    if (finalDist.isNotEmpty) rows.add(MapEntry('Distance', finalDist));
 
-    return rows;
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.grey[500],
-                fontSize: 13,
+    return _buildGlassCard(
+      child: Column(
+        children: rows.asMap().entries.map((entry) {
+          final isLast = entry.key == rows.length - 1;
+          final row = entry.value;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      row.key,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Flexible(
+                      child: Text(
+                        row.value,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+              if (!isLast)
+                Divider(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  height: 1,
+                ),
+            ],
+          );
+        }).toList(),
       ),
     );
+  }
+
+  /// Extract a proper location name, filtering out distance strings.
+  String _extractLocationName() {
+    // 1. Check flat location and target_location strings
+    for (final key in ['location', 'target_location']) {
+      final name = _extractNameFromLocationValue(post[key]);
+      debugPrint('LOC_EXTRACT step1 key=$key val=${post[key]} extracted="$name"');
+      if (name.isNotEmpty) return name;
+    }
+    // 2. Check raw location objects passed from toCard()
+    for (final key in ['_raw_location', '_raw_target_location']) {
+      final raw = post[key];
+      final name = _extractNameFromLocationValue(raw);
+      debugPrint('LOC_EXTRACT step2 key=$key type=${raw.runtimeType} val=$raw extracted="$name"');
+      if (name.isNotEmpty) return name;
+    }
+    // 3. Fallback: extract location from reasoning/description text
+    final reasoning = (post['reasoning'] ?? post['smart_message'] ?? post['description'] ?? '').toString();
+    debugPrint('LOC_EXTRACT step3 reasoning_len=${reasoning.length} first100="${reasoning.substring(0, reasoning.length.clamp(0, 100))}"');
+    if (reasoning.isNotEmpty) {
+      for (final pattern in [
+        RegExp(r'(?:mentioned\s+as|specified\s+as|located\s+in|based\s+in|in|from|near|at)\s+([A-Z][a-zA-Z\s,]+?)(?:\.|,\s*(?:so|and|which|that|the)|$)', caseSensitive: true),
+        RegExp(r'location[^:]*?(?:is|was|:)\s*([A-Z][a-zA-Z\s,]+?)(?:\.|,\s*(?:so|and|which|that)|$)', caseSensitive: false),
+      ]) {
+        final locMatch = pattern.firstMatch(reasoning);
+        if (locMatch != null) {
+          final loc = locMatch.group(1)?.trim() ?? '';
+          if (loc.length >= 3 && loc.length <= 80) return loc;
+        }
+      }
+    }
+    return '';
+  }
+
+  String _extractNameFromLocationValue(dynamic raw) {
+    String name = '';
+    if (raw is Map) {
+      for (final k in ['canonical_name', 'name', 'city', 'locality', 'area', 'address', 'display_name']) {
+        final val = raw[k]?.toString().trim() ?? '';
+        if (val.isNotEmpty) {
+          name = val;
+          break;
+        }
+      }
+      // Fallback: first non-null string value (skip metadata keys)
+      if (name.isEmpty) {
+        for (final entry in raw.entries) {
+          final val = entry.value;
+          if (val is String && val.trim().isNotEmpty && entry.key != 'match_mode' && entry.key != 'type') {
+            name = val.trim();
+            break;
+          }
+        }
+      }
+    } else if (raw is String) {
+      name = raw.trim();
+    }
+    // Filter out distance-like strings
+    if (name.isNotEmpty &&
+        !RegExp(r'^\d+(\.\d+)?\s*(km|m|miles?)\b', caseSensitive: false).hasMatch(name) &&
+        !name.toLowerCase().endsWith('away')) {
+      return name;
+    }
+    return '';
   }
 
   String _titleCaseStr(String text) {
@@ -852,39 +973,58 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
     );
   }
 
+  IconData get _categoryIcon {
+    final cat = (post['domain'] is List && (post['domain'] as List).isNotEmpty)
+        ? (post['domain'] as List).first.toString().toLowerCase()
+        : (post['category'] ?? widget.tabCategory).toString().toLowerCase();
+    if (cat.contains('food') || cat.contains('restaurant') || cat.contains('dining')) return Icons.restaurant;
+    if (cat.contains('electr') || cat.contains('tech') || cat.contains('gadget') || cat.contains('phone') || cat.contains('laptop') || cat.contains('computer')) return Icons.devices;
+    if (cat.contains('house') || cat.contains('property') || cat.contains('real estate') || cat.contains('rent') || cat.contains('apartment')) return Icons.home_rounded;
+    if (cat.contains('place') || cat.contains('travel') || cat.contains('tour')) return Icons.place;
+    if (cat.contains('cloth') || cat.contains('fashion') || cat.contains('wear')) return Icons.checkroom;
+    if (cat.contains('vehicle') || cat.contains('car') || cat.contains('bike') || cat.contains('auto')) return Icons.directions_car;
+    if (cat.contains('book') || cat.contains('education') || cat.contains('study')) return Icons.menu_book;
+    if (cat.contains('health') || cat.contains('medical') || cat.contains('fitness')) return Icons.health_and_safety;
+    if (cat.contains('job') || cat.contains('work') || cat.contains('hiring')) return Icons.work;
+    if (cat.contains('service')) return Icons.miscellaneous_services;
+    return Icons.category;
+  }
+
+  String get _categoryLabel {
+    final cat = (post['domain'] is List && (post['domain'] as List).isNotEmpty)
+        ? (post['domain'] as List).first.toString()
+        : (post['category'] ?? widget.tabCategory).toString();
+    if (cat.isNotEmpty) {
+      return cat.split(' ').map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+    }
+    return '';
+  }
+
   Widget _buildNoImagePlaceholder() {
     const double gridHeight = 280.0;
     const double outerRadius = 16.0;
     return Container(
       height: gridHeight,
       decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
         borderRadius: BorderRadius.circular(outerRadius),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.25),
           width: 1.2,
         ),
-        color: Colors.grey[900],
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
       ),
       child: Center(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.image_outlined, size: 56, color: Colors.white.withValues(alpha: 0.18)),
-            const SizedBox(height: 10),
+            Icon(_categoryIcon, size: 64, color: Colors.white24),
+            const SizedBox(height: 8),
             Text(
-              'No Image Available',
-              style: TextStyle(
+              _categoryLabel,
+              style: const TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white.withValues(alpha: 0.3),
+                color: Colors.white24,
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -1118,41 +1258,44 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
     }
   }
 
-  IconData get _currencyIcon {
-    final code = (post['currency'] ?? 'INR').toString();
-    switch (code) {
-      case 'USD': return Icons.attach_money_rounded;
-      case 'EUR': return Icons.euro_rounded;
-      case 'GBP': return Icons.currency_pound_rounded;
-      default: return Icons.currency_rupee_rounded;
+
+  Widget _buildPriceWidget() {
+    final rawPrice = post['price'];
+    if (_isDonation) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.pinkAccent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.pinkAccent.withValues(alpha: 0.25)),
+        ),
+        child: const Text(
+          'Free',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.pinkAccent, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+      );
     }
+    if (rawPrice == null) return const SizedBox.shrink();
+    final formattedPrice = rawPrice is num
+        ? (rawPrice == rawPrice.toInt() ? rawPrice.toInt().toString() : rawPrice.toStringAsFixed(2))
+        : rawPrice.toString();
+    if (formattedPrice.isEmpty || formattedPrice == '0') return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        '$_currencySymbol$formattedPrice',
+        style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+    );
   }
 
   Widget _buildInfoChipsRow() {
     final chips = <Map<String, dynamic>>[];
-    final rawPrice = post['price'];
-    final formattedPrice = rawPrice is num
-        ? (rawPrice == rawPrice.toInt() ? rawPrice.toInt().toString() : rawPrice.toStringAsFixed(2))
-        : rawPrice?.toString() ?? '';
-
-    // Price chip
-    if (_isDonation) {
-      chips.add({
-        'icon': Icons.volunteer_activism_rounded,
-        'text': 'Free',
-        'color': Colors.pinkAccent,
-        'bgColor': Colors.pinkAccent.withValues(alpha: 0.12),
-        'borderColor': Colors.pinkAccent.withValues(alpha: 0.25),
-      });
-    } else if (rawPrice != null && formattedPrice.isNotEmpty && formattedPrice != '0') {
-      chips.add({
-        'icon': _currencyIcon,
-        'text': '$_currencySymbol$formattedPrice',
-        'color': Colors.white,
-        'bgColor': _accent.withValues(alpha: 0.12),
-        'borderColor': _accent.withValues(alpha: 0.25),
-      });
-    }
 
     // Category chip (buy/sell/seek/provide)
     if (_category.isNotEmpty) {
@@ -1186,18 +1329,6 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
       });
     }
 
-    // Brand chip (e.g., Apple, Samsung)
-    final brand = (post['brand'] ?? '').toString().trim();
-    if (brand.isNotEmpty) {
-      chips.add({
-        'icon': Icons.verified_rounded,
-        'text': _titleCaseStr(brand),
-        'color': Colors.amberAccent,
-        'bgColor': Colors.amberAccent.withValues(alpha: 0.12),
-        'borderColor': Colors.amberAccent.withValues(alpha: 0.25),
-      });
-    }
-
     // Condition chip
     final condition = (post['condition'] ?? '').toString().trim();
     if (condition.isNotEmpty) {
@@ -1212,118 +1343,37 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
 
     if (chips.isEmpty) return const SizedBox.shrink();
 
-    // Location chip
-    Widget? locationChip;
-    final isOwnPost = post['userId'] == _auth.currentUser?.uid;
-    if (isOwnPost) {
-      final locationName = (post['location'] ?? '').toString().trim();
-      if (locationName.isNotEmpty) {
-        locationChip = _buildSingleChip(
-          icon: Icons.location_on_outlined,
-          text: locationName,
-          color: _accent,
-          bgColor: Colors.white.withValues(alpha: 0.07),
-          borderColor: Colors.white.withValues(alpha: 0.12),
-        );
-      }
-    } else {
-      // Show location name + distance for other users
-      final locationName = (post['location'] ?? '').toString().trim();
-      final distText = widget.distanceText.isNotEmpty ? widget.distanceText : _computedDistance;
-      final distFromApi = post['distance_km'];
-      final distParts = <String>[
-        if (locationName.isNotEmpty) locationName,
-        if (distText.isNotEmpty) distText
-        else if (distFromApi != null && distFromApi is num && distFromApi > 0)
-          '${distFromApi.toStringAsFixed(1)} km',
-      ];
-      if (distParts.isNotEmpty) {
-        locationChip = _buildSingleChip(
-          icon: locationName.isNotEmpty ? Icons.location_on_outlined : Icons.near_me_rounded,
-          text: distParts.join(' \u2022 '),
-          color: _accent,
-          bgColor: Colors.white.withValues(alpha: 0.07),
-          borderColor: Colors.white.withValues(alpha: 0.12),
-        );
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
-          child: Row(
-            children: chips.map((chip) {
-              return Container(
-                margin: const EdgeInsets.only(right: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: chip['bgColor'] as Color,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: chip['borderColor'] as Color),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(chip['icon'] as IconData, color: chip['color'] as Color, size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      chip['text'] as String,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: chip['color'] as Color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        if (locationChip != null) ...[
-          const SizedBox(height: 10),
-          locationChip,
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSingleChip({
-    required IconData icon,
-    required String text,
-    required Color color,
-    required Color bgColor,
-    required Color borderColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const ClampingScrollPhysics(),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 15),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
+        children: chips.map((chip) {
+          return Container(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: chip['bgColor'] as Color,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: chip['borderColor'] as Color),
             ),
-          ),
-        ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(chip['icon'] as IconData, color: chip['color'] as Color, size: 15),
+                const SizedBox(width: 6),
+                Text(
+                  chip['text'] as String,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: chip['color'] as Color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }

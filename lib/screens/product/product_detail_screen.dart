@@ -159,7 +159,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       : (widget.item['userPhoto'] as String?)?.trim() ?? '';
 
 
-  String get _name => widget.item['name'] as String? ?? '';
+  String get _name {
+    // Prefer model name (e.g., "iphone 17") like the Home screen card does
+    final model = (widget.item['model'] as String?)?.trim() ?? '';
+    if (model.isNotEmpty) return model;
+    final name = (widget.item['name'] as String?)?.trim() ?? '';
+    // Strip brand prefix if brand is shown separately below
+    final brand = (widget.item['brand'] as String?)?.trim() ?? '';
+    if (brand.isNotEmpty && name.toLowerCase().startsWith(brand.toLowerCase())) {
+      final stripped = name.substring(brand.length).trim();
+      if (stripped.isNotEmpty) return stripped;
+    }
+    return name;
+  }
   bool get _hasPrice {
     final p = widget.item['price'] as String? ?? '';
     return p.isNotEmpty;
@@ -361,21 +373,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ],
                       ),
                     ),
-                    GestureDetector(
-                      onTap: _toggleSavePost,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                          color: _isSaved ? Colors.white : Colors.white70,
-                          size: 20,
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: GestureDetector(
+                        onTap: _toggleSavePost,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            color: _isSaved ? Colors.white : Colors.white70,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -412,6 +428,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 height: 1.2,
                               ),
                             ),
+                            // Brand Name
+                            if (_brand.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                _brand,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.grey[400],
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                             // Price Row
                             if (_hasPrice) ...[
                               const SizedBox(height: 16),

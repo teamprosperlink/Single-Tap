@@ -3457,12 +3457,15 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                 child: imageWidget,
               ),
 
-              // Networking category badge at top-left (auto-sizes with text)
+              // Networking category badge at top-right (auto-sizes with text)
               if (networkingCategory != null && networkingCategory.isNotEmpty)
                 Positioned(
                   top: 6,
-                  left: 6,
-                  child: NetworkingWidgets.glassBadge(networkingCategory),
+                  right: 6,
+                  child: NetworkingWidgets.glassBadge(
+                    networkingCategory,
+                    backgroundColor: const Color(0xFF3B82F6),
+                  ),
                 ),
 
               // Glassmorphism info card at bottom
