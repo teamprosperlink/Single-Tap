@@ -37,7 +37,7 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
 
   final List<File> _selectedImages = [];
   bool _isLoading = false;
-  bool _postCreated = false; // Prevents duplicate posts after success
+  final bool _postCreated = false; // Prevents duplicate posts after success
   String _loadingStage = '';
 
   // Pre-fetched location (starts in initState to avoid lag on submit)
@@ -235,14 +235,6 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
 
   // ── Submit ──
 
-  void _goBack() {
-    if (widget.onBack != null) {
-      widget.onBack!();
-    } else {
-      Navigator.of(context).maybePop();
-    }
-  }
-
   Future<void> _submitPost() async {
     // ── Guard: prevent duplicate submissions ──
     if (_isLoading || _postCreated) return;
@@ -274,9 +266,6 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
       if (mounted) _showSnackBar('Selected images are no longer available. Please re-select.', isError: true);
       return;
     }
-
-    final priceText = _priceController.text.trim();
-    final double? price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
 
     setState(() {
       _isLoading = true;
@@ -313,7 +302,6 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
 
       final results = await Future.wait([encodingFuture, _locationFuture!]);
       final base64Images = results[0] as List<String>;
-      final locData = results[1] as Map<String, dynamic>;
 
       if (base64Images.isEmpty) {
         if (mounted) {
@@ -328,13 +316,6 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
         _showSnackBar('${bytesList.length - base64Images.length} large image(s) skipped', isError: false);
       }
 
-      final double lat = locData['lat'] as double;
-      final double lng = locData['lng'] as double;
-      final String locationName = locData['locationName'] as String;
-      final Map<String, dynamic> userData = locData['userData'] as Map<String, dynamic>;
-
-      final autoTitle = description.length > 30 ? '${description.substring(0, 27)}...' : description;
-
       // TODO: ProductApiService removed — post creation stubbed
       debugPrint('CreatePost: ProductApiService removed, skipping API call');
       if (mounted) {
@@ -347,80 +328,6 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
       if (mounted) _showSnackBar('Error: ${e.toString().length > 100 ? '${e.toString().substring(0, 100)}...' : e}', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  /// Save post to Firestore — always uses listingId as doc ID to prevent duplicates
-  Future<void> _savePostToFirestore({
-    required User currentUser,
-    required Map<String, dynamic> userData,
-    required Map<String, dynamic> result,
-    required String title,
-    required String description,
-    required String location,
-    required double lat,
-    required double lng,
-    double? price,
-  }) async {
-    try {
-      final listingId = result['listingId'] as String? ?? '';
-
-      // Safely extract images from API response
-      List<String> apiImages = [];
-      try {
-        final apiData = result['data'];
-        if (apiData != null && apiData.images is List) {
-          apiImages = List<String>.from(
-            (apiData.images as List).where((e) => e != null && e.toString().isNotEmpty).map((e) => e.toString()),
-          );
-        }
-      } catch (e) {
-        debugPrint('CreatePost: failed to extract images from API response: $e');
-      }
-
-      debugPrint('CreatePost: saving to Firestore, listingId=$listingId, images=${apiImages.length}');
-
-      final postDoc = {
-        'userId': currentUser.uid,
-        'userName': userData['name'] ?? userData['displayName'] ?? '',
-        'userPhoto': userData['photoUrl'] ?? userData['photoURL'] ?? '',
-        'title': title,
-        'description': description,
-        'originalPrompt': title,
-        'location': location,
-        'latitude': lat,
-        'longitude': lng,
-        'images': apiImages,
-        'imageUrl': apiImages.isNotEmpty ? apiImages.first : '',
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(
-          DateTime.now().add(const Duration(days: 30)),
-        ),
-        if (price != null) 'price': price,
-        if (listingId.isNotEmpty) 'listingId': listingId,
-        'source': 'api_listing',
-      };
-
-      // Use listingId as document ID to prevent duplicates
-      // .set() will overwrite if same listingId is used again = no duplicate
-      if (listingId.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('posts')
-            .doc(listingId)
-            .set(postDoc);
-      } else {
-        // Fallback: use userId + timestamp to create unique but deterministic ID
-        final docId = '${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}';
-        await FirebaseFirestore.instance
-            .collection('posts')
-            .doc(docId)
-            .set(postDoc);
-      }
-      debugPrint('CreatePost: saved to Firestore successfully');
-    } catch (e) {
-      debugPrint('CreatePost: Firestore save failed: $e');
-      // Don't block — API post was already created successfully
     }
   }
 

@@ -85,23 +85,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
   }
 
-  Future<void> _markAllAsRead() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-
-    final batch = _firestore.batch();
-    final unread = await _firestore
-        .collection('notifications')
-        .where('userId', isEqualTo: uid)
-        .where('read', isEqualTo: false)
-        .get();
-
-    for (final doc in unread.docs) {
-      batch.update(doc.reference, {'read': true});
-    }
-    await batch.commit();
-  }
-
   @override
   Widget build(BuildContext context) {
     final uid = _auth.currentUser?.uid;

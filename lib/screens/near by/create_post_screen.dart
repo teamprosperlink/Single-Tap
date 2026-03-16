@@ -30,7 +30,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   final List<File> _selectedImages = [];
   bool _isLoading = false;
-  bool _postCreated = false;
+  final bool _postCreated = false;
   String _loadingStage = '';
 
   bool get _isFormValid =>
@@ -204,17 +204,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
       // Detect location via IpLocationService
       if (mounted) setState(() => _loadingStage = 'Detecting location...');
-      double lat = 0;
-      double lng = 0;
-      String locationName = '';
-
       try {
-        final locResult = await IpLocationService.detectLocation();
-        if (locResult != null) {
-          lat = (locResult['lat'] as num?)?.toDouble() ?? 0;
-          lng = (locResult['lng'] as num?)?.toDouble() ?? 0;
-          locationName = (locResult['displayAddress'] as String?) ?? '';
-        }
+        await IpLocationService.detectLocation();
       } catch (e) {
         debugPrint('CreatePost: location error: $e');
       }
@@ -227,10 +218,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         _showSnackBar('Failed to process images. Please try again.', isError: true);
         return;
       }
-
-      // Build query from description
-      final desc = _descriptionController.text.trim();
-      final autoTitle = desc.length > 30 ? '${desc.substring(0, 27)}...' : desc;
 
       // TODO: ProductApiService removed — post creation not available
       if (mounted) {

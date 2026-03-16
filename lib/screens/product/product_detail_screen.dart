@@ -368,7 +368,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         alignment: Alignment.center,
@@ -1684,79 +1684,4 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
-  void _showShareSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color.fromRGBO(30, 30, 30, 1),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[700],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Share via',
-                style: TextStyle(fontFamily: 'Poppins', 
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildShareOption(Icons.message, 'Single Tap', Colors.green),
-                  _buildShareOption(Icons.telegram, 'Telegram', Colors.blue),
-                  _buildShareOption(Icons.copy, 'Copy Link', Colors.grey),
-                  _buildShareOption(Icons.more_horiz, 'More', Colors.purple),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildShareOption(IconData icon, String label, Color color) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sharing via $label...'),
-            backgroundColor: Colors.grey[800],
-          ),
-        );
-      },
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12)),
-        ],
-      ),
-    );
-  }
 }

@@ -6,7 +6,6 @@ import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/account_type_service.dart';
-import '../../../services/unified_post_service.dart';
 import '../../../services/booking_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
 import 'business_info_edit.dart';
