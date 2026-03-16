@@ -13,7 +13,7 @@ class ChooseAccountTypeScreen extends StatefulWidget {
 class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
   int selectedIndex = -1;
 
-  final List<String> accountTypes = ["Personal Account"];
+  final List<String> accountTypes = ["Personal Account", "Business Account"];
 
   void _onCardTap(int index) {
     setState(() {

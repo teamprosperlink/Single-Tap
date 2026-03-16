@@ -541,7 +541,7 @@ class _LoginScreenState extends State<LoginScreen>
       // Fallback: try to navigate to main screen anyway
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+          MaterialPageRoute(builder: (_) => MainNavigationScreen(loginAccountType: _currentAccountType)),
           (route) => false,
         );
       }
