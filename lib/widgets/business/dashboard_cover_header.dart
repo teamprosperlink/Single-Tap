@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:single_tap/models/business_model.dart';
-import 'package:single_tap/res/config/app_colors.dart';
+import 'package:supper/models/business_model.dart';
+import 'package:supper/res/config/app_colors.dart';
 
 /// Dashboard cover image header widget (LinkedIn-style)
 /// Displays business cover image with logo, name, and category badge
