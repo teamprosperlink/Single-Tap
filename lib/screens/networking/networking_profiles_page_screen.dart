@@ -21,30 +21,11 @@ class _NetworkingProfilesPageScreenState
     extends State<NetworkingProfilesPageScreen> {
   List<Map<String, dynamic>> _profiles = [];
   bool _isLoading = true;
-  double? _myLat;
-  double? _myLng;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentUserLocation();
     _loadProfiles();
-  }
-
-  Future<void> _loadCurrentUserLocation() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-      if (doc.exists && doc.data() != null) {
-        _myLat = (doc.data()!['latitude'] as num?)?.toDouble();
-        _myLng = (doc.data()!['longitude'] as num?)?.toDouble();
-        if (mounted) setState(() {});
-      }
-    } catch (_) {}
   }
 
   Future<void> _loadProfiles() async {
@@ -56,19 +37,21 @@ class _NetworkingProfilesPageScreenState
     try {
       List<Map<String, dynamic>> profiles = [];
 
-      // Query subcollection for all profiles (no orderBy to avoid index issues)
+      // Query subcollection for all profiles (limited to prevent unbounded reads)
       final snapshot = await FirebaseFirestore.instance
           .collection('networking_profiles')
           .doc(uid)
           .collection('profiles')
+          .limit(50)
           .get();
 
       if (snapshot.docs.isNotEmpty) {
         final seenIds = <String>{};
         for (final doc in snapshot.docs) {
-          // Deduplicate by doc.id
           if (!seenIds.add(doc.id)) continue;
-          profiles.add(doc.data());
+          final data = Map<String, dynamic>.from(doc.data());
+          data['_subDocId'] = doc.id;
+          profiles.add(data);
         }
       } else {
         // Migration: if subcollection is empty, check top-level doc
@@ -76,11 +59,12 @@ class _NetworkingProfilesPageScreenState
             .collection('networking_profiles')
             .doc(uid)
             .get();
-        if (topDoc.exists && topDoc.data() != null) {
-          profiles.add(topDoc.data()!);
+        final topData = topDoc.data();
+        if (topDoc.exists && topData != null) {
+          profiles.add(topData);
           // Copy to subcollection (non-fatal if fails)
           try {
-            final data = Map<String, dynamic>.from(topDoc.data()!);
+            final data = Map<String, dynamic>.from(topData);
             data['createdAt'] = FieldValue.serverTimestamp();
             await FirebaseFirestore.instance
                 .collection('networking_profiles')
@@ -309,9 +293,12 @@ class _NetworkingProfilesPageScreenState
     try {
       // Copy selected profile to top-level active doc with discovery enabled
       final activeData = Map<String, dynamic>.from(profileData);
+      final subDocId = activeData.remove('_subDocId') as String?;
       activeData['discoveryModeEnabled'] = true;
       // Remove subcollection createdAt to avoid conflict
       activeData.remove('createdAt');
+      // Store which subcollection doc is active so edit screen can sync back
+      if (subDocId != null) activeData['_activeSubDocId'] = subDocId;
 
       await FirebaseFirestore.instance
           .collection('networking_profiles')
@@ -326,13 +313,7 @@ class _NetworkingProfilesPageScreenState
     } catch (e) {
       debugPrint('Error switching profile: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to switch profile. Try again.', style: TextStyle(fontFamily: 'Poppins')),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        NetworkingHelpers.showErrorSnackBar(context, 'Failed to switch profile. Try again.');
       }
     }
   }
@@ -407,28 +388,24 @@ class _NetworkingProfilesPageScreenState
     if (uid == null) return;
 
     try {
-      // Find and delete the matching doc from subcollection
-      final snapshot = await FirebaseFirestore.instance
-          .collection('networking_profiles')
-          .doc(uid)
-          .collection('profiles')
-          .get();
-
-      for (final doc in snapshot.docs) {
-        final docData = doc.data();
-        if (docData['name'] == data['name'] &&
-            docData['networkingCategory'] == data['networkingCategory']) {
-          await doc.reference.delete();
-          break;
-        }
+      // Delete by exact document ID (safe and precise)
+      final subDocId = data['_subDocId'] as String?;
+      if (subDocId != null) {
+        await FirebaseFirestore.instance
+            .collection('networking_profiles')
+            .doc(uid)
+            .collection('profiles')
+            .doc(subDocId)
+            .delete();
       }
       if (!mounted) return;
 
-      // Check remaining profiles in subcollection
+      // Check if any profiles remain (limit 1 is sufficient)
       final remaining = await FirebaseFirestore.instance
           .collection('networking_profiles')
           .doc(uid)
           .collection('profiles')
+          .limit(1)
           .get();
 
       if (remaining.docs.isEmpty) {
@@ -451,20 +428,11 @@ class _NetworkingProfilesPageScreenState
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              remaining.docs.isEmpty
-                  ? 'Networking profile deleted'
-                  : 'Profile deleted. Switched to ${remaining.docs.first.data()['name'] ?? 'next profile'}.',
-              style: const TextStyle(fontFamily: 'Poppins'),
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 2),
-          ),
+        NetworkingHelpers.showSuccessSnackBar(
+          context,
+          remaining.docs.isEmpty
+              ? 'Networking profile deleted'
+              : 'Profile deleted. Switched to ${remaining.docs.first.data()['name'] ?? 'next profile'}.',
         );
 
         if (remaining.docs.isEmpty) {
@@ -478,13 +446,7 @@ class _NetworkingProfilesPageScreenState
     } catch (e) {
       debugPrint('Error deleting profile: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to delete profile. Try again.', style: TextStyle(fontFamily: 'Poppins')),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        NetworkingHelpers.showErrorSnackBar(context, 'Failed to delete profile. Try again.');
       }
     }
   }
@@ -558,7 +520,6 @@ class _NetworkingProfilesPageScreenState
     final gender = data['gender'] as String?;
     final discoveryEnabled = data['discoveryModeEnabled'] == true;
     final interests = (data['interests'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
-    final createdFrom = data['createdFrom'] as String?;
     final createdAt = data['createdAt'];
     String? createdDateStr;
     if (createdAt != null) {
@@ -572,7 +533,8 @@ class _NetworkingProfilesPageScreenState
         createdDateStr = DateFormat('dd MMM yyyy, hh:mm a').format(dt);
       }
     }
-    final distanceKm = _getDistanceKm(data);
+    final rawCity = data['city'] as String? ?? data['location'] as String? ?? '';
+    final city = rawCity.toLowerCase().contains('mountain view') ? '' : rawCity;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -675,17 +637,11 @@ class _NetworkingProfilesPageScreenState
                           const SizedBox(height: 4),
                           Text(
                             name,
-                            style: TextStyle(fontFamily: 'Poppins',
+                            style: const TextStyle(fontFamily: 'Poppins',
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
+                              letterSpacing: -0.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -699,17 +655,11 @@ class _NetworkingProfilesPageScreenState
                                   Flexible(
                                     child: Text(
                                       occupation,
-                                      style: TextStyle(fontFamily: 'Poppins', 
+                                      style: const TextStyle(fontFamily: 'Poppins',
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                        shadows: [
-                                          Shadow(
-                                            color: Colors.black.withValues(alpha: 0.4),
-                                            blurRadius: 3,
-                                            offset: const Offset(0, 1),
-                                          ),
-                                        ],
+                                        color: Colors.white70,
+                                        letterSpacing: -0.1,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -722,7 +672,7 @@ class _NetworkingProfilesPageScreenState
                                       height: 3,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: Colors.white.withValues(alpha: 0.4),
+                                        color: Colors.white.withValues(alpha: 0.5),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -732,7 +682,7 @@ class _NetworkingProfilesPageScreenState
                                   Icon(
                                     Icons.access_time_rounded,
                                     size: 11,
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                    color: Colors.white.withValues(alpha: 0.6),
                                   ),
                                   const SizedBox(width: 4),
                                   Flexible(
@@ -742,8 +692,9 @@ class _NetworkingProfilesPageScreenState
                                       maxLines: 1,
                                       style: TextStyle(fontFamily: 'Poppins',
                                         fontSize: 10,
-                                        fontWeight: FontWeight.w400,
-                                        color: Colors.white.withValues(alpha: 0.5),
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white.withValues(alpha: 0.6),
+                                        letterSpacing: -0.1,
                                       ),
                                     ),
                                   ),
@@ -770,13 +721,8 @@ class _NetworkingProfilesPageScreenState
                       NetworkingWidgets.infoChip('${age.toInt()} yrs', Icons.cake_outlined),
                     if (gender != null && gender.isNotEmpty)
                       NetworkingWidgets.infoChip(gender, Icons.person_outlined),
-                    if (distanceKm != null)
-                      NetworkingWidgets.infoChip(
-                        distanceKm < 1
-                            ? '${(distanceKm * 1000).toInt()} m'
-                            : '${distanceKm.toStringAsFixed(1)} km',
-                        Icons.near_me_outlined,
-                      ),
+                    if (city.isNotEmpty)
+                      NetworkingWidgets.infoChip(city, Icons.location_on_outlined),
                   ],
                 ),
 
@@ -806,16 +752,11 @@ class _NetworkingProfilesPageScreenState
                               subcategory,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
-                              style: TextStyle(fontFamily: 'Poppins',
+                              style: const TextStyle(fontFamily: 'Poppins',
                                 fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.85),
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withValues(alpha: 0.3),
-                                    blurRadius: 2,
-                                  ),
-                                ],
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white70,
+                                letterSpacing: -0.1,
                               ),
                             ),
                           ),
@@ -933,77 +874,9 @@ class _NetworkingProfilesPageScreenState
               ],
             ),
           ),
-          // createdFrom badge at top-right
-          if (createdFrom != null && createdFrom.isNotEmpty)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF007AFF).withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF007AFF).withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _getCreatedFromIcon(createdFrom),
-                      size: 10,
-                      color: Colors.white.withValues(alpha: 0.9),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      createdFrom,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.9),
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
-  }
-
-  IconData _getCreatedFromIcon(String source) {
-    switch (source) {
-      case 'Discover All':
-        return Icons.explore_outlined;
-      case 'Smart':
-        return Icons.auto_awesome_outlined;
-      case 'My Profiles':
-        return Icons.account_box_outlined;
-      case 'My Profile':
-        return Icons.person_outline_rounded;
-      default:
-        return Icons.add_circle_outline_rounded;
-    }
-  }
-
-  double? _getDistanceKm(Map<String, dynamic> data) {
-    if (_myLat == null || _myLng == null) return null;
-    final lat = (data['latitude'] as num?)?.toDouble();
-    final lng = (data['longitude'] as num?)?.toDouble();
-    if (lat == null || lng == null) return null;
-    return NetworkingHelpers.calcDistance(_myLat!, _myLng!, lat, lng);
   }
 
 }

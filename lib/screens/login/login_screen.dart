@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,15 +6,17 @@ import '../../services/auth_service.dart' show AuthService;
 import '../../services/professional_service.dart';
 import '../../services/business_service.dart';
 import '../../res/config/app_colors.dart';
+import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/common widgets/country_code_picker_sheet.dart';
 import '../../widgets/common widgets/device_login_dialog.dart';
 import '../home/main_navigation_screen.dart';
 import '../professional/professional_setup_screen.dart';
 import '../business/business_setup_screen.dart';
 import 'forgot_password_screen.dart';
+import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.accountType});
+  const LoginScreen({super.key, this.accountType = 'Personal Account'});
 
   final String accountType;
 
@@ -28,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _formKey = GlobalKey<FormState>();
   final _emailOrPhoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _signupPhoneController = TextEditingController();
   final AuthService _authService = AuthService();
 
   bool _isLoading = false;
@@ -46,6 +48,12 @@ class _LoginScreenState extends State<LoginScreen>
 
   // Store user ID for device logout
   String? _pendingUserId;
+
+  // Account type tab (0 = Personal, 1 = Business)
+  int _selectedTabIndex = 0;
+
+  String get _currentAccountType =>
+      _selectedTabIndex == 0 ? 'Personal Account' : 'Business Account';
 
   // Country code data
   String _selectedCountryCode = '+91';
@@ -130,6 +138,7 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _emailOrPhoneController.dispose();
     _passwordController.dispose();
+    _signupPhoneController.dispose();
     _otpController.dispose();
     for (var controller in _otpBoxControllers) {
       controller.dispose();
@@ -158,6 +167,7 @@ class _LoginScreenState extends State<LoginScreen>
         _savedLoginPassword = _passwordController.text;
         _emailOrPhoneController.clear();
         _passwordController.clear();
+        _signupPhoneController.clear();
         _acceptTerms = false;
       } else if (wasSignUpMode && !_isSignUpMode) {
         // SignUp -> Login: Restore saved login data
@@ -226,35 +236,27 @@ class _LoginScreenState extends State<LoginScreen>
 
     final fullPhoneNumber = '$_selectedCountryCode$phone';
 
-    // Show loader on Send OTP button first
     setState(() {
       _isLoading = true;
     });
     HapticFeedback.lightImpact();
 
-    // NOTE: Pre-login session check removed - it can cause false positives
-    // when user has logged out but Firestore still has stale token.
-    // The reliable check happens AFTER Firebase auth in verifyPhoneOTP()
-    // using UID-based check which compares local token with server token.
-
-    // Send OTP in background
     _authService.sendPhoneOTP(
       phoneNumber: fullPhoneNumber,
       onCodeSent: (verificationId) {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _isOtpSent = true; // Now switch to OTP screen
             _verificationId = verificationId;
           });
-          _showSuccessSnackBar('OTP sent to $fullPhoneNumber');
+          // Navigate to OTP verification screen
+          _navigateToOtpScreen(phone, verificationId);
         }
       },
       onError: (error) {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _isOtpSent = false;
           });
           HapticFeedback.heavyImpact();
           _showErrorSnackBar(error);
@@ -276,6 +278,32 @@ class _LoginScreenState extends State<LoginScreen>
         }
       },
     );
+  }
+
+  Future<void> _navigateToOtpScreen(String phone, String verificationId) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtpVerificationScreen(
+          phoneNumber: phone,
+          countryCode: _selectedCountryCode,
+          verificationId: verificationId,
+          accountType: _currentAccountType,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      if (result['success'] == true) {
+        // OTP verified successfully, navigate to home
+        await _navigateAfterAuth(isNewUser: true);
+      } else if (result['error'] == 'ALREADY_LOGGED_IN') {
+        // Handle device already logged in
+        final deviceName = result['device'] as String? ?? 'Another Device';
+        _pendingUserId = _authService.currentUser?.uid;
+        await _showDeviceLoginDialog(deviceName);
+      }
+    }
   }
 
   Future<void> _verifyPhoneOTP() async {
@@ -371,7 +399,7 @@ class _LoginScreenState extends State<LoginScreen>
     // In SIGNUP mode - always use email+password flow (even for phone numbers as username)
     if (_isPhoneNumber(input) && !_isSignUpMode) {
       // Set pending account type for phone registration
-      _authService.setPendingAccountType(widget.accountType);
+      _authService.setPendingAccountType(_currentAccountType);
       await _sendPhoneOTP();
       return;
     }
@@ -399,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen>
             ? await _authService.signUpWithEmail(
                 input,
                 _passwordController.text,
-                accountType: widget.accountType,
+                accountType: _currentAccountType,
               )
             : await _authService.signInWithEmail(
                 input,
@@ -407,6 +435,15 @@ class _LoginScreenState extends State<LoginScreen>
               );
 
         if (user != null && mounted) {
+          // Save phone number to user profile after signup
+          if (_isSignUpMode && _signupPhoneController.text.trim().isNotEmpty) {
+            final phone = '$_selectedCountryCode${_signupPhoneController.text.trim()}';
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .set({'phone': phone}, SetOptions(merge: true));
+          }
+
           HapticFeedback.lightImpact();
           _showSuccessSnackBar(
             _isSignUpMode ? 'Account created successfully!' : 'Welcome back!',
@@ -469,8 +506,8 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _navigateAfterAuth({bool isNewUser = false}) async {
     if (!mounted) return;
 
-    // Get account type - first check widget.accountType (for new signups), then check stored accountType
-    String accountType = widget.accountType.toLowerCase();
+    // Get account type - first check _currentAccountType (for new signups), then check stored accountType
+    String accountType = _currentAccountType.toLowerCase();
 
     // Also check the stored account type from Firestore for existing users
     try {
@@ -531,7 +568,7 @@ class _LoginScreenState extends State<LoginScreen>
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) =>
-              MainNavigationScreen(loginAccountType: widget.accountType),
+              MainNavigationScreen(loginAccountType: _currentAccountType),
         ),
         (route) => false,
       );
@@ -555,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       final user = await _authService.signInWithGoogle(
-        accountType: widget.accountType,
+        accountType: _currentAccountType,
       );
 
       if (user != null && mounted) {
@@ -751,131 +788,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.greenAccent.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    color: Colors.greenAccent,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-      ),
-    );
+    SnackBarHelper.showSuccess(context, message);
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.redAccent.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: Colors.redAccent,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-      ),
-    );
+    SnackBarHelper.showError(context, message);
   }
 
   void _onOtpBoxChanged(String value, int index) {
@@ -907,128 +824,431 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Gradient Background
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: AppColors.splashGradient,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          _isSignUpMode ? 'Sign Up' : 'Sign In',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+          ),
+        ),
+      ),
+      extendBody: true,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  Center(child: _buildHeader()),
+                  const SizedBox(height: 32),
+                  _buildAccountTabs(),
+                  const SizedBox(height: 6),
+                  _buildForm(),
+                  // Show OTP boxes if phone OTP was sent
+                  if (_isOtpSent) ...[
+                    const SizedBox(height: 16),
+                    _buildOtpSection(),
+                  ],
+                  if (_isSignUpMode && !_isOtpSent) ...[
+                    const SizedBox(height: 16),
+                    _buildRememberMeAndForgot(),
+                  ],
+                  const SizedBox(height: 28),
+                  _buildAuthButton(),
+                  const SizedBox(height: 12),
+                  _buildToggleModeButton(),
+                  const SizedBox(height: 24),
+                  _buildDivider(),
+                  const SizedBox(height: 24),
+                  _buildSocialLogin(),
+                  const SizedBox(height: 32),
+                ],
               ),
             ),
           ),
-
-          // Content
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                        child: Container(
-                          margin: const EdgeInsets.all(24),
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildHeader(),
-                              const SizedBox(height: 32),
-                              _buildForm(),
-                              // Show OTP boxes if phone OTP was sent
-                              if (_isOtpSent) ...[
-                                const SizedBox(height: 16),
-                                _buildOtpSection(),
-                              ],
-                              if (!_isOtpSent) ...[
-                                const SizedBox(height: 4),
-                                _buildRememberMeAndForgot(),
-                              ],
-                              const SizedBox(height: 24),
-                              _buildAuthButton(),
-                              const SizedBox(height: 16),
-                              _buildToggleModeButton(),
-                              const SizedBox(height: 24),
-                              _buildDivider(),
-                              const SizedBox(height: 24),
-                              _buildSocialLogin(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildHeader() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+        const Text(
+          'Welcome to Single Tap',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'You can need, everything in one place',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccountTabs() {
+    final tabs = ['Personal', 'Business'];
+    final descriptions = [
+      'Use personal to explore, connect, and share as an individual user',
+      'Use business to list services, manage clients, and grow your brand',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Tab bar - full width with bottom line
+        Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
                 color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-              child: Icon(
-                _isSignUpMode ? Icons.person_add : Icons.lock_outline,
-                size: 48,
-                color: Colors.white,
+                width: 1,
               ),
             ),
           ),
+          child: Row(
+            children: List.generate(tabs.length, (index) {
+              final isSelected = _selectedTabIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedTabIndex = index;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      tabs[index],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // Description
         Text(
-          'Welcome Back\n${widget.accountType}',
-          textAlign: TextAlign.center,
+          descriptions[_selectedTabIndex],
           style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [
-              Shadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 4),
-            ],
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: Colors.white.withValues(alpha: 0.45),
           ),
         ),
       ],
     );
   }
 
+  // Reusable field input decoration
+  InputDecoration _fieldDecoration({
+    required String hintText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(
+        color: Colors.white.withValues(alpha: 0.35),
+        fontSize: 14,
+      ),
+      suffixIcon: suffixIcon,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Colors.white.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Colors.white.withValues(alpha: 0.4),
+          width: 1.2,
+        ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Colors.white.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1),
+      ),
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: 0.15),
+      errorStyle: const TextStyle(
+        height: 0.8,
+        color: Colors.redAccent,
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    );
+  }
+
   Widget _buildForm() {
+    if (_isSignUpMode) {
+      return _buildSignupForm();
+    }
+    return _buildLoginForm();
+  }
+
+  Widget _buildSignupForm() {
     return Form(
       key: _formKey,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Mobile Number field
+          _buildFieldLabel('Mobile Number'),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Country Code Picker - always visible in signup
+              Container(
+                height: 52,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _showCountryCodePicker,
+                    borderRadius: BorderRadius.circular(14),
+                    splashColor: Colors.white.withValues(alpha: 0.2),
+                    highlightColor: Colors.white.withValues(alpha: 0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _selectedCountryCode,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white.withValues(alpha: 0.8),
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Phone input
+              Expanded(
+                child: TextFormField(
+                  controller: _signupPhoneController,
+                  keyboardType: TextInputType.phone,
+                  cursorColor: Colors.white,
+                  textInputAction: TextInputAction.next,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  decoration: _fieldDecoration(hintText: 'Enter phone number'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your phone number';
+                    }
+                    if (!_isPhoneNumber(value)) {
+                      return 'Please enter a valid phone number';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Email address field
+          _buildFieldLabel('Email address'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _emailOrPhoneController,
+            keyboardType: TextInputType.emailAddress,
+            cursorColor: Colors.white,
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+            ),
+            decoration: _fieldDecoration(hintText: 'Enter email address'),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your email address';
+              }
+              final isEmail = RegExp(
+                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+              ).hasMatch(value);
+              if (!isEmail) {
+                return 'Please enter a valid email address';
+              }
+              return null;
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // Password field
+          _buildFieldLabel('Password'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            cursorColor: Colors.white,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _handleAuth(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+            ),
+            decoration: _fieldDecoration(
+              hintText: 'Enter your password',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: Colors.white.withValues(alpha: 0.5),
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your password';
+              }
+              if (value.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // "Email or Mobile" label above field
+          _buildFieldLabel(_startsWithDigit ? 'Phone Number' : 'Email or Mobile'),
+          const SizedBox(height: 8),
+
           // Email or Phone field with country code picker
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1036,11 +1256,11 @@ class _LoginScreenState extends State<LoginScreen>
               // Country Code Picker - only show when input starts with a digit
               if (_startsWithDigit)
                 Container(
-                  height: 56,
+                  height: 52,
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white.withValues(alpha: 0.15),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.3),
                       width: 1,
@@ -1050,7 +1270,7 @@ class _LoginScreenState extends State<LoginScreen>
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: _isOtpSent ? null : _showCountryCodePicker,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       splashColor: Colors.white.withValues(alpha: 0.2),
                       highlightColor: Colors.white.withValues(alpha: 0.1),
                       child: Padding(
@@ -1085,94 +1305,25 @@ class _LoginScreenState extends State<LoginScreen>
                       ? TextInputType.phone
                       : TextInputType.emailAddress,
                   cursorColor: Colors.white,
-                  textInputAction: TextInputAction.next,
-                  enabled: !_isOtpSent, // Disable when OTP is sent
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _handleAuth(),
+                  enabled: !_isOtpSent,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
                   ),
-                  decoration: InputDecoration(
-                    labelText: _startsWithDigit
-                        ? 'Phone Number'
-                        : 'Email or Phone',
-                    labelStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 15,
-                    ),
-                    floatingLabelStyle: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    hintText: _startsWithDigit
-                        ? 'Enter phone number'
-                        : 'Enter email or phone number',
-                    hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 14,
-                    ),
-                    // Hide prefix icon when country code picker is shown to save space
-                    prefixIcon: _startsWithDigit
-                        ? null
-                        : Icon(
-                            Icons.person_outline,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-
-                    // ---- Glassmorphism borders ----
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        width: 1.5,
-                      ),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Colors.red, width: 1),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Colors.red, width: 1),
-                    ),
-
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.12),
-                    errorStyle: const TextStyle(
-                      height: 0.8,
-                      color: Colors.redAccent,
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: _startsWithDigit ? 16 : 20,
-                      vertical: 16,
-                    ),
-                  ),
+                  decoration: _fieldDecoration(hintText: 'Enter your email or mobile'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your email or phone number';
+                      return 'Please enter your email or mobile number';
                     }
-                    // Check if it's a valid email or phone
                     final isEmail = RegExp(
                       r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                     ).hasMatch(value);
                     final isPhone = _isPhoneNumber(value);
                     if (!isEmail && !isPhone) {
-                      return 'Please enter a valid email or phone number';
+                      return 'Please enter a valid email or mobile number';
                     }
                     return null;
                   },
@@ -1181,10 +1332,11 @@ class _LoginScreenState extends State<LoginScreen>
             ],
           ),
 
-          // Password field - show for email login OR signup mode (NOT when OTP sent)
-          // In signup mode, always show password field regardless of input type
-          if (!_isOtpSent && (_isSignUpMode || !_isCurrentInputPhone)) ...[
+          // Password field - always show, hide only when phone number entered
+          if (!_isOtpSent && !_startsWithDigit) ...[
             const SizedBox(height: 16),
+            _buildFieldLabel('Password'),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
@@ -1193,35 +1345,18 @@ class _LoginScreenState extends State<LoginScreen>
               onFieldSubmitted: (_) => _handleAuth(),
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
               ),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                labelStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 15,
-                ),
-                floatingLabelStyle: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+              decoration: _fieldDecoration(
                 hintText: 'Enter your password',
-                hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 15,
-                ),
-                prefixIcon: Icon(
-                  Icons.lock_outline,
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscurePassword
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withValues(alpha: 0.5),
+                    size: 20,
                   ),
                   onPressed: () {
                     setState(() {
@@ -1229,55 +1364,31 @@ class _LoginScreenState extends State<LoginScreen>
                     });
                   },
                 ),
-
-                // ---- Glassmorphism borders ----
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    width: 1.5,
-                  ),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Colors.red, width: 1),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Colors.red, width: 1),
-                ),
-
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.12),
-                errorStyle: const TextStyle(
-                  height: 0.8,
-                  color: Colors.redAccent,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
               ),
               validator: (value) {
-                // Skip password validation for phone login (not signup)
-                if (_isCurrentInputPhone && !_isSignUpMode) {
+                if (_isCurrentInputPhone) {
                   return null;
                 }
                 if (value == null || value.isEmpty) {
                   return 'Please enter your password';
                 }
-                if (_isSignUpMode && value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
                 return null;
               },
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: _isLoading ? null : _forgotPassword,
+                child: const Text(
+                  'Forgot Password?',
+                  style: TextStyle(
+                    color: AppColors.iosBlue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
           ],
         ],
@@ -1358,24 +1469,7 @@ class _LoginScreenState extends State<LoginScreen>
         ],
       );
     }
-
-    // Show only forgot password for login mode
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        TextButton(
-          onPressed: _forgotPassword,
-          child: const Text(
-            'Forgot Password?',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color.fromARGB(255, 240, 237, 237),
-            ),
-          ),
-        ),
-      ],
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildAuthButton() {
@@ -1395,8 +1489,8 @@ class _LoginScreenState extends State<LoginScreen>
       onPressed = _isLoading ? null : _sendPhoneOTP;
       showLoader = _isLoading;
     } else {
-      // Email entered OR Sign Up mode (with email or phone) - show Log In / Sign Up button
-      buttonText = _isSignUpMode ? 'Sign Up' : 'Log In';
+      // Email entered OR Sign Up mode (with email or phone) - show Sign In / Sign Up button
+      buttonText = _isSignUpMode ? 'Sign Up' : 'Sign In';
       onPressed = _isLoading ? null : _handleAuth;
       showLoader = _isLoading;
     }
@@ -1404,135 +1498,156 @@ class _LoginScreenState extends State<LoginScreen>
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       width: double.infinity,
-      height: 56,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: ElevatedButton(
-            onPressed: onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.withValues(alpha: 0.4),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: Colors.blue.withValues(alpha: 0.5),
-                  width: 1,
-                ),
-              ),
-              elevation: 0,
-            ),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: showLoader
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : Text(
-                      buttonText,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-            ),
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: const Color(0xFF2563EB),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: showLoader
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  buttonText,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
         ),
       ),
     );
   }
 
   Widget _buildToggleModeButton() {
-    return TextButton(
-      onPressed: _isLoading ? null : _toggleSignUpMode,
-      child: RichText(
-        text: TextSpan(
-          text: _isSignUpMode
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          _isSignUpMode
               ? 'Already have an account? '
               : "Don't have an account? ",
-          style: const TextStyle(
-            color: Color.fromARGB(255, 238, 237, 237),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 14,
           ),
-          children: [
-            TextSpan(
-              text: _isSignUpMode ? 'Log In' : 'Sign Up',
-              style: const TextStyle(
-                color: Color.fromARGB(214, 106, 183, 255),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ),
-      ),
+        GestureDetector(
+          onTap: _isLoading ? null : _toggleSignUpMode,
+          child: Text(
+            _isSignUpMode ? 'Sign In' : 'Sign Up',
+            style: const TextStyle(
+              color: AppColors.iosBlue,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+        Expanded(
+          child: Divider(
+            color: Colors.white.withValues(alpha: 0.2),
+            thickness: 0.8,
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'OR',
+            'Or',
             style: TextStyle(
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
-        Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+        Expanded(
+          child: Divider(
+            color: Colors.white.withValues(alpha: 0.2),
+            thickness: 0.8,
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildSocialLogin() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : _signInWithGoogle,
-            icon: Image.network(
-              'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-              height: 24,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
-                  Icons.g_mobiledata,
-                  size: 38,
-                  color: Color.fromARGB(255, 230, 226, 226),
-                );
-              },
-            ),
-            label: const Text(
-              'Continue with Google',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Google icon
+        GestureDetector(
+          onTap: _isLoading ? null : _signInWithGoogle,
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.15),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
               ),
             ),
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+            child: Center(
+              child: Text(
+                'G',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
               ),
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-              backgroundColor: Colors.white.withValues(alpha: 0.1),
             ),
           ),
         ),
-      ),
+        const SizedBox(width: 20),
+        // Apple icon
+        GestureDetector(
+          onTap: _isLoading ? null : () {
+            // Apple sign-in placeholder
+          },
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.15),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.apple,
+                size: 28,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

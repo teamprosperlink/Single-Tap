@@ -172,7 +172,7 @@ Navigator.push(
 
 ```dart
 // Add this temporarily to your app for testing
-import 'package:supper/screens/call/video_test_screen.dart';
+import 'package:single_tap/screens/call/video_test_screen.dart';
 
 // Navigate to it from anywhere
 Navigator.push(
@@ -234,7 +234,7 @@ Look for these error indicators:
 ## Common Issues & Solutions
 
 ### Issue 1: "Permissions denied"
-**Solution:** Go to device Settings → Apps → Supper → Permissions → Enable Camera and Microphone
+**Solution:** Go to device Settings → Apps → Single Tap → Permissions → Enable Camera and Microphone
 
 ### Issue 2: "No video tracks in local stream"
 **Solution:** Camera is being used by another app. Close all apps and try again.

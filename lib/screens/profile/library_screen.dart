@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/main_navigation_screen.dart';
 
-/// SingleTap-style Projects / Library screen
+/// Single Tap-style Projects / Library screen
 class LibraryScreen extends StatefulWidget {
   final Function(String chatId)? onLoadChat;
   final Function(String projectId)? onNewChatInProject;
@@ -312,6 +312,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: _createProject,
         backgroundColor: const Color(0xFF016CFF),
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -1138,6 +1139,7 @@ class _ProjectDetailScreenState extends State<_ProjectDetailScreen> {
       ),
       // Floating New Chat button
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _startNewChat(),
         backgroundColor: const Color(0xFF016CFF),
         icon: const Icon(Icons.add_rounded, color: Colors.white),

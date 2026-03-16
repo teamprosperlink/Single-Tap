@@ -13,7 +13,7 @@ Update your chat screen to include a group video call button:
 ```dart
 // In your enhanced_chat_screen.dart or similar file
 
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class EnhancedChatScreen extends StatefulWidget {
@@ -79,7 +79,7 @@ Update your notification handler to support group calls:
 ```dart
 // In your notification_service.dart or main.dart
 
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 class NotificationService {
   // ... existing code
@@ -119,7 +119,7 @@ Add a floating action button or menu option:
 ```dart
 // In your profile_screen.dart or user_detail_screen.dart
 
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 class UserProfileScreen extends StatelessWidget {
   final UserProfile userProfile;
@@ -190,7 +190,7 @@ Start a group call with predefined participants (no selection dialog):
 ```dart
 // In any screen where you want to start a direct group call
 
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 Future<void> startGroupCallWithUsers({
   required BuildContext context,
@@ -237,7 +237,7 @@ Display a banner when there's an active group call:
 ```dart
 // In your home screen or main navigation
 
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -349,7 +349,7 @@ Handle group call notifications via FCM:
 // In your main.dart or notification_handler.dart
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();

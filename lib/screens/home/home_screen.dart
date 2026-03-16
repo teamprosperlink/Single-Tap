@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,14 +7,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import '../../services/universal_intent_service.dart';
+import 'package:shimmer/shimmer.dart';
+import 'api_create_post_screen.dart';
 import '../../models/user_profile.dart';
 import '../chat/enhanced_chat_screen.dart';
-import '../../widgets/other widgets/user_avatar.dart';
-import '../../services/realtime_matching_service.dart';
-import '../../services/profile services/photo_cache_service.dart';
 import '../product/product_detail_screen.dart';
 import '../product/see_all_products_screen.dart';
+import '../../services/product_api_service.dart';
+import '../../services/ip_location_service.dart';
+import '../../services/notification_service.dart';
+import '../../res/utils/snackbar_helper.dart';
+import 'package:geolocator/geolocator.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -29,11 +33,8 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  final UniversalIntentService _intentService = UniversalIntentService();
-  final RealtimeMatchingService _realtimeService = RealtimeMatchingService();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final PhotoCacheService _photoCache = PhotoCacheService();
 
   final TextEditingController _intentController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -43,16 +44,17 @@ class HomeScreenState extends State<HomeScreen>
   bool _isProcessing = false;
 
   final List<String> _suggestions = [];
-  List<Map<String, dynamic>> _matches = [];
   String _currentUserName = '';
   String? _currentUserPhotoUrl;
+  double? _currentUserLat;
+  double? _currentUserLng;
 
   late AnimationController _controller;
   Timer? _timer;
 
   final List<Map<String, dynamic>> _conversation = [];
 
-  // Current chat ID for auto-save (SingleTap style)
+  // Current chat ID for auto-save (Single Tap style)
   String? _currentChatId;
 
   // Current project context (for Library/Projects feature)
@@ -72,19 +74,37 @@ class HomeScreenState extends State<HomeScreen>
   String? _currentlyPlayingKey;
   bool _isTtsSpeaking = false;
 
-  // SingleTap-style action states
+  // Single Tap-style action states
   final Set<String> _likedMessages = {};
   final Set<String> _dislikedMessages = {};
   String _currentSpeechText = '';
 
+  // Saved posts tracking
+  final Set<String> _savedPostIds = {};
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Navigate to create post screen
+  void _navigateToCreatePost([String? initialDescription]) {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (_) => ApiCreatePostScreen(
+        initialDescription: initialDescription,
+        isPopup: true,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadUserIntents();
     _loadUserProfile();
-    _realtimeService.initialize();
     _initSpeech();
     _initTts();
+    _loadSavedPosts();
+    // Clear old cache for fresh results (warmUp already called in main.dart)
+    ProductApiService().resetCache();
 
     _controller = AnimationController(vsync: this);
 
@@ -92,7 +112,7 @@ class HomeScreenState extends State<HomeScreen>
 
     _conversation.add({
       'text':
-          'Hi! I\'m your SingleTap assistant. What would you like to find today?',
+          'Hi! I\'m your Single Tap assistant. What would you like to find today?',
       'isUser': false,
       'timestamp': DateTime.now(),
     });
@@ -156,7 +176,6 @@ class HomeScreenState extends State<HomeScreen>
     _searchFocusNode.removeListener(_onFocusChange);
     _intentController.dispose();
     _searchFocusNode.dispose();
-    _realtimeService.dispose();
     _controller.dispose();
     _timer?.cancel();
     _recordingTimer?.cancel();
@@ -166,7 +185,7 @@ class HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  /// Reset for new chat (SingleTap style - conversation is auto-saved)
+  /// Reset for new chat (Single Tap style - conversation is auto-saved)
   Future<void> saveConversationAndReset() async {
     debugPrint('Starting new chat (previous auto-saved)');
     _resetConversation();
@@ -197,7 +216,6 @@ class HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _conversation.clear();
-        _matches.clear();
         _intentController.clear();
         _currentChatId = chatId;
         _currentProjectId = null; // Clear project context when loading a chat
@@ -205,7 +223,7 @@ class HomeScreenState extends State<HomeScreen>
         // Restore messages
         for (var msg in messages) {
           final text =
-              (msg['text'] as String?)?.replaceAll('Supper', 'SingleTap') ?? '';
+              (msg['text'] as String?)?.replaceAll('Supper', 'Single Tap') ?? '';
           _conversation.add({
             'text': text,
             'isUser': msg['isUser'],
@@ -234,7 +252,6 @@ class HomeScreenState extends State<HomeScreen>
   void _resetConversation() {
     setState(() {
       _conversation.clear();
-      _matches.clear();
       _intentController.clear();
       _currentChatId = null; // Reset chat ID for new conversation
       _currentProjectId = null; // Reset project context
@@ -242,7 +259,7 @@ class HomeScreenState extends State<HomeScreen>
       // Add welcome message
       _conversation.add({
         'text':
-            'Hi! I\'m your SingleTap assistant. What would you like to find today?',
+            'Hi! I\'m your Single Tap assistant. What would you like to find today?',
         'isUser': false,
         'timestamp': DateTime.now(),
       });
@@ -271,34 +288,93 @@ class HomeScreenState extends State<HomeScreen>
   Future<void> _loadUserProfile() async {
     final userId = _auth.currentUser?.uid;
     if (userId != null) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
 
-      if (userDoc.exists && mounted) {
-        setState(() {
-          _currentUserName = userDoc.data()?['name'] ?? 'User';
-          _currentUserPhotoUrl = userDoc.data()?['photoUrl'] as String?;
-        });
+        if (userDoc.exists && mounted) {
+          final data = userDoc.data();
+          final city = (data?['city'] as String? ?? '').toLowerCase();
+          final lat = (data?['latitude'] as num?)?.toDouble();
+          final lng = (data?['longitude'] as num?)?.toDouble();
+          final isMVCoords = (lat != null && lng != null &&
+              (lat - 37.422).abs() < 0.05 && (lng + 122.084).abs() < 0.05);
+          final isStale = city.contains('mountain view') || isMVCoords ||
+              (lat != null && lng != null && lat.abs() < 0.01 && lng.abs() < 0.01);
+          setState(() {
+            _currentUserName = data?['name'] ?? 'User';
+            _currentUserPhotoUrl = data?['photoUrl'] as String?;
+            _currentUserLat = isStale ? null : lat;
+            _currentUserLng = isStale ? null : lng;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading user profile from Firestore: $e');
+        // Continue to GPS/IP fallback below
+      }
+    }
+
+    // Fallback: get device location if Firestore doesn't have it
+    if (_currentUserLat == null || _currentUserLng == null) {
+      // Try GPS first
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.always ||
+            permission == LocationPermission.whileInUse) {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 5),
+            ),
+          );
+          if (mounted) {
+            setState(() {
+              _currentUserLat = pos.latitude;
+              _currentUserLng = pos.longitude;
+            });
+          }
+        }
+      } catch (_) {}
+
+      // If GPS also failed, try IP location
+      if (_currentUserLat == null || _currentUserLng == null) {
+        try {
+          final ipResult = await IpLocationService.detectLocation();
+          if (ipResult != null && mounted) {
+            setState(() {
+              _currentUserLat = (ipResult['lat'] as num?)?.toDouble();
+              _currentUserLng = (ipResult['lng'] as num?)?.toDouble();
+            });
+            debugPrint('HomeScreen: using IP location: $_currentUserLat, $_currentUserLng');
+          }
+        } catch (_) {}
       }
     }
   }
 
-  Future<void> _loadUserIntents() async {
-    final userId = _auth.currentUser?.uid;
-    if (userId != null) {
-      await _intentService.getUserIntents(userId);
-      if (mounted) {
-        setState(() {});
-      }
-    }
+  /// Haversine formula — returns distance in km between two lat/lng points.
+  double _haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371.0; // Earth radius in km
+    final dLat = _degToRad(lat2 - lat1);
+    final dLon = _degToRad(lon2 - lon1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degToRad(lat1)) * math.cos(_degToRad(lat2)) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
+
+  double _degToRad(double deg) => deg * (math.pi / 180);
 
   void _processIntent() async {
-    if (_intentController.text.isEmpty) return;
+    if (_isProcessing) return; // Prevent concurrent operations
 
     final userMessage = _intentController.text.trim();
+    if (_intentController.text.isEmpty) return;
     if (userMessage.isEmpty) return;
 
     setState(() {
@@ -316,104 +392,39 @@ class HomeScreenState extends State<HomeScreen>
 
     _intentController.clear();
 
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (!mounted) return;
-
-    final aiResponse = _generateAIResponse(userMessage);
-
-    setState(() {
-      _conversation.add({
-        'text': aiResponse,
-        'isUser': false,
-        'timestamp': DateTime.now(),
-      });
-
-      final lowerMessage = userMessage.toLowerCase();
-
-      // If food query, add food results to conversation
-      if (_isFoodQuery(lowerMessage)) {
-        final foodResults = _getFoodResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'food_results',
-          'data': foodResults,
-        });
+    try {
+      if (_shouldProcessForMatches(userMessage)) {
+        // Call backend API — adds AI message + product cards to conversation
+        await _processWithIntent(userMessage);
+      } else {
+        // Conversational messages (hi, thanks, etc.) — simple local response
+        final aiResponse = _generateConversationalResponse(userMessage);
+        if (mounted) {
+          setState(() {
+            _conversation.add({
+              'text': aiResponse,
+              'isUser': false,
+              'timestamp': DateTime.now(),
+            });
+          });
+        }
       }
-      // If electric query, add electric results
-      else if (_isElectricQuery(lowerMessage)) {
-        final electricResults = _getElectricResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'electric_results',
-          'data': electricResults,
-        });
-      }
-      // If house query, add house results
-      else if (_isHouseQuery(lowerMessage)) {
-        final houseResults = _getHouseResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'house_results',
-          'data': houseResults,
-        });
-      }
-      // If place query, add place results
-      else if (_isPlaceQuery(lowerMessage)) {
-        final placeResults = _getPlaceResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'place_results',
-          'data': placeResults,
-        });
-      }
-      // If news query, add news results
-      else if (_isNewsQuery(lowerMessage)) {
-        final newsResults = _getNewsResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'news_results',
-          'data': newsResults,
-        });
-      }
-      // If reels query, add reels results
-      else if (_isReelsQuery(lowerMessage)) {
-        final reelsResults = _getReelsResults(userMessage);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'reels_results',
-          'data': reelsResults,
-        });
-      }
-
+    } finally {
       _isProcessing = false;
-    });
+      if (mounted) {
+        setState(() {});
+      }
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
 
-    if (_shouldProcessForMatches(userMessage)) {
-      await _processWithIntent(userMessage);
-    }
-
-    // Auto-save conversation to chat history (SingleTap style)
-    await _autoSaveConversation(userMessage);
+    // Auto-save conversation to chat history (fire-and-forget — don't block UI)
+    _autoSaveConversation(userMessage);
   }
 
-  /// Auto-save conversation after each message (SingleTap style)
+  /// Auto-save conversation after each message (Single Tap style)
   Future<void> _autoSaveConversation(String userMessage) async {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
@@ -498,913 +509,98 @@ class HomeScreenState extends State<HomeScreen>
     }
   }
 
-  String _generateAIResponse(String userMessage) {
-    final message = userMessage.toLowerCase();
+  /// Generate a simple conversational response for non-search messages
+  String _generateConversationalResponse(String userMessage) {
+    final trimmed = userMessage.trim().toLowerCase();
+    final userName = _currentUserName.split(' ')[0];
 
-    if (message.contains('hello') ||
-        message.contains('hi') ||
-        message.contains('hey')) {
-      return 'Hello ${_currentUserName.split(' ')[0]}! How can I help you find what you need today?';
-    } else if (_isFoodQuery(message)) {
-      return 'Great choice! Here are some nearby restaurants serving delicious food:';
-    } else if (_isElectricQuery(message)) {
-      return 'Looking for electronics? Here are some great options for you:';
-    } else if (_isHouseQuery(message)) {
-      return 'Looking for a place to stay? Here are some properties that might interest you:';
-    } else if (_isPlaceQuery(message)) {
-      return 'Planning a trip? Here are some amazing places to visit:';
-    } else if (_isNewsQuery(message)) {
-      return 'Here are the latest news updates for you:';
-    } else if (_isReelsQuery(message)) {
-      return 'Here are some trending reels for you:';
-    } else if (message.contains('bike') || message.contains('cycle')) {
-      return 'Looking for a bike? I can help you find people selling or renting bicycles in your area. What\'s your budget?';
-    } else if (message.contains('book') || message.contains('study')) {
-      return 'Need books? Tell me which subject or specific books you\'re looking for, and I\'ll find students who have them.';
-    } else if (message.contains('job') ||
-        message.contains('work') ||
-        message.contains('hire')) {
-      return 'Job hunting? Let me know what kind of work you\'re looking for or if you\'re hiring, and I\'ll find relevant matches.';
-    } else if (message.contains('sell') || message.contains('buy')) {
-      return 'Looking to buy or sell something? Describe what you need, and I\'ll find the perfect match for you!';
-    } else if (message.contains('thank') || message.contains('thanks')) {
-      return 'You\'re welcome! Let me know if you need help with anything else.';
-    } else if (message.contains('help')) {
-      return 'I can help you find:\n• Electronics & Gadgets\n• Houses & Properties\n• Hill Stations & Places\n• Food & Restaurants\n• Items to buy/sell\n• Part-time jobs\nJust tell me what you need!';
-    } else {
-      return 'I understand you\'re looking for: "$userMessage". Let me find the best matches for you in our community!';
+    if (RegExp(r'^(hi|hello|hey|hii+|helo|namaste|namaskar)\b').hasMatch(trimmed)) {
+      return 'Hey $userName! How can I help you today?';
+    }
+    if (RegExp(r'^(thanks|thank you|thanku|shukriya|dhanyavad)').hasMatch(trimmed)) {
+      return 'You\'re welcome, $userName! Let me know if you need anything else.';
+    }
+    if (RegExp(r'^(bye|goodbye|alvida|see you)').hasMatch(trimmed)) {
+      return 'See you later, $userName! Have a great day!';
+    }
+    if (RegExp(r'^(ok|okay|accha|theek|thik)').hasMatch(trimmed)) {
+      return 'Let me know if you want to search for something!';
+    }
+    if (RegExp(r'^(yes|no|haan|nahi|nah)$').hasMatch(trimmed)) {
+      return 'Got it! Tell me what you\'re looking for and I\'ll find the best matches.';
+    }
+    if (RegExp(r'(help|madad|sahayata)').hasMatch(trimmed)) {
+      return 'I can help you find products, services, jobs, friends and more. Just tell me what you need!';
+    }
+    return 'I\'m here to help! Tell me what you\'re looking for.';
+  }
+
+
+
+
+
+  // ── Saved Posts ──
+  Future<void> _loadSavedPosts() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .limit(200)
+          .get();
+      if (mounted) {
+        setState(() {
+          _savedPostIds.clear();
+          for (final doc in snap.docs) {
+            _savedPostIds.add(doc.id);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading saved posts: $e');
     }
   }
 
-  bool _isFoodQuery(String message) {
-    final foodKeywords = [
-      'food',
-      'eat',
-      'hungry',
-      'restaurant',
-      'hotel',
-      'pizza',
-      'burger',
-      'biryani',
-      'chicken',
-      'paneer',
-      'dal',
-      'rice',
-      'roti',
-      'naan',
-      'dosa',
-      'idli',
-      'samosa',
-      'chaat',
-      'momos',
-      'noodles',
-      'chinese',
-      'italian',
-      'mexican',
-      'thai',
-      'indian',
-      'breakfast',
-      'lunch',
-      'dinner',
-      'snack',
-      'dessert',
-      'ice cream',
-      'cake',
-      'coffee',
-      'tea',
-      'juice',
-      'shake',
-      'thali',
-      'paratha',
-      'chole',
-      'pav bhaji',
-      'vada pav',
-      'sandwich',
-      'wrap',
-      'roll',
-      'fried rice',
-      'manchurian',
-      'curry',
-      'kebab',
-      'tandoori',
-      'masala',
-      'korma',
-      'pulao',
-    ];
-    return foodKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isElectricQuery(String message) {
-    final electricKeywords = [
-      'electric',
-      'electronics',
-      'phone',
-      'mobile',
-      'laptop',
-      'computer',
-      'tv',
-      'television',
-      'fridge',
-      'refrigerator',
-      'ac',
-      'air conditioner',
-      'washing machine',
-      'microwave',
-      'fan',
-      'cooler',
-      'heater',
-      'iron',
-      'mixer',
-      'grinder',
-      'blender',
-      'toaster',
-      'oven',
-      'camera',
-      'speaker',
-      'headphone',
-      'earphone',
-      'charger',
-      'power bank',
-      'tablet',
-      'ipad',
-      'smartwatch',
-      'watch',
-      'gadget',
-      'appliance',
-      'led',
-      'bulb',
-      'light',
-    ];
-    return electricKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isHouseQuery(String message) {
-    final houseKeywords = [
-      'house',
-      'home',
-      'flat',
-      'apartment',
-      'villa',
-      'bungalow',
-      'property',
-      'real estate',
-      'pg',
-      'paying guest',
-      'hostel',
-      '1bhk',
-      '2bhk',
-      '3bhk',
-      '4bhk',
-      'bedroom',
-      'kitchen',
-      'bathroom',
-      'balcony',
-      'terrace',
-      'duplex',
-      'penthouse',
-      'studio',
-      'furnished',
-      'unfurnished',
-      'semi furnished',
-    ];
-    return houseKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isPlaceQuery(String message) {
-    final placeKeywords = [
-      'hill station',
-      'hill',
-      'mountain',
-      'beach',
-      'lake',
-      'waterfall',
-      'temple',
-      'mandir',
-      'church',
-      'mosque',
-      'gurudwara',
-      'monument',
-      'fort',
-      'palace',
-      'museum',
-      'zoo',
-      'park',
-      'garden',
-      'mall',
-      'market',
-      'tourist',
-      'travel',
-      'trip',
-      'vacation',
-      'holiday',
-      'resort',
-      'camping',
-      'trekking',
-      'hiking',
-      'adventure',
-      'shimla',
-      'manali',
-      'goa',
-      'kashmir',
-      'kerala',
-      'rajasthan',
-      'ladakh',
-      'ooty',
-      'darjeeling',
-      'mussoorie',
-      'nainital',
-      'lonavala',
-      'mahabaleshwar',
-      'munnar',
-      'coorg',
-      'rishikesh',
-      'varanasi',
-      'jaipur',
-      'udaipur',
-      'agra',
-      'delhi',
-      'mumbai',
-      'kolkata',
-      'chennai',
-      'bangalore',
-      'hyderabad',
-      'place',
-      'visit',
-      'destination',
-      'sightseeing',
-    ];
-    return placeKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isNewsQuery(String message) {
-    final newsKeywords = [
-      'news',
-      'khabar',
-      'headline',
-      'headlines',
-      'latest',
-      'breaking',
-      'update',
-      'updates',
-      'today',
-      'trending',
-      'viral',
-      'current affairs',
-      'current events',
-      'whats happening',
-      'what\'s happening',
-      'politics',
-      'sports',
-      'cricket',
-      'football',
-      'business',
-      'tech news',
-      'technology news',
-      'entertainment',
-      'bollywood',
-      'hollywood',
-      'weather',
-      'stock market',
-      'election',
-      'world news',
-      'india news',
-      'local news',
-    ];
-    return newsKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  bool _isReelsQuery(String message) {
-    final reelsKeywords = [
-      'reels',
-      'reel',
-      'video',
-      'videos',
-      'shorts',
-      'short video',
-      'funny video',
-      'comedy',
-      'meme',
-      'memes',
-      'entertainment video',
-      'watch video',
-      'show video',
-      'tiktok',
-      'instagram reels',
-      'youtube shorts',
-      'viral video',
-      'trending video',
-      'dance',
-      'music video',
-      'song',
-      'clip',
-      'clips',
-    ];
-    return reelsKeywords.any((keyword) => message.contains(keyword));
-  }
-
-  List<Map<String, dynamic>> _getFoodResults(String query) {
-    // Mock food data - in production, this would come from an API
-    final allFoods = [
-      {
-        'name': 'Butter Chicken',
-        'restaurant': 'Punjab Grill',
-        'rating': 4.5,
-        'price': '₹350',
-        'image':
-            'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=400',
-        'distance': '1.2 km',
-      },
-      {
-        'name': 'Margherita Pizza',
-        'restaurant': 'Pizza Hut',
-        'rating': 4.2,
-        'price': '₹299',
-        'image':
-            'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400',
-        'distance': '0.8 km',
-      },
-      {
-        'name': 'Veg Biryani',
-        'restaurant': 'Biryani House',
-        'rating': 4.3,
-        'price': '₹220',
-        'image':
-            'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400',
-        'distance': '2.1 km',
-      },
-      {
-        'name': 'Masala Dosa',
-        'restaurant': 'South Indian Cafe',
-        'rating': 4.6,
-        'price': '₹120',
-        'image':
-            'https://images.unsplash.com/photo-1668236543090-82eb5eace9f8?w=400',
-        'distance': '0.5 km',
-      },
-      {
-        'name': 'Chicken Momos',
-        'restaurant': 'Momo Junction',
-        'rating': 4.4,
-        'price': '₹150',
-        'image':
-            'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=400',
-        'distance': '1.5 km',
-      },
-      {
-        'name': 'Paneer Tikka',
-        'restaurant': 'Tandoor Nights',
-        'rating': 4.3,
-        'price': '₹280',
-        'image':
-            'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=400',
-        'distance': '1.8 km',
-      },
-      {
-        'name': 'Classic Burger',
-        'restaurant': 'Burger King',
-        'rating': 4.1,
-        'price': '₹199',
-        'image':
-            'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
-        'distance': '0.6 km',
-      },
-      {
-        'name': 'Chole Bhature',
-        'restaurant': 'Delhi Darbar',
-        'rating': 4.5,
-        'price': '₹180',
-        'image':
-            'https://images.unsplash.com/photo-1626132647523-66c4bf1e8e5c?w=400',
-        'distance': '1.0 km',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on query or return all
-    return allFoods.where((food) {
-      final name = (food['name'] as String).toLowerCase();
-      final restaurant = (food['restaurant'] as String).toLowerCase();
-      return name.contains(lowerQuery) ||
-          restaurant.contains(lowerQuery) ||
-          lowerQuery.contains('food') ||
-          lowerQuery.contains('eat') ||
-          lowerQuery.contains('hungry') ||
-          lowerQuery.contains('restaurant');
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> _getElectricResults(String query) {
-    final allElectrics = [
-      {
-        'name': 'iPhone 15 Pro',
-        'brand': 'Apple',
-        'rating': 4.8,
-        'price': '₹1,34,900',
-        'image':
-            'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400',
-        'condition': 'New',
-        'distance': '1.5 km',
-      },
-      {
-        'name': 'MacBook Air M2',
-        'brand': 'Apple',
-        'rating': 4.9,
-        'price': '₹1,14,900',
-        'image':
-            'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400',
-        'condition': 'New',
-        'distance': '2.3 km',
-      },
-      {
-        'name': 'Samsung Smart TV 55"',
-        'brand': 'Samsung',
-        'rating': 4.5,
-        'price': '₹54,990',
-        'image':
-            'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400',
-        'condition': 'New',
-        'distance': '0.8 km',
-      },
-      {
-        'name': 'Sony WH-1000XM5',
-        'brand': 'Sony',
-        'rating': 4.7,
-        'price': '₹29,990',
-        'image':
-            'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=400',
-        'condition': 'New',
-        'distance': '3.1 km',
-      },
-      {
-        'name': 'LG Refrigerator 260L',
-        'brand': 'LG',
-        'rating': 4.4,
-        'price': '₹28,990',
-        'image':
-            'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=400',
-        'condition': 'New',
-        'distance': '1.9 km',
-      },
-      {
-        'name': 'Dyson Air Purifier',
-        'brand': 'Dyson',
-        'rating': 4.6,
-        'price': '₹42,900',
-        'image':
-            'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
-        'condition': 'New',
-        'distance': '4.2 km',
-      },
-      {
-        'name': 'Canon EOS R6',
-        'brand': 'Canon',
-        'rating': 4.8,
-        'price': '₹2,15,995',
-        'image':
-            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-        'condition': 'New',
-        'distance': '2.7 km',
-      },
-      {
-        'name': 'iPad Pro 12.9"',
-        'brand': 'Apple',
-        'rating': 4.9,
-        'price': '₹1,12,900',
-        'image':
-            'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400',
-        'condition': 'New',
-        'distance': '1.1 km',
-      },
-    ];
-
-    return allElectrics;
-  }
-
-  List<Map<String, dynamic>> _getHouseResults(String query) {
-    final allHouses = [
-      {
-        'name': '3 BHK Luxury Apartment',
-        'location': 'Bandra West, Mumbai',
-        'rating': 4.6,
-        'price': '₹2.5 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
-        'type': 'Apartment',
-        'area': '1450 sq.ft',
-        'distance': '3.2 km',
-      },
-      {
-        'name': '2 BHK Furnished Flat',
-        'location': 'Koramangala, Bangalore',
-        'rating': 4.4,
-        'price': '₹45,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400',
-        'type': 'Flat',
-        'area': '1100 sq.ft',
-        'distance': '5.6 km',
-      },
-      {
-        'name': 'Premium Villa',
-        'location': 'Jubilee Hills, Hyderabad',
-        'rating': 4.8,
-        'price': '₹4.2 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=400',
-        'type': 'Villa',
-        'area': '3200 sq.ft',
-        'distance': '8.4 km',
-      },
-      {
-        'name': '1 BHK Studio Apartment',
-        'location': 'Andheri East, Mumbai',
-        'rating': 4.2,
-        'price': '₹18,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400',
-        'type': 'Studio',
-        'area': '550 sq.ft',
-        'distance': '1.8 km',
-      },
-      {
-        'name': 'Duplex Penthouse',
-        'location': 'Golf Course Road, Gurgaon',
-        'rating': 4.9,
-        'price': '₹6.8 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400',
-        'type': 'Penthouse',
-        'area': '4500 sq.ft',
-        'distance': '12.1 km',
-      },
-      {
-        'name': 'PG for Girls',
-        'location': 'HSR Layout, Bangalore',
-        'rating': 4.3,
-        'price': '₹12,000/mo',
-        'image':
-            'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400',
-        'type': 'PG',
-        'area': 'Single Room',
-        'distance': '2.4 km',
-      },
-      {
-        'name': '4 BHK Independent House',
-        'location': 'Sector 50, Noida',
-        'rating': 4.5,
-        'price': '₹1.8 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1605146769289-440113cc3d00?w=400',
-        'type': 'House',
-        'area': '2800 sq.ft',
-        'distance': '6.7 km',
-      },
-      {
-        'name': 'Beachfront Apartment',
-        'location': 'Marine Drive, Mumbai',
-        'rating': 4.7,
-        'price': '₹5.5 Cr',
-        'image':
-            'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-        'type': 'Apartment',
-        'area': '2100 sq.ft',
-        'distance': '4.5 km',
-      },
-    ];
-
-    return allHouses;
-  }
-
-  List<Map<String, dynamic>> _getPlaceResults(String query) {
-    final allPlaces = [
-      {
-        'name': 'Manali',
-        'location': 'Himachal Pradesh',
-        'rating': 4.7,
-        'price': '₹8,500',
-        'image':
-            'https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=400',
-        'type': 'Hill Station',
-        'distance': '540 km',
-      },
-      {
-        'name': 'Goa Beaches',
-        'location': 'Goa',
-        'rating': 4.8,
-        'price': '₹12,000',
-        'image':
-            'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=400',
-        'type': 'Beach',
-        'distance': '590 km',
-      },
-      {
-        'name': 'Shimla',
-        'location': 'Himachal Pradesh',
-        'rating': 4.6,
-        'price': '₹6,500',
-        'image':
-            'https://images.unsplash.com/photo-1597074866923-dc0589150358?w=400',
-        'type': 'Hill Station',
-        'distance': '350 km',
-      },
-      {
-        'name': 'Taj Mahal',
-        'location': 'Agra, UP',
-        'rating': 4.9,
-        'price': '₹50',
-        'image':
-            'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400',
-        'type': 'Monument',
-        'distance': '230 km',
-      },
-      {
-        'name': 'Kerala Backwaters',
-        'location': 'Kerala',
-        'rating': 4.8,
-        'price': '₹15,000',
-        'image':
-            'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=400',
-        'type': 'Lake',
-        'distance': '2100 km',
-      },
-      {
-        'name': 'Jaipur City Palace',
-        'location': 'Rajasthan',
-        'rating': 4.7,
-        'price': '₹500',
-        'image':
-            'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=400',
-        'type': 'Palace',
-        'distance': '280 km',
-      },
-      {
-        'name': 'Rishikesh',
-        'location': 'Uttarakhand',
-        'rating': 4.6,
-        'price': '₹5,000',
-        'image':
-            'https://images.unsplash.com/photo-1592385862821-d7bfee21be83?w=400',
-        'type': 'Adventure',
-        'distance': '240 km',
-      },
-      {
-        'name': 'Ladakh',
-        'location': 'Jammu & Kashmir',
-        'rating': 4.9,
-        'price': '₹25,000',
-        'image':
-            'https://images.unsplash.com/photo-1626015365107-59f71df26e70?w=400',
-        'type': 'Mountain',
-        'distance': '1020 km',
-      },
-    ];
-
-    return allPlaces;
-  }
-
-  List<Map<String, dynamic>> _getNewsResults(String query) {
-    final allNews = [
-      {
-        'title': 'India Wins Historic Test Series Against Australia',
-        'source': 'Sports Today',
-        'category': 'Sports',
-        'time': '2 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400',
-        'description':
-            'Team India creates history by winning the Border-Gavaskar Trophy for the fifth consecutive time.',
-      },
-      {
-        'title': 'Stock Market Hits All-Time High',
-        'source': 'Economic Times',
-        'category': 'Business',
-        'time': '3 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400',
-        'description':
-            'Sensex crosses 80,000 mark for the first time as FII inflows continue.',
-      },
-      {
-        'title': 'New AI Chip Launched by Tech Giant',
-        'source': 'Tech Crunch',
-        'category': 'Technology',
-        'time': '4 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400',
-        'description':
-            'Revolutionary AI chip promises 10x faster processing for machine learning tasks.',
-      },
-      {
-        'title': 'Bollywood Star Announces New Film',
-        'source': 'Film Fare',
-        'category': 'Entertainment',
-        'time': '5 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400',
-        'description':
-            'Highly anticipated sequel to blockbuster franchise to release next year.',
-      },
-      {
-        'title': 'Government Launches New Digital Initiative',
-        'source': 'India Today',
-        'category': 'Politics',
-        'time': '6 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400',
-        'description':
-            'New scheme aims to provide digital services to rural areas across the country.',
-      },
-      {
-        'title': 'Heavy Rainfall Expected in Mumbai',
-        'source': 'Weather Channel',
-        'category': 'Weather',
-        'time': '1 hour ago',
-        'image':
-            'https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=400',
-        'description':
-            'IMD issues orange alert for Mumbai and surrounding areas for next 48 hours.',
-      },
-      {
-        'title': 'ISRO Plans New Moon Mission',
-        'source': 'Science Daily',
-        'category': 'Science',
-        'time': '7 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=400',
-        'description':
-            'Chandrayaan-4 mission announced with advanced rover and sample return capability.',
-      },
-      {
-        'title': 'Startup Raises \$100M in Funding',
-        'source': 'Startup News',
-        'category': 'Business',
-        'time': '8 hours ago',
-        'image':
-            'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400',
-        'description':
-            'Indian fintech startup becomes unicorn with latest funding round.',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on category if specified
-    if (lowerQuery.contains('sports') ||
-        lowerQuery.contains('cricket') ||
-        lowerQuery.contains('football')) {
-      return allNews.where((n) => n['category'] == 'Sports').toList();
-    } else if (lowerQuery.contains('business') ||
-        lowerQuery.contains('stock') ||
-        lowerQuery.contains('market')) {
-      return allNews.where((n) => n['category'] == 'Business').toList();
-    } else if (lowerQuery.contains('tech') ||
-        lowerQuery.contains('technology')) {
-      return allNews
-          .where(
-            (n) => n['category'] == 'Technology' || n['category'] == 'Science',
-          )
-          .toList();
-    } else if (lowerQuery.contains('entertainment') ||
-        lowerQuery.contains('bollywood') ||
-        lowerQuery.contains('hollywood')) {
-      return allNews.where((n) => n['category'] == 'Entertainment').toList();
-    } else if (lowerQuery.contains('politics') ||
-        lowerQuery.contains('government')) {
-      return allNews.where((n) => n['category'] == 'Politics').toList();
-    } else if (lowerQuery.contains('weather')) {
-      return allNews.where((n) => n['category'] == 'Weather').toList();
+  Future<void> _toggleSaveProduct(String productId, Map<String, dynamic> productData) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    HapticFeedback.lightImpact();
+    try {
+      final savedRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .doc(productId);
+      if (_savedPostIds.contains(productId)) {
+        await savedRef.delete();
+        if (mounted) {
+          setState(() => _savedPostIds.remove(productId));
+          SnackBarHelper.showSuccess(context, 'Post unsaved');
+        }
+      } else {
+        await savedRef.set({
+          'postId': productId,
+          'postData': {
+            ...productData,
+            'source': 'api_listing',
+            'imageUrl': productData['image'] ?? '',
+            'title': productData['name'] ?? '',
+          },
+          'savedAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) {
+          setState(() => _savedPostIds.add(productId));
+          SnackBarHelper.showSuccess(context, 'Post saved');
+        }
+      }
+    } catch (e) {
+      if (mounted) SnackBarHelper.showError(context, 'Failed to save post');
     }
-
-    return allNews;
   }
 
-  List<Map<String, dynamic>> _getReelsResults(String query) {
-    // Sample video URLs (free stock videos)
-    final allReels = [
-      {
-        'title': 'Epic Dance Moves',
-        'creator': '@dance_king',
-        'views': '2.5M',
-        'likes': '150K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1547153760-18fc86324498?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:30',
-        'category': 'Dance',
-      },
-      {
-        'title': 'Cooking Hack You Need',
-        'creator': '@foodie_chef',
-        'views': '1.8M',
-        'likes': '98K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:45',
-        'category': 'Food',
-      },
-      {
-        'title': 'Comedy Skit - Office Life',
-        'creator': '@funny_guy',
-        'views': '5.2M',
-        'likes': '320K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1527224857830-43a7acc85260?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:58',
-        'category': 'Comedy',
-      },
-      {
-        'title': 'Travel Vlog - Goa',
-        'creator': '@wanderlust',
-        'views': '890K',
-        'likes': '67K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '1:20',
-        'category': 'Travel',
-      },
-      {
-        'title': 'Fitness Motivation',
-        'creator': '@fit_life',
-        'views': '3.1M',
-        'likes': '210K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:35',
-        'category': 'Fitness',
-      },
-      {
-        'title': 'Cute Pet Moments',
-        'creator': '@pet_lover',
-        'views': '4.7M',
-        'likes': '450K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:22',
-        'category': 'Pets',
-      },
-      {
-        'title': 'Tech Review - New Phone',
-        'creator': '@tech_guru',
-        'view  umbnail':
-            'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-        'duration': '0:55',
-        'category': 'Tech',
-      },
-      {
-        'title': 'Fashion Tips 2024',
-        'creator': '@style_icon',
-        'views': '2.8M',
-        'likes': '185K',
-        'thumbnail':
-            'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400',
-        'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'duration': '0:40',
-        'category': 'Fashion',
-      },
-    ];
-
-    final lowerQuery = query.toLowerCase();
-
-    // Filter based on category if specified
-    if (lowerQuery.contains('dance') || lowerQuery.contains('music')) {
-      return allReels.where((r) => r['category'] == 'Dance').toList();
-    } else if (lowerQuery.contains('comedy') ||
-        lowerQuery.contains('funny') ||
-        lowerQuery.contains('meme')) {
-      return allReels.where((r) => r['category'] == 'Comedy').toList();
-    } else if (lowerQuery.contains('food') || lowerQuery.contains('cooking')) {
-      return allReels.where((r) => r['category'] == 'Food').toList();
-    } else if (lowerQuery.contains('travel')) {
-      return allReels.where((r) => r['category'] == 'Travel').toList();
-    } else if (lowerQuery.contains('fitness') || lowerQuery.contains('gym')) {
-      return allReels.where((r) => r['category'] == 'Fitness').toList();
-    } else if (lowerQuery.contains('pet') ||
-        lowerQuery.contains('dog') ||
-        lowerQuery.contains('cat')) {
-      return allReels.where((r) => r['category'] == 'Pets').toList();
-    } else if (lowerQuery.contains('tech')) {
-      return allReels.where((r) => r['category'] == 'Tech').toList();
-    } else if (lowerQuery.contains('fashion') || lowerQuery.contains('style')) {
-      return allReels.where((r) => r['category'] == 'Fashion').toList();
-    }
-
-    return allReels;
-  }
+  // ── Inline Create Post (images in search field) ──
 
   bool _shouldProcessForMatches(String message) {
     final trimmed = message.trim().toLowerCase();
@@ -1417,23 +613,12 @@ class HomeScreenState extends State<HomeScreen>
     return true;
   }
 
-  // Mock voice results for fallback
-  final List<String> _mockVoiceResults = [
-    "I'm looking for a bicycle under 200 dollars",
-    "Need a room for rent near college campus",
-    "Want to buy second hand engineering books",
-    "Looking for part time job on weekends",
-    "Selling my old smartphone in good condition",
-    "Want to find a roommate near university",
-    "Looking to buy a used laptop for studies",
-  ];
-
   // Initialize speech recognition
   Future<void> _initSpeech() async {
     try {
       _speechEnabled = await _speech.initialize(
         onStatus: (status) {
-          debugPrint('Speech status: $status');
+          debugPrint('Voice: status=$status, text="$_currentSpeechText"');
           if (status == 'done' || status == 'notListening') {
             if (mounted && _isRecording) {
               _finishRecording();
@@ -1448,11 +633,12 @@ class HomeScreenState extends State<HomeScreen>
           }
         },
       );
+      debugPrint('Voice: initialized, speechEnabled=$_speechEnabled');
       if (mounted) {
         setState(() {});
       }
     } catch (e) {
-      debugPrint('Error initializing speech: $e');
+      debugPrint('Voice: init error=$e');
     }
   }
 
@@ -1495,11 +681,19 @@ class HomeScreenState extends State<HomeScreen>
         });
       }
     } else {
-      // Speech not available, use mock after delay
-      _recordingTimer = Timer(const Duration(seconds: 2), () {
-        if (mounted && _isRecording) {
-          _useMockVoiceResult();
-        }
+      // Speech not available
+      debugPrint('Voice: speech not enabled, falling back');
+      setState(() {
+        _isRecording = false;
+        _isVoiceProcessing = false;
+        _conversation.add({
+          'text': 'Voice input is not available. Please type your query.',
+          'isUser': false,
+          'timestamp': DateTime.now(),
+        });
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
       });
     }
   }
@@ -1519,16 +713,33 @@ class HomeScreenState extends State<HomeScreen>
     _recordingTimer?.cancel();
     _recordingTimer = null;
 
-    final randomResult =
-        _mockVoiceResults[DateTime.now().millisecondsSinceEpoch %
-            _mockVoiceResults.length];
+    debugPrint('Voice: speechEnabled=$_speechEnabled, currentText="$_currentSpeechText"');
+
+    // If there's partial text captured, use it instead of showing error
+    if (_currentSpeechText.trim().isNotEmpty) {
+      final spokenText = _currentSpeechText.trim();
+      setState(() {
+        _isRecording = false;
+        _isVoiceProcessing = false;
+        _conversation.add({
+          'text': spokenText,
+          'isUser': true,
+          'timestamp': DateTime.now(),
+        });
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+      _processVoiceMessage(spokenText);
+      return;
+    }
 
     setState(() {
       _isRecording = false;
       _isVoiceProcessing = false;
       _conversation.add({
-        'text': randomResult,
-        'isUser': true,
+        'text': 'Sorry, I couldn\'t hear you. Please try again.',
+        'isUser': false,
         'timestamp': DateTime.now(),
       });
     });
@@ -1536,8 +747,6 @@ class HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
-
-    _processVoiceMessage(randomResult);
   }
 
   void _finishRecording() {
@@ -1578,167 +787,299 @@ class HomeScreenState extends State<HomeScreen>
   }
 
   void _processVoiceMessage(String message) async {
+    if (_isProcessing) return; // Prevent concurrent operations
     setState(() {
       _isProcessing = true;
-    });
-
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (!mounted) return;
-
-    final aiResponse = _generateAIResponse(message);
-    final lowerMessage = message.toLowerCase();
-
-    setState(() {
-      _conversation.add({
-        'text': aiResponse,
-        'isUser': false,
-        'timestamp': DateTime.now(),
-      });
-
-      // Add results based on query type
-      if (_isFoodQuery(lowerMessage)) {
-        final foodResults = _getFoodResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'food_results',
-          'data': foodResults,
-        });
-      } else if (_isElectricQuery(lowerMessage)) {
-        final electricResults = _getElectricResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'electric_results',
-          'data': electricResults,
-        });
-      } else if (_isHouseQuery(lowerMessage)) {
-        final houseResults = _getHouseResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'house_results',
-          'data': houseResults,
-        });
-      } else if (_isPlaceQuery(lowerMessage)) {
-        final placeResults = _getPlaceResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'place_results',
-          'data': placeResults,
-        });
-      } else if (_isNewsQuery(lowerMessage)) {
-        final newsResults = _getNewsResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'news_results',
-          'data': newsResults,
-        });
-      } else if (_isReelsQuery(lowerMessage)) {
-        final reelsResults = _getReelsResults(message);
-        _conversation.add({
-          'text': '',
-          'isUser': false,
-          'timestamp': DateTime.now(),
-          'type': 'reels_results',
-          'data': reelsResults,
-        });
-      }
-
-      _isProcessing = false;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
     });
 
     if (_shouldProcessForMatches(message)) {
+      // Call backend API — adds AI message + product cards to conversation
       await _processWithIntent(message);
-    }
-  }
-
-  Future<void> _processWithIntent(String intent) async {
-    setState(() {
-      _isProcessing = true;
-    });
-
-    try {
-      final result = await _intentService.processIntentAndMatch(intent);
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        final matches = List<Map<String, dynamic>>.from(
-          result['matches'] ?? [],
-        );
-
-        for (final match in matches) {
-          final userProfile = match['userProfile'] ?? {};
-          final userId = match['userId'];
-          final photoUrl = userProfile['photoUrl'];
-
-          if (userId != null && photoUrl != null) {
-            _photoCache.cachePhotoUrl(userId, photoUrl);
-          }
-        }
-
-        // Deduplicate matches by userId
-        final seenUserIds = <String>{};
-        final dedupedMatches = matches.where((m) {
-          final userId = m['userId'] as String?;
-          if (userId == null) return true;
-          return seenUserIds.add(userId);
-        }).toList();
-
+    } else {
+      // Conversational messages — simple local response
+      final aiResponse = _generateConversationalResponse(message);
+      if (mounted) {
         setState(() {
-          _matches = dedupedMatches;
-          _isProcessing = false;
-        });
-
-        if (_matches.isNotEmpty) {
-          setState(() {
-            _conversation.add({
-              'text':
-                  'Found ${_matches.length} potential matches for you! Tap below to view them.',
-              'isUser': false,
-              'timestamp': DateTime.now(),
-            });
+          _conversation.add({
+            'text': aiResponse,
+            'isUser': false,
+            'timestamp': DateTime.now(),
           });
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToBottom();
-          });
-        }
-
-        _loadUserIntents();
-      } else {
-        setState(() {
-          _isProcessing = false;
         });
       }
-    } catch (e) {
+    }
+
+    if (mounted) {
       setState(() {
         _isProcessing = false;
       });
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
   }
 
-  String _formatDistance(double distanceInKm) {
-    if (distanceInKm < 1) {
-      return '${(distanceInKm * 1000).toStringAsFixed(0)}m away';
-    } else if (distanceInKm < 10) {
-      return '${distanceInKm.toStringAsFixed(1)}km away';
-    } else {
-      return '${distanceInKm.toStringAsFixed(0)}km away';
+  /// Process intent and find matches. Shows shimmer skeleton cards instantly
+  /// (like Flipkart/Amazon) while fetching real data from backend.
+  Future<void> _processWithIntent(String intent) async {
+    // Show "Searching..." text bubble + shimmer skeleton cards immediately
+    setState(() {
+      _conversation.add({
+        'text': 'Searching for "$intent"...',
+        'isUser': false,
+        'timestamp': DateTime.now(),
+        'type': 'searching_text',
+      });
+      _conversation.add({
+        'text': '',
+        'isUser': false,
+        'timestamp': DateTime.now(),
+        'type': 'skeleton_results',
+      });
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    try {
+      // Call backend API with timeout to prevent infinite loading
+      final sw = Stopwatch()..start();
+      final productResult = await ProductApiService()
+          .searchWithResponse(intent, bidirectionalMatching: true, lat: _currentUserLat, lng: _currentUserLng)
+          .timeout(const Duration(seconds: 250), onTimeout: () {
+        debugPrint('ProductAPI: overall timeout for "$intent"');
+        return <String, dynamic>{
+          'products': <Map<String, dynamic>>[],
+          'message': 'Search is taking too long. The server may be warming up — please try again in a moment.',
+          '_error': true,
+        };
+      });
+      final apiMessage = productResult['message'] as String? ?? '';
+      final productCards =
+          productResult['products'] as List<Map<String, dynamic>>? ?? [];
+
+      debugPrint(
+          'ProductAPI: returned ${productCards.length} cards in ${sw.elapsedMilliseconds}ms');
+      debugPrint('ProductAPI: apiMessage="$apiMessage"');
+      for (int i = 0; i < productCards.length; i++) {
+        final c = productCards[i];
+        debugPrint('ProductAPI: RAW card[$i] name="${c['name']}" sim=${c['similarity_score']} match_type="${c['match_type']}" listing_id="${c['listing_id']}" user_id="${c['user_id']}"');
+      }
+
+      if (!mounted) return;
+
+      final List<Map<String, dynamic>> apiCards = [];
+
+      for (final card in productCards) {
+        final loc = card['_raw_location'];
+        final originalLocationName = card['location'] as String? ?? '';
+        String displayLocation = originalLocationName;
+        debugPrint('ProductAPI: card="${card['name']}" rawLoc type=${loc.runtimeType} userLat=$_currentUserLat userLng=$_currentUserLng image="${card['image']}" images=${(card['images'] as List?)?.length ?? 0}');
+        if (loc is Map &&
+            _currentUserLat != null &&
+            _currentUserLng != null) {
+          // Try coordinates directly or nested
+          Map<String, dynamic>? coords;
+          if (loc['coordinates'] is Map) {
+            coords = Map<String, dynamic>.from(loc['coordinates'] as Map);
+          } else if (loc['lat'] != null && loc['lng'] != null) {
+            coords = {'lat': loc['lat'], 'lng': loc['lng']};
+          }
+          if (coords != null) {
+            final lat = (coords['lat'] as num?)?.toDouble();
+            final lng = (coords['lng'] as num?)?.toDouble();
+            if (lat != null && lng != null && (lat != 0 || lng != 0)) {
+              final distKm = _haversineDistance(
+                  _currentUserLat!, _currentUserLng!, lat, lng);
+              // Home screen cards show distance only
+              displayLocation = distKm < 1
+                  ? '${(distKm * 1000).round()} m away'
+                  : '${distKm.toStringAsFixed(1)} km away';
+              debugPrint('ProductAPI: distance=${distKm.toStringAsFixed(1)}km for "${card['name']}"');
+            }
+          }
+        }
+        // Preserve original location name for detail screen
+        card['_location_name'] = originalLocationName;
+        card['location'] = displayLocation;
+
+        // Use original similarity_score, or calculate locally if API returned very low
+        double simScore = (card['similarity_score'] as num?)?.toDouble() ?? 0.0;
+        if (simScore < 0.05) {
+          simScore = _calculateLocalSimilarity(intent, card);
+          card['similarity_score'] = simScore;
+        }
+        final scorePercent = (simScore * 100).toStringAsFixed(0);
+        card['match_score'] = '$scorePercent%';
+
+        // Keep API's match_type; only set fallback if empty/null
+        final apiMatchType = card['match_type']?.toString() ?? '';
+        if (apiMatchType.isEmpty) {
+          card['match_type'] = simScore >= 1.0 ? 'exact' : 'similar';
+        }
+
+        apiCards.add(card);
+      }
+
+      // Use distance_km from nearby/feed as location fallback
+      for (final card in apiCards) {
+        if ((card['location'] as String? ?? '').isEmpty && card['distance_km'] != null) {
+          final distKm = (card['distance_km'] as num).toDouble();
+          card['location'] = distKm < 1
+              ? '${(distKm * 1000).round()} m away'
+              : '${distKm.toStringAsFixed(1)} km away';
+        }
+      }
+
+      // Log card count before any filtering
+      debugPrint('ProductAPI: apiCards count after processing = ${apiCards.length}');
+      for (int i = 0; i < apiCards.length; i++) {
+        debugPrint('ProductAPI: PROCESSED card[$i] name="${apiCards[i]['name']}" sim=${apiCards[i]['similarity_score']} match_score="${apiCards[i]['match_score']}"');
+      }
+
+      // Build result text — use API message (has exact+similar breakdown)
+      final String aiText;
+      if (apiCards.isNotEmpty && apiMessage.isNotEmpty) {
+        aiText = apiMessage;
+      } else if (apiCards.isNotEmpty) {
+        aiText = 'Found ${apiCards.length} matches for "$intent"';
+      } else if (apiMessage.isNotEmpty) {
+        aiText = apiMessage;
+      } else {
+        aiText = 'No matches found for "$intent".';
+      }
+      setState(() {
+        // Remove ALL skeleton cards (reliable — no reference issues)
+        _conversation.removeWhere((m) => m['type'] == 'skeleton_results' || m['type'] == 'searching_text');
+        _conversation.add({
+          'text': aiText,
+          'isUser': false,
+          'timestamp': DateTime.now(),
+        });
+        _isProcessing = false;
+        if (apiCards.isNotEmpty) {
+          _conversation.add({
+            'text': '',
+            'isUser': false,
+            'timestamp': DateTime.now(),
+            'type': 'match_results',
+            'data': apiCards,
+            'query': intent,
+          });
+        } else {
+          // Suggest creating a post when no results found
+          _conversation.add({
+            'text': '',
+            'isUser': false,
+            'timestamp': DateTime.now(),
+            'type': 'no_results_create_post',
+            'data': {'query': intent},
+          });
+        }
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+      // Notify matched post owners that their post was matched
+      if (apiCards.isNotEmpty) {
+        _notifyMatchedPostOwners(apiCards, intent);
+      }
+    } catch (e, stack) {
+      debugPrint('Error processing intent: $e');
+      debugPrint('Stack: $stack');
+      if (mounted) {
+        setState(() {
+          _conversation.removeWhere((m) => m['type'] == 'skeleton_results' || m['type'] == 'searching_text');
+          _conversation.add({
+            'text': _getHumanReadableError(e),
+            'isUser': false,
+            'timestamp': DateTime.now(),
+          });
+          _isProcessing = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
     }
+  }
+
+  String _getHumanReadableError(dynamic error) {
+    final errorStr = error.toString().toLowerCase();
+    if (errorStr.contains('network') || errorStr.contains('socket') || errorStr.contains('connection')) {
+      return 'No internet connection. Please check your WiFi or mobile data and try again.';
+    } else if (errorStr.contains('quota') || errorStr.contains('429') || errorStr.contains('rate limit')) {
+      return 'Server is busy right now. Please try again in a few minutes.';
+    } else if (errorStr.contains('timeout') || errorStr.contains('timed out')) {
+      return 'Request timed out. Please check your connection and try again.';
+    } else if (errorStr.contains('permission') || errorStr.contains('unauthorized') || errorStr.contains('403')) {
+      return 'Access denied. Please try logging in again.';
+    } else if (errorStr.contains('not found') || errorStr.contains('404')) {
+      return 'Service temporarily unavailable. Please try again later.';
+    } else {
+      return 'Something went wrong. Please try again.';
+    }
+  }
+
+  /// Notify post owners when their post is matched by another user's search.
+  /// Runs in background (fire-and-forget) so it doesn't block the UI.
+  void _notifyMatchedPostOwners(List<Map<String, dynamic>> matchedCards, String searchQuery) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final notificationService = NotificationService();
+    final notifiedUserIds = <String>{};
+
+    for (final card in matchedCards) {
+      final postOwnerId = (card['user_id'] ?? '').toString();
+      // Skip if no user_id, is current user, or already notified
+      if (postOwnerId.isEmpty || postOwnerId == currentUserId || notifiedUserIds.contains(postOwnerId)) {
+        continue;
+      }
+      notifiedUserIds.add(postOwnerId);
+
+      final postTitle = (card['name'] ?? searchQuery).toString();
+      notificationService.sendNotificationToUser(
+        userId: postOwnerId,
+        title: 'Your post got a match!',
+        body: '$_currentUserName is looking for "$postTitle"',
+        type: 'post_matched',
+        data: {
+          'searchQuery': searchQuery,
+          'postTitle': postTitle,
+          'listingId': card['listing_id'] ?? '',
+        },
+      );
+    }
+
+    if (notifiedUserIds.isNotEmpty) {
+      debugPrint('Match notifications sent to ${notifiedUserIds.length} post owners');
+    }
+  }
+
+  /// Calculate local text similarity when the API doesn't provide a score.
+  /// Returns 0.0–1.0 based on how many query words appear in the card's fields.
+  /// Ignores common filler words (price, want, need, etc.) for better accuracy.
+  double _calculateLocalSimilarity(String query, Map<String, dynamic> card) {
+    const fillerWords = {'i', 'want', 'need', 'looking', 'for', 'a', 'an', 'the', 'my',
+      'me', 'price', 'rs', 'rupees', 'inr', 'under', 'below', 'above', 'around', 'about',
+      'buy', 'sell', 'get', 'find', 'search', 'show', 'please', 'do', 'can', 'you', 'is', 'it'};
+    final queryWords = query.toLowerCase().split(RegExp(r'\s+'))
+        .where((w) => w.length > 1 && !fillerWords.contains(w) && !RegExp(r'^\d+$').hasMatch(w))
+        .toSet();
+    if (queryWords.isEmpty) return 0.0;
+
+    final name = (card['name'] ?? '').toString().toLowerCase();
+    final brand = (card['brand'] ?? '').toString().toLowerCase();
+    final model = (card['model'] ?? '').toString().toLowerCase();
+    final subintent = (card['subintent'] ?? '').toString().toLowerCase();
+    final intent = (card['intent'] ?? '').toString().toLowerCase();
+    final itemType = (card['item_type'] ?? '').toString().toLowerCase();
+    final category = (card['category'] ?? '').toString().toLowerCase();
+    final combined = '$name $brand $model $subintent $intent $itemType $category';
+
+    int matched = 0;
+    for (final word in queryWords) {
+      if (combined.contains(word)) matched++;
+    }
+
+    return (matched / queryWords.length).clamp(0.0, 1.0);
   }
 
   @override
@@ -1747,28 +1088,28 @@ class HomeScreenState extends State<HomeScreen>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: _isProcessing
-                  ? _buildChatState(isDarkMode)
-                  : _matches.isNotEmpty
-                  ? _buildMatchesList(isDarkMode)
-                  : _buildChatState(isDarkMode),
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+              ),
             ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: _buildChatState(isDarkMode),
+                ),
 
-            // Bottom input section (always visible, recording happens inline)
-            _buildInputSection(isDarkMode),
-          ],
-        ),
+                // Bottom input section (always visible, recording happens inline)
+                _buildInputSection(isDarkMode),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1828,8 +1169,8 @@ class HomeScreenState extends State<HomeScreen>
                         ),
                         child: Text(
                           _suggestions[index],
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
+                          style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 12.5,
                             fontWeight: FontWeight.w500,
                             color: Theme.of(context).primaryColor,
                           ),
@@ -1862,7 +1203,10 @@ class HomeScreenState extends State<HomeScreen>
                     ),
                   ],
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                   children: [
                     // Text field OR Audio wave when recording
                     Expanded(
@@ -1931,7 +1275,7 @@ class HomeScreenState extends State<HomeScreen>
                                         color: _currentSpeechText.isNotEmpty
                                             ? Colors.white
                                             : Colors.grey[400],
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                       ),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
@@ -1946,31 +1290,32 @@ class HomeScreenState extends State<HomeScreen>
                                 color: _isSearchFocused
                                     ? Colors.white
                                     : Colors.grey[400],
-                                fontSize: _isSearchFocused ? 16 : 15,
+                                fontSize: _isSearchFocused ? 13 : 12.5,
                                 fontWeight: _isSearchFocused
                                     ? FontWeight.w500
                                     : FontWeight.w400,
                                 height: 1.4,
                               ),
                               child: TextField(
-                                cursorHeight: 17,
+                                cursorHeight: 15,
                                 controller: _intentController,
                                 focusNode: _searchFocusNode,
-                                textInputAction: TextInputAction.send,
+                                textInputAction: TextInputAction.search,
                                 keyboardType: TextInputType.text,
-                                maxLines: 1,
+                                maxLines: 4,
+                                minLines: 1,
                                 cursorWidth: 2,
                                 cursorColor: Colors.white,
-                                style: const TextStyle(fontFamily: 'Poppins', 
+                                style: const TextStyle(fontFamily: 'Poppins',
                                   color: Colors.white,
-                                  fontSize: 16,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w400,
                                 ),
                                 decoration: InputDecoration(
-                                  hintText: 'Ask me anything...',
-                                  hintStyle: TextStyle(fontFamily: 'Poppins', 
+                                  hintText: 'Search nearby...',
+                                  hintStyle: TextStyle(fontFamily: 'Poppins',
                                     color: Colors.grey[300],
-                                    fontSize: 15,
+                                    fontSize: 12.5,
                                     fontWeight: FontWeight.w400,
                                   ),
                                   border: InputBorder.none,
@@ -1978,21 +1323,25 @@ class HomeScreenState extends State<HomeScreen>
                                   focusedBorder: InputBorder.none,
                                   errorBorder: InputBorder.none,
                                   disabledBorder: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                    horizontal: 16,
+                                  contentPadding: const EdgeInsets.only(
+                                    top: 16,
+                                    bottom: 16,
+                                    left: 6,
+                                    right: 4,
                                   ),
                                   isDense: true,
                                   filled: true,
                                   fillColor: Colors.transparent,
                                 ),
                                 // Don't call setState on every keystroke - causes focus loss
-                                onSubmitted: (_) => _processIntent(),
+                                onSubmitted: (_) {
+                                  if (!_isProcessing) _processIntent();
+                                },
                               ),
                             ),
                     ),
 
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 2),
 
                     // Stop button when recording, Mic button otherwise
                     if (_isRecording || _isVoiceProcessing) ...[
@@ -2020,16 +1369,9 @@ class HomeScreenState extends State<HomeScreen>
                         child: Container(
                           width: 40,
                           height: 40,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.grey[800],
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.white.withValues(alpha: 0.1),
-                                blurRadius: 2,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
+                            color: Color(0xFF007AFF),
                           ),
                           child: const Icon(
                             Icons.mic,
@@ -2039,34 +1381,30 @@ class HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ],
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 6),
 
                     // Send button
                     GestureDetector(
                       onTap: _isProcessing ? null : _processIntent,
                       child: Container(
-                        width: 50,
+                        width: 42,
                         height: 40,
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.grey[800],
+                          color: Color(0xFF007AFF),
                         ),
-                        child: _isProcessing
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.5,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.send,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.send,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
+                  ],
+                ),
                   ],
                 ),
               ),
@@ -2107,27 +1445,37 @@ class HomeScreenState extends State<HomeScreen>
     bool isDarkMode,
     int index,
   ) {
-    final isUser = message['isUser'] as bool;
-    final text = message['text'] as String;
+    final isUser = message['isUser'] as bool? ?? false;
+    final text = message['text'] as String? ?? '';
     final type = message['type'] as String?;
+
+    // Skeleton shimmer cards — show instantly while backend loads (like Flipkart/Amazon)
+    if (type == 'skeleton_results') {
+      return _buildSkeletonCards();
+    }
+
+    // "Create a post" suggestion when no results found
+    if (type == 'no_results_create_post') {
+      final query = (message['data'] as Map?)?['query'] as String? ?? '';
+      return _buildCreatePostSuggestion(query);
+    }
 
     // Result card types - wrap with action row below
     if (type != null && type.endsWith('_results')) {
       final rawData = message['data'];
-      if (rawData == null) return const SizedBox.shrink();
-      final data = (rawData as List).cast<Map<String, dynamic>>();
-
-      // Skip news and reels results
-      if (type == 'news_results' || type == 'reels_results') {
-        return const SizedBox.shrink();
-      }
+      if (rawData == null || rawData is! List) return const SizedBox.shrink();
+      final data = rawData
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
 
       final category = type.replaceAll('_results', '');
-      return _buildResultsWidget(data, isDarkMode, category, index);
+      final query = message['query'] as String? ?? '';
+      return _buildResultsWidget(data, isDarkMode, category, index, query);
     }
 
     return Container(
-      margin: EdgeInsets.only(top: isUser ? 12 : 1, bottom: isUser ? 8 : 1),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: isUser
             ? CrossAxisAlignment.end
@@ -2147,7 +1495,7 @@ class HomeScreenState extends State<HomeScreen>
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     image: DecorationImage(
-                      image: AssetImage('assets/logo/AppLogo.png'),
+                      image: AssetImage('assets/logo/SingleTap.png'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -2159,9 +1507,9 @@ class HomeScreenState extends State<HomeScreen>
                         MediaQuery.of(context).size.width * 0.65;
                     const bubblePadding = 28.0; // 14 * 2 horizontal padding
 
-                    final textStyle = TextStyle(fontFamily: 'Poppins', 
+                    final textStyle = TextStyle(fontFamily: 'Poppins',
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
                       height: 1.4,
                     );
@@ -2176,18 +1524,10 @@ class HomeScreenState extends State<HomeScreen>
 
                       // Find the actual longest line width
                       final lineMetrics = textPainter.computeLineMetrics();
-                      double longestLineWidth = textPainter.width;
+                      double longestLineWidth = 0;
                       for (final line in lineMetrics) {
                         if (line.width > longestLineWidth) {
                           longestLineWidth = line.width;
-                        }
-                      }
-                      if (lineMetrics.isNotEmpty) {
-                        longestLineWidth = 0;
-                        for (final line in lineMetrics) {
-                          if (line.width > longestLineWidth) {
-                            longestLineWidth = line.width;
-                          }
                         }
                       }
 
@@ -2279,9 +1619,9 @@ class HomeScreenState extends State<HomeScreen>
                                   children: [
                                     Text(
                                       text,
-                                      style: TextStyle(fontFamily: 'Poppins', 
+                                      style: TextStyle(fontFamily: 'Poppins',
                                         color: Colors.white,
-                                        fontSize: 15,
+                                        fontSize: 14,
                                         fontWeight: isUser
                                             ? FontWeight.w500
                                             : FontWeight.w400,
@@ -2337,6 +1677,9 @@ class HomeScreenState extends State<HomeScreen>
                         ? DecorationImage(
                             image: NetworkImage(_currentUserPhotoUrl!),
                             fit: BoxFit.cover,
+                            onError: (exception, stackTrace) {
+                              debugPrint('Error loading profile image: $exception');
+                            },
                           )
                         : null,
                     color: _currentUserPhotoUrl == null
@@ -2350,7 +1693,7 @@ class HomeScreenState extends State<HomeScreen>
             ],
           ),
 
-          // SingleTap-style action icons row (assistant messages only, skip welcome)
+          // Single Tap-style action icons row (assistant messages only, skip welcome)
           // Hide if next message is a product result card
           if (!isUser && index > 0 && !_hasResultCardAfter(index))
             _buildActionRow(
@@ -2369,13 +1712,11 @@ class HomeScreenState extends State<HomeScreen>
     if (index + 1 >= _conversation.length) return false;
     final nextType = _conversation[index + 1]['type'] as String?;
     if (nextType == null) return false;
-    // News and reels results are skipped (SizedBox.shrink), so don't hide action row
-    if (nextType == 'news_results' || nextType == 'reels_results') return false;
     return nextType.endsWith('_results');
   }
 
   /// Regenerate the assistant response at the given index
-  void _regenerateResponse(int index) {
+  void _regenerateResponse(int index) async {
     // Find the user message before this assistant message
     String? userMessage;
     for (int i = index - 1; i >= 0; i--) {
@@ -2394,19 +1735,27 @@ class HomeScreenState extends State<HomeScreen>
       _isProcessing = true;
     });
 
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (!mounted) return;
-      final newResponse = _generateAIResponse(userMessage!);
-      setState(() {
-        _conversation.add({
-          'text': newResponse,
-          'isUser': false,
-          'timestamp': DateTime.now(),
+    // Re-run the full search pipeline
+    if (_shouldProcessForMatches(userMessage)) {
+      await _processWithIntent(userMessage);
+    } else {
+      final newResponse = _generateConversationalResponse(userMessage);
+      if (mounted) {
+        setState(() {
+          _conversation.add({
+            'text': newResponse,
+            'isUser': false,
+            'timestamp': DateTime.now(),
+          });
         });
-        _isProcessing = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = false;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   /// Reusable action row for assistant messages
@@ -2518,14 +1867,178 @@ class HomeScreenState extends State<HomeScreen>
     );
   }
 
+  /// "Create a post" + "Similar Matches" buttons shown when search returns no results
+  Widget _buildCreatePostSuggestion(String query) {
+    return Container(
+      margin: const EdgeInsets.only(left: 16, top: 4, bottom: 4, right: 16),
+      child: _buildSearchActionButtons(query),
+    );
+  }
+
+  /// "Create a post" button shown after search results
+  Widget _buildSearchActionButtons(String query) {
+    return Row(
+      children: [
+        Flexible(
+          child: _buildPillButton(
+            icon: Icons.add_circle_outline,
+            label: 'Listing your post',
+            iconColor: Colors.blue[300]!,
+            bgColor: Colors.blue.withValues(alpha: 0.15),
+            borderColor: Colors.blue.withValues(alpha: 0.35),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _navigateToCreatePost(query);
+            },
+          ),
+        ),
+        const Spacer(),
+      ],
+    );
+  }
+
+  /// Reusable pill-shaped button widget
+  Widget _buildPillButton({
+    required IconData icon,
+    required String label,
+    required Color iconColor,
+    required Color bgColor,
+    required Color borderColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 14),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shimmer skeleton cards — shown instantly while backend loads (like Flipkart/Amazon)
+  Widget _buildSkeletonCards() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      height: 178,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 4,
+        physics: const NeverScrollableScrollPhysics(),
+        itemBuilder: (context, index) {
+          return Shimmer.fromColors(
+            baseColor: Colors.white.withValues(alpha: 0.1),
+            highlightColor: Colors.white.withValues(alpha: 0.25),
+            child: Container(
+              width: 160,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Image placeholder
+                  Container(
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Title placeholder
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Container(
+                      height: 12,
+                      width: 110,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Subtitle placeholder
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Container(
+                      height: 10,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Price placeholder
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Container(
+                      height: 10,
+                      width: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildResultsWidget(
     List<Map<String, dynamic>> data,
     bool isDarkMode,
     String category,
     int msgIndex,
+    String query,
   ) {
     return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 2),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2536,41 +2049,28 @@ class HomeScreenState extends State<HomeScreen>
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _showSeeAllProducts(data, category),
                 child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   child: Text(
                     "See All",
-                    style: TextStyle(fontFamily: 'Poppins', 
+                    style: TextStyle(fontFamily: 'Poppins',
                       color: Colors.blue,
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
             ),
-          if (data.length > 2) const SizedBox(height: 4),
+          if (data.length > 2) const SizedBox(height: 2),
           SizedBox(
-            height: 230,
+            height: 178,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: data.length,
               itemBuilder: (context, index) {
                 final item = data[index];
-                final productName = item['name'] as String? ?? '';
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildItemCard(item, isDarkMode, category),
-                    _buildActionRow(
-                      'product_${msgIndex}_$index',
-                      productName,
-                      leftPadding: 0,
-                      showCopy: false,
-                      showRegenerate: false,
-                    ),
-                  ],
-                );
+                return _buildItemCard(item, isDarkMode, category);
               },
             ),
           ),
@@ -2588,57 +2088,163 @@ class HomeScreenState extends State<HomeScreen>
     );
   }
 
+  /// Get category icon based on domain/category
+  IconData _getCategoryIcon(String category) {
+    final cat = category.toLowerCase();
+    if (cat.contains('technology') || cat.contains('electronic')) return Icons.devices;
+    if (cat.contains('food') || cat.contains('restaurant')) return Icons.restaurant;
+    if (cat.contains('real estate') || cat.contains('house') || cat.contains('property')) return Icons.home;
+    if (cat.contains('vehicle') || cat.contains('car') || cat.contains('bike')) return Icons.directions_car;
+    if (cat.contains('fashion') || cat.contains('cloth')) return Icons.checkroom;
+    if (cat.contains('sport')) return Icons.sports;
+    if (cat.contains('book') || cat.contains('education')) return Icons.menu_book;
+    if (cat.contains('job') || cat.contains('service')) return Icons.work;
+    return Icons.shopping_bag;
+  }
+
+  Widget _buildImagePlaceholder(String category) {
+    return Container(
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.grey[800]!, Colors.grey[700]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Icon(_getCategoryIcon(category), color: Colors.white38, size: 40),
+    );
+  }
+
+  Widget _buildUserInitialsPlaceholder(String name) {
+    final initials = name.isNotEmpty
+        ? name.split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+        : '?';
+    return Container(
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue[700]!, Colors.purple[600]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontSize: 36,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Generate a unique save ID for a product item
+  String _productSaveId(Map<String, dynamic> item) {
+    // Use postId if available (from API), otherwise hash from name+price
+    final postId = item['listing_id'] ?? item['postId'] ?? item['id'] ?? item['_id'];
+    if (postId != null && postId.toString().isNotEmpty) return postId.toString();
+    final name = (item['name'] ?? '').toString();
+    final price = (item['price'] ?? '').toString();
+    return 'product_${name.hashCode}_${price.hashCode}';
+  }
+
+  Widget _buildSaveButton(Map<String, dynamic> item) {
+    final saveId = _productSaveId(item);
+    final isSaved = _savedPostIds.contains(saveId);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _toggleSaveProduct(saveId, item),
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF016CFF).withValues(alpha: 0.85),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.4),
+            width: 1,
+          ),
+        ),
+        child: Icon(
+          isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          color: Colors.white,
+          size: 14,
+        ),
+      ),
+    );
+  }
+
   Widget _buildItemCard(
     Map<String, dynamic> item,
     bool isDarkMode,
     String category,
   ) {
-    // Get icon based on category
-    IconData getIcon() {
-      switch (category) {
-        case 'food':
-          return Icons.restaurant;
-        case 'electric':
-          return Icons.devices;
-        case 'house':
-          return Icons.home;
-        case 'place':
-          return Icons.place;
-        default:
-          return Icons.category;
+    final brand = item['brand'] as String? ?? '';
+    final itemType = item['item_type'] as String? ?? '';
+    final variant = item['variant'] as String? ?? '';
+    final subVariant = item['sub_variant'] as String? ?? '';
+    final domainList = item['domain'] as List<dynamic>? ?? [];
+    final domainStr = domainList.isNotEmpty ? domainList.first.toString() : '';
+    // Line 2: brand (+ variant) → domain → item type → category
+    String subtitleLine = brand.isNotEmpty ? brand : (domainStr.isNotEmpty ? domainStr : (itemType.isNotEmpty ? itemType : category));
+    // Append variant info if available (e.g., "Apple · Pro Max")
+    if (variant.isNotEmpty || subVariant.isNotEmpty) {
+      final variantStr = [variant, subVariant].where((v) => v.isNotEmpty).join(' ');
+      if (subtitleLine.isNotEmpty) {
+        subtitleLine = '$subtitleLine · $variantStr';
+      } else {
+        subtitleLine = variantStr;
       }
     }
+    final imageUrl = item['image'] as String? ?? '';
+    final matchType = item['match_type'] as String? ?? '';
+    final price = item['price'] as String? ?? '';
 
-    // Get subtitle based on category
-    String getSubtitle() {
-      switch (category) {
-        case 'food':
-          return item['restaurant'] as String? ?? '';
-        case 'electric':
-          return item['brand'] as String? ?? '';
-        case 'house':
-          return item['location'] as String? ?? '';
-        case 'place':
-          return item['location'] as String? ?? '';
-        default:
-          return '';
+    // Show distance in km instead of location name
+    String location = '';
+    final rawLoc = item['_raw_location'];
+    if (_currentUserLat != null && _currentUserLng != null && rawLoc is Map) {
+      Map<String, dynamic>? coords;
+      if (rawLoc['coordinates'] is Map) {
+        coords = Map<String, dynamic>.from(rawLoc['coordinates'] as Map);
+      } else if (rawLoc['lat'] != null && rawLoc['lng'] != null) {
+        coords = {'lat': rawLoc['lat'], 'lng': rawLoc['lng']};
       }
-    }
-
-    // Get bottom info based on category
-    String getBottomInfo() {
-      return item['distance'] as String? ?? item['location'] as String? ?? '';
-    }
-
-    // Get bottom icon based on category
-    IconData getBottomIcon() {
-      return Icons.location_on;
+      if (coords != null) {
+        final lat = (coords['lat'] as num?)?.toDouble();
+        final lng = (coords['lng'] as num?)?.toDouble();
+        if (lat != null && lng != null && (lat != 0 || lng != 0)) {
+          final distKm = _haversineDistance(_currentUserLat!, _currentUserLng!, lat, lng);
+          location = distKm < 1
+              ? '${(distKm * 1000).round()} m away'
+              : '${distKm.toStringAsFixed(1)} km away';
+        }
+      }
     }
 
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        // Navigate to unified detail screen
+        // Match results: navigate to chat with the matched user
+        final matchData = item['_matchData'] as Map<String, dynamic>?;
+        if (matchData != null) {
+          final userProfile = matchData['userProfile'] as Map<String, dynamic>? ?? {};
+          final otherUser = UserProfile.fromMap(userProfile, matchData['userId']);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EnhancedChatScreen(otherUser: otherUser, source: 'Matching'),
+            ),
+          );
+          return;
+        }
+        // Product results: navigate to product detail
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -2665,432 +2271,166 @@ class HomeScreenState extends State<HomeScreen>
             width: 1,
           ),
         ),
+        clipBehavior: Clip.hardEdge,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Image with download button
+            // Image or placeholder
             Stack(
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(16),
                   ),
-                  child: Image.network(
-                    item['image'] as String? ?? '',
-                    height: 100,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 100,
-                        color: Colors.grey[700],
-                        child: Icon(getIcon(), color: Colors.white70, size: 40),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 100,
-                        color: Colors.grey[800],
-                        child: const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                  child: imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          height: 100,
+                          width: double.infinity,
+                          fit: matchType == 'match' ? BoxFit.contain : BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return matchType == 'match'
+                                ? _buildUserInitialsPlaceholder(item['name'] as String? ?? '')
+                                : _buildImagePlaceholder(itemType.isNotEmpty ? itemType : category);
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              height: 100,
+                              color: Colors.grey[800],
+                              child: const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          },
+                        )
+                      : matchType == 'match'
+                          ? _buildUserInitialsPlaceholder(item['name'] as String? ?? '')
+                          : _buildImagePlaceholder(itemType.isNotEmpty ? itemType : category),
+                ),
+                // Match type / score badge — use API match_type as source of truth
+                if (matchType.isNotEmpty) ...[
+                  () {
+                    final simScore = (item['similarity_score'] as num?)?.toDouble() ?? 0.0;
+                    final isExact = matchType == 'exact';
+                    final scoreLabel = simScore < 0.10
+                        ? 'Similar'
+                        : '${(simScore * 100).toStringAsFixed(0)}% Match';
+                    return Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isExact
+                              ? Colors.green.withValues(alpha: 0.85)
+                              : Colors.orange.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      );
-                    },
-                  ),
+                        child: Text(
+                          isExact ? 'Exact' : scoreLabel,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }(),
+                ],
+                // Save / Bookmark button (top-right)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: _buildSaveButton(item),
                 ),
               ],
             ),
-            // Details
+            // Details — 4 lines: Model, Brand, Budget, Location
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Name
-                  Text(
-                    item['name'] as String? ?? '',
-                    style: const TextStyle(fontFamily: 'Poppins', 
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                    // Line 1: Model
+                    Text(
+                      (item['model'] as String? ?? '').isNotEmpty
+                          ? item['model'] as String
+                          : (item['name'] as String? ?? subtitleLine),
+                      style: const TextStyle(fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  // Subtitle (restaurant/brand/location)
-                  Text(
-                    getSubtitle(),
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  // Price & Rating Row
-                  Row(
-                    children: [
-                      // Price
-                      Expanded(
-                        child: Text(
-                          item['price'] as String? ?? '',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            color: Colors.green[400],
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Rating
-                      Icon(Icons.star, color: Colors.amber[400], size: 14),
-                      const SizedBox(width: 2),
+                    // Line 2: Brand (+ variant)
+                    if (subtitleLine.isNotEmpty)
                       Text(
-                        '${item['rating']}',
-                        style: const TextStyle(fontFamily: 'Poppins', 
-                          color: Colors.white,
-                          fontSize: 12,
+                        subtitleLine,
+                        style: TextStyle(fontFamily: 'Poppins',
+                          color: Colors.grey[400],
+                          fontSize: 10.5,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // Bottom info (distance/condition/area)
-                  Row(
-                    children: [
-                      Icon(getBottomIcon(), color: Colors.grey[500], size: 12),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          getBottomInfo(),
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            color: Colors.grey[400],
-                            fontSize: 13,
+                    // Line 3: Price / Budget
+                    () {
+                      final budget = item['budget']?.toString() ?? '';
+                      final zeroPrices = {'', '₹0', '₹0.0', '₹0 - ₹0', '₹0.0 - ₹0.0'};
+                      String priceDisplay = '';
+                      if (price.isNotEmpty && !zeroPrices.contains(price)) {
+                        priceDisplay = price;
+                      } else if (budget.isNotEmpty && budget != '0' && budget != '0.0' && budget != 'null') {
+                        priceDisplay = budget.startsWith('₹') ? budget : '₹$budget';
+                      }
+                      debugPrint('CardUI price=$price, budget=$budget, display=$priceDisplay');
+                      if (priceDisplay.isEmpty) return const SizedBox.shrink();
+                      return Text(
+                        priceDisplay,
+                        style: TextStyle(fontFamily: 'Poppins',
+                          color: Colors.green[400],
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    }(),
+                    // Line 4: Location
+                    if (location.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(Icons.near_me, color: Colors.grey[500], size: 11),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              location,
+                              style: TextStyle(fontFamily: 'Poppins',
+                                color: Colors.grey[400],
+                                fontSize: 10.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMatchesList(bool isDarkMode) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
-            border: Border(
-              bottom: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.people, color: Colors.green[600]),
-              const SizedBox(width: 8),
-              Text(
-                '${_matches.length} Matches Found',
-                style: TextStyle(fontFamily: 'Poppins', 
-                  color: Colors.green[600],
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _matches.clear();
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Text(
-                    'Clear',
-                    style: TextStyle(fontFamily: 'Poppins', 
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _matches.length,
-            itemBuilder: (context, index) {
-              return _buildMatchCard(_matches[index], isDarkMode);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMatchCard(Map<String, dynamic> match, bool isDarkMode) {
-    final userProfile = match['userProfile'] ?? {};
-    final matchScore = (match['matchScore'] ?? 0.0) * 100;
-    final userName = userProfile['name'] ?? 'Unknown User';
-    final userId = match['userId'];
-
-    final cachedPhoto = userId != null
-        ? _photoCache.getCachedPhotoUrl(userId)
-        : null;
-    final photoUrl = cachedPhoto ?? userProfile['photoUrl'];
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      elevation: 2,
-      color: Colors.grey.shade800,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () async {
-          HapticFeedback.lightImpact();
-
-          final otherUser = UserProfile.fromMap(userProfile, match['userId']);
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EnhancedChatScreen(otherUser: otherUser, source: 'Networking'),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  UserAvatar(
-                    profileImageUrl: photoUrl,
-                    radius: 24,
-                    fallbackText: userName,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            userName.toUpperCase(),
-                            style: const TextStyle(fontFamily: 'Poppins', 
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.auto_awesome,
-                                size: 14,
-                                color: Colors.blue[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${matchScore.toStringAsFixed(0)}% match',
-                                style: TextStyle(fontFamily: 'Poppins', 
-                                  color: Colors.blue[600],
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (userProfile['city'] != null &&
-                            userProfile['city'].toString().isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.location_on,
-                                  size: 14,
-                                  color: Colors.green[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  userProfile['city'].toString(),
-                                  style: TextStyle(fontFamily: 'Poppins', 
-                                    color: Colors.green[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (match['distance'] != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.near_me,
-                                  size: 14,
-                                  color: Colors.orange[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatDistance(match['distance'] as double),
-                                  style: TextStyle(fontFamily: 'Poppins', 
-                                    color: Colors.orange[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Posted:',
-                      style: TextStyle(fontFamily: 'Poppins', 
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      match['title'] ??
-                          match['description'] ??
-                          'Looking for match',
-                      style: TextStyle(fontFamily: 'Poppins', 
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: isDarkMode ? Colors.white : Colors.black,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (match['description'] != null &&
-                        match['description'] != match['title'])
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          match['description'],
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            color: isDarkMode
-                                ? Colors.grey[400]
-                                : Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (match['lookingFor'] != null &&
-                  match['lookingFor'].toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 14,
-                        color: Colors.green[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Matches your search',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 12,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // 3D Animated Drawer Transition
@@ -3232,7 +2572,7 @@ class Drawer3DTransition extends StatelessWidget {
   }
 }
 
-// SingleTap-style Side Drawer
+// Single Tap-style Side Drawer
 class _ChatHistorySideDrawer extends StatefulWidget {
   final VoidCallback onNewChat;
   final VoidCallback onSearchChats;
@@ -3461,9 +2801,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                                   const SizedBox(width: 12),
                                   const Text(
                                     'New Chat',
-                                    style: TextStyle(fontFamily: 'Poppins', 
+                                    style: TextStyle(fontFamily: 'Poppins',
                                       color: Colors.white,
-                                      fontSize: 16,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -3514,9 +2854,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                               const SizedBox(width: 10),
                               Text(
                                 'Search chats...',
-                                style: TextStyle(fontFamily: 'Poppins', 
+                                style: TextStyle(fontFamily: 'Poppins',
                                   color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 14,
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
@@ -3633,17 +2973,17 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
                             children: [
                               Text(
                                 'My Account',
-                                style: TextStyle(fontFamily: 'Poppins', 
+                                style: TextStyle(fontFamily: 'Poppins',
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 'Settings & Preferences',
-                                style: TextStyle(fontFamily: 'Poppins', 
+                                style: TextStyle(fontFamily: 'Poppins',
                                   color: Colors.white70,
-                                  fontSize: 13,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -3716,9 +3056,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
             const SizedBox(width: 12),
             Text(
               label,
-              style: const TextStyle(fontFamily: 'Poppins', 
+              style: const TextStyle(fontFamily: 'Poppins',
                 color: Colors.white,
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -3751,9 +3091,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
         padding: const EdgeInsets.only(left: 14, top: 12, bottom: 8),
         child: Text(
           title,
-          style: TextStyle(fontFamily: 'Poppins', 
+          style: TextStyle(fontFamily: 'Poppins',
             color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -3800,9 +3140,9 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
               Expanded(
                 child: Text(
                   chat['title'] as String,
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: TextStyle(fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
@@ -3818,6 +3158,65 @@ class _ChatHistorySideDrawerState extends State<_ChatHistorySideDrawer>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Animated typing dots (three bouncing dots)
+class _TypingDotsWidget extends StatefulWidget {
+  const _TypingDotsWidget();
+
+  @override
+  State<_TypingDotsWidget> createState() => _TypingDotsWidgetState();
+}
+
+class _TypingDotsWidgetState extends State<_TypingDotsWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final t = (_controller.value - delay) % 1.0;
+            final bounce = t < 0.5 ? math.sin(t * math.pi) : 0.0;
+            return Container(
+              margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+              child: Transform.translate(
+                offset: Offset(0, -4 * bounce),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.6 + 0.4 * bounce),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

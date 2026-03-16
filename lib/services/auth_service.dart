@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io' show Platform;
 import '../res/utils/photo_url_helper.dart';
+import '../screens/networking/live_connect_tab_screen.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -17,6 +18,9 @@ class AuthService {
     clientId: Platform.isAndroid
         ? null
         : '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
+    // serverClientId is the web client ID - needed on Android to get idToken
+    serverClientId:
+        '1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com',
     scopes: [
       'email',
       'profile',
@@ -390,6 +394,34 @@ class AuthService {
           message = e.message ?? 'An error occurred during Google sign-in.';
       }
       throw Exception(message);
+    } catch (e) {
+      final errorStr = e.toString();
+      print('[AuthService] Google Sign-In error: $errorStr');
+
+      // Don't re-wrap our own ALREADY_LOGGED_IN exceptions
+      if (errorStr.contains('ALREADY_LOGGED_IN')) {
+        rethrow;
+      }
+
+      // PlatformException from google_sign_in plugin
+      if (errorStr.contains('ApiException: 10') ||
+          errorStr.contains('DEVELOPER_ERROR')) {
+        throw Exception(
+          'Google Sign-In configuration error. Please check SHA-1 fingerprint and google-services.json.',
+        );
+      }
+      if (errorStr.contains('ApiException: 12500')) {
+        throw Exception(
+          'Google Sign-In failed. Please update Google Play Services.',
+        );
+      }
+      if (errorStr.contains('ApiException: 7')) {
+        throw Exception(
+          'Network error. Please check your internet connection.',
+        );
+      }
+
+      rethrow;
     }
   }
 
@@ -428,6 +460,9 @@ class AuthService {
 
       // Clear local device token
       await _clearLocalDeviceToken();
+
+      // Clear cached networking data to prevent stale data on next login
+      LiveConnectTabScreen.clearCache();
 
       // CRITICAL: Sign out from Firebase Auth FIRST (triggers auth stream immediately)
       print('[AuthService] Signing out from Firebase Auth...');
@@ -1037,6 +1072,9 @@ class AuthService {
     try {
       final deviceInfo = await _getDeviceInfo();
 
+      // Generate UUID v5 for API backend (same as ProductApiService)
+      final userUuid = const Uuid().v5(Namespace.url.value, 'singletap:$uid');
+
       // Use set with merge instead of update - more robust against security rule issues
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'activeDeviceToken': deviceToken,
@@ -1044,6 +1082,7 @@ class AuthService {
         'forceLogout':
             false, // CRITICAL: Clear any stale logout flag from previous logout
         'lastSessionUpdate': FieldValue.serverTimestamp(),
+        'user_uuid': userUuid, // Store UUID for reverse-lookup from API responses
       }, SetOptions(merge: true));
 
       // Delete forceLogoutTime separately (FieldValue.delete() works better with update)
@@ -1061,7 +1100,7 @@ class AuthService {
   }
 
   /// Logout from all other devices and keep only current device logged in
-  /// Uses a two-step approach for instant logout (SingleTap-style):
+  /// Uses a two-step approach for instant logout (Single Tap-style):
   /// 1. Set forceLogout flag to trigger immediate logout on other devices
   /// 2. Then set new device as active
   Future<void> logoutFromOtherDevices({String? userId}) async {
@@ -1123,7 +1162,7 @@ class AuthService {
           final data = result.data as Map<dynamic, dynamic>?;
           if (data?['success'] == true) {
             print(
-              '[AuthService]  Successfully forced logout on other devices - instant like SingleTap!',
+              '[AuthService]  Successfully forced logout on other devices - instant like Single Tap!',
             );
           } else {
             throw Exception(

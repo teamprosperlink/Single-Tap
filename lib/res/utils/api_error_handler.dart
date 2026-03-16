@@ -2,6 +2,7 @@
 
 enum ApiErrorType {
   quotaExceeded,
+  rateLimited,
   networkError,
   invalidApiKey,
   modelNotFound,
@@ -14,6 +15,13 @@ class ApiErrorHandler {
 
     if (errorString.contains('quota') || errorString.contains('billing')) {
       return ApiErrorType.quotaExceeded;
+    } else if (errorString.contains('resource_exhausted') ||
+        errorString.contains('resource exhausted') ||
+        errorString.contains('429') ||
+        errorString.contains('too many requests') ||
+        errorString.contains('rate limit') ||
+        errorString.contains('rate_limit')) {
+      return ApiErrorType.rateLimited;
     } else if (errorString.contains('network') ||
         errorString.contains('no address associated') ||
         errorString.contains('unable to resolve host')) {
@@ -33,6 +41,8 @@ class ApiErrorHandler {
     switch (errorType) {
       case ApiErrorType.quotaExceeded:
         return 'API quota exceeded. Please check your billing and usage limits.';
+      case ApiErrorType.rateLimited:
+        return 'API rate limited. Too many requests — please wait a moment.';
       case ApiErrorType.networkError:
         return 'Network connection error. Please check your internet connection.';
       case ApiErrorType.invalidApiKey:

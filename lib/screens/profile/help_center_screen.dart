@@ -1,7 +1,7 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../home/main_navigation_screen.dart';
+import '../../widgets/common widgets/app_background.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -20,8 +20,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       color: Colors.blue,
       faqs: [
         _FAQ(
-          question: 'What is SingleTap?',
-          answer: 'SingleTap is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
+          question: 'What is Single Tap?',
+          answer: 'Single Tap is an AI-powered matching app that connects people for various purposes - whether you\'re buying, selling, looking for friends, dating, finding jobs, or reuniting lost items with their owners. Our smart AI understands your intent and finds the best matches for you.',
         ),
         _FAQ(
           question: 'How do I create a post?',
@@ -134,10 +134,14 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0f0f23),
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () {
@@ -152,67 +156,36 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
           'Help Center',
           style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 0.5,
-            color: Colors.white.withValues(alpha: 0.2),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
       ),
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/logo/home_background.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.grey.shade900, Colors.black],
-                    ),
-                  ),
-                );
-              },
-            ),
+      body: AppBackground(
+        showParticles: false,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(
+            top: kToolbarHeight + 44,
+            left: 16,
+            right: 16,
+            bottom: 16,
           ),
-
-          // Blur overlay
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-
-          // Content
-          SafeArea(
-            child: Column(
-              children: [
-                // Categories and FAQs
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _categories.length,
-                    itemBuilder: (context, categoryIndex) {
-                      final category = _categories[categoryIndex];
-                      return _buildCategorySection(category, categoryIndex);
-                    },
-                  ),
-                ),
-
-              ],
-            ),
-          ),
-        ],
+          itemCount: _categories.length,
+          itemBuilder: (context, categoryIndex) {
+            final category = _categories[categoryIndex];
+            return _buildCategorySection(category, categoryIndex);
+          },
+        ),
       ),
     );
   }
@@ -222,7 +195,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.only(top: 4, bottom: 6),
           child: Row(
             children: [
               Container(
@@ -253,7 +226,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
 
           return _buildFAQItem(faq, globalIndex, category.color);
         }),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
       ],
     );
   }
@@ -268,14 +241,20 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
         });
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
+        margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.15),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isExpanded
-                ? color.withValues(alpha: 0.3)
-                : Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1,
           ),
         ),
         child: Column(

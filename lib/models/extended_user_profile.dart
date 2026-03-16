@@ -152,14 +152,25 @@ class ExtendedUserProfile {
       displayName = map['phone'] ?? 'Unknown';
     }
 
+    // Reject Mountain View / null-island stale coordinates
+    final rawCity = (map['city'] as String? ?? '').toLowerCase();
+    final rawLat = (map['latitude'] as num?)?.toDouble();
+    final rawLng = (map['longitude'] as num?)?.toDouble();
+    final isMountainView = rawCity.contains('mountain view');
+    final isNullIsland = rawLat != null && rawLng != null &&
+        rawLat.abs() < 0.01 && rawLng.abs() < 0.01;
+    final cleanLat = (isMountainView || isNullIsland) ? null : rawLat;
+    final cleanLng = (isMountainView || isNullIsland) ? null : rawLng;
+    final cleanCity = isMountainView ? null : map['city'];
+
     return ExtendedUserProfile(
       uid: uid,
       name: displayName,
       photoUrl: map['photoUrl'],
-      city: map['city'],
+      city: cleanCity,
       location: map['location'] ?? map['displayLocation'],
-      latitude: (map['latitude'] as num?)?.toDouble(),
-      longitude: (map['longitude'] as num?)?.toDouble(),
+      latitude: cleanLat,
+      longitude: cleanLng,
       interests: (map['interests'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       verified: map['verified'] ?? false,
       connectionTypes: (map['connectionTypes'] as List?)?.map((e) => e.toString()).toList() ?? const [],
@@ -259,19 +270,21 @@ class ExtendedUserProfile {
     );
   }
 
-  // Helper to get display location
+  // Helper to get display location (rejects Mountain View)
   String get displayLocation {
-    if (city != null && city!.isNotEmpty) {
+    if (city != null && city!.isNotEmpty &&
+        !city!.toLowerCase().contains('mountain view')) {
       return city!;
-    } else if (location != null && location!.isNotEmpty) {
+    } else if (location != null && location!.isNotEmpty &&
+        !location!.toLowerCase().contains('mountain view')) {
       return location!;
     }
     return 'Location not set';
   }
 
-  // Helper to get formatted distance
+  // Helper to get formatted distance (skip unrealistic values)
   String? get formattedDistance {
-    if (distance == null) return null;
+    if (distance == null || distance! > 10000) return null;
     if (distance! < 1) {
       return '${(distance! * 1000).round()} m';
     } else {

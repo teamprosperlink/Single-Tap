@@ -171,6 +171,7 @@ class _BusinessServicesTabState extends State<BusinessServicesTab>
       ),
       floatingActionButton: _hasListings
           ? FloatingActionButton.extended(
+        heroTag: null,
               onPressed: () => _showAddSheet(),
               backgroundColor: const Color(0xFF00D67D),
               foregroundColor: Colors.white,

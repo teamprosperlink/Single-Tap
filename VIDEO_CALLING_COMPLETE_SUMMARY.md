@@ -110,7 +110,7 @@ lib/
 ### Start a Group Video Call
 
 ```dart
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 // Option 1: Show participant selection dialog
 await GroupCallHelper.showParticipantSelectionAndStartCall(
@@ -136,7 +136,7 @@ await GroupCallHelper.startGroupVideoCall(
 ### Handle Incoming Group Call
 
 ```dart
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 await GroupCallHelper.handleIncomingGroupCall(
   context: context,
@@ -394,7 +394,7 @@ Your app now has **complete video calling functionality**:
 
 ## 📝 License
 
-Part of the Supper app project.
+Part of the Single Tap app project.
 
 ---
 

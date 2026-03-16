@@ -44,7 +44,7 @@ Temporarily add navigation to test screen:
 
 ```dart
 // In lib/screens/home/main_navigation_screen.dart or anywhere
-import 'package:supper/screens/call/video_test_screen.dart';
+import 'package:single_tap/screens/call/video_test_screen.dart';
 
 // Add a button
 ElevatedButton(
@@ -134,13 +134,13 @@ Debug logs should show:
 **Solution:**
 ```bash
 # Grant permissions manually via ADB
-adb shell pm grant com.app.supper android.permission.CAMERA
-adb shell pm grant com.app.supper android.permission.RECORD_AUDIO
+adb shell pm grant com.app.single_tap android.permission.CAMERA
+adb shell pm grant com.app.single_tap android.permission.RECORD_AUDIO
 ```
 
 Or in device settings:
 ```
-Settings → Apps → Supper → Permissions → Enable all
+Settings → Apps → Single Tap → Permissions → Enable all
 ```
 
 ### Issue 2: Blank Screen on Emulator

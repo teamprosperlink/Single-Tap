@@ -51,6 +51,7 @@ class _ProductsTabState extends State<ProductsTab> {
           if (!hasProducts) return const SizedBox.shrink();
 
           return FloatingActionButton.extended(
+        heroTag: null,
             onPressed: _addProduct,
             backgroundColor: const Color(0xFF00D67D),
             icon: const Icon(Icons.add, color: Colors.white),

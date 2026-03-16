@@ -10,7 +10,6 @@ import '../../models/conversation_model.dart';
 import '../../models/user_profile.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../widgets/chat widgets/chat_common.dart';
-import '../../widgets/common widgets/app_background.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../mixins/voice_search_mixin.dart';
 import 'enhanced_chat_screen.dart';
@@ -433,15 +432,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromRGBO(0, 0, 0, 1),
       appBar: AppBar(
         centerTitle: true,
         leading: const SizedBox.shrink(),
         leadingWidth: 0,
+        toolbarHeight: 56,
         title: const Text(
           'Messages',
-          style: TextStyle(fontFamily: 'Poppins', 
+          style: TextStyle(fontFamily: 'Poppins',
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -453,23 +452,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         flexibleSpace: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
               ],
             ),
-            border: const Border(
-              bottom: BorderSide(color: Colors.white, width: 0.5),
-            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
         actions: [
-          // Add person/group icon with circular container
           Container(
             margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
             decoration: BoxDecoration(
@@ -495,61 +490,44 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
-              ),
+          child: TabBar(
+            controller: _tabController,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorColor: Colors.white,
+            indicatorWeight: 2,
+            dividerColor: Colors.transparent,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+            labelStyle: const TextStyle(fontFamily: 'Poppins',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicatorColor: Colors.white,
-              indicatorWeight: 2,
-              dividerColor: Colors.transparent,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-              labelStyle: const TextStyle(fontFamily: 'Poppins', 
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', 
-                fontSize: 15,
-                fontWeight: FontWeight.normal,
-              ),
-              tabs: const [
-                Tab(text: 'Chats'),
-                Tab(text: 'Groups'),
-                Tab(text: 'Calls'),
-              ],
+            unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins',
+              fontSize: 15,
+              fontWeight: FontWeight.normal,
             ),
+            tabs: const [
+              Tab(text: 'Chats'),
+              Tab(text: 'Groups'),
+              Tab(text: 'Calls'),
+            ],
           ),
         ),
       ),
-      body: AppBackground(
-        showParticles: true,
-        overlayOpacity: 0.6,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
+        child: TabBarView(
+          controller: _tabController,
           children: [
-            // Spacer for AppBar
-            SizedBox(
-              height: MediaQuery.of(context).padding.top + kToolbarHeight + 48,
-            ),
-            // Tab content
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildChatsList(isDarkMode, isGroup: false),
-                  _buildChatsList(isDarkMode, isGroup: true),
-                  _buildCallsList(isDarkMode),
-                ],
-              ),
-            ),
+            _buildChatsList(isDarkMode, isGroup: false),
+            _buildChatsList(isDarkMode, isGroup: true),
+            _buildCallsList(isDarkMode),
           ],
         ),
       ),
@@ -1691,6 +1669,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           width: 1,
         ),
       ),
+      clipBehavior: Clip.hardEdge,
       child: ListTile(
         dense: false,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -1711,9 +1690,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
         title: Text(
           finalIsGroupCall ? groupName : formatDisplayName(displayName),
-          style: TextStyle(fontFamily: 'Poppins', 
+          style: TextStyle(fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
-            fontSize: 16,
+            fontSize: 15,
             color: isDarkMode ? Colors.white : Colors.black,
           ),
         ),
@@ -1722,13 +1701,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           children: [
             Row(
               children: [
-                Icon(statusIcon, size: 15, color: statusColor),
+                Icon(statusIcon, size: 14, color: statusColor),
                 const SizedBox(width: 4),
                 Text(
                   finalIsGroupCall ? (joinedCount > 0 ? 'joined $joinedCount' : 'not joined') : '',
                   style: TextStyle(fontFamily: 'Poppins',
                     color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 13,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -1746,7 +1725,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                         callStatus == 'busy'
                     ? Colors.red.withValues(alpha: 0.9)
                     : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                fontSize: 13,
+                fontSize: 12,
               ),
             ),
           ],
@@ -1776,9 +1755,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Widget _buildEmptyCallsState(bool isDarkMode) {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.4),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.call_outlined,
@@ -1788,7 +1768,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 16),
           Text(
             'No calls yet',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: isDarkMode ? Colors.white : Colors.black,
@@ -1797,7 +1777,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 8),
           Text(
             'Your call history will appear here',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 14,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -2425,6 +2405,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           width: 1,
         ),
       ),
+      clipBehavior: Clip.hardEdge,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -2442,7 +2423,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             }
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
                 // Checkbox for selection mode
@@ -2462,7 +2443,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 // Avatar
                 conversation.isGroup
                     ? CircleAvatar(
-                        radius: 24,
+                        radius: 22,
                         backgroundColor: Theme.of(
                           context,
                         ).primaryColor.withValues(alpha: 0.15),
@@ -2475,11 +2456,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     : _buildUserAvatar(
                         photoUrl: fixedPhotoUrl,
                         initial: initial,
-                        radius: 24,
+                        radius: 22,
                         context: context,
                         uniqueId: conversation.id,
                       ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 // Content
                 Expanded(
                   child: Column(
@@ -2491,29 +2472,27 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                           Expanded(
                             child: Text(
                               formatDisplayName(displayName),
-                              style: const TextStyle(fontFamily: 'Poppins', 
-                                fontSize: 16,
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                fontSize: 13.5,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _buildSourceTag(conversation),
                         ],
                       ),
-                      const SizedBox(height: 3),
                       // Row 2: Time
                       if (conversation.lastMessageTime != null)
                         Text(
                           timeago.format(conversation.lastMessageTime!),
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.6),
+                          style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.5),
                           ),
                         ),
-                      const SizedBox(height: 4),
                       // Row 3: Last message + unread count
                       Row(
                         children: [
@@ -2526,7 +2505,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                               padding: EdgeInsets.only(right: 4),
                               child: Icon(
                                 Icons.mic,
-                                size: 15,
+                                size: 13,
                                 color: Colors.white,
                               ),
                             ),
@@ -2536,10 +2515,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                   ? 'Typing...'
                                   : conversation.lastMessage ??
                                         'Start a conversation',
-                              style: TextStyle(fontFamily: 'Poppins', 
-                                fontSize: 13,
-                                color: Colors.white.withValues(alpha: 0.7),
+                              style: TextStyle(fontFamily: 'Poppins',
+                                fontSize: 11.5,
+                                color: Colors.white.withValues(alpha: 0.6),
                               ),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -2551,16 +2531,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor,
+                                color: const Color(0xFF25D366),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 unreadCount > 99
                                     ? '99+'
                                     : unreadCount.toString(),
-                                style: const TextStyle(fontFamily: 'Poppins', 
+                                style: const TextStyle(fontFamily: 'Poppins',
                                   color: Colors.white,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -2620,10 +2600,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: sourceColor.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: sourceColor.withValues(alpha: 0.4),
           width: 0.5,
@@ -2632,12 +2612,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(sourceIcon, size: 13, color: Colors.white),
-          const SizedBox(width: 4),
+          Icon(sourceIcon, size: 11, color: Colors.white),
+          const SizedBox(width: 3),
           Text(
             source,
-            style: const TextStyle(fontFamily: 'Poppins', 
-              fontSize: 12,
+            style: const TextStyle(fontFamily: 'Poppins',
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
@@ -2688,25 +2668,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 120),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      constraints: const BoxConstraints(maxWidth: 110),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: tagColor.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: tagColor.withValues(alpha: 0.4), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white),
-          const SizedBox(width: 4),
+          Icon(icon, size: 11, color: Colors.white),
+          const SizedBox(width: 3),
           Flexible(
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               style: const TextStyle(fontFamily: 'Poppins',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
@@ -2977,9 +2957,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Widget _buildEmptyState(bool isDarkMode, bool isGroup) {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.4),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             isGroup ? Icons.group_outlined : Icons.chat_bubble_outline,
@@ -2989,7 +2970,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 16),
           Text(
             isGroup ? 'No groups yet' : 'No chats yet',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: isDarkMode ? Colors.white : Colors.black,
@@ -3000,7 +2981,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             isGroup
                 ? 'Create a group to get started'
                 : 'Start a new conversation',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 14,
               color: isDarkMode ? Colors.grey[600] : Colors.grey,
             ),
@@ -3175,9 +3156,14 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
           ),
         ),
       ),
-      body: AppBackground(
-        showParticles: true,
-        overlayOpacity: 0.6,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
         child: Column(
           children: [
             SizedBox(height: MediaQuery.of(context).padding.top + 56 + 12),
@@ -3334,6 +3320,7 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
           width: 1,
         ),
       ),
+      clipBehavior: Clip.hardEdge,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -3426,15 +3413,16 @@ class _NewMessageScreenState extends State<_NewMessageScreen>
   }
 
   Widget _buildEmpty() {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.4),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.people_outline, size: 64, color: Colors.grey[700]),
           const SizedBox(height: 16),
           const Text(
             'No contacts yet',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: Colors.white,

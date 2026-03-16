@@ -91,7 +91,7 @@ The diagnostic screen at [video_test_screen.dart](lib/screens/call/video_test_sc
 
 ```dart
 // Temporarily add to your app navigation
-import 'package:supper/screens/call/video_test_screen.dart';
+import 'package:single_tap/screens/call/video_test_screen.dart';
 
 // Test camera independently
 Navigator.push(
@@ -118,7 +118,7 @@ Navigator.push(
    - Try again
 
 3. **Permissions in Settings:**
-   - Settings → Apps → Supper → Permissions
+   - Settings → Apps → Single Tap → Permissions
    - Verify Camera and Microphone are enabled
 
 #### Common Emulator Issues

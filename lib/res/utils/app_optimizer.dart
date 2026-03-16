@@ -19,11 +19,9 @@ class AppOptimizer {
 
   /// Initialize app-wide optimizations
   static Future<void> initialize() async {
-    // Configure Firestore for offline persistence
-    _firestore.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
+    // NOTE: Firestore settings are already configured in main.dart (50MB cache).
+    // Do NOT set them again here — Firestore only allows settings to be set once
+    // before the first operation. Setting them twice causes a crash.
 
     // Configure image cache
     PaintingBinding.instance.imageCache.maximumSize = maxImageCacheCount;

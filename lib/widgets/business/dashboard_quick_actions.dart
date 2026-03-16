@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/models/business_dashboard_config.dart';
-import 'package:supper/res/config/app_colors.dart';
+import 'package:single_tap/models/business_dashboard_config.dart';
+import 'package:single_tap/res/config/app_colors.dart';
 
 /// Dashboard quick actions grid widget (2x2 grid)
 /// Displays 4 action buttons for common business operations

@@ -85,7 +85,7 @@ class GeocodingService {
             url,
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'SingleTap App/1.0', // Required by Nominatim
+              'User-Agent': 'Single Tap App/1.0', // Required by Nominatim
             },
           )
           .timeout(const Duration(seconds: 10));
@@ -329,23 +329,47 @@ class GeocodingService {
     }
   }
 
+  /// Detect country code from GPS coordinates (no API call needed)
+  static String? _countryFromCoords(double lat, double lng) {
+    if (lat >= 6 && lat <= 37 && lng >= 68 && lng <= 98) return 'in';
+    if (lat >= 24 && lat <= 50 && lng >= -125 && lng <= -66) return 'us';
+    if (lat >= 49 && lat <= 61 && lng >= -8 && lng <= 2) return 'gb';
+    if (lat >= 36 && lat <= 72 && lng >= -10 && lng <= 40) return null; // Europe — too broad, skip
+    if (lat >= 22 && lat <= 27 && lng >= 51 && lng <= 56.5) return 'ae';
+    if (lat >= 16 && lat <= 33 && lng >= 34 && lng <= 56) return 'sa';
+    return null;
+  }
+
   /// Search for location by text query (for search functionality)
-  static Future<List<Map<String, dynamic>>> searchLocation(String query) async {
+  /// Pass [userLat]/[userLng] to bias results near the user's location.
+  static Future<List<Map<String, dynamic>>> searchLocation(
+    String query, {
+    double? userLat,
+    double? userLng,
+  }) async {
     try {
-      final url = Uri.parse(
-        '${AppAssets.osmSearch}'
-        '?q=${Uri.encodeComponent(query)}'
-        '&format=json'
-        '&addressdetails=1'
-        '&limit=5',
-      );
+      // Build query params
+      String params = '?q=${Uri.encodeComponent(query)}'
+          '&format=json'
+          '&addressdetails=1'
+          '&limit=8';
+
+      // Detect country from user coordinates and restrict search
+      if (userLat != null && userLng != null) {
+        final cc = _countryFromCoords(userLat, userLng);
+        if (cc != null) {
+          params += '&countrycodes=$cc';
+        }
+      }
+
+      final url = Uri.parse('${AppAssets.osmSearch}$params');
 
       final response = await http
           .get(
             url,
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'SingleTap App/1.0',
+              'User-Agent': 'Single Tap App/1.0',
             },
           )
           .timeout(const Duration(seconds: 10));
@@ -353,13 +377,24 @@ class GeocodingService {
       if (response.statusCode == 200) {
         final List<dynamic> results = json.decode(response.body);
 
-        return results.map((result) {
+        // Filter to only city/town/village/suburb level results
+        final filtered = results.where((r) {
+          final type = (r['type'] ?? '').toString().toLowerCase();
+          final cls = (r['class'] ?? '').toString().toLowerCase();
+          if (cls == 'place') return true;
+          if (cls == 'boundary' && type == 'administrative') return true;
+          return false;
+        }).toList();
+
+        final toMap = filtered.isNotEmpty ? filtered : results;
+
+        return toMap.take(5).map((result) {
           final address = result['address'] ?? {};
 
           return {
             'formatted': result['display_name'] ?? '',
             'area': address['suburb'] ?? address['neighbourhood'] ?? '',
-            'city': address['city'] ?? address['town'] ?? '',
+            'city': address['city'] ?? address['town'] ?? address['village'] ?? '',
             'state': address['state'] ?? '',
             'pincode': address['postcode'] ?? '',
             'country': address['country'] ?? '',

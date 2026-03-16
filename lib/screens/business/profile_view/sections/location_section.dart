@@ -337,7 +337,7 @@ class ContactSection extends StatelessWidget {
           if (contact.SingleTap != null)
             _ContactItem(
               icon: Icons.chat,
-              label: 'SingleTap',
+              label: 'Single Tap',
               value: contact.SingleTap!,
               color: const Color(0xFF25D366),
               onTap: () => _openSingleTap(context, contact.SingleTap!),

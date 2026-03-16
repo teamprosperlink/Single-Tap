@@ -34,11 +34,14 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0f0f23),
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () {
@@ -59,15 +62,24 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
           ),
         ),
         centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+          ),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
+                bottom: BorderSide(color: Colors.white, width: 0.5),
               ),
             ),
             child: TabBar(
@@ -97,8 +109,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
         ),
       ),
       body: AppBackground(
-        showParticles: true,
-        overlayOpacity: 0.7,
+        showParticles: false,
         child: SafeArea(
           child: Column(
             children: [
@@ -126,24 +137,17 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.3),
-        border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
-        ),
-      ),
       child: GestureDetector(
         onTap: isSelected
             ? () {
                 HapticFeedback.lightImpact();
-                // Handle continue action
                 final selectedPlan = isPersonalTab
                     ? _selectedPersonalPlan
                     : _selectedBusinessPlan;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Selected plan: $selectedPlan'),
-                    backgroundColor: const Color(0xFF6366f1),
+                    backgroundColor: const Color(0xFF007AFF),
                   ),
                 );
               }
@@ -153,14 +157,9 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF6366f1)
+                ? const Color(0xFF007AFF)
                 : Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF6366f1)
-                  : Colors.white.withValues(alpha: 0.2),
-            ),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
             'Continue',
@@ -239,7 +238,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             ),
             _PlanFeature(
               Icons.apps_outlined,
-              'Explore projects, tasks, and custom SingleTaps',
+              'Explore projects, tasks, and custom Single Taps',
             ),
           ],
           footerText: 'This plan may include ads.',
@@ -272,7 +271,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             ),
             _PlanFeature(
               Icons.folder_outlined,
-              'Organize projects and customize SingleTaps',
+              'Organize projects and customize Single Taps',
             ),
             _PlanFeature(
               Icons.videocam_outlined,
@@ -301,7 +300,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             ),
             _PlanFeature(
               Icons.all_inclusive_outlined,
-              'Tackle big projects with unlimited SingleTap-5.2',
+              'Tackle big projects with unlimited Single Tap-5.2',
             ),
             _PlanFeature(
               Icons.high_quality_outlined,
@@ -387,7 +386,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             ),
             _PlanFeature(
               Icons.all_inclusive,
-              'Get unlimited messages with SingleTap-5',
+              'Get unlimited messages with Single Tap-5',
             ),
             _PlanFeature(
               Icons.auto_awesome,
@@ -403,7 +402,7 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
             ),
             _PlanFeature(
               Icons.folder_shared_outlined,
-              'Share projects & custom SingleTaps',
+              'Share projects & custom Single Taps',
             ),
             _PlanFeature(
               Icons.integration_instructions_outlined,
@@ -452,14 +451,25 @@ class _UpgradePlanScreenState extends State<UpgradePlanScreen>
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF6366f1).withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: isSelected
+                ? [
+                    const Color(0xFF6366f1).withValues(alpha: 0.25),
+                    const Color(0xFF6366f1).withValues(alpha: 0.15),
+                  ]
+                : [
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.15),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? const Color(0xFF6366f1).withValues(alpha: 0.5)
-                : Colors.white.withValues(alpha: 0.1),
+                : Colors.white.withValues(alpha: 0.3),
+            width: 1,
           ),
         ),
         child: Column(

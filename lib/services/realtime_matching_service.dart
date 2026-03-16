@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'notification_service.dart';
-import 'location_services/gemini_service.dart';
+import 'dart:math' as math;
 
 class RealtimeMatchingService {
   static final RealtimeMatchingService _instance =
@@ -14,7 +14,6 @@ class RealtimeMatchingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final NotificationService _notificationService = NotificationService();
-  final GeminiService _geminiService = GeminiService();
 
   StreamSubscription? _intentListener;
   StreamSubscription? _postListener;
@@ -42,14 +41,18 @@ class RealtimeMatchingService {
         .where('userId', isNotEqualTo: currentUserId)
         .where('createdAt', isGreaterThan: Timestamp.now())
         .where('isActive', isEqualTo: true)
+        .limit(50)
         .snapshots()
-        .listen((snapshot) async {
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              await _checkPostMatch(change.doc, currentUserId);
+        .listen(
+          (snapshot) async {
+            for (var change in snapshot.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                await _checkPostMatch(change.doc, currentUserId);
+              }
             }
-          }
-        });
+          },
+          onError: (e) => debugPrint('Error listening to posts: $e'),
+        );
 
     debugPrint(' Listening for new posts in real-time');
   }
@@ -64,67 +67,29 @@ class RealtimeMatchingService {
           .collection('posts')
           .where('userId', isEqualTo: currentUserId)
           .where('isActive', isEqualTo: true)
+          .limit(50)
           .get();
 
       if (userPosts.docs.isEmpty) return;
 
       final newPostData = newPost.data() as Map<String, dynamic>;
-      var newEmbedding = List<double>.from(newPostData['embedding'] ?? []);
+      final newEmbedding = List<double>.from(newPostData['embedding'] ?? []);
 
-      // UPDATED: If embedding missing, generate it now
+      // Skip posts without embeddings — no Gemini calls
       if (newEmbedding.isEmpty) {
-        debugPrint(
-          '   New post ${newPost.id} missing embedding, generating...',
-        );
-        try {
-          final text =
-              '${newPostData['title'] ?? ''} ${newPostData['description'] ?? ''}';
-          newEmbedding = await _geminiService.generateEmbedding(text);
-
-          // Update document with embedding
-          await newPost.reference.update({
-            'embedding': newEmbedding,
-            'embeddingUpdatedAt': FieldValue.serverTimestamp(),
-          });
-
-          debugPrint(' Embedding generated and saved for ${newPost.id}');
-        } catch (e) {
-          debugPrint(' Failed to generate embedding: $e');
-          return; // Skip this post if embedding generation fails
-        }
+        debugPrint('New post ${newPost.id} has no embedding, skipping');
+        return;
       }
 
       for (var userPost in userPosts.docs) {
         final userPostData = userPost.data();
-        var userEmbedding = List<double>.from(userPostData['embedding'] ?? []);
+        final userEmbedding = List<double>.from(userPostData['embedding'] ?? []);
 
-        // UPDATED: Generate embedding if missing for user's post too
-        if (userEmbedding.isEmpty) {
-          debugPrint(
-            ' User post ${userPost.id} missing embedding, generating...',
-          );
-          try {
-            final text =
-                '${userPostData['title'] ?? ''} ${userPostData['description'] ?? ''}';
-            userEmbedding = await _geminiService.generateEmbedding(text);
+        // Skip if user's post has no embedding
+        if (userEmbedding.isEmpty) continue;
 
-            await userPost.reference.update({
-              'embedding': userEmbedding,
-              'embeddingUpdatedAt': FieldValue.serverTimestamp(),
-            });
-
-            debugPrint(' Embedding generated for user post ${userPost.id}');
-          } catch (e) {
-            debugPrint(' Failed to generate embedding: $e');
-            continue; // Skip this comparison
-          }
-        }
-
-        // Calculate similarity
-        final similarity = _geminiService.calculateSimilarity(
-          userEmbedding,
-          newEmbedding,
-        );
+        // Calculate cosine similarity locally
+        final similarity = _cosineSimilarity(userEmbedding, newEmbedding);
 
         if (similarity > 0.75) {
           // Match found! Send notification
@@ -220,6 +185,19 @@ class RealtimeMatchingService {
       'isRead': true,
       'readAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Cosine similarity between two embedding vectors
+  double _cosineSimilarity(List<double> a, List<double> b) {
+    if (a.length != b.length || a.isEmpty) return 0.0;
+    double dot = 0, magA = 0, magB = 0;
+    for (int i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      magA += a[i] * a[i];
+      magB += b[i] * b[i];
+    }
+    final magnitude = math.sqrt(magA) * math.sqrt(magB);
+    return magnitude == 0 ? 0.0 : dot / magnitude;
   }
 
   // Clean up listeners

@@ -185,8 +185,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.splashDark1,
-      body: SafeArea(
+      backgroundColor: Colors.black,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
+        child: SafeArea(
         child: Column(
           children: [
             // Header with progress
@@ -209,6 +217,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
             _buildBottomButtons(),
           ],
         ),
+      ),
       ),
     );
   }

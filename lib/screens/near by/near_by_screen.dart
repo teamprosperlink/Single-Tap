@@ -1,31 +1,87 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
+import '../../services/ip_location_service.dart';
 import '../../res/config/app_colors.dart';
+import '../../res/config/app_assets.dart';
 import '../../res/config/app_text_styles.dart';
-import '../../res/utils/photo_url_helper.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
-import '../../widgets/other widgets/user_avatar.dart';
-import '../../models/user_profile.dart';
-import '../chat/enhanced_chat_screen.dart';
-import '../../services/notification_service.dart';
-import '../../res/utils/snackbar_helper.dart';
-import 'near_by_posts _screen.dart';
+import '../../models/nearby_model.dart';
+import 'near_by_post_detail_screen.dart';
+import 'saved_nearby_screen.dart';
 
-import 'edit_post_screen.dart';
-import 'create_post_screen.dart';
+// Floating card animation — same as networking screen
+class _FloatingCard extends StatefulWidget {
+  final Widget child;
+  final int animationIndex;
+
+  const _FloatingCard({required this.child, this.animationIndex = 0});
+
+  @override
+  State<_FloatingCard> createState() => _FloatingCardState();
+}
+
+class _FloatingCardState extends State<_FloatingCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _floatAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    final ms = 1600 + (widget.animationIndex % 6) * 220;
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: ms),
+    );
+    _controller.value = (widget.animationIndex * 0.17) % 1.0;
+    _controller.repeat(reverse: true);
+    _floatAnim = Tween<double>(begin: -6.0, end: 6.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _floatAnim,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _floatAnim.value),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
 
 class NearByScreen extends StatefulWidget {
   final VoidCallback? onBack;
+  final bool isVisible;
 
-  const NearByScreen({super.key, this.onBack});
+  const NearByScreen({super.key, this.onBack, this.isVisible = false});
+
+  // ── Static cache so data survives widget rebuilds ──
+  static Map<String, List<Map<String, dynamic>>> _cachedPostsByTab = {};
+  static double? _cachedLat;
+  static double? _cachedLng;
+  static bool _hasEverLoaded = false;
 
   @override
   State<NearByScreen> createState() => _NearByScreenState();
@@ -35,31 +91,19 @@ class _NearByScreenState extends State<NearByScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final ScrollController _scrollController = ScrollController();
+  // Separate ScrollController per tab to avoid shared-controller conflicts
+  late final List<ScrollController> _scrollControllers;
   final TextEditingController _searchController = TextEditingController();
 
-  // Posts data
-  List<DocumentSnapshot> _posts = [];
+  // Posts data per tab (from API, categorized by domain)
+  Map<String, List<Map<String, dynamic>>> _postsByTab = {};
   bool _isLoading = true;
-  bool _isLoadingMore = false; // Separate flag for pagination loading
-  bool _hasMore = true;
-  DocumentSnapshot? _lastDocument;
-  final int _pageSize = 30; // Increased page size for fewer loads
+  String? _apiError;
 
-  // Cached filtered posts to avoid recomputation
-  List<DocumentSnapshot>? _cachedFilteredPosts;
-  String? _lastSearchQuery;
-  String? _lastSelectedCategory;
 
-  // Real-time stream subscription
-  StreamSubscription<QuerySnapshot>? _postsSubscription;
-
-  // Saved posts
-  Set<String> _savedPostIds = {};
-
-  // User cache for fetching names
-  final Map<String, Map<String, dynamic>> _userCache = {};
+  // Current user location for distance calculation
+  double? _myLat;
+  double? _myLng;
 
   // Voice search
   bool _isListening = false;
@@ -67,63 +111,70 @@ class _NearByScreenState extends State<NearByScreen>
   bool _speechEnabled = false;
   Timer? _silenceTimer;
 
-  // Categories
-  String _selectedCategory = 'All';
-  bool _isCategoryLoading = false;
-
-  // Expanded posts tracking
-  final Set<String> _expandedPosts = {};
+  // Categories — Products first since most posts are product listings
+  String _selectedCategory = 'Products';
 
   final List<Map<String, dynamic>> _categories = [
-    {'name': 'All', 'icon': Icons.grid_view_rounded},
-    {'name': 'Service', 'icon': Icons.computer_rounded},
-    {'name': 'Jobs', 'icon': Icons.work_rounded},
     {'name': 'Products', 'icon': Icons.shopping_bag_rounded},
-    {'name': 'Donation', 'icon': Icons.volunteer_activism_rounded},
+    {'name': 'Services', 'icon': Icons.computer_rounded},
   ];
+
+  bool _hasFetchedOnce = false;
+
+  // Saved/bookmarked post IDs
+  final Set<String> _savedPostIds = {};
+  final _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
+    _scrollControllers = List.generate(_categories.length, (_) => ScrollController());
     _tabController = TabController(length: _categories.length, vsync: this);
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
+      if (!_tabController.indexIsChanging && mounted) {
         HapticFeedback.lightImpact();
         setState(() {
-          _isCategoryLoading = true;
           _selectedCategory = _categories[_tabController.index]['name'];
-        });
-        // Simulate loading delay for smooth UX
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted) {
-            setState(() {
-              _isCategoryLoading = false;
-            });
-          }
         });
       }
     });
     WidgetsBinding.instance.addObserver(this);
-    _subscribeToFeedPosts();
-    _loadSavedPosts();
-    _scrollController.addListener(_onScroll);
-    _searchController.addListener(_onSearchChanged);
+    _loadSavedPostIds();
+
+    // ── Restore from static cache instantly (no loading spinner) ──
+    if (NearByScreen._hasEverLoaded && NearByScreen._cachedPostsByTab.isNotEmpty) {
+      _postsByTab = Map.of(NearByScreen._cachedPostsByTab);
+      _myLat = NearByScreen._cachedLat;
+      _myLng = NearByScreen._cachedLng;
+      _isLoading = false;
+    }
+
     _initSpeech();
+
+    // Only fetch if already visible on first build
+    if (widget.isVisible) {
+      _hasFetchedOnce = true;
+      _loadMyLocationThenFetchFeed();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant NearByScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fetch when user navigates to Nearby tab for the first time
+    if (widget.isVisible && !oldWidget.isVisible && !_hasFetchedOnce) {
+      _hasFetchedOnce = true;
+      _loadMyLocationThenFetchFeed();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Reload saved posts when app comes back to foreground
-    if (state == AppLifecycleState.resumed) {
-      _loadSavedPosts();
-    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Reload saved posts when returning to this screen
-    _loadSavedPosts();
   }
 
   Future<void> _initSpeech() async {
@@ -150,251 +201,364 @@ class _NearByScreenState extends State<NearByScreen>
     }
   }
 
-  void _onSearchChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    _postsSubscription?.cancel();
-    _scrollController.dispose();
+    for (final sc in _scrollControllers) {
+      sc.dispose();
+    }
     _searchController.dispose();
     _silenceTimer?.cancel();
     _speech.stop();
     super.dispose();
   }
 
-  void _onScroll() {
-    // Trigger loading earlier (500px before end) for smoother experience
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 500) {
-      if (!_isLoadingMore && !_isLoading && _hasMore) {
-        _loadMorePosts();
+  /// Load all saved post IDs from Firestore once
+  Future<void> _loadSavedPostIds() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .get();
+      if (mounted) {
+        setState(() {
+          _savedPostIds.clear();
+          for (final doc in snap.docs) {
+            _savedPostIds.add(doc.id);
+          }
+        });
       }
+    } catch (e) {
+      debugPrint('Error loading saved post IDs: $e');
     }
   }
 
-  void _subscribeToFeedPosts() {
-    if (!mounted) return;
+  /// Toggle save/unsave a nearby post
+  Future<void> _toggleSavePost(String postId, Map<String, dynamic> postData) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    HapticFeedback.lightImpact();
 
+    final wasSaved = _savedPostIds.contains(postId);
+    // Optimistic UI update
     setState(() {
-      _isLoading = true;
+      if (wasSaved) {
+        _savedPostIds.remove(postId);
+      } else {
+        _savedPostIds.add(postId);
+      }
     });
 
-    // Real-time stream subscription for latest posts
-    _postsSubscription = _firestore
-        .collection('posts')
-        .orderBy('createdAt', descending: true)
-        .limit(_pageSize)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (mounted) {
-              setState(() {
-                _posts = snapshot.docs;
-                _isLoading = false;
-                _hasMore = snapshot.docs.length == _pageSize;
-                if (snapshot.docs.isNotEmpty) {
-                  _lastDocument = snapshot.docs.last;
-                }
-                // Invalidate cache when posts change
-                _cachedFilteredPosts = null;
-              });
-            }
-          },
-          onError: (e) {
-            debugPrint('Error loading feed posts: $e');
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-              });
-            }
-          },
-        );
+    try {
+      final ref = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .doc(postId);
+      if (wasSaved) {
+        await ref.delete();
+      } else {
+        await ref.set({
+          'savedAt': FieldValue.serverTimestamp(),
+          'postData': postData,
+          'source': 'nearby',
+        });
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          if (wasSaved) {
+            _savedPostIds.add(postId);
+          } else {
+            _savedPostIds.remove(postId);
+          }
+        });
+      }
+      debugPrint('Error toggling save: $e');
+    }
   }
 
-  Future<void> _loadMorePosts() async {
-    if (_isLoadingMore || _isLoading || !_hasMore || _lastDocument == null) {
+  /// Convert Firebase UID to deterministic UUID v5 (same logic as ProductApiService)
+  String get _userUuid {
+    final firebaseUid = _auth.currentUser?.uid;
+    if (firebaseUid == null || firebaseUid.isEmpty) return '';
+    return const Uuid().v5(Namespace.url.value, 'singletap:$firebaseUid');
+  }
+
+  /// Load location first, then fetch feed from API
+  Future<void> _loadMyLocationThenFetchFeed() async {
+    await _loadMyLocation();
+    await _fetchNearbyFeed();
+  }
+
+  /// Fetch nearby posts from /nearby/feed API using NearbyModel
+  Future<void> _fetchNearbyFeed() async {
+    if (!mounted) return;
+
+    final userUuid = _userUuid;
+    if (userUuid.isEmpty) {
+      debugPrint('NearBy: No user UUID — skipping API call');
+      if (mounted) setState(() { _isLoading = false; _apiError = 'Not logged in'; });
       return;
     }
 
-    setState(() {
-      _isLoadingMore = true;
-    });
+    // Only show loading spinner if we have NO cached data
+    if (_postsByTab.isEmpty) {
+      setState(() { _isLoading = true; _apiError = null; });
+    }
 
-    try {
-      // Simple query without compound index requirement
-      Query query = _firestore
-          .collection('posts')
-          .orderBy('createdAt', descending: true)
-          .startAfterDocument(_lastDocument!)
-          .limit(_pageSize);
+    // Try up to 2 times (initial + 1 retry) to handle Render cold starts
+    for (int attempt = 0; attempt < 2; attempt++) {
+      if (!mounted) return;
 
-      final snapshot = await query.get();
+      try {
+        String? token;
+        try {
+          token = await _auth.currentUser?.getIdToken();
+        } catch (_) {}
 
-      if (mounted) {
-        setState(() {
-          // Filter out duplicates before adding
-          final existingIds = _posts.map((d) => d.id).toSet();
-          final newDocs = snapshot.docs
-              .where((d) => !existingIds.contains(d.id))
-              .toList();
-          _posts.addAll(newDocs);
-          _isLoadingMore = false;
-          _hasMore = snapshot.docs.length == _pageSize;
-          if (snapshot.docs.isNotEmpty) {
-            _lastDocument = snapshot.docs.last;
+        final uri = Uri.parse(AppAssets.nearbyFeedUrl);
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        };
+        final body = json.encode({
+          'user_id': userUuid,
+          'lat': _myLat ?? 0.0,
+          'lng': _myLng ?? 0.0,
+          'radius_km': 50,
+          'limit': 50,
+        });
+
+        debugPrint('NearBy: API request attempt ${attempt + 1}');
+
+        final response = await http
+            .post(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 60));
+
+        debugPrint('NearBy: API response status=${response.statusCode}');
+
+        if (response.statusCode == 200 && mounted) {
+          final decoded = json.decode(response.body) as Map<String, dynamic>;
+
+          // Debug: dump first raw listing from API
+          final rawBuy = decoded['buy'] as List? ?? [];
+          final rawSell = decoded['sell'] as List? ?? [];
+          final firstRaw = rawBuy.isNotEmpty ? rawBuy.first : (rawSell.isNotEmpty ? rawSell.first : null);
+          if (firstRaw != null) {
+            final rawData = firstRaw['data'] ?? {};
+            final rawItems = rawData['items'] as List? ?? [];
+            debugPrint('RAW_API_FIRST → listing_id=${firstRaw['listing_id']}, distance_km=${firstRaw['distance_km']}');
+            debugPrint('RAW_API_FIRST → TOP-LEVEL KEYS=${(firstRaw as Map).keys.toList()}');
+            debugPrint('RAW_API_FIRST → data.location=${rawData['location']}, data.target_location=${rawData['target_location']}, data.budget=${rawData['budget']}, data.price=${rawData['price']}');
+            debugPrint('RAW_API_FIRST → images=${firstRaw['images']}, image_urls=${firstRaw['image_urls']}, data.images=${rawData['images']}');
+            if (rawItems.isNotEmpty) {
+              debugPrint('RAW_API_FIRST → items[0]=${json.encode(rawItems.first)}');
+            } else {
+              debugPrint('RAW_API_FIRST → items=EMPTY');
+            }
           }
-          // Invalidate cache when posts change
-          _cachedFilteredPosts = null;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading more posts: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-        });
-      }
-    }
-  }
 
-  Future<void> _loadSavedPosts() async {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return;
+          // Parse with NearbyModel
+          final nearbyModel = NearbyModel.fromJson(decoded);
+          debugPrint('NearBy: NearbyModel parsed — buy=${nearbyModel.buy.length}, sell=${nearbyModel.sell.length}, seek=${nearbyModel.seek.length}, provide=${nearbyModel.provide.length}, total=${nearbyModel.totalCount}');
 
-    try {
-      final savedSnapshot = await _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('saved_posts')
-          .get();
+          // Convert all listings to flat card maps
+          final allCards = nearbyModel.toFlatCards();
 
-      if (mounted) {
-        setState(() {
-          _savedPostIds = savedSnapshot.docs.map((doc) => doc.id).toSet();
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading saved posts: $e');
-    }
-  }
+          // Categorize into tabs, deduplicate by listing_id AND
+          // collapse near-identical listings from same user
+          final tabPosts = <String, List<Map<String, dynamic>>>{
+            'Products': [],
+            'Services': [],
+          };
+          final seenIds = <String>{};
+          // Track user+itemType+model combos → kept card reference
+          final seenUserItems = <String, Map<String, dynamic>>{};
 
-  /// Fetch user data from Firestore and cache it
-  Future<Map<String, dynamic>?> _getUserData(String userId) async {
-    // Check cache first
-    if (_userCache.containsKey(userId)) {
-      return _userCache[userId];
-    }
+          // Helper to check if a card has valid price
+          bool hasPrice(Map<String, dynamic> c) {
+            final p = c['price'];
+            return p != null && p != '' && p != 0;
+          }
 
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final userData = userDoc.data()!;
-        _userCache[userId] = userData;
-        return userData;
-      }
-    } catch (e) {
-      debugPrint('Error fetching user data: $e');
-    }
-    return null;
-  }
-
-  /// Get display name for a post - fetches from user profile if not stored
-  String _getDisplayName(
-    Map<String, dynamic> post,
-    Map<String, dynamic>? userData,
-  ) {
-    // First try post's stored userName
-    final postUserName = post['userName'] as String?;
-    if (postUserName != null &&
-        postUserName.isNotEmpty &&
-        postUserName != 'User') {
-      return postUserName;
-    }
-
-    // Then try fetched user data
-    if (userData != null) {
-      // Try name first
-      final name = userData['name'] ?? userData['displayName'];
-      if (name != null &&
-          name.toString().isNotEmpty &&
-          name.toString() != 'User') {
-        return name.toString();
-      }
-      // Fallback to phone number for phone login users
-      final phone = userData['phone'] as String?;
-      if (phone != null && phone.isNotEmpty) {
-        return phone;
-      }
-    }
-
-    return 'User';
-  }
-
-  /// Get photo URL for a post - fetches from user profile if not stored
-  String? _getPhotoUrl(
-    Map<String, dynamic> post,
-    Map<String, dynamic>? userData,
-  ) {
-    // First try post's stored userPhoto
-    final postPhoto = post['userPhoto'] as String?;
-    if (postPhoto != null && postPhoto.isNotEmpty) {
-      return postPhoto;
-    }
-
-    // Then try fetched user data
-    if (userData != null) {
-      return userData['photoUrl'] ??
-          userData['photoURL'] ??
-          userData['profileImageUrl'];
-    }
-
-    return null;
-  }
-
-  Future<void> _toggleSavePost(
-    String postId,
-    Map<String, dynamic> postData,
-  ) async {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return;
-
-    HapticFeedback.lightImpact();
-
-    try {
-      final savedRef = _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('saved_posts')
-          .doc(postId);
-
-      if (_savedPostIds.contains(postId)) {
-        await savedRef.delete();
-        if (mounted) {
-          setState(() {
-            _savedPostIds.remove(postId);
+          // Sort by created_at descending so we keep the newest per combo
+          allCards.sort((a, b) {
+            final aDate = a['created_at']?.toString() ?? '';
+            final bDate = b['created_at']?.toString() ?? '';
+            return bDate.compareTo(aDate);
           });
+
+          final firebaseUid = _auth.currentUser?.uid ?? '';
+
+          // Capture current user's API user_id → Firebase UID mapping
+          // so other users can resolve our profile when viewing our posts
+          if (firebaseUid.isNotEmpty) {
+            for (final card in allCards) {
+              final cardOwnerId = (card['user_id'] ?? '').toString();
+              if (cardOwnerId.isNotEmpty &&
+                  (cardOwnerId == userUuid || cardOwnerId == firebaseUid)) {
+                // This is our own listing — store the mapping
+                _firestore.collection('api_user_mappings').doc(cardOwnerId).set({
+                  'firebaseUid': firebaseUid,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true)).catchError((_) {});
+                // Also store UUID v5 mapping
+                if (userUuid.isNotEmpty && cardOwnerId != userUuid) {
+                  _firestore.collection('api_user_mappings').doc(userUuid).set({
+                    'firebaseUid': firebaseUid,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true)).catchError((_) {});
+                }
+                break;
+              }
+            }
+          }
+
+          for (final card in allCards) {
+            // Skip current user's own posts — only show others' posts
+            final cardOwnerId = (card['user_id'] ?? '').toString();
+            if (cardOwnerId.isNotEmpty &&
+                (cardOwnerId == userUuid || cardOwnerId == firebaseUid)) continue;
+
+            final id = (card['listing_id'] ?? '').toString();
+            if (id.isNotEmpty && seenIds.contains(id)) continue;
+            if (id.isNotEmpty) seenIds.add(id);
+
+            // Collapse duplicates: same user + same item type + same model/brand
+            final userId = (card['user_id'] ?? '').toString();
+            final itemType = (card['item_type'] ?? '').toString().toLowerCase();
+            final cardModel = (card['model'] ?? '').toString().toLowerCase();
+            final cardBrand = (card['brand'] ?? '').toString().toLowerCase();
+            final dedupKey = '$userId|$itemType|$cardModel|$cardBrand';
+            if (userId.isNotEmpty && itemType.isNotEmpty) {
+              final existing = seenUserItems[dedupKey];
+              if (existing != null) {
+                // Merge price from duplicate if existing has no price
+                if (!hasPrice(existing) && hasPrice(card)) {
+                  existing['price'] = card['price'];
+                }
+                continue;
+              }
+            }
+
+            final postType = (card['postType'] ?? 'Products').toString();
+            final targetList = tabPosts[postType] ?? tabPosts['Products']!;
+            targetList.add(card);
+
+            if (userId.isNotEmpty && itemType.isNotEmpty) {
+              seenUserItems[dedupKey] = card;
+            }
+          }
+
+          debugPrint('NearBy: Products=${tabPosts['Products']!.length}, Services=${tabPosts['Services']!.length}');
+
+          // Debug: log first card's key fields to verify data flow
+          if (allCards.isNotEmpty) {
+            final sample = allCards.first;
+            debugPrint('NearBy: SAMPLE CARD → title=${sample['title']}, price=${sample['price']}, location=${sample['location']}, domain=${sample['domain']}, distance_km=${sample['distance_km']}, feedCategory=${sample['feedCategory']}, images=${(sample['images'] as List?)?.length ?? 0}');
+          }
+
+          if (mounted) {
+            setState(() {
+              _postsByTab = tabPosts;
+              _isLoading = false;
+              _apiError = null;
+              NearByScreen._cachedPostsByTab = Map.of(tabPosts);
+              NearByScreen._hasEverLoaded = true;
+            });
+          }
+          return; // Success — exit retry loop
+
+        } else {
+          debugPrint('NearBy: API error ${response.statusCode}');
+          if (attempt == 1 && mounted) {
+            setState(() { _isLoading = false; _apiError = 'Server error (${response.statusCode})'; });
+          }
         }
-      } else {
-        await savedRef.set({
-          'postId': postId,
-          'postData': postData,
-          'savedAt': FieldValue.serverTimestamp(),
-        });
-        if (mounted) {
-          setState(() {
-            _savedPostIds.add(postId);
-          });
+      } on TimeoutException {
+        debugPrint('NearBy: API timed out (attempt ${attempt + 1})');
+        if (attempt == 1 && mounted) {
+          setState(() { _isLoading = false; _apiError = 'Server is starting up, pull to refresh'; });
+        }
+      } catch (e) {
+        debugPrint('NearBy: API exception (attempt ${attempt + 1}): $e');
+        if (attempt == 1 && mounted) {
+          setState(() { _isLoading = false; _apiError = 'Connection error'; });
         }
       }
-    } catch (e) {
-      debugPrint('Error toggling save: $e');
+
+      // Wait before retry
+      if (attempt == 0) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
+  }
+
+  Future<void> _loadMyLocation() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) {
+      if (mounted) setState(() { _isLoading = false; });
+      return;
+    }
+
+    // Priority 1: Use static cache if available (instant)
+    if (NearByScreen._cachedLat != null && NearByScreen._cachedLng != null) {
+      setState(() {
+        _myLat = NearByScreen._cachedLat;
+        _myLng = NearByScreen._cachedLng;
+        _isLoading = false;
+      });
+      debugPrint('NearBy: Using cached location: $_myLat, $_myLng');
+      return;
+    }
+
+    // Priority 2: IP-based location
+    try {
+      final result = await IpLocationService.detectLocation().timeout(
+        const Duration(seconds: 10),
+      );
+      if (result != null && mounted) {
+        setState(() {
+          _myLat = result['lat'] as double;
+          _myLng = result['lng'] as double;
+          _isLoading = false;
+          NearByScreen._cachedLat = _myLat;
+          NearByScreen._cachedLng = _myLng;
+          });
+        debugPrint('NearBy: Using IP location: $_myLat, $_myLng');
+        return;
+      }
+    } catch (e) {
+      debugPrint('NearBy: IP location error: $e');
+    }
+
+    // All location methods failed — show posts without distance filter
+    if (mounted) {
+      setState(() { _isLoading = false; });
+    }
+    debugPrint('NearBy: No location available — distance filter disabled');
+  }
+
+  double? _calcDistance(double? lat2, double? lng2) {
+    if (_myLat == null || _myLng == null || lat2 == null || lng2 == null) {
+      return null;
+    }
+    const r = 6371.0;
+    final dLat = (lat2 - _myLat!) * (pi / 180);
+    final dLng = (lng2 - _myLng!) * (pi / 180);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_myLat! * (pi / 180)) *
+            cos(lat2 * (pi / 180)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
   }
 
   void _startVoiceSearch() async {
@@ -421,6 +585,11 @@ class _NearByScreenState extends State<NearByScreen>
       _speechEnabled = await _speech.initialize(
         onStatus: (status) {
           debugPrint('Speech status: $status');
+          if (status == 'done' || status == 'notListening') {
+            if (mounted && _isListening) {
+              _stopVoiceSearch();
+            }
+          }
         },
         onError: (error) {
           debugPrint('Speech error: ${error.errorMsg}');
@@ -438,6 +607,7 @@ class _NearByScreenState extends State<NearByScreen>
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _isListening = true;
     });
@@ -483,156 +653,57 @@ class _NearByScreenState extends State<NearByScreen>
 
     _silenceTimer?.cancel();
     await _speech.stop();
+    if (!mounted) return;
 
     setState(() {
       _isListening = false;
     });
   }
 
-  List<DocumentSnapshot> get _filteredPosts {
+  /// Title Case helper
+  String _toTitleCase(String text) {
+    if (text.isEmpty) return text;
+    return text.split(' ').where((w) => w.isNotEmpty).map((w) =>
+      '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}'
+    ).join(' ');
+  }
+
+  /// Helper to get a post's unique ID from API data
+  String _getPostId(Map<String, dynamic> post) {
+    return (post['id'] ?? post['listing_id'] ?? post['_syntheticId'] ?? '').toString();
+  }
+
+  List<Map<String, dynamic>> _getFilteredPosts(String category) {
     final searchQuery = _searchController.text.toLowerCase().trim();
 
-    // Return cached result if inputs haven't changed
-    if (_cachedFilteredPosts != null &&
-        _lastSearchQuery == searchQuery &&
-        _lastSelectedCategory == _selectedCategory) {
-      return _cachedFilteredPosts!;
-    }
+    // Get posts for this tab directly from API-categorized data
+    final tabList = _postsByTab[category] ?? [];
 
-    final currentUserId = _auth.currentUser?.uid;
-    final seenIds = <String>{};
-    final seenTitles = <String>{}; // Track unique titles to remove duplicates
-
-    final result = _posts.where((doc) {
-      // Remove duplicates by ID
-      if (seenIds.contains(doc.id)) return false;
-      seenIds.add(doc.id);
-
-      final data = doc.data() as Map<String, dynamic>;
-
-      // Skip dummy posts (users that don't exist in Firebase)
-      final isDummyPost = data['isDummyPost'] == true;
-      if (isDummyPost) return false;
-
-      // Skip posts from dummy users (userId starts with 'dummy_')
-      final postUserId = data['userId'] as String?;
-      if (postUserId == null || postUserId.startsWith('dummy_')) return false;
-
-      // Remove duplicates by title only (more reliable)
-      final title = (data['title'] ?? data['originalPrompt'] ?? '')
-          .toString()
-          .toLowerCase()
-          .trim();
-      if (title.isNotEmpty && seenTitles.contains(title)) return false;
-      if (title.isNotEmpty) seenTitles.add(title);
-
-      // Filter out current user's own posts (they can see them in My Posts tab)
-      if (postUserId == currentUserId) return false;
-
-      // Filter out inactive posts
-      if (data['isActive'] == false) return false;
-
-      // Donation posts should ONLY appear in the Donation tab
-      if (_selectedCategory != 'Donation' && data['isDonation'] == true) {
-        return false;
-      }
-
-      // Category filter
-      if (_selectedCategory != 'All') {
-        if (!_matchesCategory(data)) return false;
-      }
-
+    final result = tabList.where((data) {
       // Search filter
-      if (searchQuery.isNotEmpty) {
-        if (!_matchesSearch(data, searchQuery)) return false;
+      if (searchQuery.isNotEmpty && !_matchesSearch(data, searchQuery)) {
+        return false;
       }
 
       return true;
     }).toList();
 
-    // Cache the result
-    _cachedFilteredPosts = result;
-    _lastSearchQuery = searchQuery;
-    _lastSelectedCategory = _selectedCategory;
+    // Sort by distance (nearest first)
+    if (_myLat != null && _myLng != null) {
+      result.sort((a, b) {
+        final aDist = _calcDistance(
+          (a['latitude'] as num?)?.toDouble(),
+          (a['longitude'] as num?)?.toDouble(),
+        ) ?? double.infinity;
+        final bDist = _calcDistance(
+          (b['latitude'] as num?)?.toDouble(),
+          (b['longitude'] as num?)?.toDouble(),
+        ) ?? double.infinity;
+        return aDist.compareTo(bDist);
+      });
+    }
 
     return result;
-  }
-
-  // Extracted for better performance - avoid recreating strings repeatedly
-  bool _matchesCategory(Map<String, dynamic> data) {
-    final text = _getCombinedText(data);
-
-    switch (_selectedCategory) {
-      case 'News':
-        return text.contains('news') ||
-            text.contains('breaking') ||
-            text.contains('update') ||
-            text.contains('report') ||
-            text.contains('headline') ||
-            text.contains('latest') ||
-            text.contains('announcement');
-
-      case 'Entertainment':
-        return text.contains('entertainment') ||
-            text.contains('movie') ||
-            text.contains('music') ||
-            text.contains('film') ||
-            text.contains('song') ||
-            text.contains('celebrity') ||
-            text.contains('show') ||
-            text.contains('concert') ||
-            text.contains('game') ||
-            text.contains('gaming');
-
-      case 'Technology':
-        return text.contains('technology') ||
-            text.contains('tech') ||
-            text.contains('software') ||
-            text.contains('app') ||
-            text.contains('computer') ||
-            text.contains('phone') ||
-            text.contains('ai') ||
-            text.contains('digital') ||
-            text.contains('gadget') ||
-            text.contains('device');
-
-      case 'Jobs':
-        return text.contains('job') ||
-            text.contains('hiring') ||
-            text.contains('work') ||
-            text.contains('vacancy') ||
-            text.contains('career') ||
-            text.contains('employment') ||
-            text.contains('recruit') ||
-            text.contains('position') ||
-            text.contains('opening');
-
-      case 'Products':
-        return text.contains('product') ||
-            text.contains('sell') ||
-            text.contains('buy') ||
-            text.contains('sale') ||
-            text.contains('price') ||
-            text.contains('shop') ||
-            text.contains('store') ||
-            text.contains('discount') ||
-            text.contains('offer') ||
-            data['price'] != null;
-
-      case 'Donation':
-        return data['isDonation'] == true;
-
-      default:
-        return true;
-    }
-  }
-
-  String _getCombinedText(Map<String, dynamic> data) {
-    final title = (data['title'] ?? '').toString().toLowerCase();
-    final description = (data['description'] ?? '').toString().toLowerCase();
-    final hashtags =
-        (data['hashtags'] as List<dynamic>?)?.join(' ').toLowerCase() ?? '';
-    return '$title $description $hashtags';
   }
 
   bool _matchesSearch(Map<String, dynamic> data, String searchQuery) {
@@ -648,9 +719,13 @@ class _NearByScreenState extends State<NearByScreen>
     final userName = (data['userName'] ?? '').toString().toLowerCase();
     if (userName.contains(searchQuery)) return true;
 
-    final hashtags =
-        (data['hashtags'] as List<dynamic>?)?.join(' ').toLowerCase() ?? '';
+    final rawH = data['hashtags'];
+    final hashtags = (rawH is List) ? rawH.join(' ').toLowerCase() : '';
     if (hashtags.contains(searchQuery)) return true;
+
+    final rawK = data['keywords'];
+    final keywords = (rawK is List) ? rawK.join(' ').toLowerCase() : '';
+    if (keywords.contains(searchQuery)) return true;
 
     return false;
   }
@@ -666,6 +741,7 @@ class _NearByScreenState extends State<NearByScreen>
         title: const Text(
           'Nearby',
           style: TextStyle(
+            fontFamily: 'Poppins',
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -677,49 +753,42 @@ class _NearByScreenState extends State<NearByScreen>
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         flexibleSpace: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withValues(alpha: 0.4),
-                Colors.black.withValues(alpha: 0.2),
-                Colors.transparent,
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
               ],
             ),
-            border: const Border(
+            border: Border(
               bottom: BorderSide(color: Colors.white, width: 0.5),
             ),
           ),
         ),
         actions: [
-          // More options icon with circular container
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyPostsScreen()),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 0.5,
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SavedNearbyScreen()),
+                );
+              },
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
-              ),
-              child: const Icon(
-                Icons.more_vert_rounded,
-                color: Colors.white,
-                size: 18,
+                child: const Icon(Icons.bookmark_rounded, color: Colors.white, size: 20),
               ),
             ),
           ),
-          const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
@@ -741,20 +810,20 @@ class _NearByScreenState extends State<NearByScreen>
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
               labelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
               unselectedLabelStyle: const TextStyle(
+                fontFamily: 'Poppins',
                 fontSize: 13,
                 fontWeight: FontWeight.normal,
               ),
-              isScrollable: true,
-              tabAlignment: TabAlignment.center,
+              isScrollable: false,
               padding: EdgeInsets.zero,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 20),
-              tabs: _categories.map((category) {
-                return Tab(text: category['name'] as String);
-              }).toList(),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+              tabAlignment: TabAlignment.fill,
+              tabs: _categories.map((c) => Tab(text: c['name'] as String)).toList(),
             ),
           ),
         ),
@@ -767,114 +836,72 @@ class _NearByScreenState extends State<NearByScreen>
             colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
           ),
         ),
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                // Spacer for AppBar with TabBar
-                SizedBox(
-                  height:
-                      MediaQuery.of(context).padding.top + kToolbarHeight + 48,
-                ),
-
-                // Posts list with TabBarView for swipe functionality
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: _categories.map((category) {
-                      return _isLoading && _posts.isEmpty
-                          ? Column(
-                              children: [
-                                _buildGlassSearchBar(),
-                                const Expanded(
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : _isCategoryLoading
-                          ? Column(
-                              children: [
-                                _buildGlassSearchBar(),
-                                const Expanded(
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : _filteredPosts.isEmpty
-                          ? Column(
-                              children: [
-                                _buildGlassSearchBar(),
-                                Expanded(child: _buildEmptyState()),
-                              ],
-                            )
-                          : ListView.builder(
-                              controller: _scrollController,
-                              physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
-                              // Performance optimizations
-                              addAutomaticKeepAlives: false,
-                              addRepaintBoundaries: true,
-                              cacheExtent: 500,
-                              itemCount:
-                                  _filteredPosts.length +
-                                  1 +
-                                  (_isLoadingMore ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return _buildGlassSearchBar();
-                                }
-                                if (index == _filteredPosts.length + 1) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                final doc = _filteredPosts[index - 1];
-                                final data = doc.data() as Map<String, dynamic>;
-
-                                return RepaintBoundary(
-                                  child: _buildPostCard(
-                                    postId: doc.id,
-                                    post: data,
-                                    isSaved: _savedPostIds.contains(doc.id),
-                                  ),
-                                );
-                              },
-                            );
-                    }).toList(),
-                  ),
-                ),
-              ],
+            // Spacer for AppBar + TabBar
+            SizedBox(
+              height: MediaQuery.of(context).padding.top + kToolbarHeight + 48,
             ),
 
-            // Floating Action Button - Create Post
-            Positioned(
-              bottom: 75,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CreatePostScreen()),
-                  ).then((_) => _subscribeToFeedPosts());
-                },
-                backgroundColor: AppColors.iosBlue,
-                shape: const CircleBorder(),
-                child: const Icon(Icons.add, color: Colors.white, size: 28),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: List.generate(_categories.length, (tabIndex) {
+                  final tabCategory = _categories[tabIndex]['name'] as String;
+                  final tabPosts = _getFilteredPosts(tabCategory);
+                  return _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        )
+                      : tabPosts.isEmpty
+                      ? RefreshIndicator(
+                          color: Colors.white,
+                          backgroundColor: Colors.white24,
+                          onRefresh: _loadMyLocationThenFetchFeed,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              _buildGlassSearchBar(),
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+                              _buildEmptyState(),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: Colors.white,
+                          backgroundColor: Colors.white24,
+                          onRefresh: _loadMyLocationThenFetchFeed,
+                          child: CustomScrollView(
+                            controller: _scrollControllers[tabIndex],
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            slivers: [
+                              SliverToBoxAdapter(child: _buildGlassSearchBar()),
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
+                                sliver: SliverMasonryGrid.count(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 10,
+                                  crossAxisSpacing: 10,
+                                  childCount: tabPosts.length,
+                                  itemBuilder: (context, index) {
+                                    final data = tabPosts[index];
+                                    final postId = _getPostId(data);
+                                    return _FloatingCard(
+                                      animationIndex: index,
+                                      child: _buildPostCard(
+                                        postId: postId,
+                                        post: data,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                }),
               ),
             ),
           ],
@@ -885,7 +912,7 @@ class _NearByScreenState extends State<NearByScreen>
 
   Widget _buildGlassSearchBar() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
       child: GlassSearchField(
         controller: _searchController,
         hintText: 'Search posts...',
@@ -894,8 +921,10 @@ class _NearByScreenState extends State<NearByScreen>
         isListening: _isListening,
         onMicTap: _startVoiceSearch,
         onStopListening: _stopVoiceSearch,
-        onChanged: (value) => setState(() {}),
-        onClear: () => setState(() {}),
+        onChanged: (value) {
+          // Invalidate all filter caches since search query changed
+            setState(() {});
+        },
       ),
     );
   }
@@ -903,1078 +932,420 @@ class _NearByScreenState extends State<NearByScreen>
   Widget _buildPostCard({
     required String postId,
     required Map<String, dynamic> post,
-    required bool isSaved,
   }) {
-    final currentUserId = _auth.currentUser?.uid;
-    final postUserId = post['userId'] as String?;
-    final isOwnPost = currentUserId == postUserId;
 
-    final title = post['title'] ?? post['originalPrompt'] ?? 'No Title';
-    final rawDescription = post['description']?.toString() ?? '';
-    final description =
-        (rawDescription == title || rawDescription == post['originalPrompt'])
-        ? ''
-        : rawDescription;
-    final images = post['images'] as List<dynamic>? ?? [];
+    final rawModel = (post['model'] ?? '').toString();
+    final rawBrand = (post['brand'] ?? '').toString();
+    final rawTitle = (post['title'] ?? post['originalPrompt'] ?? 'No Title').toString();
+    // Product name: prefer model, then title — Title Case
+    final rawName = rawModel.isNotEmpty ? rawModel : rawTitle;
+    final title = _toTitleCase(rawName);
+    final brand = rawBrand.isNotEmpty ? _toTitleCase(rawBrand) : '';
+    final feedCategory = (post['feedCategory'] ?? '').toString();
+    final locationStr = (post['location'] ?? '').toString();
+    final rawImgs = post['images'];
+    final images = (rawImgs is List) ? rawImgs : <dynamic>[];
     final rawImageUrl = post['imageUrl'];
-    // Collect all image URLs
+
     final allImageUrls = <String>[];
     if (rawImageUrl != null && rawImageUrl.toString().isNotEmpty) {
       allImageUrls.add(rawImageUrl.toString());
     }
     for (final img in images) {
       final url = img?.toString() ?? '';
-      if (url.isNotEmpty && !allImageUrls.contains(url)) {
-        allImageUrls.add(url);
-      }
+      if (url.isNotEmpty && !allImageUrls.contains(url)) allImageUrls.add(url);
     }
-    // Limit to max 10 images
-    if (allImageUrls.length > 10) {
-      allImageUrls.removeRange(10, allImageUrls.length);
-    }
+    // No fallback to user profile photo — only show actual post/product images
     final imageUrl = allImageUrls.isNotEmpty ? allImageUrls[0] : null;
-    final price = post['price'];
-    final createdAt = post['createdAt'];
 
-    // Check if we need to fetch user data
-    final storedUserName = post['userName'] as String?;
-    final storedUserPhoto = post['userPhoto'] as String?;
-
-    // Get cached data if available
-    final cachedUserData = postUserId != null ? _userCache[postUserId] : null;
-
-    // Determine display name and photo
-    String userName;
-    String? userPhoto;
-
-    if (cachedUserData != null) {
-      userName = _getDisplayName(post, cachedUserData);
-      userPhoto = _getPhotoUrl(post, cachedUserData);
-    } else {
-      userName = storedUserName ?? 'User';
-      userPhoto = storedUserPhoto;
-
-      // Fetch user data in background if name is missing/default
-      if (postUserId != null &&
-          !postUserId.startsWith('dummy_') &&
-          (storedUserName == null ||
-              storedUserName.isEmpty ||
-              storedUserName == 'User')) {
-        _getUserData(postUserId).then((userData) {
-          if (userData != null && mounted) {
-            setState(() {}); // Trigger rebuild with cached data
-          }
-        });
+    // Price — try price first, then budget as fallback
+    String? priceText;
+    for (final key in ['price', 'budget']) {
+      final raw = post[key];
+      if (raw == null || raw == '') continue;
+      final priceNum = (raw is num) ? raw.toDouble() : double.tryParse(raw.toString().replaceAll(RegExp(r'[₹$€£,\s]'), ''));
+      if (priceNum != null && priceNum > 0) {
+        priceText = priceNum == priceNum.roundToDouble()
+            ? '₹${priceNum.toInt()}'
+            : '₹${priceNum.toStringAsFixed(2)}';
+        break;
       }
     }
 
-    DateTime? time;
-    if (createdAt != null && createdAt is Timestamp) {
-      time = createdAt.toDate();
+    // Domain — show first domain as category tag
+    final rawDomain = post['domain'];
+    String domainStr = '';
+    if (rawDomain is List && rawDomain.isNotEmpty) {
+      domainStr = rawDomain.first.toString();
+    } else if (rawDomain is String && rawDomain.isNotEmpty) {
+      domainStr = rawDomain;
     }
 
-    final bool hasImage = imageUrl != null && imageUrl.isNotEmpty;
-    final bool hasDescription = description.isNotEmpty;
-    final bool hasPrice = price != null;
+    final postLat = (post['latitude'] as num?)?.toDouble();
+    final postLng = (post['longitude'] as num?)?.toDouble();
+    final calcDist = _calcDistance(postLat, postLng);
+    final apiDistKm = (post['distance_km'] as num?)?.toDouble();
+    final distance = calcDist ?? apiDistKm;
+    final distanceText = distance != null && distance > 0
+        ? (distance < 1
+            ? '${(distance * 1000).toInt()} m'
+            : '${distance.toStringAsFixed(1)} km')
+        : '';
 
-    int contentLevel = 0;
-    if (hasImage) {
-      contentLevel = 3;
-    } else if (hasPrice && hasDescription) {
-      contentLevel = 2;
-    } else if (hasPrice || hasDescription) {
-      contentLevel = 1;
-    }
-
-    final screenHeight = MediaQuery.of(context).size.height;
-    final imageHeight = contentLevel == 3 ? screenHeight * 0.16 : 0.0;
-    final cardPadding = contentLevel >= 2 ? 12.0 : 10.0;
+    // Debug: trace what values the card will actually display
+    debugPrint('CARD_DEBUG[$postId] → title=$title, brand=$brand, priceText=$priceText, rawPrice=${post['price']}, rawBudget=${post['budget']}, location=$locationStr, distText=$distanceText, lat=$postLat, lng=$postLng, domain=$domainStr, imageUrl=$imageUrl');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(contentLevel >= 2 ? 18 : 14),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
+        height: 200,
+        margin: const EdgeInsets.only(left: 4, right: 4, bottom: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.15),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.all(cardPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              // Header with user info
-              Row(
-                children: [
-                  UserAvatar(
-                    profileImageUrl: PhotoUrlHelper.fixGooglePhotoUrl(
-                      userPhoto,
-                    ),
-                    radius: contentLevel >= 2 ? 18 : 14,
-                    fallbackText: userName,
-                  ),
-                  SizedBox(width: contentLevel >= 2 ? 10 : 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          userName,
-                          style: AppTextStyles.caption.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: contentLevel >= 2 ? 15 : 14,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (time != null || post['isDonation'] == true)
-                          Row(
-                            children: [
-                              if (time != null)
-                                Text(
-                                  timeago.format(time),
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              if (time != null && post['isDonation'] == true)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  child: Text(
-                                    '•',
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: Colors.white60,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              if (post['isDonation'] == true)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.25),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.orange.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Donation',
-                                    style: TextStyle(
-                                      color: Colors.orange,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                  // Action buttons
-                  // For own posts: Edit and Delete
-                  if (isOwnPost) ...[
-                    _buildIconOnlyButton(
-                      icon: Icons.edit_outlined,
-                      color: Colors.white,
-                      onTap: () => _editPost(postId, post),
-                      contentLevel: contentLevel,
-                    ),
-                    const SizedBox(width: 10),
-                    _buildIconOnlyButton(
-                      icon: Icons.delete_outline_rounded,
-                      color: Colors.white,
-                      onTap: () => _showDeleteConfirmation(postId),
-                      contentLevel: contentLevel,
-                    ),
-                  ],
-                  // For other's posts: Chat, Call, Save
-                  if (!isOwnPost) ...[
-                    _buildIconOnlyButton(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      color: Colors.white,
-                      onTap: () => _openUserChat(post),
-                      contentLevel: contentLevel,
-                    ),
-                    if (post['allowCalls'] ?? true) ...[
-                      const SizedBox(width: 10),
-                      _buildIconOnlyButton(
-                        icon: Icons.call_outlined,
+              // Full cover image or gradient placeholder
+              if (imageUrl != null)
+                CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey.shade800,
+                    child: const Center(
+                      child: CircularProgressIndicator(
                         color: Colors.white,
-                        onTap: () => _makeVoiceCall(post),
-                        contentLevel: contentLevel,
-                      ),
-                    ],
-                    const SizedBox(width: 10),
-                    _buildIconOnlyButton(
-                      icon: _savedPostIds.contains(postId)
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      color: Colors.white,
-                      onTap: () => _toggleSavePost(postId, post),
-                      contentLevel: contentLevel,
-                    ),
-                  ],
-                ],
-              ),
-
-              SizedBox(height: contentLevel >= 2 ? 8 : 6),
-
-              // Title and Description with See More
-              _buildExpandableText(
-                title: title,
-                description: hasDescription ? description : null,
-                postId: postId,
-              ),
-
-              // Price
-              if (hasPrice) ...[
-                SizedBox(height: contentLevel >= 2 ? 8 : 6),
-                Text(
-                  '₹${price.toString()}',
-                  style: TextStyle(
-                    fontSize: contentLevel >= 2 ? 18 : 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.vibrantGreen,
-                  ),
-                ),
-              ],
-
-              // Post Images
-              if (allImageUrls.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                // Main image
-                GestureDetector(
-                  onTap: () => _openImageViewer(allImageUrls, 0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: CachedNetworkImage(
-                      imageUrl: allImageUrls[0],
-                      width: double.infinity,
-                      height: imageHeight,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        height: imageHeight,
-                        decoration: BoxDecoration(
-                          color: AppColors.glassBackgroundDark(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        height: imageHeight,
-                        decoration: BoxDecoration(
-                          color: AppColors.glassBackgroundDark(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: AppColors.textTertiaryDark,
-                          size: 32,
-                        ),
+                        strokeWidth: 2,
                       ),
                     ),
                   ),
-                ),
-                // Additional images in grid
-                if (allImageUrls.length > 1) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      // 2nd image
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _openImageViewer(allImageUrls, 1),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: CachedNetworkImage(
-                              imageUrl: allImageUrls[1],
-                              height: screenHeight * 0.12,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                height: screenHeight * 0.12,
-                                decoration: BoxDecoration(
-                                  color: AppColors.glassBackgroundDark(
-                                    alpha: 0.1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                height: screenHeight * 0.12,
-                                decoration: BoxDecoration(
-                                  color: AppColors.glassBackgroundDark(
-                                    alpha: 0.1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: AppColors.textTertiaryDark,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // 3rd image with +N overlay
-                      if (allImageUrls.length > 2) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _openImageViewer(allImageUrls, 2),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: SizedBox(
-                                height: screenHeight * 0.12,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    CachedNetworkImage(
-                                      imageUrl: allImageUrls[2],
-                                      fit: BoxFit.cover,
-                                      placeholder: (context, url) => Container(
-                                        color: AppColors.glassBackgroundDark(
-                                          alpha: 0.1,
-                                        ),
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      ),
-                                      errorWidget: (context, url, error) =>
-                                          Container(
-                                            color:
-                                                AppColors.glassBackgroundDark(
-                                                  alpha: 0.1,
-                                                ),
-                                            child: const Icon(
-                                              Icons
-                                                  .image_not_supported_outlined,
-                                              color: AppColors.textTertiaryDark,
-                                              size: 24,
-                                            ),
-                                          ),
-                                    ),
-                                    if (allImageUrls.length > 3)
-                                      Container(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            '+${allImageUrls.length - 3}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                  errorWidget: (context, url, error) => _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
+                )
+              else
+                _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
+
+              // Bottom gradient fade
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.1),
+                        Colors.black.withValues(alpha: 0.80),
                       ],
-                    ],
-                  ),
-                ],
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openImageViewer(List<String> imageUrls, int initialIndex) {
-    final pageController = PageController(initialPage: initialIndex);
-    int currentPage = initialIndex;
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.95),
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 28),
-              onPressed: () => Navigator.pop(dialogContext),
-            ),
-            title: Text(
-              '${currentPage + 1} / ${imageUrls.length}',
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            centerTitle: true,
-          ),
-          body: PageView.builder(
-            controller: pageController,
-            itemCount: imageUrls.length,
-            onPageChanged: (index) {
-              setDialogState(() => currentPage = index);
-            },
-            itemBuilder: (context, index) {
-              return InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Center(
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrls[index],
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                    errorWidget: (_, __, ___) => const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Colors.white54,
-                      size: 48,
+                      stops: const [0.35, 0.6, 1.0],
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Icon button with border and background - fixed size for all posts
-  Widget _buildIconOnlyButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    int contentLevel = 2,
-  }) {
-    // Fixed size for all posts - consistent look
-    const double buttonSize = 32.0;
-    const double iconSize = 16.0;
-    const double borderRadius = 16.0;
-
-    // Wrap in Material to absorb InkWell splash from parent
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(borderRadius),
-        splashColor: color.withValues(alpha: 0.2),
-        highlightColor: color.withValues(alpha: 0.1),
-        child: Container(
-          width: buttonSize,
-          height: buttonSize,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Center(
-            child: Icon(icon, color: color, size: iconSize),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExpandableText({
-    required String title,
-    String? description,
-    required String postId,
-  }) {
-    final isExpanded = _expandedPosts.contains(postId);
-
-    const titleStyle = TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.bold,
-      color: Colors.white,
-      height: 1.4,
-    );
-
-    final descStyle = AppTextStyles.bodyMedium.copyWith(
-      color: Colors.white.withValues(alpha: 0.85),
-      height: 1.4,
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Calculate if title exceeds 3 lines
-        final titleSpan = TextSpan(text: title, style: titleStyle);
-        final titlePainter = TextPainter(
-          text: titleSpan,
-          maxLines: 3,
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: constraints.maxWidth);
-
-        final titleExceeds3Lines = titlePainter.didExceedMaxLines;
-
-        // Calculate if description exceeds 2 lines
-        bool descExceeds2Lines = false;
-        if (description != null && description.isNotEmpty) {
-          final descSpan = TextSpan(text: description, style: descStyle);
-          final descPainter = TextPainter(
-            text: descSpan,
-            maxLines: 2,
-            textDirection: TextDirection.ltr,
-          )..layout(maxWidth: constraints.maxWidth);
-
-          descExceeds2Lines = descPainter.didExceedMaxLines;
-        }
-
-        // Show "See more" only if text exceeds limits
-        final needsSeeMore = titleExceeds3Lines || descExceeds2Lines;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title
-            Text(
-              title,
-              style: titleStyle,
-              maxLines: isExpanded ? null : 3,
-              overflow: isExpanded ? null : TextOverflow.ellipsis,
-            ),
-
-            // Description
-            if (description != null && description.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                description,
-                style: descStyle,
-                maxLines: isExpanded ? null : 2,
-                overflow: isExpanded ? null : TextOverflow.ellipsis,
               ),
-            ],
 
-            // See more / See less button - only if text exceeds limits
-            if (needsSeeMore) ...[
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() {
-                    if (isExpanded) {
-                      _expandedPosts.remove(postId);
-                    } else {
-                      _expandedPosts.add(postId);
-                    }
-                  });
-                },
-                child: Text(
-                  isExpanded ? 'See less' : 'See more',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.iosBlue,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  void _makeVoiceCall(Map<String, dynamic> post) {
-    final postUserId = post['userId'] as String?;
-    final currentUserId = _auth.currentUser?.uid;
-
-    if (postUserId == null || postUserId == currentUserId) return;
-
-    final userName = post['userName'] ?? 'User';
-    final userPhoto = post['userPhoto'];
-
-    HapticFeedback.lightImpact();
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // User avatar with call icon
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.blue.withValues(alpha: 0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.grey[800],
-                      backgroundImage: userPhoto != null
-                          ? NetworkImage(userPhoto)
-                          : null,
-                      child: userPhoto == null
-                          ? Text(
-                              userName.isNotEmpty
-                                  ? userName[0].toUpperCase()
-                                  : 'U',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.call,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Call $userName?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'You are about to start a voice call.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 14),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: const BorderSide(color: Colors.white38),
+              // Full card tap area for navigation
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      _ExpandRoute(
+                        builder: (_) => NearByPostDetailScreen(
+                          postId: postId,
+                          post: post,
+                          distanceText: distanceText,
+                          tabCategory: _selectedCategory,
                         ),
                       ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        // Wait for dialog to close before navigating
-                        await Future.delayed(const Duration(milliseconds: 100));
-                        if (!mounted) return;
-                        _initiateCall(post);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.withValues(alpha: 0.4),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: Colors.blue.withValues(alpha: 0.5),
-                            width: 1,
+                    );
+                  },
+                ),
+              ),
+
+              // Top-left badge: Domain (e.g. "technology & electronics")
+              if (domainStr.isNotEmpty)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
                           ),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.call, color: Colors.white, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            'Call',
-                            style: TextStyle(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2196F3).withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            domainStr,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ],
+                ),
+
+              // Top-right bookmark button
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => _toggleSavePost(postId, post),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF007AFF),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                    ),
+                    child: Icon(
+                      _savedPostIds.contains(postId)
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      color: _savedPostIds.contains(postId)
+                          ? Colors.white
+                          : Colors.white70,
+                      size: 16,
+                    ),
+                  ),
+                ),
               ),
+
+              // Bottom glassmorphism info bar (IgnorePointer — non-interactive)
+              Positioned(
+                left: 4,
+                right: 4,
+                bottom: 4,
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Line 1: Product name (model or title)
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            // Line 2: Brand + Buy/Sell badge in one row
+                            if (brand.isNotEmpty || feedCategory.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  if (brand.isNotEmpty)
+                                    Expanded(
+                                      child: Text(
+                                        brand,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Colors.grey[400],
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
+                                    ),
+                                  if (brand.isEmpty) const Spacer(),
+                                  if (feedCategory.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: feedCategory == 'sell'
+                                            ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
+                                            : feedCategory == 'buy'
+                                                ? const Color(0xFFFF9800).withValues(alpha: 0.85)
+                                                : Colors.white.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        feedCategory == 'sell' ? 'Selling' : feedCategory == 'buy' ? 'Buying' : _toTitleCase(feedCategory),
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                            // Line 3: Price
+                            if (priceText != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                priceText,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.green[400],
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                            // Line 4: Location / distance
+                            if (distanceText.isNotEmpty || locationStr.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.near_me,
+                                    size: 11,
+                                    color: Colors.grey[500],
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Flexible(
+                                    child: Text(
+                                      [
+                                        if (locationStr.isNotEmpty) locationStr,
+                                        if (distanceText.isNotEmpty) distanceText,
+                                      ].join(' • '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.grey[400],
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             ],
           ),
         ),
-      ),
     );
   }
 
-  Future<void> _initiateCall(Map<String, dynamic> post) async {
-    final postUserId = post['userId'] as String?;
-    final currentUser = _auth.currentUser;
+  /// Gradient placeholder with category icon when no image is available
+  Widget _buildGradientPlaceholder(String domain, {String itemType = ''}) {
+    final domainLower = domain.toLowerCase();
+    final typeLower = itemType.toLowerCase();
 
-    if (postUserId == null || currentUser == null) return;
+    // Pick gradient colors and icon based on domain/item type
+    List<Color> colors;
+    IconData icon;
 
-    final userName = post['userName'] ?? 'User';
-    final userPhoto = post['userPhoto'];
-
-    debugPrint('  ====== INITIATING CALL (Feed) ======');
-    debugPrint('  Caller ID (me): ${currentUser.uid}');
-    debugPrint('  Receiver ID (other): $postUserId');
-
-    try {
-      // Get current user's profile for proper name
-      final callerDoc = await _firestore
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final callerData = callerDoc.data();
-      final callerName =
-          callerData?['name'] ??
-          callerData?['displayName'] ??
-          currentUser.displayName ??
-          'Unknown';
-      final callerPhoto =
-          callerData?['photoUrl'] ??
-          callerData?['photoURL'] ??
-          callerData?['profileImageUrl'] ??
-          currentUser.photoURL;
-
-      debugPrint('  Caller name: $callerName');
-      debugPrint('  Receiver name: $userName');
-
-      // Create call record in Firestore
-      final callDoc = await _firestore.collection('calls').add({
-        'callerId': currentUser.uid,
-        'callerName': callerName,
-        'callerPhoto': callerPhoto,
-        'receiverId': postUserId,
-        'receiverName': userName,
-        'receiverPhoto': userPhoto,
-        'participants': [currentUser.uid, postUserId],
-        'type': 'voice',
-        'status': 'calling',
-        'source': 'Nearby',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint('  Call document created: ${callDoc.id}');
-
-      // Send push notification to receiver for incoming call
-      await NotificationService().sendNotificationToUser(
-        userId: postUserId,
-        title: 'Incoming Call',
-        body: '$callerName is calling you',
-        type: 'call',
-        data: {
-          'callId': callDoc.id,
-          'callerId': currentUser.uid,
-          'callerName': callerName,
-          'callerPhoto': callerPhoto,
-        },
-      );
-
-      if (!mounted) return;
-
-      // Fetch full user profile for chat navigation
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(postUserId)
-          .get();
-
-      if (!userDoc.exists) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('User not found'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      if (!mounted) return;
-
-      // Use fromFirestore to get proper name (with phone fallback)
-      final userProfile = UserProfile.fromFirestore(userDoc);
-
-      // Navigate to voice call screen
-      Navigator.pushNamed(
-        context,
-        '/voice-call',
-        arguments: {
-          'callId': callDoc.id,
-          'otherUser': userProfile,
-          'isOutgoing': true,
-        },
-      );
-    } catch (e) {
-      debugPrint('Error initiating call: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to initiate call'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (typeLower.contains('phone') || typeLower.contains('smartphone')) {
+      colors = [const Color(0xFF1a1a2e), const Color(0xFF16213e)];
+      icon = Icons.smartphone_rounded;
+    } else if (typeLower.contains('gpu') || typeLower.contains('computer') || typeLower.contains('laptop')) {
+      colors = [const Color(0xFF0f0c29), const Color(0xFF302b63)];
+      icon = Icons.memory_rounded;
+    } else if (typeLower.contains('gas') || typeLower.contains('petroleum') || typeLower.contains('fuel')) {
+      colors = [const Color(0xFF1a1a0e), const Color(0xFF2d2d1a)];
+      icon = Icons.local_fire_department_rounded;
+    } else if (domainLower.contains('technology') || domainLower.contains('electronics')) {
+      colors = [const Color(0xFF0d1b2a), const Color(0xFF1b2838)];
+      icon = Icons.devices_rounded;
+    } else if (domainLower.contains('fashion') || domainLower.contains('clothing')) {
+      colors = [const Color(0xFF2d1b2e), const Color(0xFF1a1028)];
+      icon = Icons.checkroom_rounded;
+    } else if (domainLower.contains('food') || domainLower.contains('restaurant')) {
+      colors = [const Color(0xFF2e1a0d), const Color(0xFF1a1208)];
+      icon = Icons.restaurant_rounded;
+    } else if (domainLower.contains('vehicle') || domainLower.contains('auto')) {
+      colors = [const Color(0xFF1a1a2e), const Color(0xFF0d1b2a)];
+      icon = Icons.directions_car_rounded;
+    } else if (domainLower.contains('home') || domainLower.contains('furniture')) {
+      colors = [const Color(0xFF1a2e1a), const Color(0xFF0d2a1b)];
+      icon = Icons.home_rounded;
+    } else if (domainLower.contains('energy') || domainLower.contains('utilities')) {
+      colors = [const Color(0xFF2e2a0d), const Color(0xFF1a1808)];
+      icon = Icons.bolt_rounded;
+    } else if (domainLower.contains('service')) {
+      colors = [const Color(0xFF0d2a2e), const Color(0xFF081a1a)];
+      icon = Icons.build_rounded;
+    } else {
+      colors = [const Color(0xFF1a1a2e), const Color(0xFF121220)];
+      icon = Icons.inventory_2_rounded;
     }
-  }
 
-  void _editPost(String postId, Map<String, dynamic> post) async {
-    HapticFeedback.mediumImpact();
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditPostScreen(postId: postId, postData: post),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
       ),
-    );
-    // Feed auto-refreshes via real-time subscription
-  }
-
-  void _showDeleteConfirmation(String postId) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: AppColors.glassBackgroundDark(alpha: 0.2),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Delete icon
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: AppColors.error,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Delete Post',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Are you sure? This cannot be undone.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: Colors.white.withValues(alpha: 0.15),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _deletePost(postId);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: AppColors.error,
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Delete',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+      child: Center(
+        child: Icon(
+          icon,
+          color: Colors.white.withValues(alpha: 0.12),
+          size: 64,
         ),
       ),
     );
-  }
-
-  Future<void> _deletePost(String postId) async {
-    try {
-      await _firestore.collection('posts').doc(postId).delete();
-
-      if (mounted) {
-        SnackBarHelper.showSuccess(context, 'Post deleted successfully');
-        // Feed auto-refreshes via real-time subscription
-      }
-    } catch (e) {
-      debugPrint('Error deleting post: $e');
-      if (mounted) {
-        SnackBarHelper.showError(context, 'Failed to delete post');
-      }
-    }
-  }
-
-  Future<void> _openUserChat(Map<String, dynamic> post) async {
-    final postUserId = post['userId'] as String?;
-    final currentUserId = _auth.currentUser?.uid;
-
-    if (postUserId == null || postUserId == currentUserId) return;
-
-    try {
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(postUserId)
-          .get();
-
-      if (!userDoc.exists || !mounted) return;
-
-      // Use fromFirestore to get proper name (with phone fallback)
-      final userProfile = UserProfile.fromFirestore(userDoc);
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              EnhancedChatScreen(otherUser: userProfile, source: 'Nearby'),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error opening chat: $e');
-    }
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    final hasError = _apiError != null;
+    return Align(
+      alignment: const Alignment(0, -0.4),
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.all(24),
@@ -1983,26 +1354,92 @@ class _NearByScreenState extends State<NearByScreen>
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.glassBorder(alpha: 0.3)),
               ),
-              child: const Icon(
-                Icons.article_outlined,
+              child: Icon(
+                hasError ? Icons.cloud_off_rounded : Icons.article_outlined,
                 size: 64,
                 color: Colors.white54,
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              'No Posts Found',
+              hasError ? 'Could Not Load Posts' : 'No Posts Found',
               style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
             ),
             const SizedBox(height: 8),
             Text(
-              'Try a different search or category',
+              hasError ? _apiError! : 'Try a different search or category',
               style: AppTextStyles.bodyMedium.copyWith(color: Colors.white60),
               textAlign: TextAlign.center,
             ),
+            if (hasError) ...[
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  setState(() { _apiError = null; });
+                  _loadMyLocationThenFetchFeed();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Text(
+                    'Tap to Retry',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+/// Slide-up from bottom — like iOS App Store card open.
+class _ExpandRoute<T> extends PageRouteBuilder<T> {
+  _ExpandRoute({required WidgetBuilder builder})
+      : super(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              builder(context),
+          transitionDuration: const Duration(milliseconds: 500),
+          reverseTransitionDuration: const Duration(milliseconds: 400),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final slideAnim = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutQuart,
+              reverseCurve: Curves.easeInQuart,
+            );
+
+            // Open: slide in from left, Back: slide out to right
+            final offsetAnimation = Tween<Offset>(
+              begin: const Offset(-1.0, 0.0),
+              end: Offset.zero,
+            ).animate(slideAnim);
+
+            // Slight fade in at start
+            final fadeAnimation = Tween<double>(
+              begin: 0.5,
+              end: 1.0,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+            ));
+
+            return FadeTransition(
+              opacity: fadeAnimation,
+              child: SlideTransition(
+                position: offsetAnimation,
+                child: child,
+              ),
+            );
+          },
+        );
 }

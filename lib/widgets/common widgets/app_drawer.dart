@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,13 +14,12 @@ import '../../screens/home/profile_with_history_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart' show navigatorKey;
 import '../../screens/login/onboarding_screen.dart';
-import 'floating_particles.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../screens/product/my_orders_screen.dart';
 import '../../screens/home/main_navigation_screen.dart';
 import '../../screens/networking/networking_profiles_page_screen.dart';
+import '../../screens/home/api_my_posts_screen.dart';
 
-/// SingleTap-style drawer widget for the app
+/// Single Tap-style drawer widget for the app
 class AppDrawer extends StatefulWidget {
   /// Global key to access AppDrawer state for refresh
   static final GlobalKey<AppDrawerState> globalKey =
@@ -157,53 +155,27 @@ class AppDrawerState extends State<AppDrawer> {
         child: ClipRRect(
           child: Stack(
             children: [
-              // Background image
+              // Background gradient (matches home screen)
               Positioned.fill(
-                child: Image.asset(
-                  'assets/logo/home_background.webp',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.grey.shade900, Colors.black],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // Blur overlay
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color.fromRGBO(64, 64, 64, 1),
-                          Color.fromRGBO(0, 0, 0, 1),
-                        ],
-                      ),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
                     ),
                   ),
                 ),
               ),
 
               // Floating particles
-              const Positioned.fill(child: FloatingParticles(particleCount: 8)),
 
               // Border overlay
               Positioned.fill(
                 child: Container(
                   decoration: const BoxDecoration(
                     border: Border(
-                      right: BorderSide(color: Color(0xFF016CFF), width: 1.5),
+                      right: BorderSide(color: Colors.white, width: 0.5),
                     ),
                   ),
                 ),
@@ -217,8 +189,6 @@ class AppDrawerState extends State<AppDrawer> {
                   children: [
                     // Header with profile and close button
                     _buildHeader(user),
-
-                    const Divider(color: Colors.white12, height: 1),
 
                     // Scrollable content
                     Expanded(
@@ -295,6 +265,25 @@ class AppDrawerState extends State<AppDrawer> {
                     ),
 
                     _buildFeatureCard(
+                      icon: Icons.article_outlined,
+                      label: 'My Posts',
+                      color: Colors.tealAccent,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ApiMyPostsScreen(),
+                          ),
+                        ).then((_) {
+                          MainNavigationScreen.scaffoldKey.currentState
+                              ?.openEndDrawer();
+                        });
+                      },
+                    ),
+
+                    _buildFeatureCard(
                       icon: Icons.hub_outlined,
                       label: 'Networking Profile',
                       color: const Color(0xFF016CFF),
@@ -306,25 +295,6 @@ class AppDrawerState extends State<AppDrawer> {
                           MaterialPageRoute(
                             builder: (_) =>
                                 const NetworkingProfilesPageScreen(),
-                          ),
-                        ).then((_) {
-                          MainNavigationScreen.scaffoldKey.currentState
-                              ?.openEndDrawer();
-                        });
-                      },
-                    ),
-
-                    _buildFeatureCard(
-                      icon: Icons.receipt_long_outlined,
-                      label: 'My Orders',
-                      color: Colors.teal,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyOrdersScreen(),
                           ),
                         ).then((_) {
                           MainNavigationScreen.scaffoldKey.currentState
@@ -485,8 +455,8 @@ class AppDrawerState extends State<AppDrawer> {
         onTap();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -569,8 +539,8 @@ class AppDrawerState extends State<AppDrawer> {
         onTap();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -628,7 +598,17 @@ class AppDrawerState extends State<AppDrawer> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 12),
-      color: Colors.white.withValues(alpha: 0.15),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(40, 40, 40, 1),
+            Color.fromRGBO(64, 64, 64, 1),
+          ],
+        ),
+        border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+      ),
       child: Row(
         children: [
           // User avatar
@@ -724,7 +704,7 @@ class AppDrawerState extends State<AppDrawer> {
           onTap: () {
             HapticFeedback.lightImpact();
             Navigator.pop(context);
-            // Load this conversation (SingleTap style)
+            // Load this conversation (Single Tap style)
             if (chatId != null) {
               widget.onLoadChat?.call(chatId);
             }
@@ -806,21 +786,11 @@ class AppDrawerState extends State<AppDrawer> {
                           value: 'share',
                         ),
                         _buildPopupMenuItem(
-                          icon: Icons.edit_outlined,
-                          label: 'Rename',
-                          value: 'rename',
-                        ),
-                        _buildPopupMenuItem(
                           icon: isPinned
                               ? Icons.push_pin
                               : Icons.push_pin_outlined,
                           label: isPinned ? 'Unpin chat' : 'Pin chat',
                           value: 'pin',
-                        ),
-                        _buildPopupMenuItem(
-                          icon: Icons.archive_outlined,
-                          label: 'Archive',
-                          value: 'archive',
                         ),
                         const PopupMenuDivider(),
                         _buildPopupMenuItem(
@@ -921,7 +891,7 @@ class AppDrawerState extends State<AppDrawer> {
 
       if (messagesSnapshot.docs.isEmpty) {
         // If no messages subcollection, share just the title
-        Share.share('Chat: $chatName\n\nShared from SingleTap');
+        Share.share('Chat: $chatName\n\nShared from Single Tap');
         return;
       }
 
@@ -940,13 +910,13 @@ class AppDrawerState extends State<AppDrawer> {
       }
 
       buffer.writeln('---');
-      buffer.writeln('Shared from SingleTap');
+      buffer.writeln('Shared from Single Tap');
 
       Share.share(buffer.toString(), subject: chatName);
     } catch (e) {
       debugPrint('Error sharing chat: $e');
       // Fallback: share just the title
-      Share.share('Chat: $chatName\n\nShared from SingleTap');
+      Share.share('Chat: $chatName\n\nShared from Single Tap');
     }
   }
 
@@ -1147,7 +1117,17 @@ class AppDrawerState extends State<AppDrawer> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      color: Colors.white.withValues(alpha: 0.15),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            Color.fromRGBO(40, 40, 40, 1),
+            Color.fromRGBO(64, 64, 64, 1),
+          ],
+        ),
+        border: Border(top: BorderSide(color: Colors.white, width: 0.5)),
+      ),
       child: Row(
         children: [
           // Avatar - opens profile page

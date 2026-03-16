@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_profile.dart';
 import 'safe_circle_avatar.dart';
 
-/// Dialog to select participants for group video call (SingleTap style)
+/// Dialog to select participants for group video call (Single Tap style)
 class SelectParticipantsDialog extends StatefulWidget {
   final String currentUserId;
   final int maxParticipants;

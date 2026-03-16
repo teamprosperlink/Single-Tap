@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -97,53 +96,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: AppBar(
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    Navigator.pop(context);
-                    // Open drawer after returning
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      MainNavigationScreen.scaffoldKey.currentState
-                          ?.openEndDrawer();
-                    });
-                  },
-                ),
-                title: const Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                centerTitle: true,
-              ),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+            // Open drawer after returning
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              MainNavigationScreen.scaffoldKey.currentState
+                  ?.openEndDrawer();
+            });
+          },
+        ),
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
             ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
       ),
       body: AppBackground(
-        showParticles: true,
+        showParticles: false,
         overlayOpacity: 0.7,
         child: ListView(
           padding: const EdgeInsets.only(
@@ -513,9 +509,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: ListTile(
         leading: Container(
@@ -564,9 +570,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: SwitchListTile(
         secondary: Container(
@@ -610,9 +626,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: ListTile(
         leading: Container(
@@ -652,8 +678,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Blocked Users')),
-          body: StreamBuilder<QuerySnapshot>(
+          extendBodyBehindAppBar: true,
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            scrolledUnderElevation: 0,
+            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(context);
+              },
+            ),
+            title: const Text(
+              'Blocked Users',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(40, 40, 40, 1),
+                    Color.fromRGBO(64, 64, 64, 1),
+                  ],
+                ),
+                border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+              ),
+            ),
+          ),
+          body: AppBackground(
+            showParticles: false,
+            overlayOpacity: 0.7,
+            child: StreamBuilder<QuerySnapshot>(
             stream: _firestore
                 .collection('users')
                 .doc(_currentUserId)
@@ -661,7 +728,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
               }
 
               // Deduplicate by doc.id
@@ -671,15 +738,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   .toList();
 
               if (blockedUsers.isEmpty) {
-                return const Center(
+                return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.block, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
+                      Icon(Icons.block, size: 64, color: Colors.white.withValues(alpha: 0.4)),
+                      const SizedBox(height: 16),
                       Text(
                         'No Blocked Users',
-                        style: TextStyle(fontFamily: 'Poppins', fontSize: 18, color: Colors.grey),
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 18, color: Colors.white.withValues(alpha: 0.6)),
                       ),
                     ],
                   ),
@@ -687,34 +754,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
 
               return ListView.builder(
+                padding: const EdgeInsets.only(top: kToolbarHeight + 44, left: 16, right: 16, bottom: 16),
                 itemCount: blockedUsers.length,
                 itemBuilder: (context, index) {
                   final blockedUser = blockedUsers[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      child: Text(blockedUser['name']?[0] ?? 'U'),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.25),
+                          Colors.white.withValues(alpha: 0.15),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
                     ),
-                    title: Text(blockedUser['name'] ?? 'Unknown'),
-                    trailing: TextButton(
-                      onPressed: () async {
-                        await _firestore
-                            .collection('users')
-                            .doc(_currentUserId)
-                            .collection('blocked')
-                            .doc(blockedUser.id)
-                            .delete();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('User unblocked')),
-                          );
-                        }
-                      },
-                      child: const Text('Unblock'),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          child: Text(
+                            blockedUser['name']?[0] ?? 'U',
+                            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            blockedUser['name'] ?? 'Unknown',
+                            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 15),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            await _firestore
+                                .collection('users')
+                                .doc(_currentUserId)
+                                .collection('blocked')
+                                .doc(blockedUser.id)
+                                .delete();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('User unblocked'), backgroundColor: Colors.green),
+                              );
+                            }
+                          },
+                          child: const Text('Unblock', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
+                        ),
+                      ],
                     ),
                   );
                 },
               );
             },
+          ),
           ),
         ),
       ),
@@ -730,7 +827,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Security'),
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Security',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,11 +840,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ListTile(
               leading: Icon(
                 Icons.lock_outline,
-                color: hasPassword ? null : Colors.grey,
+                color: hasPassword ? Colors.white : Colors.grey,
               ),
               title: Text(
                 'Change Password',
-                style: TextStyle(fontFamily: 'Poppins', color: hasPassword ? null : Colors.grey),
+                style: TextStyle(fontFamily: 'Poppins', color: hasPassword ? Colors.white : Colors.grey),
               ),
               subtitle: Text(
                 hasPassword
@@ -750,10 +852,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     : signInMethod == 'google.com'
                     ? 'You signed in with Google'
                     : 'Not available for your account type',
+                style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70),
               ),
               trailing: Icon(
                 Icons.chevron_right,
-                color: hasPassword ? null : Colors.grey,
+                color: hasPassword ? Colors.white : Colors.grey,
               ),
               enabled: hasPassword,
               onTap: hasPassword
@@ -773,19 +876,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
-                            title: const Text('Google Account'),
-                            content: const Text(
+                            backgroundColor: const Color(0xFF1C1C1E),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+                            title: const Text(
+                              'Google Account',
+                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                            content: Text(
                               'You signed in with Google. To change your password, please:\n\n'
                               '1. Go to myaccount.google.com\n'
                               '2. Navigate to Security\n'
                               '3. Select "Password"\n'
                               '4. Follow Google\'s password change process\n\n'
                               'Your Google password will automatically work with this app.',
+                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context),
-                                child: const Text('Got it'),
+                                child: const Text('Got it', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
                               ),
                             ],
                           ),
@@ -793,7 +902,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       }
                     },
             ),
-            const Divider(),
+            Divider(color: Colors.white.withValues(alpha: 0.2)),
             ListTile(
               leading: const Icon(Icons.devices_outlined, color: Colors.blue),
               title: const Text(
@@ -802,7 +911,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               subtitle: const Text(
                 'View and logout from devices',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.blue),
               onTap: () {
@@ -810,7 +919,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _showManageDevices(context, authService);
               },
             ),
-            const Divider(),
+            Divider(color: Colors.white.withValues(alpha: 0.2)),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.orange),
               title: const Text(
@@ -819,7 +928,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               subtitle: Text(
                 FirebaseAuth.instance.currentUser?.email ?? '',
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.orange),
               onTap: () {
@@ -832,7 +941,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 });
               },
             ),
-            const Divider(),
+            Divider(color: Colors.white.withValues(alpha: 0.2)),
             ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text(
@@ -841,7 +950,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               subtitle: const Text(
                 'Permanently delete',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.red),
               onTap: () {
@@ -854,7 +963,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
         ],
       ),
@@ -907,7 +1016,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Manage Devices'),
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Manage Devices',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: FutureBuilder<String?>(
           future: authService.getLocalDeviceToken(),
           builder: (context, localTokenSnapshot) {
@@ -923,7 +1037,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                 final userData = snapshot.data?.data() as Map<String, dynamic>?;
                 if (userData == null) {
-                  return const Text('Unable to load device information');
+                  return const Text('Unable to load device information', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70));
                 }
 
                 final deviceInfo =
@@ -956,7 +1070,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         fontFamily: 'Poppins',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey,
+                        color: Colors.white70,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -965,7 +1079,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.blue),
                         borderRadius: BorderRadius.circular(8),
-                        color: Colors.blue.withValues(alpha: 0.05),
+                        color: Colors.blue.withValues(alpha: 0.1),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -989,6 +1103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         fontFamily: 'Poppins',
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
+                                        color: Colors.white,
                                       ),
                                     ),
                                     Text(
@@ -996,7 +1111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       style: const TextStyle(
                                         fontFamily: 'Poppins',
                                         fontSize: 12,
-                                        color: Colors.grey,
+                                        color: Colors.white70,
                                       ),
                                     ),
                                   ],
@@ -1025,12 +1140,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Last active: Just now',
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
-                              color: Colors.grey[600],
+                              color: Colors.white70,
                             ),
                           ),
                         ],
@@ -1065,7 +1180,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: Colors.white70,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1094,7 +1209,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
-                                color: Colors.amber[900],
+                                color: Colors.amber[300],
                                 height: 1.4,
                               ),
                             ),
@@ -1111,7 +1226,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
         ],
       ),
@@ -1123,12 +1238,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Logout',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {
@@ -1142,7 +1265,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               await Future.delayed(const Duration(milliseconds: 1000));
             },
             style: TextButton.styleFrom(foregroundColor: Colors.orange),
-            child: const Text('Logout'),
+            child: const Text('Logout', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),
@@ -1156,7 +1279,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.red, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1166,13 +1294,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
             ),
             const SizedBox(height: 20),
-            const Text('Type "DELETE" to confirm:'),
+            Text(
+              'Type "DELETE" to confirm:',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: confirmController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.1),
                 hintText: 'DELETE',
+                hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                ),
               ),
             ),
           ],
@@ -1180,7 +1326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {
@@ -1224,7 +1370,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete Forever'),
+            child: const Text('Delete Forever', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),
@@ -1237,13 +1383,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Calculating storage...'),
+            const CircularProgressIndicator(color: Colors.white),
+            const SizedBox(height: 16),
+            Text(
+              'Calculating storage...',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
+            ),
           ],
         ),
       ),
@@ -1264,36 +1415,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Storage & Data'),
+            backgroundColor: const Color(0xFF1C1C1E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+            title: const Text(
+              'Storage & Data',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.folder_outlined),
-                  title: const Text('App Data'),
+                  leading: const Icon(Icons.folder_outlined, color: Colors.white),
+                  title: const Text('App Data', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
                   subtitle: Text(
                     '${(appSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                   ),
                 ),
-                const Divider(),
+                Divider(color: Colors.white.withValues(alpha: 0.2)),
                 ListTile(
-                  leading: const Icon(Icons.cached_outlined),
-                  title: const Text('Cache'),
+                  leading: const Icon(Icons.cached_outlined, color: Colors.white),
+                  title: const Text('Cache', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
                   subtitle: Text(
                     '${(cacheSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                   ),
                 ),
-                const Divider(),
+                Divider(color: Colors.white.withValues(alpha: 0.2)),
                 ListTile(
-                  leading: const Icon(Icons.storage_outlined),
-                  title: const Text('Total Storage'),
+                  leading: const Icon(Icons.storage_outlined, color: Colors.white),
+                  title: const Text('Total Storage', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
                   subtitle: Text(
                     '${(totalSize / (1024 * 1024)).toStringAsFixed(2)} MB',
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -1302,7 +1461,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
               ),
             ],
           ),
@@ -1325,14 +1484,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Cache'),
-        content: const Text(
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Clear Cache',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
           'This will clear temporary files and cached images. Your account data will not be affected.',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {
@@ -1343,7 +1508,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 context: context,
                 barrierDismissible: false,
                 builder: (context) =>
-                    const Center(child: CircularProgressIndicator()),
+                    const Center(child: CircularProgressIndicator(color: Colors.white)),
               );
 
               try {
@@ -1389,7 +1554,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
               }
             },
-            child: const Text('Clear'),
+            child: const Text('Clear', style: TextStyle(fontFamily: 'Poppins', color: Colors.orange)),
           ),
         ],
       ),
@@ -1433,18 +1598,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Send Feedback'),
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        title: const Text(
+          'Send Feedback',
+          style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('We\'d love to hear your thoughts!'),
+            Text(
+              'We\'d love to hear your thoughts!',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white.withValues(alpha: 0.8)),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: feedbackController,
               maxLines: 5,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
+              style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.1),
                 hintText: 'Share your feedback here...',
+                hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                ),
               ),
             ),
           ],
@@ -1452,7 +1640,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {
@@ -1487,7 +1675,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
               }
             },
-            child: const Text('Send'),
+            child: const Text('Send', style: TextStyle(fontFamily: 'Poppins', color: Colors.orange)),
           ),
         ],
       ),
@@ -1503,21 +1691,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Report a Problem'),
+            backgroundColor: const Color(0xFF1C1C1E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+            title: const Text(
+              'Report a Problem',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white, fontWeight: FontWeight.bold),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
                   initialValue: selectedCategory,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
+                  dropdownColor: const Color(0xFF1C1C1E),
+                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.1),
                     labelText: 'Problem Type',
+                    labelStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white70),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                    ),
                   ),
                   items: ['Bug', 'Crash', 'Feature Request', 'Other']
                       .map(
                         (category) => DropdownMenuItem(
                           value: category,
-                          child: Text(category),
+                          child: Text(category, style: const TextStyle(fontFamily: 'Poppins', color: Colors.white)),
                         ),
                       )
                       .toList(),
@@ -1529,9 +1738,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 TextField(
                   controller: problemController,
                   maxLines: 5,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
+                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.1),
                     hintText: 'Describe the problem...',
+                    hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                    ),
                   ),
                 ),
               ],
@@ -1539,7 +1763,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
               ),
               TextButton(
                 onPressed: () async {
@@ -1577,7 +1801,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     }
                   }
                 },
-                child: const Text('Submit'),
+                child: const Text('Submit', style: TextStyle(fontFamily: 'Poppins', color: Colors.orange)),
               ),
             ],
           );
@@ -1617,7 +1841,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
         title: Row(
           children: [
             Container(
@@ -1643,7 +1867,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SingleTap',
+                  'Single Tap',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: Colors.white,
@@ -1653,7 +1877,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 Text(
                   'Version 1.0.0',
-                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey, fontSize: 14),
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 14),
                 ),
               ],
             ),
@@ -1664,7 +1888,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SingleTap is an AI-powered matching app that connects people for various purposes - marketplace, dating, friendship, jobs, and more.',
+              'Single Tap is an AI-powered matching app that connects people for various purposes - marketplace, dating, friendship, jobs, and more.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 color: Colors.white.withValues(alpha: 0.8),
@@ -1682,7 +1906,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '2024 SingleTap Inc. All rights reserved.',
+                  '2024 Single Tap Inc. All rights reserved.',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: Colors.white.withValues(alpha: 0.5),
@@ -1696,7 +1920,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.blue)),
+            child: const Text('Close', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
           ),
         ],
       ),

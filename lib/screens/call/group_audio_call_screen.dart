@@ -8,7 +8,7 @@ import '../../services/other services/group_voice_call_service.dart';
 import '../../services/floating_call_service.dart';
 import '../../widgets/common widgets/floating_particles.dart';
 
-/// SingleTap-style Group Audio Call Screen
+/// Single Tap-style Group Audio Call Screen
 /// Supports multiple participants with audio-only conference call
 class GroupAudioCallScreen extends StatefulWidget {
   final String callId;
@@ -754,7 +754,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
     }
   }
 
-  /// Minimize call to floating overlay (SingleTap-style PiP)
+  /// Minimize call to floating overlay (Single Tap-style PiP)
   void _minimizeCall() {
     debugPrint('GroupAudioCallScreen: Minimizing call...');
 
@@ -945,7 +945,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Left: Minimize button (SingleTap-style)
+          // Left: Minimize button (Single Tap-style)
           Positioned(
             left: 0,
             child: Container(
@@ -1429,16 +1429,16 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
     if (!isActive) {
       // Participant hasn't joined yet - always show "Ringing..."
       statusText = 'Ringing...';
-      statusColor = const Color(0xFFFF9500); // SingleTap orange
+      statusColor = const Color(0xFFFF9500); // Single Tap orange
     } else if (_isMuted && isCurrentUser) {
       // This shouldn't happen since isCurrentUser check in grid excludes caller
       // But keeping as fallback
       statusText = 'Muted';
-      statusColor = const Color(0xFFFF3B30); // SingleTap red
+      statusColor = const Color(0xFFFF3B30); // Single Tap red
     } else {
       // Participant is active/connected
       statusText = 'Connected';
-      statusColor = const Color(0xFF25D366); // SingleTap green
+      statusColor = const Color(0xFF25D366); // Single Tap green
     }
 
     // Size adjustments based on isLarge flag
@@ -1487,7 +1487,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isActive
-                      ? const Color(0xFF25D366) // SingleTap green
+                      ? const Color(0xFF25D366) // Single Tap green
                       : Colors.white.withValues(alpha: 0.25),
                   width: avatarBorderWidth,
                 ),
@@ -1561,7 +1561,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                       ),
                     ),
 
-                  // Mute status indicator (SingleTap style)
+                  // Mute status indicator (Single Tap style)
                   if (_isMuted && isCurrentUser)
                     Positioned(
                       bottom: isLarge ? 8 : 4,
@@ -1629,7 +1629,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
           height: heights[index],
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: const Color(0xFF25D366), // SingleTap green
+            color: const Color(0xFF25D366), // Single Tap green
             borderRadius: BorderRadius.circular(1),
           ),
         );
@@ -1648,7 +1648,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
             icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
             onTap: _toggleMute,
             backgroundColor: _isMuted
-                ? const Color(0xFFFF3B30) // SingleTap red when muted
+                ? const Color(0xFFFF3B30) // Single Tap red when muted
                 : const Color(0xFF3A3A3A), // Dark gray when unmuted
             iconColor: Colors.white,
           ),
@@ -1662,7 +1662,7 @@ class _GroupAudioCallScreenState extends State<GroupAudioCallScreen> {
                     debugPrint('  END CALL BUTTON TAPPED');
                     _endCall();
                   },
-            backgroundColor: const Color(0xFFFF3B30), // SingleTap red
+            backgroundColor: const Color(0xFFFF3B30), // Single Tap red
             iconColor: Colors.white,
             size: 68,
           ),

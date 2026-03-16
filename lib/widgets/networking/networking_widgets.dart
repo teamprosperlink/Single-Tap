@@ -64,21 +64,6 @@ class NetworkingWidgets {
 
   // ── Standard body gradient (dark) ──
   static BoxDecoration bodyGradient({bool fourStop = false}) {
-    if (fourStop) {
-      return const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color.fromRGBO(64, 64, 64, 1),
-            Color.fromRGBO(64, 64, 64, 1),
-            Color.fromRGBO(40, 40, 40, 1),
-            Color.fromRGBO(0, 0, 0, 1),
-          ],
-          stops: [0.0, 0.45, 0.7, 1.0],
-        ),
-      );
-    }
     return const BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topCenter,
@@ -385,11 +370,12 @@ class NetworkingWidgets {
     String? buttonLabel,
     VoidCallback? onButtonTap,
   }) {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.4),
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
@@ -570,27 +556,28 @@ class NetworkingWidgets {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.25),
+        color: Colors.black.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.2),
+          color: Colors.white.withValues(alpha: 0.15),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.85)),
+          Icon(icon, size: 11, color: Colors.white70),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                letterSpacing: -0.1,
               ),
             ),
           ),

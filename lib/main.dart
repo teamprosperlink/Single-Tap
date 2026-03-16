@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:math' show min;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
-import 'package:supper/screens/login/onboarding_screen.dart';
+import 'package:single_tap/screens/login/onboarding_screen.dart';
 
 import 'widgets/common widgets/firebase_options.dart';
 import 'screens/login/splash_screen.dart';
@@ -26,6 +27,8 @@ import 'services/notification_service.dart';
 import 'services/chat_services/conversation_service.dart';
 import 'services/location_services/location_service.dart';
 import 'services/connectivity_service.dart';
+import 'services/product_api_service.dart';
+import 'package:uuid/uuid.dart';
 import 'services/analytics_service.dart';
 import 'services/error services/error_tracking_service.dart';
 import 'providers/other providers/theme_provider.dart';
@@ -97,7 +100,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         }
       }
     }
-    // For GROUP call notifications (SingleTap-style)
+    // For GROUP call notifications (Single Tap-style)
     else if (type == 'group_call') {
       print('[FCM] Group call notification received in background');
       final callId = data['callId'] as String?;
@@ -176,7 +179,7 @@ Future<void> showFullScreenIncomingCall({
     final callKitParams = CallKitParams(
       id: callId, // Use Firestore callId as CallKit id
       nameCaller: callerName,
-      appName: 'SingleTap',
+      appName: 'Single Tap',
       avatar: callerPhoto,
       handle: 'Voice Call',
       type: 0, // 0 = Audio call
@@ -229,7 +232,7 @@ Future<void> showFullScreenIncomingCall({
 
     await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
 
-    // Update call status to 'ringing' so caller sees "Ringing..." (like SingleTap)
+    // Update call status to 'ringing' so caller sees "Ringing..." (like Single Tap)
     try {
       await FirebaseFirestore.instance.collection('calls').doc(callId).update({
         'status': 'ringing',
@@ -271,6 +274,18 @@ void main() async {
       );
     }
 
+    // Initialize Firebase App Check (skip in debug — enforcement blocks debug builds)
+    if (!kDebugMode) {
+      try {
+        await FirebaseAppCheck.instance.activate(
+          androidProvider: AndroidProvider.playIntegrity,
+          appleProvider: AppleProvider.deviceCheck,
+        );
+      } catch (e) {
+        debugPrint('App Check activation failed: $e');
+      }
+    }
+
     // CRITICAL: Register background message handler IMMEDIATELY after Firebase init
     // This must be done before runApp() for background notifications to work
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -307,41 +322,52 @@ void main() async {
 
 /// Initialize non-critical services after app has started rendering
 Future<void> _initializeServicesInBackground() async {
-  // Shorter delay - reduced from 500ms to 200ms for faster startup
-  await Future.delayed(const Duration(milliseconds: 200));
+  try {
+    // Shorter delay - reduced from 500ms to 200ms for faster startup
+    await Future.delayed(const Duration(milliseconds: 200));
 
-  // Initialize Firebase Analytics
-  unawaited(AnalyticsService().initialize().catchError((e) {}));
+    // Wake up Render backend early so product searches are fast
+    unawaited(ProductApiService().warmUp());
 
-  // Initialize utilities in sequence with small delays to prevent jank
-  await AppOptimizer.initialize();
-  await Future.delayed(const Duration(milliseconds: 50));
+    // Initialize Firebase Analytics
+    unawaited(AnalyticsService().initialize().catchError((e) {}));
 
-  MemoryManager().initialize();
-  await Future.delayed(const Duration(milliseconds: 50));
+    // Initialize utilities in sequence with small delays to prevent jank
+    try {
+      await AppOptimizer.initialize();
+    } catch (e) {
+      debugPrint('AppOptimizer init failed (non-fatal): $e');
+    }
+    await Future.delayed(const Duration(milliseconds: 50));
 
-  UserManager().initialize();
-  await Future.delayed(const Duration(milliseconds: 50));
+    MemoryManager().initialize();
+    await Future.delayed(const Duration(milliseconds: 50));
 
-  // Initialize notification service (can run in parallel, but don't block)
-  unawaited(
-    NotificationService().initialize().catchError((e) {
-      ErrorTrackingService().captureException(
-        e,
-        message: 'NotificationService init failed',
-      );
-    }),
-  );
+    UserManager().initialize();
+    await Future.delayed(const Duration(milliseconds: 50));
 
-  // Initialize connectivity service after a small delay
-  await Future.delayed(const Duration(milliseconds: 100));
-  unawaited(ConnectivityService().initialize().catchError((e) {}));
+    // Initialize notification service (can run in parallel, but don't block)
+    unawaited(
+      NotificationService().initialize().catchError((e) {
+        ErrorTrackingService().captureException(
+          e,
+          message: 'NotificationService init failed',
+        );
+      }),
+    );
 
-  // Log app open event
-  unawaited(AnalyticsService().logAppOpen());
+    // Initialize connectivity service after a small delay
+    await Future.delayed(const Duration(milliseconds: 100));
+    unawaited(ConnectivityService().initialize().catchError((e) {}));
 
-  // NOTE: Migrations are now run in AuthWrapper._initializeUserServices()
-  // after the user is authenticated to avoid permission errors
+    // Log app open event
+    unawaited(AnalyticsService().logAppOpen());
+
+    // NOTE: Migrations are now run in AuthWrapper._initializeUserServices()
+    // after the user is authenticated to avoid permission errors
+  } catch (e) {
+    debugPrint('Background service initialization failed (non-fatal): $e');
+  }
 }
 
 class MyApp extends ConsumerWidget {
@@ -353,10 +379,11 @@ class MyApp extends ConsumerWidget {
     final themeNotifier = ref.read(themeProvider.notifier);
 
     return MaterialApp(
-      title: 'SingleTap',
+      title: 'Single Tap',
       navigatorKey: navigatorKey,
       theme: themeNotifier.themeData.copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0f0f23),
+        scaffoldBackgroundColor: const Color(0xFF000000),
+        canvasColor: const Color(0xFF000000),
       ),
       debugShowCheckedModeBanner: false,
       home: const SplashScreen(),
@@ -454,7 +481,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     }
   }
 
-  /// Start real-time monitoring for device session changes (SingleTap-style)
+  /// Start real-time monitoring for device session changes (Single Tap-style)
   /// Automatically logs out user if another device logs in with same account
   /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
@@ -964,6 +991,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 final currentUser = FirebaseAuth.instance.currentUser;
                 if (currentUser != null && currentUser.uid == uid && mounted) {
                   await _startDeviceSessionMonitoring(uid);
+                  // Ensure user_uuid is stored for reverse-lookup from API responses
+                  final userUuid = const Uuid().v5(Namespace.url.value, 'singletap:$uid');
+                  await FirebaseFirestore.instance.collection('users').doc(uid).set({
+                    'user_uuid': userUuid,
+                  }, SetOptions(merge: true));
+                  // Also save to api_user_mappings for Chat/Call profile resolution
+                  FirebaseFirestore.instance.collection('api_user_mappings').doc(userUuid).set({
+                    'firebaseUid': uid,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true)).catchError((_) {});
+                  print('[BUILD] Stored user_uuid for $uid');
                 }
               } catch (e) {
                 print('[BUILD] ERROR starting device session monitoring: $e');

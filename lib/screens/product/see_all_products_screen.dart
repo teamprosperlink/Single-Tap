@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../../res/utils/snackbar_helper.dart';
 import 'product_detail_screen.dart';
 
 class SeeAllProductsScreen extends StatefulWidget {
@@ -29,6 +34,11 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
   Timer? _recordingTimer;
   String _currentSpeechText = '';
 
+  // Saved posts
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Set<String> _savedPostIds = {};
+
   String get _categoryLabel {
     switch (widget.category) {
       case 'food':
@@ -44,26 +54,12 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
     }
   }
 
-  IconData get _categoryIcon {
-    switch (widget.category) {
-      case 'food':
-        return Icons.restaurant;
-      case 'electric':
-        return Icons.devices;
-      case 'house':
-        return Icons.home_rounded;
-      case 'place':
-        return Icons.place;
-      default:
-        return Icons.category;
-    }
-  }
-
   @override
   void initState() {
     super.initState();
     _filtered = List.from(widget.products);
     _initSpeech();
+    _loadSavedPosts();
     _searchController.addListener(() {
       setState(() {});
     });
@@ -180,6 +176,70 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
     }
   }
 
+  // ── Saved Posts ──
+  Future<void> _loadSavedPosts() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .limit(200)
+          .get();
+      if (mounted) {
+        setState(() {
+          _savedPostIds.clear();
+          for (final doc in snap.docs) {
+            _savedPostIds.add(doc.id);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading saved posts: $e');
+    }
+  }
+
+  String _productSaveId(Map<String, dynamic> item) {
+    final postId = item['postId'] ?? item['id'] ?? item['_id'];
+    if (postId != null && postId.toString().isNotEmpty) return postId.toString();
+    final name = (item['name'] ?? '').toString();
+    final price = (item['price'] ?? '').toString();
+    return 'product_${name.hashCode}_${price.hashCode}';
+  }
+
+  Future<void> _toggleSaveProduct(String productId, Map<String, dynamic> productData) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    HapticFeedback.lightImpact();
+    try {
+      final savedRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('saved_posts')
+          .doc(productId);
+      if (_savedPostIds.contains(productId)) {
+        await savedRef.delete();
+        if (mounted) {
+          setState(() => _savedPostIds.remove(productId));
+          SnackBarHelper.showSuccess(context, 'Post unsaved');
+        }
+      } else {
+        await savedRef.set({
+          'postId': productId,
+          'postData': productData,
+          'savedAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) {
+          setState(() => _savedPostIds.add(productId));
+          SnackBarHelper.showSuccess(context, 'Post saved');
+        }
+      }
+    } catch (e) {
+      if (mounted) SnackBarHelper.showError(context, 'Failed to save post');
+    }
+  }
+
   void _onSearch(String query) {
     final q = query.toLowerCase().trim();
     setState(() {
@@ -249,9 +309,9 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                     ),
                     Text(
                       _categoryLabel,
-                      style: const TextStyle(fontFamily: 'Poppins', 
+                      style: const TextStyle(fontFamily: 'Poppins',
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -492,7 +552,7 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
-                                childAspectRatio: 1.0,
+                                childAspectRatio: 0.78,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
                               ),
@@ -512,7 +572,56 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
     );
   }
 
+  /// Gradient colors for initials placeholder based on name hash
+  static const _placeholderGradients = [
+    [Color(0xFFFF6B35), Color(0xFFFF8E53)],
+    [Color(0xFF667EEA), Color(0xFF764BA2)],
+    [Color(0xFF11998E), Color(0xFF38EF7D)],
+    [Color(0xFFFC5C7D), Color(0xFF6A82FB)],
+    [Color(0xFFF7971E), Color(0xFFFFD200)],
+    [Color(0xFF0082C8), Color(0xFF667EEA)],
+    [Color(0xFFE44D26), Color(0xFFF16529)],
+    [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+  ];
+
+  Widget _buildInitialsPlaceholder(String name, int index) {
+    final initials = name.isNotEmpty
+        ? name.split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+        : '?';
+    final colors = _placeholderGradients[index % _placeholderGradients.length];
+    return Container(
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontSize: 36,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildProductCard(Map<String, dynamic> item) {
+    final name = item['name'] as String? ?? '';
+    final imageUrl = item['image'] as String? ?? '';
+    final price = item['price'] as String? ?? '';
+    final location = _getBottomInfo(item);
+    final matchScore = item['match_score'] as String? ?? '';
+    final matchType = item['match_type'] as String? ?? '';
+    final cardIndex = _filtered.indexOf(item);
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -526,129 +635,225 @@ class _SeeAllProductsScreenState extends State<SeeAllProductsScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white.withValues(alpha: 0.25),
-              Colors.white.withValues(alpha: 0.15),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.3),
-            width: 1,
+            color: Colors.white.withValues(alpha: 0.25),
+            width: 1.5,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              child: Image.network(
-                item['image'] as String? ?? '',
-                height: 80,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 80,
-                  color: Colors.grey[700],
-                  child: Icon(_categoryIcon, color: Colors.white70, size: 40),
-                ),
-                loadingBuilder: (_, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 80,
-                    color: Colors.grey[800],
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Details
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name
-                  Text(
-                    item['name'] as String? ?? '',
-                    style: const TextStyle(fontFamily: 'Poppins', 
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  // Subtitle
-                  Text(
-                    _getSubtitle(item),
-                    style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[400], fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  // Price + Rating
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item['price'] as String? ?? '',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            color: Colors.green[400],
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Icon(Icons.star, color: Colors.amber[400], size: 14),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${item['rating'] ?? ''}',
-                        style: const TextStyle(fontFamily: 'Poppins', 
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // Bottom info
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        color: Colors.grey[500],
-                        size: 12,
-                      ),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          _getBottomInfo(item),
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            color: Colors.grey[400],
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16.5),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Full cover image or initials placeholder
+              if (imageUrl.isNotEmpty)
+                CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    color: Colors.grey.shade800,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) =>
+                      _buildInitialsPlaceholder(name, cardIndex),
+                )
+              else
+                _buildInitialsPlaceholder(name, cardIndex),
+
+              // Bottom gradient fade
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.1),
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                      stops: const [0.3, 0.55, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Match score badge (top-left) — 100% = Exact, else % Similar
+              if (matchScore.isNotEmpty) ...[
+                () {
+                  final simScore = (item['similarity_score'] as num?)?.toDouble() ?? 0.0;
+                  final isExact = simScore >= 1.0 || matchType == 'exact';
+                  final scoreLabel = simScore < 0.10
+                      ? 'Similar'
+                      : '${(simScore * 100).toStringAsFixed(0)}% Match';
+                  return Positioned(
+                    top: 8,
+                    left: 8,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isExact
+                                ? Colors.green.withValues(alpha: 0.7)
+                                : Colors.orange.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            isExact ? 'Exact' : scoreLabel,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }(),
+              ],
+
+              // Save / Bookmark button (top-right)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Builder(builder: (context) {
+                  final saveId = _productSaveId(item);
+                  final isSaved = _savedPostIds.contains(saveId);
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _toggleSaveProduct(saveId, item),
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF016CFF).withValues(alpha: 0.85),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          width: 1,
+                        ),
+                      ),
+                      child: Icon(
+                        isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+
+              // Bottom glassmorphism info bar
+              Positioned(
+                left: 4,
+                right: 4,
+                bottom: 4,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Name
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          // Price + Rating row
+                          Row(
+                            children: [
+                              if (price.isNotEmpty && price != '₹0' && price != '₹0.0')
+                                Expanded(
+                                  child: Text(
+                                    price,
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Color(0xFF00D67D),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )
+                              else
+                                const Spacer(),
+                            ],
+                          ),
+                          // Location row
+                          if (location.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Icon(Icons.near_me, color: Colors.grey[400], size: 10),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Text(
+                                    location,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.grey[400],
+                                      fontSize: 10,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

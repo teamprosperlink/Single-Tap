@@ -6,7 +6,7 @@ import '../../res/config/app_colors.dart';
 import '../../widgets/common widgets/safe_circle_avatar.dart';
 import '../../services/other services/group_video_call_service.dart';
 
-/// SingleTap-style Group Video Call Screen
+/// Single Tap-style Group Video Call Screen
 /// Supports up to 8 participants with grid layout
 class GroupVideoCallScreen extends StatefulWidget {
   final String callId;
@@ -230,7 +230,7 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
         backgroundColor: AppColors.splashDark3,
         body: Stack(
           children: [
-            // Grid layout for video feeds (SingleTap style)
+            // Grid layout for video feeds (Single Tap style)
             Positioned.fill(
               child: _buildVideoGrid(totalParticipants, remoteRenderers),
             ),
@@ -395,7 +395,7 @@ class _GroupVideoCallScreenState extends State<GroupVideoCallScreen> {
     );
   }
 
-  /// Build video grid layout (SingleTap style)
+  /// Build video grid layout (Single Tap style)
   Widget _buildVideoGrid(
     int participantCount,
     Map<String, RTCVideoRenderer> remoteRenderers,

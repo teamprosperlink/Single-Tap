@@ -77,7 +77,7 @@ SHA-1: 73:8C:B2:09:A9:F1:FD:F7:6D:D7:86:78:65:F3:FF:8B:58:67:F8:90
           "client_id": "1027499426345-2qclqehls729lrmhji6nlii8v4m6bkv4.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.plink.supper",
+            "package_name": "com.plink.singletap",
             "certificate_hash": "738cb209a9f1fdf76dd7867865f3ff8b5867f890"  // ✅ UPDATED
           }
         },
@@ -85,7 +85,7 @@ SHA-1: 73:8C:B2:09:A9:F1:FD:F7:6D:D7:86:78:65:F3:FF:8B:58:67:F8:90
           "client_id": "1027499426345-jke49khj5on1jmddnt1abmbccloequqq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.plink.supper",
+            "package_name": "com.plink.singletap",
             "certificate_hash": "738cb209a9f1fdf76dd7867865f3ff8b5867f890"  // ✅ ENSURED SAME
           }
         }

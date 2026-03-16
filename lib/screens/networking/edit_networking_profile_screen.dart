@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
@@ -8,7 +9,10 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
+import '../../services/location_services/geocoding_service.dart';
+import '../../services/ip_location_service.dart';
 import '../../widgets/networking/networking_constants.dart';
+import '../../widgets/networking/networking_helpers.dart';
 import '../../widgets/networking/networking_widgets.dart';
 
 class EditNetworkingProfileScreen extends StatefulWidget {
@@ -30,6 +34,7 @@ class _EditNetworkingProfileScreenState
   final _nameController = TextEditingController();
   final _aboutMeController = TextEditingController();
   final _occupationController = TextEditingController();
+  final _locationController = TextEditingController();
 
   // Image picker
   final ImagePicker _imagePicker = ImagePicker();
@@ -38,11 +43,18 @@ class _EditNetworkingProfileScreenState
 
   // Active status & location
   bool _discoveryModeEnabled = true;
-  RangeValues _ageRange = const RangeValues(18, 60);
+  DateTime? _dateOfBirth;
   RangeValues _distanceRange = const RangeValues(1, 500);
   String? _locationCity;
   double? _userLatitude;
   double? _userLongitude;
+
+  // Location search
+  List<Map<String, dynamic>> _locationSuggestions = [];
+  bool _isSearchingLocation = false;
+  bool _showLocationSuggestions = false;
+  Timer? _locationDebounce;
+  bool _isDetectingLocation = false;
 
   // Selected values
   String? _selectedGender;
@@ -57,6 +69,14 @@ class _EditNetworkingProfileScreenState
   bool _isSaving = false;
   bool _isLoading = true;
 
+  bool get _canSave =>
+      _nameController.text.trim().isNotEmpty &&
+      (_selectedImage != null ||
+          (_currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty)) &&
+      _selectedCategory != null &&
+      _selectedGender != null &&
+      _locationController.text.trim().isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -64,16 +84,20 @@ class _EditNetworkingProfileScreenState
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     )..repeat();
+    _nameController.addListener(() => setState(() {}));
+    _locationController.addListener(_onLocationTextChanged);
     _loadExistingProfile();
   }
 
   @override
   void dispose() {
+    _locationDebounce?.cancel();
     _scrollController.dispose();
     _shimmerController.dispose();
     _nameController.dispose();
     _aboutMeController.dispose();
     _occupationController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -110,13 +134,17 @@ class _EditNetworkingProfileScreenState
         _currentPhotoUrl = data['photoUrl'];
         _aboutMeController.text = data['aboutMe'] ?? '';
         _occupationController.text = data['occupation'] ?? '';
-        final ageStart = (data['ageRangeStart'] as num?)?.toDouble();
-        final ageEnd = (data['ageRangeEnd'] as num?)?.toDouble();
-        if (ageStart != null && ageEnd != null) {
-          _ageRange = RangeValues(ageStart, ageEnd);
-        } else {
-          final age = (data['age'] as num?)?.toDouble();
-          if (age != null) _ageRange = RangeValues(age, age);
+        final dobStr = data['dateOfBirth'] as String?;
+        if (dobStr != null && dobStr.isNotEmpty) {
+          final parts = dobStr.split('-');
+          if (parts.length == 3) {
+            final y = int.tryParse(parts[0]);
+            final m = int.tryParse(parts[1]);
+            final d = int.tryParse(parts[2]);
+            if (y != null && m != null && d != null) {
+              _dateOfBirth = DateTime(y, m, d);
+            }
+          }
         }
         final distStart = (data['distanceRangeStart'] as num?)?.toDouble();
         final distEnd = (data['distanceRangeEnd'] as num?)?.toDouble();
@@ -127,13 +155,20 @@ class _EditNetworkingProfileScreenState
         _discoveryModeEnabled = data['discoveryModeEnabled'] ?? true;
         _allowCalls = data['allowCalls'] ?? true;
         _locationCity = data['city'] ?? data['location'];
+        if (_locationCity != null && _locationCity!.isNotEmpty) {
+          _locationController.removeListener(_onLocationTextChanged);
+          _locationController.text = _locationCity!;
+          _locationController.addListener(_onLocationTextChanged);
+        }
         // Always take lat/lon from users (kept live by location service)
         _userLatitude = (userData['latitude'] as num?)?.toDouble()
             ?? (data['latitude'] as num?)?.toDouble();
         _userLongitude = (userData['longitude'] as num?)?.toDouble()
             ?? (data['longitude'] as num?)?.toDouble();
-        _selectedCategory = data['networkingCategory'];
-        _selectedSubcategory = data['networkingSubcategory'];
+        final cat = data['networkingCategory'] as String?;
+        _selectedCategory = (cat != null && cat.isNotEmpty) ? cat : null;
+        final subcat = data['networkingSubcategory'] as String?;
+        _selectedSubcategory = (subcat != null && subcat.isNotEmpty) ? subcat : null;
         if (data['categoryFilters'] is Map) {
           _categoryFilterValues.addAll(
             (data['categoryFilters'] as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
@@ -166,6 +201,16 @@ class _EditNetworkingProfileScreenState
     }
   }
 
+  int _calculateAge(DateTime birthDate) {
+    final now = DateTime.now();
+    int age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age;
+  }
+
   Future<void> _saveProfile() async {
     if (_formKey.currentState?.validate() != true) return;
 
@@ -185,10 +230,15 @@ class _EditNetworkingProfileScreenState
           final ref = FirebaseStorage.instance.ref().child(
             'networking_profile_images/$uid.jpg',
           );
-          await ref.putFile(_selectedImage!);
+          final metadata = SettableMetadata(contentType: 'image/jpeg');
+          final bytes = await _selectedImage!.readAsBytes();
+          await ref.putData(bytes, metadata);
           photoUrl = await ref.getDownloadURL();
         } catch (e) {
           debugPrint('Failed to upload image: $e');
+          if (mounted) {
+            _showSnackBar('Failed to upload image: $e', isError: true);
+          }
         }
       } else if (_currentPhotoUrl != null &&
           _currentPhotoUrl!.isNotEmpty &&
@@ -202,12 +252,62 @@ class _EditNetworkingProfileScreenState
             final ref = FirebaseStorage.instance.ref().child(
               'networking_profile_images/$uid.jpg',
             );
-            await ref.putData(response.bodyBytes);
+            final metadata = SettableMetadata(contentType: 'image/jpeg');
+            await ref.putData(response.bodyBytes, metadata);
             photoUrl = await ref.getDownloadURL();
           }
         } catch (e) {
           debugPrint('Failed to migrate networking photo: $e');
         }
+      }
+
+      // Ensure coordinates are available (GPS-first fallback chain)
+      double? lat = _userLatitude;
+      double? lng = _userLongitude;
+      if (lat == null || lng == null) {
+        // Priority 1: Fresh GPS
+        try {
+          final locResult = await IpLocationService.detectLocation();
+          if (locResult != null) {
+            lat = locResult['lat'] as double;
+            lng = locResult['lng'] as double;
+          }
+        } catch (_) {}
+        // Priority 2: Firestore user profile (skip stale Mountain View)
+        if (lat == null || lng == null) {
+          try {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(uid)
+                .get();
+            if (userDoc.exists) {
+              final fLat = (userDoc.data()?['latitude'] as num?)?.toDouble();
+              final fLng = (userDoc.data()?['longitude'] as num?)?.toDouble();
+              final fCity = (userDoc.data()?['city'] as String? ?? '').toLowerCase();
+              final isMVCoords = (fLat != null && fLng != null &&
+                  (fLat - 37.422).abs() < 0.05 && (fLng + 122.084).abs() < 0.05);
+              if (fLat != null && fLng != null &&
+                  !fCity.contains('mountain view') &&
+                  !isMVCoords &&
+                  !(fLat.abs() < 0.01 && fLng.abs() < 0.01)) {
+                lat = fLat;
+                lng = fLng;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Block save if no coordinates
+      if (lat == null || lng == null) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          _showSnackBar(
+            'Location is required. Please enable GPS or enter your location.',
+            isError: true,
+          );
+        }
+        return;
       }
 
       final data = <String, dynamic>{
@@ -216,18 +316,19 @@ class _EditNetworkingProfileScreenState
         'photoUrl': photoUrl ?? '',
         'aboutMe': _aboutMeController.text.trim(),
         'occupation': _occupationController.text.trim(),
-        'age': _ageRange.start.round(),
-        'ageRangeStart': _ageRange.start.round(),
-        'ageRangeEnd': _ageRange.end.round(),
+        'dateOfBirth': _dateOfBirth != null
+            ? '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}'
+            : '',
+        'age': _dateOfBirth != null ? _calculateAge(_dateOfBirth!) : 0,
         'gender': _selectedGender ?? '',
         'discoveryModeEnabled': _discoveryModeEnabled,
         'allowCalls': _allowCalls,
         'distanceRangeStart': _distanceRange.start.round(),
         'distanceRangeEnd': _distanceRange.end.round(),
-        'city': _locationCity ?? '',
-        'location': _locationCity ?? '',
-        if (_userLatitude != null) 'latitude': _userLatitude,
-        if (_userLongitude != null) 'longitude': _userLongitude,
+        'city': _locationController.text.trim(),
+        'location': _locationController.text.trim(),
+        'latitude': lat,
+        'longitude': lng,
         'networkingCategory': _selectedCategory ?? '',
         'networkingSubcategory': _selectedSubcategory ?? '',
         'connectionTypes': _selectedConnectionTypes,
@@ -238,11 +339,32 @@ class _EditNetworkingProfileScreenState
             : <String, String>{},
       };
 
-      // Save to networking_profiles — separate from main user profile
+      // Save to top-level networking_profiles doc
       await FirebaseFirestore.instance
           .collection('networking_profiles')
           .doc(uid)
           .set(data, SetOptions(merge: true));
+
+      // Also update the active subcollection doc (the one matching the top-level profile)
+      try {
+        final topDoc = await FirebaseFirestore.instance
+            .collection('networking_profiles')
+            .doc(uid)
+            .get();
+        final activeDocId = topDoc.data()?['_activeSubDocId'] as String?;
+
+        if (activeDocId != null) {
+          // Direct update by known doc ID
+          await FirebaseFirestore.instance
+              .collection('networking_profiles')
+              .doc(uid)
+              .collection('profiles')
+              .doc(activeDocId)
+              .set(data, SetOptions(merge: true));
+        }
+      } catch (e) {
+        debugPrint('Failed to sync subcollection: $e');
+      }
 
       if (mounted) {
         _showSnackBar('Profile updated successfully!');
@@ -259,16 +381,170 @@ class _EditNetworkingProfileScreenState
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
+    NetworkingHelpers.showSnackBar(context, message, isError: isError);
+  }
+
+  // ──────────────────── Location Methods ────────────────────
+
+  void _onLocationTextChanged() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(fontFamily: 'Poppins')),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    setState(() {});
+    final query = _locationController.text.trim();
+    _locationDebounce?.cancel();
+    if (query.length < 2) {
+      setState(() {
+        _locationSuggestions = [];
+        _showLocationSuggestions = false;
+      });
+      return;
+    }
+    _locationDebounce = Timer(const Duration(milliseconds: 400), () {
+      _searchLocationSuggestions(query);
+    });
+  }
+
+  Future<void> _autoDetectLocation() async {
+    if (!mounted || _isDetectingLocation) return;
+    setState(() => _isDetectingLocation = true);
+
+    // Priority 1: Fresh GPS via IpLocationService (always accurate)
+    try {
+      final result = await IpLocationService.detectLocation();
+      if (result != null && mounted) {
+        _userLatitude = result['lat'] as double;
+        _userLongitude = result['lng'] as double;
+        final display = result['displayAddress'] as String?;
+        _locationController.removeListener(_onLocationTextChanged);
+        setState(() {
+          _isDetectingLocation = false;
+          if (display != null && display.isNotEmpty) {
+            _locationController.text = display;
+          }
+        });
+        _locationController.addListener(_onLocationTextChanged);
+        debugPrint('AutoDetect: Fresh GPS location used');
+        return;
+      }
+    } catch (e) {
+      debugPrint('AutoDetect: GPS location error: $e');
+    }
+
+    // Priority 2: Firestore user profile (only if GPS failed, skip stale data)
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        if (userDoc.exists && mounted) {
+          final lat = (userDoc.data()?['latitude'] as num?)?.toDouble();
+          final lng = (userDoc.data()?['longitude'] as num?)?.toDouble();
+          final city = userDoc.data()?['city'] as String? ??
+              userDoc.data()?['location'] as String? ?? '';
+          final cityLower = city.toLowerCase();
+          final isMVCoords2 = (lat != null && lng != null &&
+              (lat - 37.422).abs() < 0.05 && (lng + 122.084).abs() < 0.05);
+          if (lat != null && lng != null &&
+              !cityLower.contains('mountain view') &&
+              !isMVCoords2 &&
+              !(lat.abs() < 0.01 && lng.abs() < 0.01)) {
+            _userLatitude = lat;
+            _userLongitude = lng;
+            _locationController.removeListener(_onLocationTextChanged);
+            setState(() {
+              _isDetectingLocation = false;
+              if (city.isNotEmpty) {
+                _locationController.text = city;
+              }
+            });
+            _locationController.addListener(_onLocationTextChanged);
+            debugPrint('AutoDetect: Firestore fallback: $lat, $lng');
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('AutoDetect: Firestore GPS error: $e');
+    }
+
+    if (mounted) {
+      setState(() => _isDetectingLocation = false);
+      _showSnackBar('Could not detect location. Please enter manually.', isError: true);
+    }
+  }
+
+  Future<void> _searchLocationSuggestions(String query) async {
+    if (!mounted) return;
+    setState(() => _isSearchingLocation = true);
+    try {
+      double? lat = _userLatitude;
+      double? lng = _userLongitude;
+
+      if (lat == null || lng == null) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          if (doc.exists) {
+            lat = (doc.data()?['latitude'] as num?)?.toDouble();
+            lng = (doc.data()?['longitude'] as num?)?.toDouble();
+          }
+        }
+      }
+      final results = await GeocodingService.searchLocation(
+        query,
+        userLat: lat,
+        userLng: lng,
+      );
+      if (mounted) {
+        setState(() {
+          _locationSuggestions = results;
+          _showLocationSuggestions = results.isNotEmpty;
+          _isSearchingLocation = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Location search error: $e');
+      if (mounted) setState(() => _isSearchingLocation = false);
+    }
+  }
+
+  void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
+    final area = (suggestion['area'] ?? '').toString();
+    final city = (suggestion['city'] ?? '').toString();
+    final state = (suggestion['state'] ?? '').toString();
+
+    String display = '';
+    if (area.isNotEmpty) {
+      display = area;
+      if (city.isNotEmpty && city != area) {
+        display += ', $city';
+      }
+    } else if (city.isNotEmpty) {
+      display = city;
+    }
+
+    if (state.isNotEmpty) {
+      if (display.isNotEmpty) {
+        display += ', $state';
+      } else {
+        display = state;
+      }
+    } else if (display.isEmpty) {
+      display = (suggestion['formatted'] ?? '').toString().split(',').take(2).join(',').trim();
+    }
+
+    _locationController.removeListener(_onLocationTextChanged);
+    _locationController.text = display;
+    _locationController.addListener(_onLocationTextChanged);
+
+    _userLatitude = (suggestion['latitude'] as num?)?.toDouble();
+    _userLongitude = (suggestion['longitude'] as num?)?.toDouble();
+
+    setState(() {
+      _showLocationSuggestions = false;
+      _locationSuggestions = [];
+    });
   }
 
   Future<void> _pickImage() async {
@@ -330,8 +606,8 @@ class _EditNetworkingProfileScreenState
                     const SizedBox(width: 22),
                     const Text(
                       'Change Photo',
-                      style: TextStyle(fontFamily: 'Poppins', 
-                        fontSize: 16,
+                      style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
@@ -365,9 +641,9 @@ class _EditNetworkingProfileScreenState
                 ),
                 title: const Text(
                   'Choose from Gallery',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: TextStyle(fontFamily: 'Poppins',
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 15,
                   ),
                 ),
                 onTap: () {
@@ -392,9 +668,9 @@ class _EditNetworkingProfileScreenState
                 ),
                 title: const Text(
                   'Take a Photo',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: TextStyle(fontFamily: 'Poppins',
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 15,
                   ),
                 ),
                 onTap: () {
@@ -417,9 +693,9 @@ class _EditNetworkingProfileScreenState
                   ),
                   title: const Text(
                     'Remove Photo',
-                    style: TextStyle(fontFamily: 'Poppins', 
+                    style: TextStyle(fontFamily: 'Poppins',
                       color: Colors.red,
-                      fontSize: 14,
+                      fontSize: 15,
                     ),
                   ),
                   onTap: () {
@@ -443,7 +719,7 @@ class _EditNetworkingProfileScreenState
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: const Color(0xFF000000),
-        appBar: NetworkingWidgets.networkingAppBar(title: 'Edit Profile', onBack: () => Navigator.pop(context)),
+        appBar: NetworkingWidgets.networkingAppBar(title: 'Edit Networking Profile', onBack: () => Navigator.pop(context)),
         bottomNavigationBar: _buildSaveButton(),
         body: Container(
           decoration: NetworkingWidgets.bodyGradient(fourStop: true),
@@ -490,8 +766,32 @@ class _EditNetworkingProfileScreenState
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                               child: Padding(
                                 padding: const EdgeInsets.all(20),
-                                child: Center(
-                                  child: Stack(
+                                child: Column(
+                                  children: [
+                                    Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: 'Profile Photo',
+                                            style: TextStyle(fontFamily: 'Poppins',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.white.withValues(alpha: 0.7),
+                                            ),
+                                          ),
+                                          const TextSpan(
+                                            text: ' *',
+                                            style: TextStyle(
+                                              color: Color(0xFF007AFF),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Stack(
                                     children: [
                                       GestureDetector(
                                         onTap: _showImagePickerOptions,
@@ -577,6 +877,7 @@ class _EditNetworkingProfileScreenState
                                       ),
                                     ],
                                   ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -586,12 +887,26 @@ class _EditNetworkingProfileScreenState
                         const SizedBox(height: 14),
 
                         // Name Field
-                        Text(
-                          'Name',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.7),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Name',
+                                style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                              ),
+                              const TextSpan(
+                                text: ' *',
+                                style: TextStyle(
+                                  color: Color(0xFF007AFF),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -613,23 +928,14 @@ class _EditNetworkingProfileScreenState
                         ),
                         const SizedBox(height: 20),
 
-                        // 1. Basic Info Section
-                        _buildSectionHeader(
-                          'Basic Information',
-                          Icons.person_outline_rounded,
-                          [
-                            const Color(0xFF6366F1),
-                            const Color(0xFFA855F7),
-                          ],
-                        ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               'About Me',
-                              style: TextStyle(fontFamily: 'Poppins', 
-                                fontSize: 13,
+                              style: TextStyle(fontFamily: 'Poppins',
+                                fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.white.withValues(alpha: 0.7),
                               ),
@@ -639,8 +945,8 @@ class _EditNetworkingProfileScreenState
                               builder: (context, value, _) {
                                 return Text(
                                   '${value.text.length}/300',
-                                  style: TextStyle(fontFamily: 'Poppins', 
-                                    fontSize: 11,
+                                  style: TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 12,
                                     color: value.text.length > 300
                                         ? Colors.redAccent
                                         : Colors.white.withValues(alpha: 0.5),
@@ -661,8 +967,8 @@ class _EditNetworkingProfileScreenState
                         const SizedBox(height: 16),
                         Text(
                           'Occupation',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
+                          style: TextStyle(fontFamily: 'Poppins',
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: Colors.white.withValues(alpha: 0.7),
                           ),
@@ -683,115 +989,44 @@ class _EditNetworkingProfileScreenState
                             const Color(0xFF3B82F6),
                             const Color(0xFF60A5FA),
                           ],
+                          isMandatory: true,
                         ),
                         const SizedBox(height: 8),
 
                         // Category Dropdown
-                        LayoutBuilder(
-                          builder: (_, boxConstraints) =>
-                              PopupMenuButton<String>(
-                                constraints: BoxConstraints(
-                                  minWidth: boxConstraints.maxWidth,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  side: BorderSide(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.35),
+                        GestureDetector(
+                          onTap: _showCategoryGridPicker,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                            ),
+                            child: Row(
+                              children: [
+                                if (_selectedCategory != null) ...[
+                                  Icon(
+                                    NetworkingConstants.categoryIcons[_selectedCategory] ?? Icons.hub_rounded,
+                                    color: (NetworkingConstants.categoryColors[_selectedCategory] ?? [const Color(0xFF6366F1)])[0],
+                                    size: 20,
                                   ),
-                                ),
-                                color: const Color(0xFF2A2A2A),
-                                position: PopupMenuPosition.under,
-                                borderRadius: BorderRadius.circular(14),
-                                initialValue: _selectedCategory,
-                                itemBuilder: (context) =>
-                                    NetworkingConstants.categorySubcategories.keys.map((catName) {
-                                      final icon = NetworkingConstants.categoryIcons[catName] ??
-                                          Icons.hub_rounded;
-                                      final colors =
-                                          NetworkingConstants.categoryColors[catName] ??
-                                          [const Color(0xFF6366F1)];
-                                      return PopupMenuItem<String>(
-                                        value: catName,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              icon,
-                                              color: colors[0],
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              catName,
-                                              style: const TextStyle(fontFamily: 'Poppins', 
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                                onSelected: (value) {
-                                  setState(() {
-                                    _selectedCategory = value;
-                                    _selectedSubcategory = null;
-                                    _categoryFilterValues.clear();
-                                  });
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 11,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.35,
-                                      ),
+                                  const SizedBox(width: 12),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    _selectedCategory ?? 'Select Category',
+                                    style: TextStyle(fontFamily: 'Poppins',
+                                      color: _selectedCategory != null ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                                      fontSize: 15,
                                     ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      if (_selectedCategory != null) ...[
-                                        Icon(
-                                          NetworkingConstants.categoryIcons[_selectedCategory] ??
-                                              Icons.hub_rounded,
-                                          color:
-                                              (NetworkingConstants.categoryColors[
-                                                      _selectedCategory] ??
-                                                  [
-                                                    const Color(0xFF6366F1),
-                                                  ])[0],
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          _selectedCategory ??
-                                              'Select Category',
-                                          style: TextStyle(fontFamily: 'Poppins', 
-                                            color: _selectedCategory != null
-                                                ? Colors.white
-                                                : Colors.white.withValues(
-                                                    alpha: 0.5,
-                                                  ),
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Icons.keyboard_arrow_down_rounded,
-                                        color: Colors.white,
-                                      ),
-                                    ],
-                                  ),
                                 ),
-                              ),
+                                const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
+                              ],
+                            ),
+                          ),
                         ),
 
                         // 3. Subcategory Dropdown (if category selected)
@@ -805,90 +1040,48 @@ class _EditNetworkingProfileScreenState
                               final catColor =
                                   (NetworkingConstants.categoryColors[_selectedCategory] ??
                                   [const Color(0xFF6366F1)])[0];
-                              return LayoutBuilder(
-                                builder: (_, boxConstraints) =>
-                                    PopupMenuButton<String>(
-                                      constraints: BoxConstraints(
-                                        minWidth: boxConstraints.maxWidth,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(14),
-                                        side: BorderSide(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.35,
+                              return GestureDetector(
+                                onTap: () async {
+                                  final result = await _showGridPicker(
+                                    title: 'Select Subcategory',
+                                    options: subs,
+                                    currentValue: _selectedSubcategory,
+                                    accentColor: catColor,
+                                  );
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _selectedSubcategory = result;
+                                      _categoryFilterValues.clear();
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                                  decoration: BoxDecoration(
+                                    color: catColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          (_selectedSubcategory != null && _selectedSubcategory!.isNotEmpty)
+                                              ? _selectedSubcategory!
+                                              : 'Select Subcategory',
+                                          style: TextStyle(fontFamily: 'Poppins',
+                                            color: (_selectedSubcategory != null && _selectedSubcategory!.isNotEmpty)
+                                                ? Colors.white
+                                                : Colors.white.withValues(alpha: 0.5),
+                                            fontSize: 15,
                                           ),
                                         ),
                                       ),
-                                      color: const Color(0xFF2A2A2A),
-                                      position: PopupMenuPosition.under,
-                                      borderRadius: BorderRadius.circular(14),
-                                      initialValue: _selectedSubcategory,
-                                      itemBuilder: (context) => subs
-                                          .map(
-                                            (sub) => PopupMenuItem<String>(
-                                              value: sub,
-                                              child: Text(
-                                                sub,
-                                                style: const TextStyle(fontFamily: 'Poppins', 
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onSelected: (value) {
-                                        setState(() {
-                                          _selectedSubcategory = value;
-                                          _categoryFilterValues.clear();
-                                        });
-                                      },
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 11,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: catColor.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.35,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                _selectedSubcategory ??
-                                                    'Select Subcategory',
-                                                style: TextStyle(fontFamily: 'Poppins', 
-                                                  color:
-                                                      _selectedSubcategory !=
-                                                              null
-                                                          ? Colors.white
-                                                          : Colors.white
-                                                              .withValues(
-                                                                alpha: 0.5,
-                                                              ),
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ),
-                                            const Icon(
-                                              Icons
-                                                  .keyboard_arrow_down_rounded,
-                                              color: Colors.white,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                      const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
+                                    ],
+                                  ),
+                                ),
                               );
                             },
                           ),
@@ -906,94 +1099,49 @@ class _EditNetworkingProfileScreenState
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                               style: const TextStyle(fontFamily: 'Poppins',
-                                fontSize: 14,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            LayoutBuilder(
-                              builder: (_, boxConstraints) {
+                            Builder(
+                              builder: (context) {
                                 final label = (filter['label'] ?? '').toString();
                                 final options = (filter['options'] as List?)
                                     ?.map((e) => e.toString()).toList() ?? <String>[];
-                                final catColor =
-                                    (NetworkingConstants.categoryColors[_selectedCategory] ??
-                                    [const Color(0xFF6366F1)])[0];
-                                return PopupMenuButton<String>(
-                                  constraints: BoxConstraints(
-                                    minWidth: boxConstraints.maxWidth,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    side: BorderSide(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  color: const Color(0xFF2A2A2A),
-                                  position: PopupMenuPosition.under,
-                                  borderRadius: BorderRadius.circular(14),
-                                  initialValue: _categoryFilterValues[label],
-                                  itemBuilder: (context) => options
-                                      .map(
-                                        (opt) => PopupMenuItem<String>(
-                                          value: opt,
-                                          child: Text(
-                                            opt,
-                                            style: const TextStyle(fontFamily: 'Poppins', 
-                                              color: Colors.white,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onSelected: (value) {
-                                    setState(() {
-                                      _categoryFilterValues[label] = value;
-                                    });
+                                final catColor = (NetworkingConstants.categoryColors[_selectedCategory] ?? [const Color(0xFF6366F1)])[0];
+                                return GestureDetector(
+                                  onTap: () async {
+                                    final result = await _showGridPicker(
+                                      title: 'Select $label',
+                                      options: options,
+                                      currentValue: _categoryFilterValues[label],
+                                    );
+                                    if (result != null && mounted) {
+                                      setState(() => _categoryFilterValues[label] = result);
+                                    }
                                   },
                                   child: Container(
                                     width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 11,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                                     decoration: BoxDecoration(
                                       color: catColor.withValues(alpha: 0.06),
                                       borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                      ),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
                                     ),
                                     child: Row(
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            _categoryFilterValues[label] ??
-                                                'Select $label',
-                                            style: TextStyle(fontFamily: 'Poppins', 
-                                              color:
-                                                  _categoryFilterValues[
-                                                              label] !=
-                                                          null
-                                                      ? Colors.white
-                                                      : Colors.white
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          ),
-                                              fontSize: 13,
+                                            _categoryFilterValues[label] ?? 'Select $label',
+                                            style: TextStyle(fontFamily: 'Poppins',
+                                              color: _categoryFilterValues[label] != null ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                                              fontSize: 14,
                                             ),
                                           ),
                                         ),
-                                        const Icon(
-                                          Icons.keyboard_arrow_down_rounded,
-                                          color: Colors.white,
-                                        ),
+                                        const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
                                       ],
                                     ),
                                   ),
@@ -1005,129 +1153,63 @@ class _EditNetworkingProfileScreenState
                         ],
                         const SizedBox(height: 16),
 
-                        // ── Age Range (RangeSlider Popup) ──
-                        Text(
-                          'Age Range',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.7),
+                        // ── Date of Birth (Calendar Picker) ──
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Date of Birth',
+                                style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                              ),
+                              const TextSpan(
+                                text: ' *',
+                                style: TextStyle(
+                                  color: Color(0xFF007AFF),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
                         GestureDetector(
-                          onTap: () {
-                            RangeValues tempAge = _ageRange;
-                            showDialog(
+                          onTap: () async {
+                            final now = DateTime.now();
+                            final picked = await showDatePicker(
                               context: context,
-                              builder: (ctx) => StatefulBuilder(
-                                builder: (ctx, setSliderState) => AlertDialog(
-                                  backgroundColor: const Color(0xFF2A2A2A),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    side: BorderSide(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.35,
+                              initialDate: _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day),
+                              firstDate: DateTime(1940),
+                              lastDate: DateTime(now.year - 13, now.month, now.day),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.dark(
+                                      primary: Color(0xFF007AFF),
+                                      onPrimary: Colors.white,
+                                      surface: Color(0xFF2A2A2A),
+                                      onSurface: Colors.white,
+                                    ),
+                                    dialogBackgroundColor: const Color(0xFF2A2A2A),
+                                    textButtonTheme: TextButtonThemeData(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white,
                                       ),
                                     ),
                                   ),
-                                  title: const Text(
-                                    'Age Range',
-                                    style: TextStyle(fontFamily: 'Poppins', 
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        '${tempAge.start.round()} - ${tempAge.end.round() == 60 ? "60+" : tempAge.end.round()}',
-                                        style: const TextStyle(fontFamily: 'Poppins', 
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      SliderTheme(
-                                        data: SliderThemeData(
-                                          activeTrackColor: Colors.white,
-                                          inactiveTrackColor:
-                                              Colors.white.withValues(
-                                                alpha: 0.2,
-                                              ),
-                                          thumbColor: Colors.white,
-                                          overlayColor:
-                                              Colors.white.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                          rangeThumbShape:
-                                              const RoundRangeSliderThumbShape(
-                                                enabledThumbRadius: 8,
-                                              ),
-                                        ),
-                                        child: RangeSlider(
-                                          values: tempAge,
-                                          min: 18,
-                                          max: 60,
-                                          divisions: 42,
-                                          onChanged: (values) {
-                                            setSliderState(() {
-                                              tempAge = values;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            '18',
-                                            style: TextStyle(fontFamily: 'Poppins', 
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          Text(
-                                            '60+',
-                                            style: TextStyle(fontFamily: 'Poppins', 
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text(
-                                        'Cancel',
-                                        style:
-                                            TextStyle(fontFamily: 'Poppins', color: Colors.white70),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        setState(() => _ageRange = tempAge);
-                                        Navigator.pop(ctx);
-                                      },
-                                      child: const Text(
-                                        'Done',
-                                        style: TextStyle(fontFamily: 'Poppins', 
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                  child: child!,
+                                );
+                              },
                             );
+                            if (picked != null) {
+                              setState(() {
+                                _dateOfBirth = picked;
+                              });
+                            }
                           },
                           child: Container(
                             width: double.infinity,
@@ -1146,17 +1228,21 @@ class _EditNetworkingProfileScreenState
                               children: [
                                 Expanded(
                                   child: Text(
-                                    '${_ageRange.start.round()} - ${_ageRange.end.round() == 60 ? "60+" : _ageRange.end.round()}',
-                                    style: const TextStyle(fontFamily: 'Poppins', 
-                                      color: Colors.white,
-                                      fontSize: 14,
+                                    _dateOfBirth != null
+                                        ? '${_dateOfBirth!.day.toString().padLeft(2, '0')} / ${_dateOfBirth!.month.toString().padLeft(2, '0')} / ${_dateOfBirth!.year}'
+                                        : 'Select your date of birth',
+                                    style: TextStyle(fontFamily: 'Poppins',
+                                      color: _dateOfBirth != null
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.4),
+                                      fontSize: 15,
                                     ),
                                   ),
                                 ),
-                                const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: Colors.white,
-                                  size: 20,
+                                Icon(
+                                  Icons.calendar_today_rounded,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  size: 18,
                                 ),
                               ],
                             ),
@@ -1165,275 +1251,285 @@ class _EditNetworkingProfileScreenState
                         const SizedBox(height: 16),
 
                         // ── Gender (Popup with Icons) ──
-                        Text(
-                          'Gender',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        LayoutBuilder(
-                          builder: (_, boxConstraints) =>
-                              PopupMenuButton<String>(
-                                constraints: BoxConstraints(
-                                  minWidth: boxConstraints.maxWidth,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  side: BorderSide(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.35),
-                                  ),
-                                ),
-                                color: const Color(0xFF2A2A2A),
-                                position: PopupMenuPosition.under,
-                                borderRadius: BorderRadius.circular(14),
-                                initialValue: _selectedGender,
-                                itemBuilder: (context) => NetworkingConstants.genderOptions
-                                    .map(
-                                      (gender) => PopupMenuItem<String>(
-                                        value: gender,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              gender == 'Male'
-                                                  ? Icons.male
-                                                  : gender == 'Female'
-                                                  ? Icons.female
-                                                  : Icons.transgender,
-                                              color: const Color(0xFFFF6B9D),
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              gender,
-                                              style: const TextStyle(fontFamily: 'Poppins', 
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onSelected: (value) {
-                                  setState(() => _selectedGender = value);
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 11,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (_selectedGender != null) ...[
-                                        Icon(
-                                          _selectedGender == 'Male'
-                                              ? Icons.male
-                                              : _selectedGender == 'Female'
-                                              ? Icons.female
-                                              : Icons.transgender,
-                                          color: const Color(0xFFFF6B9D),
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          _selectedGender ?? 'Select Gender',
-                                          style: TextStyle(fontFamily: 'Poppins', 
-                                            color: _selectedGender != null
-                                                ? Colors.white
-                                                : Colors.white.withValues(
-                                                    alpha: 0.5,
-                                                  ),
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Icons.keyboard_arrow_down_rounded,
-                                        color: Colors.white,
-                                      ),
-                                    ],
-                                  ),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Gender',
+                                style: TextStyle(fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.7),
                                 ),
                               ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ── Location (Distance RangeSlider Popup) ──
-                        Text(
-                          'Location',
-                          style: TextStyle(fontFamily: 'Poppins', 
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.7),
+                              const TextSpan(
+                                text: ' *',
+                                style: TextStyle(
+                                  color: Color(0xFF007AFF),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
                         GestureDetector(
-                          onTap: () {
-                            RangeValues tempDist = _distanceRange;
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => StatefulBuilder(
-                                builder: (ctx, setSliderState) => AlertDialog(
-                                  backgroundColor: const Color(0xFF2A2A2A),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    side: BorderSide(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'Location Range',
-                                    style: TextStyle(fontFamily: 'Poppins', 
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        '${tempDist.start.round()} km - ${tempDist.end.round() == 500 ? "500+" : "${tempDist.end.round()}"} km',
-                                        style: const TextStyle(fontFamily: 'Poppins', 
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      SliderTheme(
-                                        data: SliderThemeData(
-                                          activeTrackColor: Colors.white,
-                                          inactiveTrackColor:
-                                              Colors.white.withValues(
-                                                alpha: 0.2,
-                                              ),
-                                          thumbColor: Colors.white,
-                                          overlayColor:
-                                              Colors.white.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                          rangeThumbShape:
-                                              const RoundRangeSliderThumbShape(
-                                                enabledThumbRadius: 8,
-                                              ),
-                                        ),
-                                        child: RangeSlider(
-                                          values: tempDist,
-                                          min: 1,
-                                          max: 500,
-                                          divisions: 499,
-                                          onChanged: (values) {
-                                            setSliderState(() {
-                                              tempDist = values;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            '1 km',
-                                            style: TextStyle(fontFamily: 'Poppins', 
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          Text(
-                                            '500+ km',
-                                            style: TextStyle(fontFamily: 'Poppins', 
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text(
-                                        'Cancel',
-                                        style:
-                                            TextStyle(fontFamily: 'Poppins', color: Colors.white70),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        setState(
-                                          () => _distanceRange = tempDist,
-                                        );
-                                        Navigator.pop(ctx);
-                                      },
-                                      child: const Text(
-                                        'Done',
-                                        style: TextStyle(fontFamily: 'Poppins', 
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                          onTap: () async {
+                            final result = await _showGridPicker(
+                              title: 'Select Gender',
+                              options: NetworkingConstants.genderOptions,
+                              currentValue: _selectedGender,
                             );
+                            if (result != null && mounted) setState(() => _selectedGender = result);
                           },
                           child: Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 11,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.35),
-                              ),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
                             ),
                             child: Row(
                               children: [
+                                if (_selectedGender != null) ...[
+                                  Icon(
+                                    _selectedGender == 'Male' ? Icons.male : _selectedGender == 'Female' ? Icons.female : Icons.transgender,
+                                    color: const Color(0xFFFF6B9D),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
                                 Expanded(
                                   child: Text(
-                                    '${_distanceRange.start.round()} km - ${_distanceRange.end.round() == 500 ? "500+" : "${_distanceRange.end.round()}"} km',
-                                    style: const TextStyle(fontFamily: 'Poppins', 
-                                      color: Colors.white,
-                                      fontSize: 14,
+                                    _selectedGender ?? 'Select Gender',
+                                    style: TextStyle(fontFamily: 'Poppins',
+                                      color: _selectedGender != null ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                                      fontSize: 15,
                                     ),
                                   ),
                                 ),
-                                const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+                                const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
                               ],
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+
+                        // ── Location (Text Field with Auto-Detect & Search) ──
+                        Row(
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'Location',
+                                    style: TextStyle(fontFamily: 'Poppins',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' *',
+                                    style: TextStyle(
+                                      color: Color(0xFF007AFF),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_isSearchingLocation)
+                              const SizedBox(
+                                width: 14, height: 14,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white38,
+                                  strokeWidth: 1.5,
+                                ),
+                              ),
+                            const SizedBox(width: 8),
+                            if (_isDetectingLocation)
+                              const SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white54,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _autoDetectLocation,
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.my_location_rounded,
+                                        color: Color(0xFF016CFF),
+                                        size: 16,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Detect',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: Color(0xFF016CFF),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _buildTextField(
+                          controller: _locationController,
+                          label: '',
+                          hint: _isDetectingLocation
+                              ? 'Detecting location...'
+                              : 'e.g. Mumbai, Delhi...',
+                        ),
+
+                        // Location suggestions dropdown
+                        if (_showLocationSuggestions && _locationSuggestions.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color.fromRGBO(64, 64, 64, 1),
+                                  Color.fromRGBO(0, 0, 0, 1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Align(
+                                    alignment: Alignment.topRight,
+                                    child: GestureDetector(
+                                      onTap: () => setState(() {
+                                        _showLocationSuggestions = false;
+                                        _locationSuggestions = [];
+                                      }),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 6, right: 10),
+                                        child: Icon(
+                                          Icons.close_rounded,
+                                          color: Colors.white.withValues(alpha: 0.5),
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Flexible(
+                                    child: ListView.separated(
+                                      shrinkWrap: true,
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      itemCount: _locationSuggestions.length,
+                                      separatorBuilder: (_, __) => Divider(
+                                        height: 1,
+                                        indent: 40,
+                                        color: Colors.white.withValues(alpha: 0.08),
+                                      ),
+                                      itemBuilder: (context, index) {
+                                        final s = _locationSuggestions[index];
+                                        final city = (s['city'] ?? '').toString();
+                                        final state = (s['state'] ?? '').toString();
+                                        final area = (s['area'] ?? '').toString();
+                                        final title = area.isNotEmpty ? area : city;
+                                        String subtitle = '';
+                                        if (city.isNotEmpty && city != title) subtitle = city;
+                                        if (state.isNotEmpty) {
+                                          subtitle = subtitle.isNotEmpty
+                                              ? '$subtitle, $state'
+                                              : state;
+                                        }
+
+                                        return InkWell(
+                                          onTap: () => _selectLocationSuggestion(s),
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(6),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF016CFF).withValues(alpha: 0.15),
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                      color: const Color(0xFF016CFF).withValues(alpha: 0.4),
+                                                    ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.location_on_outlined,
+                                                    color: Color(0xFF016CFF),
+                                                    size: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        title,
+                                                        style: const TextStyle(
+                                                          fontFamily: 'Poppins',
+                                                          color: Colors.white,
+                                                          fontSize: 14,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                      if (subtitle.isNotEmpty)
+                                                        Text(
+                                                          subtitle,
+                                                          style: TextStyle(
+                                                            fontFamily: 'Poppins',
+                                                            color: Colors.white.withValues(alpha: 0.5),
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 16),
 
                         // ── Active Status (Discovery Toggle) ──
@@ -1475,8 +1571,8 @@ class _EditNetworkingProfileScreenState
                               const Expanded(
                                 child: Text(
                                   'Show me in Discovery',
-                                  style: TextStyle(fontFamily: 'Poppins', 
-                                    fontSize: 14,
+                                  style: TextStyle(fontFamily: 'Poppins',
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white,
                                   ),
@@ -1537,7 +1633,7 @@ class _EditNetworkingProfileScreenState
                                 child: Text(
                                   'Allow Calls',
                                   style: TextStyle(fontFamily: 'Poppins',
-                                    fontSize: 14,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white,
                                   ),
@@ -1572,15 +1668,271 @@ class _EditNetworkingProfileScreenState
     );
   }
 
+  // ──────────────────── Category Grid Picker ────────────────────
+  Future<void> _showCategoryGridPicker() async {
+    final categories = NetworkingConstants.categorySubcategories.keys.toList();
+    final result = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 560),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.7), blurRadius: 32, offset: const Offset(0, 8))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Select Category', style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.9))),
+                      GestureDetector(onTap: () => Navigator.pop(ctx), child: Icon(Icons.close_rounded, color: Colors.white.withValues(alpha: 0.5), size: 20)),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 1.2,
+                      ),
+                      itemCount: categories.length,
+                      itemBuilder: (context, index) {
+                        final catName = categories[index];
+                        final icon = NetworkingConstants.categoryIcons[catName] ?? Icons.hub_rounded;
+                        final colors = NetworkingConstants.categoryColors[catName] ?? [const Color(0xFF6366F1), const Color(0xFFA855F7)];
+                        final isSelected = _selectedCategory == catName;
+                        return GestureDetector(
+                          onTap: () => Navigator.pop(ctx, catName),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isSelected ? colors : [Colors.white.withValues(alpha: 0.25), Colors.white.withValues(alpha: 0.15)],
+                                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isSelected ? colors[0].withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.3), width: isSelected ? 1.5 : 1),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.white.withValues(alpha: 0.2) : colors[0].withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: isSelected ? Colors.white.withValues(alpha: 0.5) : colors[0].withValues(alpha: 0.4), width: 1.2),
+                                  ),
+                                  child: Icon(icon, color: isSelected ? Colors.white : colors[0], size: 20),
+                                ),
+                                const SizedBox(height: 5),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text(catName, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _selectedCategory = result;
+        _selectedSubcategory = null;
+        _categoryFilterValues.clear();
+      });
+    }
+  }
+
+  // ──────────────────── Generic Grid Picker ────────────────────
+  Future<String?> _showGridPicker({
+    required String title,
+    required List<String> options,
+    String? currentValue,
+    Widget Function(String)? leadingBuilder,
+    Color? accentColor,
+  }) {
+    return showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 560),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.7), blurRadius: 32, offset: const Offset(0, 8))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.9))),
+                      GestureDetector(onTap: () => Navigator.pop(ctx), child: Icon(Icons.close_rounded, color: Colors.white.withValues(alpha: 0.5), size: 20)),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 1.2,
+                      ),
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final opt = options[index];
+                        final isSelected = opt == currentValue;
+                        // Use per-item color: maps → accent → auto-generate from hash
+                        final itemColor = NetworkingConstants.subcategoryColors[opt]
+                            ?? NetworkingConstants.filterOptionColors[opt]
+                            ?? accentColor
+                            ?? HSLColor.fromAHSL(1.0, (opt.hashCode % 360).abs().toDouble(), 0.65, 0.55).toColor();
+                        return GestureDetector(
+                          onTap: () => Navigator.pop(ctx, opt),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isSelected
+                                    ? [itemColor, itemColor.withValues(alpha: 0.7)]
+                                    : [Colors.white.withValues(alpha: 0.25), Colors.white.withValues(alpha: 0.15)],
+                                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? itemColor.withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.3),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Colors.white.withValues(alpha: 0.2)
+                                        : itemColor.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Colors.white.withValues(alpha: 0.5)
+                                          : itemColor.withValues(alpha: 0.4),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: leadingBuilder != null
+                                      ? leadingBuilder(opt)
+                                      : Icon(
+                                          NetworkingConstants.subcategoryIcons[opt]
+                                              ?? NetworkingConstants.filterOptionIcons[opt]
+                                              ?? Icons.label_rounded,
+                                          color: isSelected ? Colors.white : itemColor,
+                                          size: 20,
+                                        ),
+                                ),
+                                const SizedBox(height: 5),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text(opt, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ──────────────────── Section Header ────────────────────
   Widget _buildSectionHeader(
     String title,
     IconData icon,
-    List<Color> colors,
-  ) {
+    List<Color> colors, {
+    bool isMandatory = false,
+  }) {
+    if (isMandatory) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: title,
+              style: const TextStyle(fontFamily: 'Poppins',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const TextSpan(
+              text: ' *',
+              style: TextStyle(
+                color: Color(0xFF007AFF),
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Text(
       title,
-      style: const TextStyle(fontFamily: 'Poppins', 
+      style: const TextStyle(fontFamily: 'Poppins',
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Colors.white,
@@ -1619,8 +1971,8 @@ class _EditNetworkingProfileScreenState
         textAlignVertical: TextAlignVertical.top,
         validator: validator,
         inputFormatters: inputFormatters,
-        style: const TextStyle(fontFamily: 'Poppins', 
-          fontSize: 14,
+        style: const TextStyle(fontFamily: 'Poppins',
+          fontSize: 15,
           color: Colors.white,
         ),
         decoration: InputDecoration(
@@ -1629,16 +1981,16 @@ class _EditNetworkingProfileScreenState
           alignLabelWithHint: true,
           filled: true,
           fillColor: Colors.transparent,
-          labelStyle: TextStyle(fontFamily: 'Poppins', 
+          labelStyle: TextStyle(fontFamily: 'Poppins',
             fontSize: 14,
             color: Colors.white.withValues(alpha: 0.7),
           ),
-          hintStyle: TextStyle(fontFamily: 'Poppins', 
+          hintStyle: TextStyle(fontFamily: 'Poppins',
             fontSize: 14,
             color: Colors.white.withValues(alpha: 0.4),
           ),
-          counterStyle: TextStyle(fontFamily: 'Poppins', 
-            fontSize: 11,
+          counterStyle: TextStyle(fontFamily: 'Poppins',
+            fontSize: 12,
             color: Colors.white.withValues(alpha: 0.5),
           ),
           border: InputBorder.none,
@@ -1671,19 +2023,24 @@ class _EditNetworkingProfileScreenState
             ),
           ),
           child: GestureDetector(
-            onTap: _isSaving ? null : _saveProfile,
-            child: Container(
+            onTap: (_canSave && !_isSaving) ? _saveProfile : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
               height: 54,
               decoration: BoxDecoration(
-                color: const Color(0xFF016CFF),
+                color: _canSave
+                    ? const Color(0xFF016CFF)
+                    : Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF016CFF).withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                boxShadow: _canSave
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF016CFF).withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
+                    : [],
               ),
               child: Center(
                 child: _isSaving
@@ -1697,21 +2054,25 @@ class _EditNetworkingProfileScreenState
                           ),
                         ),
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.save_rounded,
-                            color: Colors.white,
+                            color: _canSave
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.35),
                             size: 22,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
                             'Update Profile',
-                            style: TextStyle(fontFamily: 'Poppins', 
-                              fontSize: 16,
+                            style: TextStyle(fontFamily: 'Poppins',
+                              fontSize: 17,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: _canSave
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.35),
                             ),
                           ),
                         ],

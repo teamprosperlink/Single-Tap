@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/screens/login/choose_account_type_screen.dart';
+import 'package:single_tap/screens/login/choose_account_type_screen.dart';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';
 import '../../res/config/app_text_styles.dart';
@@ -21,7 +21,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
-      title: 'Welcome to SingleTap',
+      title: 'Welcome to Single Tap',
       subtitle:
           'Your ultimate campus marketplace for buying, selling, and connecting with students',
       imagePath: AppAssets.logoPath,
@@ -55,7 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ),
     OnboardingPage(
       title: 'Get Started',
-      subtitle: 'Join thousands of students already using SingleTap every day',
+      subtitle: 'Join thousands of students already using Single Tap every day',
       imagePath: AppAssets.searchDataImage,
       color: AppColors.lightPurpleTint,
       gradient: [
@@ -126,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'SingleTap',
+                          'Single Tap',
                           style: AppTextStyles.displaySmall.copyWith(
                             shadows: [
                               Shadow(
@@ -221,7 +221,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           else
                             _buildNextButton(),
 
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 16),
                         ],
                       ),
                     ),
@@ -351,7 +351,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _buildPageIndicators() {
     return SizedBox(
-      height: 60,
+      height: 40,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(_pages.length, (index) {

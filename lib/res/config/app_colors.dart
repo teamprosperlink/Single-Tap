@@ -89,11 +89,11 @@ class AppColors {
 
   //    GRADIENTS
 
-  /// Splash screen gradient
+  /// Splash screen gradient (matches home screen exactly)
   static const LinearGradient splashGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [splashDark1, splashDark2, splashDark3],
+    colors: [splashDark1, splashDark3],
   );
 
   //    GLASSMORPHISM COLORS

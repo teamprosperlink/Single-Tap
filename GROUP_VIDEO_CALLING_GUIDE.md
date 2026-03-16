@@ -129,7 +129,7 @@ To create indexes:
 
 ```dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supper/screens/call/group_video_call_screen.dart';
+import 'package:single_tap/screens/call/group_video_call_screen.dart';
 
 Future<void> startGroupVideoCall({
   required String currentUserId,
@@ -247,7 +247,7 @@ Future<void> _sendGroupCallNotification({
 When a user receives a notification, show the incoming call screen:
 
 ```dart
-import 'package:supper/screens/call/incoming_group_video_call_screen.dart';
+import 'package:single_tap/screens/call/incoming_group_video_call_screen.dart';
 
 Future<void> handleIncomingGroupCall({
   required String callId,
@@ -503,4 +503,4 @@ Both single and group video calling work independently!
 
 ## License
 
-This implementation is part of the Supper app project.
+This implementation is part of the Single Tap app project.

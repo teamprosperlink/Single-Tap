@@ -20,7 +20,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
     FAQItem(
       question: 'How do inquiries work?',
       answer:
-          'When customers are interested in your products or services, they can send you an inquiry. You\'ll receive a notification and can view all inquiries in the Inquiries section. From there, you can contact them via call, SingleTap, or message.',
+          'When customers are interested in your products or services, they can send you an inquiry. You\'ll receive a notification and can view all inquiries in the Inquiries section. From there, you can contact them via call, Single Tap, or message.',
     ),
     FAQItem(
       question: 'How do I update my business hours?',
@@ -137,7 +137,7 @@ class _BusinessSupportScreenState extends State<BusinessSupportScreen> {
                       Expanded(
                         child: _buildContactButton(
                           icon: Icons.chat_outlined,
-                          label: 'SingleTap',
+                          label: 'Single Tap',
                           onTap: () => _launchSingleTap('+911234567890'),
                         ),
                       ),

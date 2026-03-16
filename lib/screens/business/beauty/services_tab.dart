@@ -263,6 +263,7 @@ class _BeautyServicesTabState extends State<BeautyServicesTab> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddServiceSheet(),
         backgroundColor: const Color(0xFFE91E63),
         foregroundColor: Colors.white,

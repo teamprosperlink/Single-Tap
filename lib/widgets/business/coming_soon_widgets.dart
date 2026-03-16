@@ -5,8 +5,8 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:supper/config/feature_flags.dart';
-import 'package:supper/services/firebase_provider.dart';
+import 'package:single_tap/config/feature_flags.dart';
+import 'package:single_tap/services/firebase_provider.dart';
 
 // ============================================================================
 // COMING SOON BADGE

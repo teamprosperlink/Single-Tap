@@ -81,6 +81,7 @@ class _MenuCategoryScreenState extends State<MenuCategoryScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddCategoryDialog(context, isDarkMode),
         backgroundColor: const Color(0xFF00D67D),
         icon: const Icon(Icons.add, color: Colors.white),

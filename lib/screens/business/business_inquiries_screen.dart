@@ -646,7 +646,7 @@ class _InquiryCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _buildContactButton(
                   icon: Icons.chat,
-                  label: 'SingleTap',
+                  label: 'Single Tap',
                   color: const Color(0xFF25D366),
                   onTap: onSingleTap,
                 ),
@@ -953,7 +953,7 @@ class _InquiryDetailsSheet extends StatelessWidget {
                           Expanded(
                             child: _buildLargeContactButton(
                               icon: Icons.chat,
-                              label: 'SingleTap',
+                              label: 'Single Tap',
                               color: const Color(0xFF25D366),
                               onTap: onSingleTap,
                             ),

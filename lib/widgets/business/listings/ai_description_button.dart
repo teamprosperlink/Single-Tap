@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../../../services/location_services/gemini_service.dart';
+import 'package:http/http.dart' as http;
+import '../../../res/config/api_config.dart';
 
 /// AI-powered description generation button
-/// Uses Gemini to generate product descriptions
+/// Uses Gemini Chat API key for product descriptions
 class AIDescriptionButton extends StatefulWidget {
   final String listingTitle;
   final String category;
@@ -21,7 +23,6 @@ class AIDescriptionButton extends StatefulWidget {
 
 class _AIDescriptionButtonState extends State<AIDescriptionButton> {
   bool _isGenerating = false;
-  final GeminiService _geminiService = GeminiService();
 
   Future<void> _generateDescription() async {
     if (widget.listingTitle.trim().isEmpty) {
@@ -31,6 +32,19 @@ class _AIDescriptionButtonState extends State<AIDescriptionButton> {
           backgroundColor: Colors.orange,
         ),
       );
+      return;
+    }
+
+    final apiKey = ApiConfig.geminiChatApiKey;
+    if (apiKey.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('AI description not available'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -52,22 +66,45 @@ Requirements:
 Only return the description text, no additional commentary or formatting.
 ''';
 
-      final description = await _geminiService.generateContent(prompt);
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/${ApiConfig.geminiChatModel}:generateContent?key=$apiKey',
+      );
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt}
+              ]
+            }
+          ],
+        }),
+      ).timeout(const Duration(seconds: 30));
 
-      if (description != null && description.isNotEmpty) {
-        widget.onDescriptionGenerated(description.trim());
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final description =
+            data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✨ Description generated successfully!'),
-              backgroundColor: Color(0xFF7C3AED),
-              duration: Duration(seconds: 2),
-            ),
-          );
+        if (description != null && description.isNotEmpty) {
+          widget.onDescriptionGenerated(description.trim());
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Description generated successfully!'),
+                backgroundColor: Color(0xFF7C3AED),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          throw Exception('No description generated');
         }
       } else {
-        throw Exception('No description generated');
+        throw Exception('API error: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {

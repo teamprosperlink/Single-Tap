@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import '../res/config/api_config.dart';
 import 'cache services/cache_service.dart';
 
@@ -26,38 +24,13 @@ class UnifiedMatchingService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final CacheService _cache = CacheService();
 
-  late final GenerativeModel _aiModel;
-  late final GenerativeModel _embeddingModel;
-
   bool _initialized = false;
 
   /// Initialize the service
   Future<void> initialize() async {
     if (_initialized) return;
-
-    try {
-      _aiModel = GenerativeModel(
-        model: ApiConfig.geminiFlashModel,
-        apiKey: ApiConfig.geminiApiKey,
-        generationConfig: GenerationConfig(
-          temperature: ApiConfig.temperature,
-          topK: ApiConfig.topK,
-          topP: ApiConfig.topP,
-          maxOutputTokens: ApiConfig.maxOutputTokens,
-        ),
-      );
-
-      _embeddingModel = GenerativeModel(
-        model: ApiConfig.geminiEmbeddingModel,
-        apiKey: ApiConfig.geminiApiKey,
-      );
-
-      _initialized = true;
-      debugPrint(' UnifiedMatchingService initialized successfully');
-    } catch (e) {
-      debugPrint(' Error initializing UnifiedMatchingService: $e');
-      throw Exception('Failed to initialize matching service: $e');
-    }
+    _initialized = true;
+    debugPrint(' UnifiedMatchingService initialized successfully');
   }
 
   /// Ensure service is initialized
@@ -69,152 +42,32 @@ class UnifiedMatchingService {
 
   //    INTENT ANALYSIS
 
-  /// Analyze user intent from their input using AI
+  /// Analyze user intent (local fallback — backend API handles AI)
   Future<IntentAnalysis> analyzeIntent(String userInput) async {
     await _ensureInitialized();
-
-    try {
-      final prompt =
-          '''
-Analyze this user input and extract their intent WITHOUT using predefined categories.
-Think deeply about what the user really wants.
-
-User Input: "$userInput"
-
-Return ONLY a valid JSON object (no markdown, no backticks):
-{
-  "primary_intent": "what the user wants in simple terms",
-  "action_type": "seeking" or "offering" or "neutral",
-  "entities": {
-    "item": "what item/service/person if mentioned",
-    "price": "price or price range if mentioned",
-    "location": "location if mentioned",
-    "time": "time/urgency if mentioned",
-    "quantity": "quantity if mentioned",
-    "condition": "condition/quality if mentioned",
-    "preferences": "any preferences mentioned"
-  },
-  "complementary_intents": ["list of intents that would match with this"],
-  "clarifications_needed": ["list of important missing information"],
-  "search_keywords": ["keywords for semantic matching"],
-  "emotional_tone": "urgent/casual/serious/friendly/professional",
-  "match_criteria": {
-    "must_have": ["essential requirements"],
-    "nice_to_have": ["optional preferences"],
-    "deal_breakers": ["things that would prevent a match"]
-  }
-}
-''';
-
-      final response = await _aiModel.generateContent([Content.text(prompt)]);
-      final text =
-          response.text
-              ?.replaceAll('```json', '')
-              .replaceAll('```', '')
-              .trim() ??
-          '{}';
-
-      final json = jsonDecode(text);
-      return IntentAnalysis.fromJson(json);
-    } catch (e) {
-      debugPrint('Error analyzing intent: $e');
-      return IntentAnalysis.fallback(userInput);
-    }
+    return IntentAnalysis.fallback(userInput);
   }
 
-  /// Generate clarifying questions based on intent
+  /// Generate clarifying questions (no longer uses Gemini)
   Future<List<ClarifyingQuestion>> generateClarifyingQuestions(
     String userInput,
     IntentAnalysis intent,
   ) async {
-    await _ensureInitialized();
-
-    try {
-      final prompt =
-          '''
-The user said: "$userInput"
-
-We understood their intent as: ${intent.primaryIntent}
-Missing information: ${intent.clarificationsNeeded.join(', ')}
-
-Generate 2-3 natural, conversational questions to clarify their needs.
-Make questions specific to their situation.
-
-Return ONLY valid JSON (no markdown, no backticks):
-{
-  "questions": [
-    {
-      "id": "unique_id",
-      "question": "the question text",
-      "type": "text/choice/range/yes_no",
-      "options": ["array of 2-4 options if type is choice"],
-      "importance": "essential/helpful/optional",
-      "reason": "why we're asking this"
-    }
-  ]
-}
-''';
-
-      final response = await _aiModel.generateContent([Content.text(prompt)]);
-      final text =
-          response.text
-              ?.replaceAll('```json', '')
-              .replaceAll('```', '')
-              .trim() ??
-          '{}';
-
-      final json = jsonDecode(text);
-      return (json['questions'] as List)
-          .map((q) => ClarifyingQuestion.fromJson(q))
-          .toList();
-    } catch (e) {
-      debugPrint('Error generating questions: $e');
-      return [];
-    }
+    return [];
   }
 
   //    EMBEDDING GENERATION
 
-  /// Generate embedding for text with caching
+  /// Generate embedding — returns zero vector (backend API handles embeddings)
   Future<List<double>> generateEmbedding(String text) async {
-    await _ensureInitialized();
-
-    // Check cache first
     final cached = _cache.getCachedEmbedding(text);
-    if (cached != null) {
-      return cached;
-    }
-
-    try {
-      final cleanedText = _cleanText(text);
-      if (cleanedText.isEmpty) {
-        return _generateFallbackEmbedding(text);
-      }
-
-      final response = await _embeddingModel.embedContent(
-        Content.text(cleanedText),
-      );
-      final embedding = response.embedding.values;
-
-      // Cache the result
-      _cache.cacheEmbedding(text, embedding);
-
-      return embedding;
-    } catch (e) {
-      debugPrint('Error generating embedding: $e');
-      return _generateFallbackEmbedding(text);
-    }
+    if (cached != null) return cached;
+    return _generateFallbackEmbedding(text);
   }
 
-  /// Generate embeddings in batch for efficiency
+  /// Generate embeddings in batch
   Future<List<List<double>>> generateBatchEmbeddings(List<String> texts) async {
-    final embeddings = <List<double>>[];
-
-    for (final text in texts) {
-      embeddings.add(await generateEmbedding(text));
-    }
-
-    return embeddings;
+    return texts.map((_) => _generateFallbackEmbedding('')).toList();
   }
 
   //    MATCHING ALGORITHM
@@ -238,16 +91,31 @@ Return ONLY valid JSON (no markdown, no backticks):
       final userEmbedding = await generateEmbedding(userText);
 
       // Get active posts from other users
-      final snapshot = await _firestore
-          .collection(ApiConfig.postsCollection)
-          .where('userId', isNotEqualTo: userId)
-          .where('isActive', isEqualTo: true)
-          .limit(500) // Limit to prevent excessive reads
-          .get();
+      // Use try-catch for index fallback - composite index may not exist yet
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> candidateDocs;
+      try {
+        final snapshot = await _firestore
+            .collection(ApiConfig.postsCollection)
+            .where('userId', isNotEqualTo: userId)
+            .where('isActive', isEqualTo: true)
+            .limit(500)
+            .get();
+        candidateDocs = snapshot.docs;
+      } catch (indexError) {
+        debugPrint(' Index not available, using fallback query: $indexError');
+        final fallbackSnapshot = await _firestore
+            .collection(ApiConfig.postsCollection)
+            .where('isActive', isEqualTo: true)
+            .limit(500)
+            .get();
+        candidateDocs = fallbackSnapshot.docs
+            .where((doc) => doc.data()['userId'] != userId)
+            .toList();
+      }
 
       List<MatchResult> matches = [];
 
-      for (final doc in snapshot.docs) {
+      for (final doc in candidateDocs) {
         try {
           final postData = doc.data();
 
@@ -455,7 +323,7 @@ Return ONLY valid JSON (no markdown, no backticks):
     return (dotProduct / (sqrt(norm1) * sqrt(norm2))).clamp(-1.0, 1.0);
   }
 
-  /// Calculate location-based score
+  /// Calculate location-based score (rejects stale/null-island coords)
   double _calculateLocationScore(
     double? userLat,
     double? userLon,
@@ -468,8 +336,14 @@ Return ONLY valid JSON (no markdown, no backticks):
         postLon == null) {
       return 0.5; // Neutral score if no location data
     }
+    // Reject null-island coordinates
+    if (userLat.abs() < 0.01 && userLon.abs() < 0.01) return 0.5;
+    if (postLat.abs() < 0.01 && postLon.abs() < 0.01) return 0.5;
 
     final distance = _calculateDistance(userLat, userLon, postLat, postLon);
+
+    // Skip unrealistic distances (likely stale Mountain View data)
+    if (distance > 10000) return 0.5;
 
     // Score based on distance
     if (distance < 5) return 1.0;
@@ -653,21 +527,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 
   //    UTILITY METHODS
 
-  /// Clean text before processing
-  String _cleanText(String text) {
-    return text
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .substring(0, min(text.length, 1000));
-  }
-
-  /// Generate fallback embedding
+  /// Returns zero vector — backend API handles real embeddings.
   List<double> _generateFallbackEmbedding(String text) {
-    final random = Random(text.hashCode);
-    return List.generate(
-      ApiConfig.embeddingDimension,
-      (_) => random.nextDouble() * 2 - 1,
-    );
+    return List.filled(768, 0.0);
   }
 
   /// Get cache statistics

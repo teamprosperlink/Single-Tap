@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supper/main.dart';
+import 'package:single_tap/main.dart';
 import 'dart:async';
 import '../../res/config/app_colors.dart';
 import '../../res/config/app_assets.dart';

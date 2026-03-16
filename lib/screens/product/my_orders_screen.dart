@@ -112,8 +112,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             ),
           ),
           SafeArea(
+            top: false,
+            bottom: false,
             child: Column(
               children: [
+                SizedBox(height: MediaQuery.of(context).padding.top),
                 // App Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -140,7 +143,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -159,12 +162,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                   unselectedLabelColor: Colors.grey[500],
                   labelStyle: const TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                   unselectedLabelStyle: const TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w400,
                   ),
                   dividerColor: Colors.white.withValues(alpha: 0.2),
@@ -174,8 +177,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                     Tab(text: 'Delivered'),
                   ],
                 ),
-
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
 
                 // TabBarView - swipeable tabs
                 Expanded(
@@ -196,26 +198,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                             }
 
                             if (snapshot.hasError) {
-                              return Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline,
-                                      color: Colors.grey[600],
-                                      size: 48,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'Something went wrong',
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        color: Colors.grey[500],
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              debugPrint('Orders stream error: ${snapshot.error}');
+                              // Show empty state on error (collection may not exist yet)
+                              return TabBarView(
+                                controller: _tabController,
+                                children: [
+                                  _buildEmptyState(),
+                                  _buildEmptyState(),
+                                  _buildEmptyState(),
+                                ],
                               );
                             }
 
@@ -278,7 +269,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     }
 
     return ListView.builder(
-      physics: const ClampingScrollPhysics(),
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       itemCount: filtered.length,
       itemBuilder: (context, index) {
@@ -349,7 +340,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                           data['itemName'] as String? ?? 'Product',
                           style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 15,
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
@@ -370,7 +361,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                           _formatDate(createdAt),
                           style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 13,
+                            fontSize: 11,
                             color: Colors.grey[500],
                           ),
                         ),
@@ -386,7 +377,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                         '₹${(data['totalAmount'] as num?)?.toStringAsFixed(0) ?? '0'}',
                         style: const TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
@@ -434,14 +425,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
             style: TextStyle(
               fontFamily: 'Poppins',
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Your orders will appear here',
-            style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(fontFamily: 'Poppins', color: Colors.grey[500], fontSize: 12),
           ),
         ],
       ),

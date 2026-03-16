@@ -23,6 +23,32 @@ class PendingRequestsScreen extends StatefulWidget {
 class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ConnectionService _connectionService = ConnectionService();
+
+  // Cache fetched profiles to avoid N+1 Firestore reads on every stream emission
+  final Map<String, Map<String, dynamic>> _profileCache = {};
+  final Set<String> _fetchingProfiles = {};
+
+  /// Fetch and cache a user's profile (networking_profiles first, then users)
+  Future<Map<String, dynamic>> _fetchProfile(String userId) async {
+    if (_profileCache.containsKey(userId)) return _profileCache[userId]!;
+    if (_fetchingProfiles.contains(userId)) return {};
+    _fetchingProfiles.add(userId);
+    try {
+      final netDoc = await _firestore.collection('networking_profiles').doc(userId).get();
+      if (netDoc.exists && netDoc.data() != null) {
+        _profileCache[userId] = netDoc.data()!;
+        return _profileCache[userId]!;
+      }
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      _profileCache[userId] = userDoc.data() ?? {};
+      return _profileCache[userId]!;
+    } catch (_) {
+      return {};
+    } finally {
+      _fetchingProfiles.remove(userId);
+    }
+  }
 
   @override
   void dispose() {
@@ -98,35 +124,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       .acceptConnectionRequest(requestId);
                   if (!mounted) return;
                   if (result['success'] == true) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Row(
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.white),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text('Connection request accepted!', style: TextStyle(fontFamily: 'Poppins')),
-                            ),
-                          ],
-                        ),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        margin: const EdgeInsets.all(16),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    NetworkingHelpers.showSuccessSnackBar(context, 'Connection request accepted!');
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(result['message'] ?? 'Failed', style: const TextStyle(fontFamily: 'Poppins')),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        margin: const EdgeInsets.all(16),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed');
                   }
                 },
         ),
@@ -392,50 +392,29 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                       behavior: HitTestBehavior.opaque,
                                       onTap: () async {
                                         HapticFeedback.mediumImpact();
-                                        if (isSent) {
-                                          await connectionService
-                                              .cancelConnectionRequest(
-                                                requestId,
-                                              );
-                                          if (!context.mounted) return;
-                                        } else {
-                                          final result = await connectionService
-                                              .acceptConnectionRequest(
-                                                requestId,
-                                              );
-                                          if (!context.mounted) return;
-                                          if (result['success'] == true) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: const Text(
-                                                  'Connection accepted!',
-                                                  style: TextStyle(fontFamily: 'Poppins'),
-                                                ),
-                                                backgroundColor: Colors.green,
-                                                behavior: SnackBarBehavior.floating,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                margin: const EdgeInsets.all(16),
-                                                duration: const Duration(seconds: 2),
-                                              ),
-                                            );
+                                        try {
+                                          if (isSent) {
+                                            await connectionService
+                                                .cancelConnectionRequest(
+                                                  requestId,
+                                                );
+                                            if (!context.mounted) return;
                                           } else {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  result['message'] ?? 'Failed',
-                                                  style: const TextStyle(fontFamily: 'Poppins'),
-                                                ),
-                                                backgroundColor: Colors.red,
-                                                behavior: SnackBarBehavior.floating,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                margin: const EdgeInsets.all(16),
-                                                duration: const Duration(seconds: 2),
-                                              ),
-                                            );
+                                            final result = await connectionService
+                                                .acceptConnectionRequest(
+                                                  requestId,
+                                                );
+                                            if (!context.mounted) return;
+                                            if (result['success'] == true) {
+                                              NetworkingHelpers.showSuccessSnackBar(context, 'Connection accepted!');
+                                            } else {
+                                              NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed');
+                                            }
+                                          }
+                                        } catch (e) {
+                                          debugPrint('Error handling connection request: $e');
+                                          if (context.mounted) {
+                                            NetworkingHelpers.showErrorSnackBar(context, 'Something went wrong. Try again.');
                                           }
                                         }
                                       },
@@ -449,7 +428,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                         ),
                                         child: Center(
                                           child: Text(
-                                            isSent ? 'Confirm' : 'Confirm',
+                                            isSent ? 'Cancel' : 'Confirm',
                                             style: const TextStyle(
                                               fontFamily: 'Poppins',
                                               fontSize: 13,
@@ -550,7 +529,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final connectionService = ConnectionService();
+    final connectionService = _connectionService;
     final currentUid = _auth.currentUser?.uid;
 
     return Scaffold(
@@ -574,8 +553,14 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   : null,
               builder: (context, mySnap) {
                 final myData = mySnap.data?.data() as Map<String, dynamic>?;
-                final myLat = (myData?['latitude'] as num?)?.toDouble();
-                final myLng = (myData?['longitude'] as num?)?.toDouble();
+                // Reject Mountain View / null-island from current user
+                final myCity = (myData?['city'] as String? ?? '').toLowerCase();
+                final rawMyLat = (myData?['latitude'] as num?)?.toDouble();
+                final rawMyLng = (myData?['longitude'] as num?)?.toDouble();
+                final myStale = myCity.contains('mountain view') ||
+                    (rawMyLat != null && rawMyLng != null && rawMyLat.abs() < 0.01 && rawMyLng.abs() < 0.01);
+                final myLat = myStale ? null : rawMyLat;
+                final myLng = myStale ? null : rawMyLng;
 
                 return StreamBuilder<List<Map<String, dynamic>>>(
                   stream: connectionService.getPendingRequestsStream(),
@@ -604,12 +589,15 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         }
 
                         final rawRequests = receivedSnapshot.data ?? [];
-                        // Deduplicate by otherUserId to avoid showing same person twice
+                        // Deduplicate by the OTHER user (not just senderId)
                         final seen = <String>{};
                         final requests = rawRequests.where((req) {
-                          final senderId = req['senderId'] as String?;
-                          if (senderId == null) return false;
-                          return seen.add(senderId);
+                          final isSentReq = req['requestType'] == 'sent';
+                          final otherId = isSentReq
+                              ? req['receiverId'] as String?
+                              : req['senderId'] as String?;
+                          if (otherId == null) return false;
+                          return seen.add(otherId);
                         }).toList();
                         requests.sort((a, b) {
                           final aTime = a['createdAt'] as Timestamp?;
@@ -666,7 +654,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
                           const double cardHeight = 145.0;
 
-                          // Calculate stored distance for fallback
+                          // Calculate stored distance (reject stale coords)
                           double? storedDist;
                           if (myLat != null &&
                               myLng != null &&
@@ -678,31 +666,19 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               storedLat,
                               storedLng,
                             );
+                            if (storedDist > 10000) storedDist = null;
                           }
                           final storedAgeInt = storedAge is int
                               ? storedAge
                               : int.tryParse('${storedAge ?? ''}');
 
-                          // Fetch fresh data — try networking_profiles first, fall back to users
+                          // Use cached profile data (fetched once, reused on stream re-emissions)
                           return FutureBuilder<Map<String, dynamic>>(
-                            future: _firestore
-                                .collection('networking_profiles')
-                                .doc(otherUserId)
-                                .get()
-                                .then((netDoc) async {
-                              if (netDoc.exists && netDoc.data() != null) {
-                                return netDoc.data()!;
-                              }
-                              final userDoc = await _firestore
-                                  .collection('users')
-                                  .doc(otherUserId)
-                                  .get();
-                              return userDoc.data() ?? {};
-                            }),
+                            future: _fetchProfile(otherUserId),
                             builder: (context, userSnap) {
                               // Show card with stored data while loading
                               if (userSnap.connectionState ==
-                                  ConnectionState.waiting) {
+                                  ConnectionState.waiting && !_profileCache.containsKey(otherUserId)) {
                                 final fallbackPhoto = storedPhoto != null
                                     ? PhotoUrlHelper.fixGooglePhotoUrl(
                                         storedPhoto,
@@ -724,7 +700,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   isSent: isSent,
                                 );
                               }
-                              final userData = userSnap.data ?? {};
+                              final userData = userSnap.data ?? _profileCache[otherUserId] ?? {};
                               // Resolve name: name → displayName → phone → storedName → Unknown
                               final name =
                                   NetworkingHelpers.resolveUserName(userData) ??
@@ -740,12 +716,15 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               final occupation =
                                   NetworkingHelpers.resolveOccupation(userData) ??
                                   storedOccupation;
-                              final userLat =
-                                  (userData['latitude'] as num?)?.toDouble() ??
-                                  storedLat;
-                              final userLng =
-                                  (userData['longitude'] as num?)?.toDouble() ??
-                                  storedLng;
+                              // Reject Mountain View / null-island from other user
+                              final otherCity = (userData['city'] as String? ?? '').toLowerCase();
+                              final otherMV = otherCity.contains('mountain view');
+                              final rawOtherLat = (userData['latitude'] as num?)?.toDouble();
+                              final rawOtherLng = (userData['longitude'] as num?)?.toDouble();
+                              final otherNI = rawOtherLat != null && rawOtherLng != null &&
+                                  rawOtherLat.abs() < 0.01 && rawOtherLng.abs() < 0.01;
+                              final userLat = (otherMV || otherNI) ? null : (rawOtherLat ?? storedLat);
+                              final userLng = (otherMV || otherNI) ? null : (rawOtherLng ?? storedLng);
                               final isOnline =
                                   userData['isOnline'] as bool? ?? false;
                               final networkingCat =
@@ -762,6 +741,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   userLat,
                                   userLng,
                                 );
+                                if (fetchedDist > 10000) fetchedDist = null;
                               }
 
                               final fixedPhoto = photo != null

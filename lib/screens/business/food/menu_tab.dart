@@ -51,6 +51,7 @@ class _MenuTabState extends State<MenuTab> with SingleTickerProviderStateMixin {
           if (!hasItems) return const SizedBox.shrink();
 
           return FloatingActionButton.extended(
+        heroTag: null,
             onPressed: _addMenuItem,
             backgroundColor: const Color(0xFF00D67D),
             icon: const Icon(Icons.add, color: Colors.white),

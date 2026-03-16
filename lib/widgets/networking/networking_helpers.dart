@@ -1,4 +1,5 @@
 import 'dart:math' show sin, cos, sqrt, atan2, pi;
+import 'dart:ui' show ImageFilter;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -122,36 +123,124 @@ class NetworkingHelpers {
     }
   }
 
-  /// Show a styled floating SnackBar.
+  /// Show a glassmorphic success SnackBar (matches login screen design).
+  static void showSuccessSnackBar(BuildContext context, String message) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        _buildGlassSnackBar(
+          message: message,
+          icon: Icons.check_circle,
+          accentColor: Colors.greenAccent,
+        ),
+      );
+  }
+
+  /// Show a glassmorphic error SnackBar (matches login screen design).
+  static void showErrorSnackBar(BuildContext context, String message) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        _buildGlassSnackBar(
+          message: message,
+          icon: Icons.error_outline,
+          accentColor: Colors.redAccent,
+        ),
+      );
+  }
+
+  /// Show a glassmorphic warning SnackBar (matches login screen design).
+  static void showWarningSnackBar(BuildContext context, String message) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        _buildGlassSnackBar(
+          message: message,
+          icon: Icons.warning_amber_rounded,
+          accentColor: Colors.orangeAccent,
+        ),
+      );
+  }
+
+  /// Backward-compatible wrapper — routes to success or error glassmorphic style.
   static void showSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
     IconData? icon,
   }) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontFamily: 'Poppins'),
+    if (isError) {
+      showErrorSnackBar(context, message);
+    } else {
+      showSuccessSnackBar(context, message);
+    }
+  }
+
+  /// Build a glassmorphic SnackBar with blur + gradient (login screen style).
+  static SnackBar _buildGlassSnackBar({
+    required String message,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    return SnackBar(
+      clipBehavior: Clip.none,
+      content: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.25),
+                  accentColor.withValues(alpha: 0.15),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-          ],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            child: Row(
+              children: [
+                Icon(icon, color: accentColor, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
       ),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      behavior: SnackBarBehavior.floating,
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
     );
   }
 }

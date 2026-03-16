@@ -25,12 +25,13 @@ import '../../services/notification_service.dart';
 import '../../providers/other providers/app_providers.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../res/utils/snackbar_helper.dart';
+import '../../services/ai_chat_service.dart';
+import '../../res/config/api_config.dart';
 import '../call/group_audio_call_screen.dart';
 import '../../services/floating_call_service.dart';
 import 'group_info_screen.dart';
 import 'video_player_screen.dart';
 import 'photo_viewer_dialog.dart';
-
 class GroupChatScreen extends ConsumerStatefulWidget {
   final String groupId;
   final String groupName;
@@ -47,7 +48,7 @@ class GroupChatScreen extends ConsumerStatefulWidget {
 
 class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     with WidgetsBindingObserver {
-  final TextEditingController _messageController = TextEditingController();
+  final _messageController = _MentionTextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -62,6 +63,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   bool _hasMoreMessages = true;
   bool _isLoadingMore = false;
   DocumentSnapshot? _lastDocument;
+  final List<Map<String, dynamic>> _olderMessages = []; // Stores paginated older messages
 
   bool _isSending = false;
   bool _isRecordingVideo = false;
@@ -103,6 +105,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   // Cached messages stream to prevent re-subscription on setState
   late final Stream<QuerySnapshot> _messagesStream;
 
+  // Cached active call stream to prevent permission-denied retry spam
+  StreamController<QuerySnapshot>? _activeCallController;
+  StreamSubscription<QuerySnapshot>? _activeCallSub;
+  late final Stream<QuerySnapshot> _activeCallStream;
+  bool _activeCallStreamError = false;
+
   // Reply
   Map<String, dynamic>? _replyToMessage;
 
@@ -140,9 +148,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   double _playbackProgress = 0.0;
   StreamSubscription? _playerSubscription;
 
-  // Mention functionality
+  // Mention functionality (WhatsApp-style)
   bool _showMentionSuggestions = false;
-  List<Map<String, dynamic>> _filteredMembers = [];
+  List<Map<String, dynamic>> _mentionSuggestions = [];
   int _mentionStartIndex = -1;
 
   @override
@@ -164,6 +172,29 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         .orderBy('timestamp', descending: true)
         .limit(_messagesPerPage)
         .snapshots();
+
+    // Cache active call stream — cancel subscription on first error to stop retry spam
+    _activeCallController = StreamController<QuerySnapshot>.broadcast();
+    _activeCallSub = _firestore
+        .collection('group_calls')
+        .where('groupId', isEqualTo: widget.groupId)
+        .snapshots()
+        .listen(
+          (data) {
+            if (!_activeCallController!.isClosed) {
+              _activeCallController!.add(data);
+            }
+          },
+          onError: (error) {
+            debugPrint('Active call stream error (subscription cancelled): $error');
+            _activeCallStreamError = true;
+            _activeCallSub?.cancel();
+            if (!_activeCallController!.isClosed) {
+              _activeCallController!.close();
+            }
+          },
+        );
+    _activeCallStream = _activeCallController!.stream;
 
     // Strategy: Try loading counter with progressive delays
     // This handles the case where Firebase Auth takes time to initialize
@@ -246,6 +277,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     _messageFocusNode.dispose();
     // Clear typing status on dispose
     _groupChatService.clearTypingStatus(widget.groupId);
+    // Clean up active call stream
+    _activeCallSub?.cancel();
+    _activeCallController?.close();
     // Clean up audio resources
     _recordingTimer?.cancel();
     _playerSubscription?.cancel();
@@ -295,6 +329,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         setState(() => _hasMoreMessages = false);
       } else {
         _lastDocument = snapshot.docs.last;
+        // Store older messages for display
+        final existingIds = _olderMessages.map((m) => m['id']).toSet();
+        for (final doc in snapshot.docs) {
+          if (!existingIds.contains(doc.id)) {
+            _olderMessages.add({
+              'id': doc.id,
+              ...doc.data(),
+            });
+          }
+        }
+        _hasMoreMessages = snapshot.docs.length >= _messagesPerPage;
       }
     } catch (e) {
       debugPrint('Error loading more messages: $e');
@@ -315,8 +360,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
+    // IMMEDIATELY lock to prevent any double-send from onSubmitted + onTap race
+    _isSending = true;
+
     final currentUserId = _currentUserId;
-    if (currentUserId == null) return;
+    if (currentUserId == null) {
+      _isSending = false;
+      return;
+    }
 
     // Clear input immediately
     _messageController.clear();
@@ -336,7 +387,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     setState(() {
       _optimisticMessages.add(optimisticMessage);
-      _isSending = true;
     });
 
     // Scroll to bottom for new message
@@ -363,6 +413,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             (m) => m['id'] == optimisticMessage['id'],
           );
         });
+
+        // Check if message contains @Single Tap AI mention
+        if (AiChatService.containsAiMention(text)) {
+          final senderName = _memberNames[currentUserId] ?? 'User';
+          AiChatService().processAiMention(
+            conversationId: widget.groupId,
+            userMessage: text,
+            userName: senderName,
+            isGroupChat: true,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error sending message: $e');
@@ -386,6 +447,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       }
     }
   }
+
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -477,62 +539,81 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  // Handle mention (@) detection
+  // ── WhatsApp-style @mention methods ──
+
   void _handleMentionDetection(String text) {
     final cursorPosition = _messageController.selection.baseOffset;
+    if (cursorPosition <= 0 || cursorPosition > text.length) {
+      _dismissMentionSuggestions();
+      return;
+    }
 
-    // Find the last @ before cursor
     int atIndex = -1;
     for (int i = cursorPosition - 1; i >= 0; i--) {
       if (text[i] == '@') {
-        // Check if @ is at start or preceded by space
         if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
           atIndex = i;
-          break;
         }
-      } else if (text[i] == ' ' || text[i] == '\n') {
-        // Stop at space before finding @
         break;
+      }
+      if (text[i] == '\n') break;
+    }
+
+    if (atIndex == -1) {
+      _dismissMentionSuggestions();
+      return;
+    }
+
+    final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+    _mentionStartIndex = atIndex;
+
+    final suggestions = <Map<String, dynamic>>[];
+
+    // Single Tap AI always first
+    const aiName = 'Single Tap AI';
+    if (query.isEmpty || aiName.toLowerCase().startsWith(query) ||
+        aiName.toLowerCase().contains(query)) {
+      suggestions.add({
+        'id': ApiConfig.singletapAiSenderId,
+        'name': aiName,
+        'photo': null,
+        'isAi': true,
+      });
+    }
+
+    // Add group members (excluding current user)
+    final currentUserId = _currentUserId;
+    for (final entry in _memberNames.entries) {
+      if (entry.key == currentUserId) continue;
+      if (query.isEmpty || entry.value.toLowerCase().contains(query)) {
+        suggestions.add({
+          'id': entry.key,
+          'name': entry.value,
+          'photo': _memberPhotos[entry.key],
+        });
       }
     }
 
-    if (atIndex != -1 && atIndex < cursorPosition) {
-      // Extract query after @
-      final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+    setState(() {
+      _mentionSuggestions = suggestions;
+      _showMentionSuggestions = suggestions.isNotEmpty;
+    });
+  }
 
-      // Filter members based on query
-      final filtered = _memberNames.entries
-          .where((entry) => entry.key != _currentUserId) // Exclude current user
-          .where((entry) => entry.value.toLowerCase().contains(query))
-          .map(
-            (entry) => {
-              'id': entry.key,
-              'name': entry.value,
-              'photo': _memberPhotos[entry.key],
-            },
-          )
-          .toList();
-
-      setState(() {
-        _mentionStartIndex = atIndex;
-        _filteredMembers = filtered;
-        _showMentionSuggestions = filtered.isNotEmpty;
-      });
-    } else {
+  void _dismissMentionSuggestions() {
+    if (_showMentionSuggestions) {
       setState(() {
         _showMentionSuggestions = false;
-        _filteredMembers = [];
+        _mentionSuggestions = [];
         _mentionStartIndex = -1;
       });
     }
   }
 
-  // Insert mention when user selects from suggestions
   void _insertMention(String userId, String userName) {
     final text = _messageController.text;
     final cursorPosition = _messageController.selection.baseOffset;
 
-    // Replace from @ to cursor with @UserName
     final beforeMention = text.substring(0, _mentionStartIndex);
     final afterMention = text.substring(cursorPosition);
     final mentionText = '@$userName ';
@@ -545,59 +626,61 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       selection: TextSelection.collapsed(offset: newCursorPosition),
     );
 
-    setState(() {
-      _showMentionSuggestions = false;
-      _filteredMembers = [];
-      _mentionStartIndex = -1;
-    });
-
-    // Keep focus on text field
+    _dismissMentionSuggestions();
     _messageFocusNode.requestFocus();
   }
 
-  // Extract mentions from message text
   List<Map<String, String>> _extractMentions(String text) {
     final mentions = <Map<String, String>>[];
-    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    final regex = RegExp(r'@Single\s*Tap\s+AI|@\w+', caseSensitive: false);
     final matches = regex.allMatches(text);
 
     for (final match in matches) {
-      final mentionedName = match.group(1);
-      if (mentionedName != null) {
-        // Find user ID by name
-        final entry = _memberNames.entries.firstWhere(
-          (e) => e.value == mentionedName,
-          orElse: () => const MapEntry('', ''),
-        );
-        if (entry.key.isNotEmpty) {
-          mentions.add({'userId': entry.key, 'name': mentionedName});
-        }
+      final matchedText = match.group(0)!;
+      final mentionedName = matchedText.substring(1); // remove @ prefix
+
+      // Check if it's the AI mention
+      if (RegExp(r'Single\s*Tap\s+AI', caseSensitive: false).hasMatch(mentionedName)) {
+        mentions.add({
+          'userId': ApiConfig.singletapAiSenderId,
+          'name': 'Single Tap AI',
+        });
+        continue;
+      }
+
+      // Find user by name from members
+      final entry = _memberNames.entries.firstWhere(
+        (e) => e.value.toLowerCase() == mentionedName.toLowerCase(),
+        orElse: () => const MapEntry('', ''),
+      );
+      if (entry.key.isNotEmpty) {
+        mentions.add({'userId': entry.key, 'name': mentionedName});
       }
     }
-
     return mentions;
   }
 
-  // Build text with highlighted mentions and search highlighting
   Widget _buildTextWithMentions(
     String text,
     bool isMe,
     bool isDarkMode,
     bool isDeleted,
   ) {
-    final baseStyle = TextStyle(fontFamily: 'Poppins', 
-      color: isDeleted
-          ? Colors.grey
-          : (isMe
-                ? Colors.white
-                : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-      fontSize: 16,
+    final normalColor = isDeleted
+        ? Colors.grey
+        : (isMe
+              ? Colors.white
+              : (isDarkMode ? Colors.white : AppColors.iosGrayDark));
+
+    final baseStyle = TextStyle(
+      fontFamily: 'Poppins',
+      color: normalColor,
+      fontSize: 14,
       height: 1.35,
       fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
     );
 
-    // If searching and no mentions, use search highlight only
-    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    final regex = RegExp(r'@Single\s*Tap\s+AI|@\w+', caseSensitive: false);
     final matches = regex.allMatches(text);
 
     if (matches.isEmpty && _isSearching && _searchQuery.isNotEmpty) {
@@ -605,70 +688,51 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
 
     if (matches.isEmpty) {
-      // No mentions, no search - return simple text
       return Text(text, style: baseStyle);
     }
 
-    // Build rich text with highlighted mentions
     final spans = <TextSpan>[];
     int lastIndex = 0;
 
     for (final match in matches) {
-      // Add text before mention
       if (match.start > lastIndex) {
-        spans.add(
-          TextSpan(
-            text: text.substring(lastIndex, match.start),
-            style: TextStyle(fontFamily: 'Poppins', 
-              color: isDeleted
-                  ? Colors.grey
-                  : (isMe
-                        ? Colors.white
-                        : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-            ),
-          ),
-        );
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: TextStyle(fontFamily: 'Poppins', color: normalColor),
+        ));
       }
 
-      // Add highlighted mention
-      spans.add(
-        TextSpan(
-          text: match.group(0), // @Username
-          style: TextStyle(fontFamily: 'Poppins', 
-            color: isMe
-                ? Colors.white
-                : AppColors.iosBlue, // Blue highlight for mentions
-            fontWeight: FontWeight.w600,
-            backgroundColor: isMe
-                ? Colors.white.withValues(alpha: 0.2)
-                : AppColors.iosBlue.withValues(alpha: 0.1),
-          ),
+      final matchText = match.group(0)!;
+      final isAiMention = RegExp(r'single\s*tap', caseSensitive: false).hasMatch(matchText);
+      spans.add(TextSpan(
+        text: matchText,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          color: isAiMention
+              ? const Color(0xFF818CF8)
+              : (isMe
+                    ? const Color(0xFF00E5FF)
+                    : (isDarkMode
+                          ? const Color(0xFF00E5FF)
+                          : const Color(0xFF00B8D4))),
+          fontWeight: FontWeight.w600,
         ),
-      );
-
+      ));
       lastIndex = match.end;
     }
 
-    // Add remaining text
     if (lastIndex < text.length) {
-      spans.add(
-        TextSpan(
-          text: text.substring(lastIndex),
-          style: TextStyle(fontFamily: 'Poppins', 
-            color: isDeleted
-                ? Colors.grey
-                : (isMe
-                      ? Colors.white
-                      : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-          ),
-        ),
-      );
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: TextStyle(fontFamily: 'Poppins', color: normalColor),
+      ));
     }
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(fontFamily: 'Poppins', 
-          fontSize: 16,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 14,
           height: 1.35,
           fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
         ),
@@ -920,7 +984,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       await batch.commit();
       debugPrint('  Initialized ${uniqueMembers.length} participant documents');
 
-      // Add optimistic call system message to UI immediately (SingleTap style)
+      // Add optimistic call system message to UI immediately (Single Tap style)
       final optimisticCallMessageId =
           'optimistic_call_${DateTime.now().millisecondsSinceEpoch}';
       final optimisticCallMessage = {
@@ -949,7 +1013,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         if (mounted) _scrollToBottom();
       });
 
-      // Send system message to chat - SingleTap style with caller info
+      // Send system message to chat - Single Tap style with caller info
       debugPrint('  Creating call system message...');
       final systemMessageId = await _groupChatService.sendSystemMessage(
         groupId: widget.groupId,
@@ -2617,7 +2681,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.7),
       builder: (context) {
         return GestureDetector(
           onTap: () => Navigator.pop(context),
@@ -2628,15 +2692,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                 onTap: () {},
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 40),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color.fromRGBO(32, 32, 32, 1),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white, width: 1),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 20,
+                        spreadRadius: 5,
                       ),
                     ],
                   ),
@@ -2793,30 +2858,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
-            children: [
-              Icon(
-                icon,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isDestructive ? Colors.red : Colors.white,
+              size: 22,
+            ),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: TextStyle(fontFamily: 'Poppins',
                 color: isDestructive ? Colors.red : Colors.white,
-                size: 24,
+                fontSize: 16,
               ),
-              const SizedBox(width: 20),
-              Text(
-                label,
-                style: TextStyle(fontFamily: 'Poppins', 
-                  color: isDestructive ? Colors.red : Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -3277,7 +3339,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  /// Show SingleTap-style delete dialog with glass effect
+  /// Show Single Tap-style delete dialog with glass effect
   Future<String?> _showDeleteDialog({
     required String title,
     required bool showDeleteForEveryone,
@@ -3443,7 +3505,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     }
   }
 
-  /// Delete message for everyone - SingleTap style "This message was deleted"
+  /// Delete message for everyone - Single Tap style "This message was deleted"
   Future<void> _deleteMessageForEveryone(String messageId) async {
     debugPrint('=== _deleteMessageForEveryone START ===');
     debugPrint('messageId: $messageId');
@@ -3550,7 +3612,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         debugPrint('NOT A CALL MESSAGE - skipping group_calls deletion');
       }
 
-      // Mark message as deleted (SingleTap style - shows "This message was deleted")
+      // Mark message as deleted (Single Tap style - shows "This message was deleted")
       debugPrint('Marking message as deleted in Firestore...');
       await _firestore
           .collection('conversations')
@@ -3672,14 +3734,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   Widget _buildActiveCallBanner(bool isDarkMode) {
+    // Skip rendering if the stream already failed with permission error
+    if (_activeCallStreamError) {
+      return const SizedBox.shrink();
+    }
+
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('group_calls')
-          .where('groupId', isEqualTo: widget.groupId)
-          .snapshots(),
+      stream: _activeCallStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           debugPrint('Error loading active call: ${snapshot.error}');
+          _activeCallStreamError = true;
           return const SizedBox.shrink();
         }
 
@@ -3957,17 +4022,28 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     if (_typingUsers.isEmpty) return '';
 
     final currentUserId = _currentUserId;
+    final isAiTyping = _typingUsers.contains(ApiConfig.singletapAiSenderId);
     final typingNames = _typingUsers
-        .where((id) => id != currentUserId)
+        .where((id) => id != currentUserId && id != ApiConfig.singletapAiSenderId)
         .map((id) => _memberNames[id]?.split(' ').first ?? 'Someone')
         .toList();
 
-    if (typingNames.isEmpty) return '';
-    if (typingNames.length == 1) return '${typingNames[0]} is typing...';
-    if (typingNames.length == 2) {
-      return '${typingNames.join(' and ')} are typing...';
+    final parts = <String>[];
+
+    if (typingNames.length == 1) {
+      parts.add('${typingNames[0]} is typing...');
+    } else if (typingNames.length == 2) {
+      parts.add('${typingNames.join(' and ')} are typing...');
+    } else if (typingNames.isNotEmpty) {
+      parts.add('${typingNames.length} people are typing...');
     }
-    return '${typingNames.length} people are typing...';
+
+    if (isAiTyping) {
+      parts.add('Single Tap AI is thinking...');
+    }
+
+    if (parts.isEmpty) return '';
+    return parts.join(' ');
   }
 
   @override
@@ -3985,14 +4061,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           final data = snapshot.data!.data() as Map<String, dynamic>;
           _currentGroupName = data['groupName'] ?? widget.groupName;
           _groupPhoto = data['groupPhoto'];
-          _memberNames = Map<String, String>.from(
-            data['participantNames'] ?? {},
+          _memberNames = (data['participantNames'] as Map<String, dynamic>? ?? {}).map(
+            (k, v) => MapEntry(k, v?.toString() ?? 'Unknown'),
           );
-          _memberPhotos = Map<String, String?>.from(
-            data['participantPhotos'] ?? {},
+          _memberPhotos = (data['participantPhotos'] as Map<String, dynamic>? ?? {}).map(
+            (k, v) => MapEntry(k, v?.toString()),
           );
 
-          final isTypingMap = Map<String, bool>.from(data['isTyping'] ?? {});
+          final isTypingMap = (data['isTyping'] as Map<String, dynamic>? ?? {}).map(
+            (k, v) => MapEntry(k, v == true),
+          );
           _typingUsers = isTypingMap.entries
               .where((e) => e.value == true && e.key != currentUserId)
               .map((e) => e.key)
@@ -4086,6 +4164,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                     )
                                     .toList();
 
+                            // Merge stream messages + older paginated messages
+                            final streamMsgIds = messages.map((doc) => doc.id).toSet();
+                            final dedupedOlderMessages = _olderMessages
+                                .where((m) => !streamMsgIds.contains(m['id']))
+                                .toList();
+
                             var allMessages = [
                               ...dedupedOptimisticMessages, // Newest (optimistic, not yet in Firestore)
                               ...messages.map(
@@ -4094,6 +4178,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   ...doc.data() as Map<String, dynamic>,
                                 },
                               ), // Then real messages (newest to oldest)
+                              ...dedupedOlderMessages, // Then older paginated messages
                             ];
 
                             // Filter out messages deleted for current user
@@ -4232,60 +4317,98 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   final voiceDuration =
                                       messageData['voiceDuration'] as int?;
 
-                                  if (isSystemMessage) {
-                                    // Reduced logging
-                                    // debugPrint('  Rendering system message: text="$text"');
-                                    return _buildSystemMessage(
+                                  // Check if we need a date separator
+                                  // With reverse: true, index+1 is the older message above
+                                  Widget? dateSeparator;
+                                  final currentDate = timestamp?.toDate();
+                                  if (index == allMessages.length - 1) {
+                                    // Oldest visible message - always show its date
+                                    dateSeparator = _buildDateSeparator(currentDate, isDarkMode);
+                                  } else {
+                                    final nextTimestamp = allMessages[index + 1]['timestamp'] as Timestamp?;
+                                    final nextDate = nextTimestamp?.toDate();
+                                    if (!_isSameDay(currentDate, nextDate)) {
+                                      dateSeparator = _buildDateSeparator(currentDate, isDarkMode);
+                                    }
+                                  }
+
+                                  // Build the appropriate message widget
+                                  Widget messageWidget;
+
+                                  // Handle AI messages
+                                  final isAiMessage = senderId == ApiConfig.singletapAiSenderId ||
+                                      messageData['isAiMessage'] == true;
+
+                                  if (isAiMessage) {
+                                    messageWidget = _buildAiMessageBubble(
+                                      text: text,
+                                      timestamp: timestamp,
+                                      isDarkMode: isDarkMode,
+                                    );
+                                  } else if (isSystemMessage) {
+                                    messageWidget = _buildSystemMessage(
                                       text,
                                       isDarkMode,
                                       messageData,
                                     );
+                                  } else {
+                                    messageWidget = Dismissible(
+                                      key: Key(messageData['id'] ?? 'msg_$index'),
+                                      direction: _isMultiSelectMode
+                                          ? DismissDirection.none
+                                          : DismissDirection.startToEnd,
+                                      confirmDismiss: (direction) async {
+                                        HapticFeedback.lightImpact();
+                                        setState(() {
+                                          _editingMessage = null;
+                                          _messageController.clear();
+                                          _replyToMessage = messageData;
+                                        });
+                                        FocusScope.of(
+                                          context,
+                                        ).requestFocus(_messageFocusNode);
+                                        return false;
+                                      },
+                                      background: Container(
+                                        alignment: Alignment.centerLeft,
+                                        padding: const EdgeInsets.only(left: 20),
+                                        child: Icon(
+                                          Icons.reply,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.7,
+                                          ),
+                                          size: 24,
+                                        ),
+                                      ),
+                                      child: _buildMessageBubble(
+                                        messageData: messageData,
+                                        text: text,
+                                        imageUrl: imageUrl,
+                                        videoUrl: videoUrl,
+                                        senderId: senderId,
+                                        isMe: isMe,
+                                        timestamp: timestamp,
+                                        isDarkMode: isDarkMode,
+                                        isOptimistic: isOptimistic,
+                                        readBy: readBy,
+                                        replyToId: replyToId,
+                                        voiceUrl: voiceUrl,
+                                        voiceDuration: voiceDuration,
+                                      ),
+                                    );
                                   }
 
-                                  return Dismissible(
-                                    key: Key(messageData['id'] ?? 'msg_$index'),
-                                    direction: _isMultiSelectMode
-                                        ? DismissDirection.none
-                                        : DismissDirection.startToEnd,
-                                    confirmDismiss: (direction) async {
-                                      HapticFeedback.lightImpact();
-                                      setState(() {
-                                        _editingMessage = null;
-                                        _messageController.clear();
-                                        _replyToMessage = messageData;
-                                      });
-                                      FocusScope.of(
-                                        context,
-                                      ).requestFocus(_messageFocusNode);
-                                      return false;
-                                    },
-                                    background: Container(
-                                      alignment: Alignment.centerLeft,
-                                      padding: const EdgeInsets.only(left: 20),
-                                      child: Icon(
-                                        Icons.reply,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                        size: 24,
-                                      ),
-                                    ),
-                                    child: _buildMessageBubble(
-                                      messageData: messageData,
-                                      text: text,
-                                      imageUrl: imageUrl,
-                                      videoUrl: videoUrl,
-                                      senderId: senderId,
-                                      isMe: isMe,
-                                      timestamp: timestamp,
-                                      isDarkMode: isDarkMode,
-                                      isOptimistic: isOptimistic,
-                                      readBy: readBy,
-                                      replyToId: replyToId,
-                                      voiceUrl: voiceUrl,
-                                      voiceDuration: voiceDuration,
-                                    ),
-                                  );
+                                  // Wrap with date separator if needed
+                                  if (dateSeparator != null) {
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        dateSeparator,
+                                        messageWidget,
+                                      ],
+                                    );
+                                  }
+                                  return messageWidget;
                                 }
 
                                 // Header items come after messages (display at top due to reverse: true)
@@ -4339,6 +4462,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         ),
                       ),
                     ),
+                    // AI thinking indicator
+                    _buildAiThinkingIndicator(isDarkMode),
                     // Reply preview
                     if (_replyToMessage != null) _buildReplyPreview(isDarkMode),
                     // Edit preview
@@ -4418,15 +4543,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                   final data = snapshot.data!.data() as Map<String, dynamic>;
                   _currentGroupName = data['groupName'] ?? widget.groupName;
                   _groupPhoto = data['groupPhoto'];
-                  _memberNames = Map<String, String>.from(
-                    data['participantNames'] ?? {},
+                  _memberNames = (data['participantNames'] as Map<String, dynamic>? ?? {}).map(
+                    (k, v) => MapEntry(k, v?.toString() ?? 'Unknown'),
                   );
-                  _memberPhotos = Map<String, String?>.from(
-                    data['participantPhotos'] ?? {},
+                  _memberPhotos = (data['participantPhotos'] as Map<String, dynamic>? ?? {}).map(
+                    (k, v) => MapEntry(k, v?.toString()),
                   );
 
-                  final isTypingMap = Map<String, bool>.from(
-                    data['isTyping'] ?? {},
+                  final isTypingMap = (data['isTyping'] as Map<String, dynamic>? ?? {}).map(
+                    (k, v) => MapEntry(k, v == true),
                   );
                   _typingUsers = isTypingMap.entries
                       .where((e) => e.value == true && e.key != currentUserId)
@@ -4644,7 +4769,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   Widget _buildReplyPreview(bool isDarkMode) {
-    final senderId = _replyToMessage!['senderId'] as String;
+    final senderId = _replyToMessage!['senderId'] as String? ?? '';
     final senderName = _memberNames[senderId] ?? 'Unknown';
     final isMe = senderId == _currentUserId;
 
@@ -5019,13 +5144,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     int audioDuration,
   ) async {
     try {
-      // Upload to Firebase Storage
+      // Upload to Firebase Storage (using chat_media path which has storage rules)
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'voice_${currentUserId}_$timestamp.aac';
+      final fileName = 'voice_${widget.groupId}_$timestamp.aac';
       final storageRef = _storage
           .ref()
-          .child('voice_messages')
-          .child(widget.groupId)
+          .child('chat_media')
+          .child(currentUserId)
           .child(fileName);
 
       final uploadTask = storageRef.putFile(
@@ -5068,6 +5193,84 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
         }
       }
     }
+  }
+
+  Widget _buildAiThinkingIndicator(bool isDarkMode) {
+    final isAiTyping = _typingUsers.contains(ApiConfig.singletapAiSenderId);
+    if (!isAiTyping) return const SizedBox.shrink();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 14,
+            backgroundColor: Color(0xFF6366F1),
+            child: Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF6366F1).withValues(alpha: 0.3),
+                  const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                ],
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.zero,
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Single Tap AI is thinking',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: Color(0xFF6366F1),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _buildTypingDot(0, isDarkMode),
+                const SizedBox(width: 3),
+                _buildTypingDot(1, isDarkMode),
+                const SizedBox(width: 3),
+                _buildTypingDot(2, isDarkMode),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingDot(int index, bool isDarkMode) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.4, end: 1.0),
+      duration: Duration(milliseconds: 400 + (index * 150)),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withValues(alpha: value),
+            shape: BoxShape.circle,
+          ),
+        );
+      },
+      onEnd: () {
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Widget _buildMessageInput(bool isDarkMode) {
@@ -5142,6 +5345,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             maxLines: 5,
                             minLines: 1,
                             textCapitalization: TextCapitalization.sentences,
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.send,
                             hintText: 'Message',
                             showBlur: false,
                             decoration: const BoxDecoration(),
@@ -5157,6 +5362,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               );
                               // Handle @ mention detection
                               _handleMentionDetection(text);
+                            },
+                            onSubmitted: (text) {
+                              if (text.trim().isNotEmpty) {
+                                _sendMessage();
+                              }
                             },
                             onTap: () {
                               if (_showEmojiPicker) {
@@ -5389,63 +5599,111 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   }
 
   Widget _buildMentionSuggestions() {
-    if (!_showMentionSuggestions || _filteredMembers.isEmpty) {
+    if (!_showMentionSuggestions || _mentionSuggestions.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 200),
+      constraints: const BoxConstraints(maxHeight: 220),
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.2),
+          color: Colors.white.withValues(alpha: 0.15),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: _filteredMembers.length,
-        separatorBuilder: (context, index) =>
-            Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
-        itemBuilder: (context, index) {
-          final member = _filteredMembers[index];
-          final name = member['name'] as String;
-          final photo = member['photo'] as String?;
-          final userId = member['id'] as String;
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          itemCount: _mentionSuggestions.length,
+          separatorBuilder: (_, __) => Divider(
+            color: Colors.white.withValues(alpha: 0.08),
+            height: 1,
+            indent: 56,
+          ),
+          itemBuilder: (context, index) {
+            final item = _mentionSuggestions[index];
+            final name = item['name'] as String;
+            final photo = item['photo'] as String?;
+            final isAi = item['isAi'] == true;
 
-          return ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
-            leading: CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.grey[800],
-              backgroundImage: PhotoUrlHelper.isValidUrl(photo)
-                  ? CachedNetworkImageProvider(photo!)
-                  : null,
-              child: !PhotoUrlHelper.isValidUrl(photo)
-                  ? Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
-                    )
-                  : null,
-            ),
-            title: Text(
-              name,
-              style: const TextStyle(fontFamily: 'Poppins', 
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+            return InkWell(
+              onTap: () => _insertMention(item['id'] as String, name),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    if (isAi)
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      )
+                    else
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.grey[800],
+                        backgroundImage: PhotoUrlHelper.isValidUrl(photo)
+                            ? CachedNetworkImageProvider(photo!)
+                            : null,
+                        child: !PhotoUrlHelper.isValidUrl(photo)
+                            ? Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
+                              )
+                            : null,
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: isAi ? const Color(0xFF818CF8) : Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (isAi)
+                            Text(
+                              'Ask me anything',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.grey[500],
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            onTap: () => _insertMention(userId, name),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -5480,6 +5738,142 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
+
+  /// Build AI message bubble - normal incoming message style with "Single Tap AI" label outside
+  Widget _buildAiMessageBubble({
+    required String text,
+    Timestamp? timestamp,
+    required bool isDarkMode,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // "Single Tap AI" label outside the bubble, top-left
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/logo/SingleTap.png',
+                        width: 14,
+                        height: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Single Tap AI',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: Color(0xFF6366F1),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // AI message bubble with soft indigo tint
+                IntrinsicWidth(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.7,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6366F1).withValues(alpha: 0.30),
+                            const Color(0xFF8B5CF6).withValues(alpha: 0.20),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.5),
+                          width: 1,
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                          bottomLeft: Radius.zero,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 5, right: 5, top: 3, bottom: 5),
+                        child: _buildAiRichText(text),
+                      ),
+                    ),
+                  ),
+                ),
+                // Timestamp below
+                if (timestamp != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, left: 4),
+                    child: Text(
+                      DateFormat('h:mm a').format(timestamp.toDate()),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10.5,
+                        color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Parse **bold** markers in AI text and render with highlight color
+  Widget _buildAiRichText(String text) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*');
+    int lastEnd = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          color: Color(0xFF818CF8),
+          fontSize: 14,
+          height: 1.35,
+          letterSpacing: -0.2,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          color: Colors.white,
+          fontSize: 14,
+          height: 1.35,
+          letterSpacing: -0.2,
+        ),
+        children: spans,
+      ),
+    );
+  }
+
   Widget _buildSystemMessage(
     String text,
     bool isDarkMode, [
@@ -5487,7 +5881,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
   ]) {
     final actionType = messageData?['actionType'] as String?;
 
-    // SingleTap-style call message
+    // Single Tap-style call message
     if (actionType == 'call') {
       final callerId = messageData?['callerId'] as String?;
       final callerName = messageData?['callerName'] as String?;
@@ -5507,17 +5901,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       Color iconColor;
       String callText;
 
-      // Participant text for all call types
-      final participantText = participantCount != null && participantCount > 0
-          ? ' • $participantCount joined'
-          : '';
-
       if (isMissed) {
-        callIcon = Icons.phone_missed;
-        iconColor = Colors.red;
-        callText = isCallerCurrentUser
-            ? 'Outgoing call$participantText'
-            : 'Missed call$participantText';
+        if (isCallerCurrentUser) {
+          callIcon = Icons.call_made;
+          iconColor = Colors.green;
+          callText = 'Outgoing call';
+        } else {
+          callIcon = Icons.phone_missed;
+          iconColor = Colors.red;
+          callText = 'Missed call';
+        }
       } else {
         callIcon = isCallerCurrentUser ? Icons.call_made : Icons.call_received;
         iconColor = Colors.green;
@@ -5530,12 +5923,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             ? '${minutes}m ${seconds}s'
             : '${seconds}s';
 
-        callText = isCallerCurrentUser
-            ? 'Outgoing call • $durationText$participantText'
-            : 'Incoming call • $durationText$participantText';
+        final prefix = isCallerCurrentUser ? 'Outgoing call' : 'Incoming call';
+        callText = '$prefix • $durationText';
       }
 
-      // SingleTap-style positioning: right for caller, left for others
+      // Single Tap-style positioning: right for caller, left for others
       return GestureDetector(
         onTap: _isMultiSelectMode && messageId != null
             ? () => _toggleMessageSelection(messageId)
@@ -5544,12 +5936,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
           color: isSelected
               ? Colors.blue.withValues(alpha: 0.1)
               : Colors.transparent,
-          padding: const EdgeInsets.only(
-            top: 6,
-            bottom: 6,
-            right: 16,
-            left: 16,
-          ), // Better spacing for call messages
+          padding: const EdgeInsets.symmetric(
+            vertical: 3,
+          ),
           child: Row(
             mainAxisAlignment: isCallerCurrentUser
                 ? MainAxisAlignment
@@ -5580,82 +5969,48 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                         ? () => _toggleMessageSelection(messageId)
                         : () => _handleCallCardTap(callId, callDuration),
                     onLongPress: () => _showCallDeleteOptions(messageData),
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.4,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white.withValues(alpha: 0.25),
-                            Colors.white.withValues(alpha: 0.15),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    child: IntrinsicWidth(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.7,
                         ),
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(20),
-                          topRight: const Radius.circular(20),
-                          bottomLeft: isCallerCurrentUser
-                              ? const Radius.circular(20)
-                              : const Radius.circular(4),
-                          bottomRight: isCallerCurrentUser
-                              ? const Radius.circular(4)
-                              : const Radius.circular(20),
-                        ),
-                        border: Border.all(color: Colors.white, width: 1),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: isCallerCurrentUser
-                            ? CrossAxisAlignment
-                                  .end // My call details → RIGHT
-                            : CrossAxisAlignment
-                                  .start, // Others' details → LEFT
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Show caller name inside card (only for non-callers)
-                          if (!isCallerCurrentUser && callerName != null) ...[
-                            Text(
-                              callerName,
-                              style: const TextStyle(fontFamily: 'Poppins', 
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withValues(alpha: 0.25),
+                                Colors.white.withValues(alpha: 0.15),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            // Line below caller name
-                            Container(
-                              margin: const EdgeInsets.only(top: 4, bottom: 8),
-                              height: 1,
-                              color: Colors.white.withValues(alpha: 0.2),
+                            border: Border.all(color: Colors.white, width: 1),
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: isCallerCurrentUser
+                                  ? const Radius.circular(16)
+                                  : Radius.zero,
+                              bottomRight: isCallerCurrentUser
+                                  ? Radius.zero
+                                  : const Radius.circular(16),
                             ),
-                          ],
-                          // Call info row
-                          Row(
+                          ),
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(8),
+                                width: 34,
+                                height: 34,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 1,
-                                  ),
-                                  color: isCallerCurrentUser
-                                      ? Colors.white.withValues(alpha: 0.2)
-                                      : null,
+                                  color: iconColor.withValues(alpha: 0.15),
                                 ),
                                 child: Icon(
                                   callIcon,
-                                  size: 18,
-                                  color: isCallerCurrentUser
-                                      ? Colors.white
-                                      : iconColor,
+                                  size: 16,
+                                  color: iconColor,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -5664,26 +6019,30 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    if (!isCallerCurrentUser && callerName != null)
+                                      Text(
+                                        callerName,
+                                        style: TextStyle(fontFamily: 'Poppins',
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     Text(
                                       callText,
-                                      style: const TextStyle(fontFamily: 'Poppins', 
-                                        fontSize: 13,
+                                      style: TextStyle(fontFamily: 'Poppins',
+                                        color: iconColor,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.white,
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (timestamp != null)
+                                    if (participantCount != null && participantCount > 0)
                                       Text(
-                                        DateFormat(
-                                          'MMM d, h:mm a',
-                                        ).format(timestamp.toDate()),
-                                        style: TextStyle(fontFamily: 'Poppins', 
-                                          fontSize: 11,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
-                                          ),
+                                        '$participantCount joined',
+                                        style: TextStyle(fontFamily: 'Poppins',
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                          fontSize: 10,
                                         ),
                                       ),
                                   ],
@@ -5691,10 +6050,24 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                               ),
                             ],
                           ),
-                        ],
                       ),
                     ),
-                  ), // Close Container + GestureDetector
+                  ), // Close IntrinsicWidth + ConstrainedBox + Container + GestureDetector
+                  ),
+                  // Timestamp below the call card (same style as chat messages)
+                  if (timestamp != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, right: 4, top: 1),
+                      child: Text(
+                        DateFormat('h:mm a').format(timestamp.toDate()),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                        ),
+                      ),
+                    ),
                   // Show "Join" button ONLY if someone has already joined the call
                   if (callId != null &&
                       (callDuration == null || callDuration == 0) &&
@@ -5738,7 +6111,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     // Regular system message
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
+        margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -5758,6 +6131,79 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             fontSize: 12,
             color: Colors.white,
             fontStyle: FontStyle.italic,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Check if two dates are the same day
+  bool _isSameDay(DateTime? date1, DateTime? date2) {
+    if (date1 == null || date2 == null) return false;
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  // Build date separator widget - same style as 1-on-1 chat
+  Widget _buildDateSeparator(DateTime? date, bool isDarkMode) {
+    if (date == null) return const SizedBox.shrink();
+
+    String dateText;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final messageDate = DateTime(date.year, date.month, date.day);
+
+    if (messageDate == today) {
+      dateText = 'Today';
+    } else if (messageDate == yesterday) {
+      dateText = 'Yesterday';
+    } else if (now.difference(date).inDays < 7) {
+      const days = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+      dateText = days[date.weekday - 1];
+    } else {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      dateText = '${months[date.month - 1]} ${date.day}, ${date.year}';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.25),
+                Colors.white.withValues(alpha: 0.15),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            dateText,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDarkMode ? Colors.grey : Colors.grey,
+              letterSpacing: -0.2,
+            ),
           ),
         ),
       ),
@@ -5790,7 +6236,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
 
     if (!hasContent) return const SizedBox.shrink();
 
-    final messageId = messageData['id'] as String;
+    final messageId = messageData['id'] as String? ?? '';
     final isSelected = _selectedMessageIds.contains(messageId);
 
     return GestureDetector(
@@ -5805,8 +6251,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
               ? Colors.blue.withValues(alpha: 0.1)
               : Colors.transparent,
           padding: const EdgeInsets.symmetric(
-            vertical: 8,
-          ), // Increased spacing between messages
+            vertical: 3,
+          ),
           child: Row(
             mainAxisAlignment: isMe
                 ? MainAxisAlignment
@@ -5837,22 +6283,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                     IntrinsicWidth(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.5,
+                          maxWidth: MediaQuery.of(context).size.width * 0.7,
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(20),
-                            topRight: const Radius.circular(20),
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
                             bottomLeft: isMe
-                                ? const Radius.circular(20)
-                                : const Radius.circular(4),
+                                ? const Radius.circular(16)
+                                : Radius.zero,
                             bottomRight: isMe
-                                ? const Radius.circular(4)
-                                : const Radius.circular(20),
+                                ? Radius.zero
+                                : const Radius.circular(16),
                           ),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
+                          child: Container(
                               padding: EdgeInsets.symmetric(
                                 horizontal:
                                     (imageUrl != null || videoUrl != null)
@@ -5885,14 +6329,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                     ? Border.all(color: Colors.white, width: 1)
                                     : null,
                                 borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(20),
-                                  topRight: const Radius.circular(20),
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
                                   bottomLeft: isMe
-                                      ? const Radius.circular(20)
-                                      : const Radius.circular(4),
+                                      ? const Radius.circular(16)
+                                      : Radius.zero,
                                   bottomRight: isMe
-                                      ? const Radius.circular(4)
-                                      : const Radius.circular(20),
+                                      ? Radius.zero
+                                      : const Radius.circular(16),
                                 ),
                               ),
                               child: Column(
@@ -5909,8 +6353,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                       voiceUrl == null) ...[
                                     Text(
                                       senderName,
-                                      style: const TextStyle(fontFamily: 'Poppins', 
-                                        fontSize: 12,
+                                      style: const TextStyle(fontFamily: 'Poppins',
+                                        fontSize: 10.5,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -5993,17 +6437,31 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                     alpha: 0.5,
                                                   )
                                                 : Colors.white.withValues(
-                                                    alpha: 0.3,
+                                                    alpha: isMe ? 0.3 : 0.15,
                                                   ),
                                             width: 1,
                                           ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(16),
+                                            topRight: const Radius.circular(16),
+                                            bottomLeft: isMe
+                                                ? const Radius.circular(16)
+                                                : Radius.zero,
+                                            bottomRight: isMe
+                                                ? Radius.zero
+                                                : const Radius.circular(16),
                                           ),
                                         ),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(16),
+                                            topRight: const Radius.circular(16),
+                                            bottomLeft: isMe
+                                                ? const Radius.circular(16)
+                                                : Radius.zero,
+                                            bottomRight: isMe
+                                                ? Radius.zero
+                                                : const Radius.circular(16),
                                           ),
                                           child: Column(
                                             crossAxisAlignment:
@@ -6022,8 +6480,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                       .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(fontFamily: 'Poppins', 
-                                                      fontSize: 12,
+                                                    style: const TextStyle(fontFamily: 'Poppins',
+                                                      fontSize: 11,
                                                       color: Colors.white,
                                                       fontWeight:
                                                           FontWeight.w600,
@@ -6032,9 +6490,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                 ),
                                               ConstrainedBox(
                                                 constraints:
-                                                    const BoxConstraints(
+                                                    BoxConstraints(
                                                       maxHeight: 180,
-                                                      maxWidth: 220,
+                                                      maxWidth: MediaQuery.of(context).size.width * 0.7,
                                                     ),
                                                 child: Stack(
                                                   alignment: Alignment.center,
@@ -6044,19 +6502,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                             true
                                                         ? Image.file(
                                                             File(imageUrl),
-                                                            width: 200,
+                                                            width: MediaQuery.of(context).size.width * 0.7,
                                                             fit: BoxFit.cover,
                                                           )
                                                         : CachedNetworkImage(
                                                             imageUrl: imageUrl,
-                                                            width: 200,
+                                                            width: MediaQuery.of(context).size.width * 0.7,
                                                             fit: BoxFit.cover,
                                                             placeholder:
                                                                 (
                                                                   context,
                                                                   url,
                                                                 ) => Container(
-                                                                  width: 200,
+                                                                  width: MediaQuery.of(context).size.width * 0.7,
                                                                   height: 180,
                                                                   color:
                                                                       isDarkMode
@@ -6076,17 +6534,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                                   context,
                                                                   url,
                                                                   error,
-                                                                ) => const Icon(
-                                                                  Icons
-                                                                      .error_outline,
-                                                                  color: Colors
-                                                                      .red,
+                                                                ) => Container(
+                                                                  width: MediaQuery.of(context).size.width * 0.7,
+                                                                  height: 180,
+                                                                  color:
+                                                                      isDarkMode
+                                                                      ? Colors
+                                                                            .grey[800]
+                                                                      : Colors
+                                                                            .grey[300],
+                                                                  child: const Icon(
+                                                                    Icons
+                                                                        .error_outline,
+                                                                    color: Colors
+                                                                        .red,
+                                                                  ),
                                                                 ),
                                                           ),
                                                     // Show uploading overlay for optimistic messages
                                                     if (isOptimistic)
                                                       Container(
-                                                        width: 200,
+                                                        width: MediaQuery.of(context).size.width * 0.7,
                                                         height: 180,
                                                         color: Colors.black
                                                             .withValues(
@@ -6144,17 +6612,31 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                     alpha: 0.5,
                                                   )
                                                 : Colors.white.withValues(
-                                                    alpha: 0.3,
+                                                    alpha: isMe ? 0.3 : 0.15,
                                                   ),
                                             width: 1,
                                           ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(16),
+                                            topRight: const Radius.circular(16),
+                                            bottomLeft: isMe
+                                                ? const Radius.circular(16)
+                                                : Radius.zero,
+                                            bottomRight: isMe
+                                                ? Radius.zero
+                                                : const Radius.circular(16),
                                           ),
                                         ),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(16),
+                                            topRight: const Radius.circular(16),
+                                            bottomLeft: isMe
+                                                ? const Radius.circular(16)
+                                                : Radius.zero,
+                                            bottomRight: isMe
+                                                ? Radius.zero
+                                                : const Radius.circular(16),
                                           ),
                                           child: Column(
                                             crossAxisAlignment:
@@ -6173,8 +6655,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                       .withValues(alpha: 0.6),
                                                   child: Text(
                                                     senderName,
-                                                    style: const TextStyle(fontFamily: 'Poppins', 
-                                                      fontSize: 12,
+                                                    style: const TextStyle(fontFamily: 'Poppins',
+                                                      fontSize: 11,
                                                       color: Colors.white,
                                                       fontWeight:
                                                           FontWeight.w600,
@@ -6183,76 +6665,55 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                                                 ),
                                               ConstrainedBox(
                                                 constraints:
-                                                    const BoxConstraints(
-                                                      maxHeight: 180,
-                                                      maxWidth: 220,
+                                                    BoxConstraints(
+                                                      maxHeight: 200,
+                                                      maxWidth: MediaQuery.of(context).size.width * 0.7,
                                                     ),
                                                 child: Stack(
                                                   alignment: Alignment.center,
                                                   children: [
                                                     Container(
-                                                      width: 200,
-                                                      height: 180,
+                                                      width: MediaQuery.of(context).size.width * 0.7,
+                                                      height: 200,
                                                       color: Colors.black,
-                                                      child: Icon(
-                                                        Icons.video_library,
-                                                        color: isOptimistic
-                                                            ? Colors.white38
-                                                            : Colors.white54,
-                                                        size: 48,
+                                                      child: const Icon(
+                                                        Icons.play_circle_outline,
+                                                        size: 64,
+                                                        color: Colors.white,
                                                       ),
                                                     ),
                                                     // Show uploading indicator for optimistic messages
                                                     if (isOptimistic)
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              12,
-                                                            ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                              color: Colors
-                                                                  .black
-                                                                  .withValues(
-                                                                    alpha: 0.7,
-                                                                  ),
-                                                              shape: BoxShape
-                                                                  .circle,
-                                                            ),
-                                                        child: const SizedBox(
-                                                          width: 32,
-                                                          height: 32,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 3,
-                                                            valueColor:
-                                                                AlwaysStoppedAnimation<
-                                                                  Color
-                                                                >(
-                                                                  Colors.orange,
+                                                      Positioned.fill(
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: Colors
+                                                                .black
+                                                                .withValues(
+                                                                  alpha: 0.6,
                                                                 ),
                                                           ),
-                                                        ),
-                                                      )
-                                                    else
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              12,
-                                                            ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                              color: Colors
-                                                                  .black
-                                                                  .withValues(
-                                                                    alpha: 0.6,
-                                                                  ),
-                                                              shape: BoxShape
-                                                                  .circle,
-                                                            ),
-                                                        child: const Icon(
-                                                          Icons.play_arrow,
-                                                          color: Colors.white,
-                                                          size: 32,
+                                                          child: const Column(
+                                                            mainAxisAlignment: MainAxisAlignment.center,
+                                                            children: [
+                                                              CircularProgressIndicator(
+                                                                valueColor:
+                                                                    AlwaysStoppedAnimation<
+                                                                      Color
+                                                                    >(
+                                                                      Colors.orange,
+                                                                    ),
+                                                              ),
+                                                              SizedBox(height: 8),
+                                                              Text(
+                                                                'Uploading...',
+                                                                style: TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontSize: 12,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
                                                       ),
                                                   ],
@@ -6313,7 +6774,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           ),
                         ),
                       ),
-                    ),
                     // Timestamp and read status - outside the bubble
                     Padding(
                       padding: EdgeInsets.only(
@@ -6327,8 +6787,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                           if (timestamp != null)
                             Text(
                               DateFormat('h:mm a').format(timestamp.toDate()),
-                              style: TextStyle(fontFamily: 'Poppins', 
-                                fontSize: 11,
+                              style: TextStyle(fontFamily: 'Poppins',
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
                                 color: isDarkMode
                                     ? Colors.grey[500]
@@ -6379,7 +6839,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
 
-    // Waveform bar heights pattern (30 bars for SingleTap style)
+    // Waveform bar heights pattern (30 bars for Single Tap style)
     final heights = [
       6.0,
       10.0,
@@ -6413,28 +6873,36 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
       8.0,
     ];
 
-    // Audio player SingleTap style - glass background
+    // Audio player Single Tap style - glass background
     return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
+      width: MediaQuery.of(context).size.width * 0.7,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
-          ],
+          colors: isMe
+              ? [
+                  Colors.white.withValues(alpha: 0.25),
+                  Colors.white.withValues(alpha: 0.15),
+                ]
+              : [
+                  Colors.white.withValues(alpha: 0.12),
+                  Colors.white.withValues(alpha: 0.06),
+                ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: Colors.white, width: 1),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
+          width: 1,
+        ),
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(20),
-          topRight: const Radius.circular(20),
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
           bottomLeft: isMe
-              ? const Radius.circular(20)
-              : const Radius.circular(4),
+              ? const Radius.circular(16)
+              : Radius.zero,
           bottomRight: isMe
-              ? const Radius.circular(4)
-              : const Radius.circular(20),
+              ? Radius.zero
+              : const Radius.circular(16),
         ),
       ),
       child: Column(
@@ -6489,7 +6957,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                     decoration: BoxDecoration(
                       color: isOptimistic
                           ? Colors.orange.withValues(alpha: 0.9)
-                          : Colors.white.withValues(alpha: 0.9),
+                          : AppColors.iosBlue,
                       shape: BoxShape.circle,
                     ),
                     child: isOptimistic
@@ -6510,7 +6978,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
                             isCurrentlyPlaying
                                 ? Icons.pause_rounded
                                 : Icons.play_arrow_rounded,
-                            color: const Color(0xFF3A3A3A),
+                            color: Colors.white,
                             size: 20,
                           ),
                   ),
@@ -6675,16 +7143,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
             children: [
               Text(
                 replySenderName,
-                style: TextStyle(fontFamily: 'Poppins', 
-                  fontSize: 11,
+                style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                   color: isMe ? Colors.white : Theme.of(context).primaryColor,
                 ),
               ),
               Text(
                 replyData['text'] ?? ' Photo',
-                style: TextStyle(fontFamily: 'Poppins', 
-                  fontSize: 12,
+                style: TextStyle(fontFamily: 'Poppins',
+                  fontSize: 11.5,
                   color: isMe
                       ? Colors.white.withValues(alpha: 0.8)
                       : (isDarkMode ? Colors.grey[400] : Colors.grey[700]),
@@ -6699,14 +7167,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen>
     );
   }
 
-  // Build message status icon (SingleTap-like ticks)
+  // Build message status icon (Single Tap-like ticks)
   Widget _buildMessageStatusIcon(
     dynamic status,
     int readCount,
     int totalMembers,
     bool isDarkMode,
   ) {
-    // SingleTap group chat tick logic:
+    // Single Tap group chat tick logic:
     // Single grey tick ✓ = Sent to server (only sender has read, readCount = 1)
     // Double grey tick ✓✓ = Delivered/read by some members (readCount > 1 but < totalMembers)
     // Double blue tick ✓✓ = Read by ALL members (readCount >= totalMembers)
@@ -6869,7 +7337,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                   child: const Icon(Icons.close, color: Colors.white70, size: 22),
                 ),
               ),
-              // Audio Player UI - SingleTap style
+              // Audio Player UI - Single Tap style
               Container(
                 decoration: BoxDecoration(
                   border: Border.all(
@@ -7331,7 +7799,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                             : null,
                         child: !PhotoUrlHelper.isValidUrl(user['photoUrl'])
                             ? Text(
-                                user['name'][0].toUpperCase(),
+                                ((user['name']?.toString() ?? 'U').isNotEmpty ? (user['name']?.toString() ?? 'U')[0] : 'U').toUpperCase(),
                                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 10),
                               )
                             : null,
@@ -7384,7 +7852,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                               : null,
                           child: !PhotoUrlHelper.isValidUrl(contact['photoUrl'])
                               ? Text(
-                                  contact['name'][0].toUpperCase(),
+                                  ((contact['name']?.toString() ?? 'U').isNotEmpty ? (contact['name']?.toString() ?? 'U')[0] : 'U').toUpperCase(),
                                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 18),
                                 )
                               : null,
@@ -7426,5 +7894,58 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
         ],
       ),
     );
+  }
+}
+
+/// Custom TextEditingController that highlights @mentions with color while typing
+class _MentionTextEditingController extends TextEditingController {
+  static final _mentionRegex =
+      RegExp(r'@Single\s*Tap\s+AI|@\w+', caseSensitive: false);
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final text = this.text;
+    final matches = _mentionRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      return TextSpan(text: text, style: style);
+    }
+
+    final spans = <TextSpan>[];
+    int lastIndex = 0;
+
+    for (final match in matches) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: style,
+        ));
+      }
+
+      final matchText = match.group(0)!;
+      final isAi = RegExp(r'single\s*tap', caseSensitive: false)
+          .hasMatch(matchText);
+      spans.add(TextSpan(
+        text: matchText,
+        style: style?.copyWith(
+          color: isAi ? const Color(0xFF818CF8) : const Color(0xFF00E5FF),
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: style,
+      ));
+    }
+
+    return TextSpan(children: spans, style: style);
   }
 }

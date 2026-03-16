@@ -298,6 +298,7 @@ class _ProductListTabState extends State<ProductListTab> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () {
           Navigator.push(
             context,

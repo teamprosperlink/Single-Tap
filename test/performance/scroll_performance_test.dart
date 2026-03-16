@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supper/main.dart';
-import 'package:supper/widgets/common%20widgets/firebase_options.dart';
+import 'package:single_tap/main.dart';
+import 'package:single_tap/widgets/common%20widgets/firebase_options.dart';
 import '../test_helpers.dart';
 
 void main() {

@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supper/services/firebase_provider.dart';
+import 'package:single_tap/services/firebase_provider.dart';
 import '../retail/product_form_screen.dart';
 import '../retail/product_category_screen.dart';
 

@@ -5,7 +5,7 @@
 //
 // Usage:
 // ```dart
-// import 'package:supper/screens/business/profile_view/profile_view.dart';
+// import 'package:single_tap/screens/business/profile_view/profile_view.dart';
 //
 // // Navigate to profile
 // Navigator.push(

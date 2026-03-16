@@ -128,7 +128,7 @@ D/FlutterGeolocator: Binding to location service.
 W/GoogleApiManager: Not showing notification since connectionResult is not user-facing:
 ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
 
-W/FlagRegistrar: Failed to register com.google.android.gms.providerinstaller#com.plink.supper
+W/FlagRegistrar: Failed to register com.google.android.gms.providerinstaller#com.plink.singletap
 ```
 
 **Status**: ✅ These warnings are expected and not related to the fix. App continues to function normally.

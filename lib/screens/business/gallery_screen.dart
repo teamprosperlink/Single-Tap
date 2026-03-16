@@ -354,6 +354,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               : _buildGalleryGrid(isDarkMode),
       floatingActionButton: _images.isNotEmpty && !_isReorderMode
           ? FloatingActionButton(
+        heroTag: null,
               onPressed: _addImages,
               backgroundColor: const Color(0xFF00D67D),
               child: const Icon(Icons.add_photo_alternate, color: Colors.white),

@@ -135,7 +135,7 @@ T=1.2s  LoginScreen appears on Device A
 
 ### Problem: "Permission Denied" errors in console
 **Solution**:
-- Clear app cache: `adb shell pm clear com.plink.supper`
+- Clear app cache: `adb shell pm clear com.plink.singletap`
 - Restart emulator
 - Rebuild app: `flutter clean && flutter pub get && flutter run`
 

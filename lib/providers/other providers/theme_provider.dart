@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,7 +93,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
 
   static final ThemeData _glassmorphismTheme = ThemeData(
     useMaterial3: true,
+    fontFamily: 'Poppins',
     brightness: Brightness.light,
+    cupertinoOverrideTheme: const CupertinoThemeData(
+      brightness: Brightness.dark,
+    ),
     primaryColor: AppColors.iosBlue,
     colorScheme: const ColorScheme.light(
       primary: AppColors.iosBlue,
@@ -275,6 +280,9 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
       color: Colors.black.withValues(alpha: 0.1),
       thickness: 0.5,
     ),
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+    ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: Colors.white.withValues(alpha: 0.95),
       selectedItemColor: AppColors.iosBlue,
@@ -286,7 +294,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
 
   static final ThemeData _darkTheme = ThemeData(
     useMaterial3: true,
+    fontFamily: 'Poppins',
     brightness: Brightness.dark,
+    cupertinoOverrideTheme: const CupertinoThemeData(
+      brightness: Brightness.dark,
+    ),
     primaryColor: const Color(0xFF0A84FF),
     colorScheme: const ColorScheme.dark(
       primary: Color(0xFF0A84FF),
@@ -468,6 +480,9 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     dividerTheme: DividerThemeData(
       color: Colors.white.withValues(alpha: 0.1),
       thickness: 0.5,
+    ),
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: const Color(0xFF1C1C1E).withValues(alpha: 0.95),

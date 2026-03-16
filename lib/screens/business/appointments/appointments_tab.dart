@@ -145,6 +145,7 @@ class _AppointmentsTabState extends State<AppointmentsTab> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddAppointment(),
         backgroundColor: const Color(0xFF00D67D),
         foregroundColor: Colors.white,

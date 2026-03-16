@@ -21,7 +21,6 @@ class LocationService {
   bool _periodicUpdatesStarted =
       false; // Prevent multiple periodic update loops
   bool _isInitialized = false; // Prevent multiple initialization calls
-  bool _isFetchingBackground = false; // Prevent duplicate background fetches
 
   // Timer for periodic updates (cancellable)
   Timer? _periodicTimer;
@@ -152,20 +151,9 @@ class LocationService {
         if (silent) {
           // Strategy 1: Try last known position FIRST (instant, no GPS wait)
           // ONLY for background silent updates
-          try {
-            _log('LocationService: Trying last known position first...');
-            final lastPosition = await Geolocator.getLastKnownPosition();
-            if (lastPosition != null) {
-              _log(
-                'LocationService: Got last known position lat=${lastPosition.latitude}, lng=${lastPosition.longitude}',
-              );
-              // Continue fetching fresh location in background, but return this immediately
-              _fetchFreshLocationInBackground();
-              return lastPosition;
-            }
-          } catch (e) {
-            _log('LocationService: Last known position failed: $e');
-          }
+          // Skip getLastKnownPosition entirely — it can return stale/cached
+          // emulator coordinates. Always get fresh GPS instead.
+          _log('LocationService: Skipping last known position, getting fresh GPS...');
         }
 
         // Strategy 2: Try HIGH accuracy first for user-initiated requests
@@ -250,42 +238,7 @@ class LocationService {
     }
   }
 
-  // Fetch fresh location in background without blocking
-  void _fetchFreshLocationInBackground() async {
-    // Prevent duplicate background fetches
-    if (_isFetchingBackground) {
-      _log(
-        'LocationService: Background fetch already in progress, skipping...',
-      );
-      return;
-    }
-
-    _isFetchingBackground = true;
-
-    try {
-      _log('LocationService: Fetching fresh location in background...');
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 60),
-        ),
-      );
-      _log(
-        'LocationService: Background fetch completed lat=${position.latitude}, lng=${position.longitude}',
-      );
-
-      // Update user location silently in background
-      // Note: updateUserLocation has its own rate limiting
-      await updateUserLocation(position: position);
-    } catch (e) {
-      _log('LocationService: Background fetch failed (not critical): $e');
-      // Silently fail - don't show errors to user
-    } finally {
-      _isFetchingBackground = false;
-    }
-  }
-
-  // Get city name from coordinates - Enhanced with real API
+// Get city name from coordinates - Enhanced with real API
   Future<Map<String, dynamic>?> getCityFromCoordinates(
     double latitude,
     double longitude,
@@ -419,6 +372,15 @@ class LocationService {
       }
 
       if (currentPosition != null) {
+        // Reject null-island (0,0) coordinates only
+        final lat = currentPosition.latitude;
+        final lng = currentPosition.longitude;
+        if (lat.abs() < 0.01 && lng.abs() < 0.01) {
+          _log('LocationService: Rejected null-island coordinates ($lat, $lng)');
+          _isUpdatingLocation = false;
+          return false;
+        }
+
         // Get detailed address from coordinates SILENTLY
         final addressData = await getCityFromCoordinates(
           currentPosition.latitude,
@@ -431,6 +393,14 @@ class LocationService {
           _log(
             'LocationService: Updating user location silently with detailed address: ${addressData['display']}',
           );
+
+          // Reject stale Mountain View from geocoding
+          final geocodedCity = (addressData['city'] as String? ?? '').toLowerCase();
+          if (geocodedCity.contains('mountain view')) {
+            _log('LocationService: Rejected Mountain View geocoding result');
+            _isUpdatingLocation = false;
+            return false;
+          }
 
           Map<String, dynamic> locationData = {
             'latitude': currentPosition.latitude,
@@ -453,6 +423,23 @@ class LocationService {
               .collection('users')
               .doc(userId)
               .set(locationData, SetOptions(merge: true));
+
+          // Also update networking_profiles so distance is correct on Networking screen
+          final netDoc = await _firestore
+              .collection('networking_profiles')
+              .doc(userId)
+              .get();
+          if (netDoc.exists) {
+            await _firestore
+                .collection('networking_profiles')
+                .doc(userId)
+                .update({
+              'latitude': currentPosition.latitude,
+              'longitude': currentPosition.longitude,
+              'city': addressData['city'],
+              'location': addressData['formatted'] ?? addressData['display'] ?? addressData['city'],
+            });
+          }
 
           _log(
             'LocationService: Location updated silently with area: ${addressData['area']}, city: ${addressData['city']}',
@@ -724,6 +711,16 @@ class LocationService {
 
       if (userDoc.exists) {
         final data = userDoc.data();
+        final storedCity = (data?['city'] as String? ?? '').toLowerCase();
+        // Force refresh if stored location is Mountain View (stale emulator data)
+        final storedLat = (data?['latitude'] as num?)?.toDouble();
+        final storedLng = (data?['longitude'] as num?)?.toDouble();
+        final isMVCoords = (storedLat != null && storedLng != null &&
+            (storedLat - 37.422).abs() < 0.05 && (storedLng + 122.084).abs() < 0.05);
+        if (storedCity.contains('mountain view') || isMVCoords) {
+          _log('LocationService: Stored location is Mountain View — forcing refresh');
+          return await updateUserLocation(silent: true);
+        }
         final locationUpdatedAt = data?['locationUpdatedAt'] as Timestamp?;
 
         if (locationUpdatedAt != null) {
@@ -936,7 +933,6 @@ class LocationService {
     _lastLocationUpdate = null;
     _lastKnownPosition = null;
     _isUpdatingLocation = false;
-    _isFetchingBackground = false;
     _log('LocationService: State reset');
   }
 }

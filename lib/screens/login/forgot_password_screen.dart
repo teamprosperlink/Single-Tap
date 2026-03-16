@@ -1,8 +1,8 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../res/config/app_colors.dart';
+import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/common widgets/country_code_picker_sheet.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -32,6 +32,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _verificationId;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // OTP timer
+  Timer? _otpTimer;
+  int _otpCountdown = 30;
 
   // Country code data
   String _selectedCountryCode = '+91';
@@ -86,7 +90,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     for (var node in _otpFocusNodes) {
       node.dispose();
     }
+    _otpTimer?.cancel();
     super.dispose();
+  }
+
+  void _startOtpTimer() {
+    _otpCountdown = 30;
+    _otpTimer?.cancel();
+    _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_otpCountdown > 0) {
+        setState(() => _otpCountdown--);
+      } else {
+        timer.cancel();
+      }
+    });
   }
 
   Future<void> _sendOTP() async {
@@ -130,6 +147,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               _verificationId = verificationId;
             });
             _showSuccess('OTP sent to $fullPhoneNumber');
+            _startOtpTimer();
           }
         },
         codeAutoRetrievalTimeout: (String verificationId) {
@@ -239,292 +257,84 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.redAccent.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: Colors.redAccent,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-      ),
-    );
+    SnackBarHelper.showError(context, message);
   }
 
   void _showSuccess(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.greenAccent.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    color: Colors.greenAccent,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-      ),
-    );
+    SnackBarHelper.showSuccess(context, message);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
+      extendBody: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: ClipOval(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-            ),
-          ),
+          icon: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Reset Password',
-          style: TextStyle(
+          _currentStep == 2 ? 'Create New Password' : 'Forgot Password',
+          style: const TextStyle(
             color: Colors.white,
-            shadows: [
-              Shadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 4),
-            ],
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          // Gradient Background
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: AppColors.splashGradient,
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
           ),
-
-          // Content
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                    child: Container(
-                      margin: const EdgeInsets.all(24),
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackgroundDark(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: AppColors.glassBorder(alpha: 0.2),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.darkOverlay(alpha: 0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildStepIndicator(),
-                          const SizedBox(height: 32),
-                          _buildCurrentStep(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
+        child: _buildCurrentStep(),
       ),
     );
   }
 
-  Widget _buildStepIndicator() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildStepCircle(0, 'Phone'),
-        _buildStepLine(0),
-        _buildStepCircle(1, 'OTP'),
-        _buildStepLine(1),
-        _buildStepCircle(2, 'Password'),
-      ],
-    );
-  }
-
-  Widget _buildStepCircle(int step, String label) {
-    final isActive = _currentStep >= step;
-    final isCurrent = _currentStep == step;
-
-    return Column(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isActive
-                ? Colors.white.withValues(alpha: 0.9)
-                : Colors.white.withValues(alpha: 0.1),
-            border: Border.all(
-              color: isCurrent
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.3),
-              width: isCurrent ? 2 : 1,
-            ),
-          ),
-          child: Center(
-            child: isActive && !isCurrent
-                ? const Icon(Icons.check, size: 20, color: Colors.green)
-                : Text(
-                    '${step + 1}',
-                    style: TextStyle(
-                      color: isActive ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.white60,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStepLine(int step) {
-    final isActive = _currentStep > step;
-    return Container(
-      width: 40,
-      height: 2,
-      margin: const EdgeInsets.only(bottom: 20),
-      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.3),
+  Widget _buildIllustration() {
+    return ShaderMask(
+      shaderCallback: (Rect bounds) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.75, 1.0],
+        ).createShader(bounds);
+      },
+      blendMode: BlendMode.dstIn,
+      child: Image.asset(
+        'assets/images/Forgot Password.png',
+        height: 220,
+        fit: BoxFit.contain,
+      ),
     );
   }
 
@@ -544,7 +354,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _showCountryCodePicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.splashDark1,
+      backgroundColor: const Color.fromRGBO(64, 64, 64, 1),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -564,288 +374,278 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Widget _buildPhoneStep() {
-    return Column(
-      children: [
-        ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(
-                Icons.phone_android,
-                size: 48,
-                color: Colors.white,
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            const SizedBox(height: 32),
+            // Illustration
+            _buildIllustration(),
+            const SizedBox(height: 28),
+            // Description text
+            Text(
+              'Where would you like to receive a\nverification code?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withValues(alpha: 0.6),
+                height: 1.5,
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'Enter Mobile Number',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'We will send you an OTP to verify',
-          style: TextStyle(fontSize: 14, color: Colors.white70),
-        ),
-        const SizedBox(height: 32),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Country Code Picker
-            Container(
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            const SizedBox(height: 32),
+            // Mobile Number label
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Mobile Number',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _showCountryCodePicker,
-                  borderRadius: BorderRadius.circular(16),
-                  splashColor: Colors.white.withValues(alpha: 0.2),
-                  highlightColor: Colors.white.withValues(alpha: 0.1),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _selectedCountryCode,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
+            ),
+            const SizedBox(height: 10),
+            // Combined country code + phone field
+            Theme(
+              data: Theme.of(context).copyWith(
+                inputDecorationTheme: const InputDecorationTheme(filled: false),
+              ),
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Country code section
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _showCountryCodePicker,
+                        borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _selectedCountryCode,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.keyboard_arrow_down,
+                                color: Colors.white.withValues(alpha: 0.6),
+                                size: 20,
+                              ),
+                            ],
                           ),
                         ),
-                        Icon(
-                          Icons.arrow_drop_down,
-                          color: Colors.white.withValues(alpha: 0.8),
-                          size: 20,
+                      ),
+                    ),
+                    // Divider
+                    Container(
+                      width: 1,
+                      height: 28,
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                    // Phone number input
+                    Expanded(
+                      child: TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        maxLength: 15,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        cursorColor: Colors.white,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
                         ),
-                      ],
+                        decoration: InputDecoration(
+                          hintText: 'Enter phone number',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.35),
+                            fontSize: 15,
+                          ),
+                          counterText: '',
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            // Phone Number Field
-            Expanded(
-              child: TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                maxLength: 15,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                cursorColor: Colors.white,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Phone Number',
-                  labelStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 15,
-                  ),
-                  floatingLabelStyle: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  hintText: 'Enter phone number',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 14,
-                  ),
-                  counterText: '',
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      width: 1.5,
-                    ),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.12),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            const SizedBox(height: 32),
+            // Send OTP button - iOS Blue
+            SizedBox(
+              width: double.infinity,
+              height: 56,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _sendOTP,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.withValues(alpha: 0.4),
                   foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF007AFF),
+                  disabledBackgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.blue.withValues(alpha: 0.5)),
                   ),
                   elevation: 0,
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                        height: 24,
-                        width: 24,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : const Text(
                         'Send OTP',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                       ),
               ),
             ),
-          ),
+            const SizedBox(height: 32),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildOTPStep() {
-    return Column(
-      children: [
-        ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(Icons.sms, size: 48, color: Colors.white),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'Enter OTP',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'OTP sent to $_selectedCountryCode ${_phoneController.text}',
-          style: const TextStyle(fontSize: 14, color: Colors.white70),
-        ),
-        const SizedBox(height: 32),
-        // 6 OTP Boxes
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // Calculate box size based on available width
-            // 6 boxes + 5 gaps (8px each) = total width
-            final availableWidth = constraints.maxWidth;
-            const totalGapWidth = 5 * 8.0; // 5 gaps of 8px each
-            final boxWidth = ((availableWidth - totalGapWidth) / 6).clamp(
-              36.0,
-              48.0,
-            );
-            final boxHeight = boxWidth * 1.1; // Slightly taller than wide
+    final String formattedTime =
+        '${(_otpCountdown ~/ 60).toString().padLeft(2, '0')}:${(_otpCountdown % 60).toString().padLeft(2, '0')} Sec';
 
-            return Row(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 32),
+            // Same illustration
+            _buildIllustration(),
+            const SizedBox(height: 28),
+            // Description text
+            Text(
+              'we have sent a verification code to',
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Phone number
+            Text(
+              '$_selectedCountryCode ${_phoneController.text}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // 6 OTP Boxes
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                const totalGapWidth = 5 * 10.0;
+                final boxWidth = ((availableWidth - totalGapWidth) / 6).clamp(
+                  40.0,
+                  52.0,
+                );
+                final boxHeight = boxWidth * 1.1;
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (int i = 0; i < 6; i++)
+                      _buildSingleOtpBox(i, boxWidth, boxHeight),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            // Timer and Resend row
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                for (int i = 0; i < 6; i++)
-                  _buildSingleOtpBox(i, boxWidth, boxHeight),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        TextButton(
-          onPressed: _isLoading
-              ? null
-              : () {
-                  setState(() => _currentStep = 0);
-                },
-          child: const Text(
-            'Change Phone Number',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildOTPVerifyButton(),
-      ],
-    );
-  }
-
-  Widget _buildOTPVerifyButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _verifyOTP,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.withValues(alpha: 0.4),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.blue.withValues(alpha: 0.5)),
-              ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text(
-                    'Verify OTP',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                Text(
+                  formattedTime,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.5),
                   ),
-          ),
+                ),
+                GestureDetector(
+                  onTap: _otpCountdown == 0 && !_isLoading
+                      ? () {
+                          _sendOTP();
+                        }
+                      : null,
+                  child: Text(
+                    'Resend OTP ?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _otpCountdown == 0
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Push button to bottom
+            SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+            // Verify OTP button - dark outlined style
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _verifyOTP,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF007AFF),
+                  disabledBackgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Verify OTP',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
         ),
       ),
     );
@@ -961,189 +761,162 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
+
+
+  Widget _buildPasswordIllustration() {
+    return Image.asset(
+      'assets/images/New Password Create.png',
+      height: 220,
+      fit: BoxFit.contain,
+    );
+  }
+
   Widget _buildPasswordStep() {
-    return Column(
-      children: [
-        ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            const SizedBox(height: 32),
+            // Illustration
+            _buildPasswordIllustration(),
+            const SizedBox(height: 32),
+            // Password fields with theme override
+            Theme(
+              data: Theme.of(context).copyWith(
+                inputDecorationTheme: const InputDecorationTheme(filled: false),
               ),
-              child: const Icon(
-                Icons.lock_reset,
-                size: 48,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'Create New Password',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Your password must be at least 6 characters',
-          style: TextStyle(fontSize: 14, color: Colors.white70),
-        ),
-        const SizedBox(height: 32),
-        TextFormField(
-          controller: _newPasswordController,
-          obscureText: _obscurePassword,
-          cursorColor: Colors.white,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            labelText: 'New Password',
-            labelStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 15,
-            ),
-            floatingLabelStyle: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-            prefixIcon: Icon(
-              Icons.lock_outline,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-              onPressed: () {
-                setState(() => _obscurePassword = !_obscurePassword);
-              },
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.6),
-                width: 1.5,
-              ),
-            ),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _confirmPasswordController,
-          obscureText: _obscureConfirmPassword,
-          cursorColor: Colors.white,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            labelText: 'Confirm Password',
-            labelStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 15,
-            ),
-            floatingLabelStyle: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-            prefixIcon: Icon(
-              Icons.lock_outline,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscureConfirmPassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-              onPressed: () {
-                setState(
-                  () => _obscureConfirmPassword = !_obscureConfirmPassword,
-                );
-              },
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.3),
+              child: Column(
+                children: [
+                  // Enter new password field
+                  TextFormField(
+                    controller: _newPasswordController,
+                    obscureText: _obscurePassword,
+                    cursorColor: Colors.white,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter new password',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        fontSize: 15,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.white.withValues(alpha: 0.5),
+                          size: 22,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.15),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          width: 1,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Confirm new password field
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    cursorColor: Colors.white,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Confirm new password',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        fontSize: 15,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.white.withValues(alpha: 0.5),
+                          size: 22,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                        },
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.15),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          width: 1,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.6),
-                width: 1.5,
-              ),
-            ),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            const SizedBox(height: 32),
+            // Update Password button - iOS Blue
+            SizedBox(
+              width: double.infinity,
+              height: 56,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _resetPassword,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.withValues(alpha: 0.4),
                   foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF007AFF),
+                  disabledBackgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.blue.withValues(alpha: 0.5)),
                   ),
                   elevation: 0,
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                        height: 24,
-                        width: 24,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : const Text(
-                        'Reset Password',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        'Update Password',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                       ),
               ),
             ),
-          ),
+            const SizedBox(height: 32),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

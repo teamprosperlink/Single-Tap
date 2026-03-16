@@ -1,6 +1,6 @@
-# Supper App - Firebase Cloud Functions
+# Single Tap App - Firebase Cloud Functions
 
-Push notification system for the Supper app. These functions automatically send notifications to User B when User A performs actions (messages, calls, etc.).
+Push notification system for the Single Tap app. These functions automatically send notifications to User B when User A performs actions (messages, calls, etc.).
 
 ## How It Works
 

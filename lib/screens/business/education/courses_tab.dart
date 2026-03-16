@@ -416,6 +416,7 @@ class _EducationCoursesTabState extends State<EducationCoursesTab> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddCourseSheet(),
         backgroundColor: const Color(0xFF3F51B5),
         foregroundColor: Colors.white,

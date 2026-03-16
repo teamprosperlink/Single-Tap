@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Service to manage floating call overlay (SingleTap-style PiP)
+/// Service to manage floating call overlay (Single Tap-style PiP)
 class FloatingCallService {
   static final FloatingCallService _instance = FloatingCallService._internal();
   factory FloatingCallService() => _instance;
@@ -126,7 +126,7 @@ class FloatingCallService {
   }
 }
 
-/// Floating call widget (SingleTap-style minimized call UI)
+/// Floating call widget (Single Tap-style minimized call UI)
 class FloatingCallWidget extends StatefulWidget {
   final String callId;
   final String groupId;
@@ -191,7 +191,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF00C853), // SingleTap green
+                  Color(0xFF00C853), // Single Tap green
                   Color(0xFF00E676),
                 ],
               ),

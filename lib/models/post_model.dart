@@ -78,7 +78,9 @@ class PostModel {
       intentAnalysis: data['intentAnalysis'] ?? {},
       images: data['images'] != null ? List<String>.from(data['images']) : null,
       metadata: data['metadata'] ?? {},
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
       expiresAt: data['expiresAt'] != null
           ? (data['expiresAt'] as Timestamp).toDate()
           : null,

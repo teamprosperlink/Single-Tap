@@ -24,7 +24,7 @@ void main() {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
-            home: Scaffold(body: Center(child: Text('Supper App'))),
+            home: Scaffold(body: Center(child: Text('Single Tap'))),
           ),
         ),
       );
@@ -32,7 +32,7 @@ void main() {
       // Verify the app shell renders
       expect(find.byType(MaterialApp), findsOneWidget);
       expect(find.byType(Scaffold), findsOneWidget);
-      expect(find.text('Supper App'), findsOneWidget);
+      expect(find.text('Single Tap'), findsOneWidget);
     });
 
     testWidgets('ProviderScope wraps MaterialApp correctly', (

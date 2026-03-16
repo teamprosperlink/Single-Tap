@@ -1565,10 +1565,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           ),
           const SizedBox(height: 12),
 
-          // SingleTap
+          // Single Tap
           _buildSocialField(
             controller: _SingleTapController,
-            hint: 'SingleTap number',
+            hint: 'Single Tap number',
             icon: Icons.phone_android,
           ),
           const SizedBox(height: 100),

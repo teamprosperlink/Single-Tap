@@ -111,6 +111,7 @@ class _BusinessPostsTabState extends State<BusinessPostsTab> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showCreateSheet(),
         backgroundColor: const Color(0xFF00D67D),
         foregroundColor: Colors.white,

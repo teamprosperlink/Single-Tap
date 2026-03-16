@@ -4,8 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../models/business_model.dart';
 import '../../../../config/category_profile_config.dart';
-import 'package:supper/res/config/app_colors.dart';
-import 'package:supper/config/app_theme.dart';
+import 'package:single_tap/res/config/app_colors.dart';
+import 'package:single_tap/config/app_theme.dart';
 
 /// Hero section with cover image, logo, and business info
 /// Uses SliverAppBar for collapsing effect

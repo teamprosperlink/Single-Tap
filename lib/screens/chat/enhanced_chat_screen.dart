@@ -37,6 +37,8 @@ import '../call/voice_call_screen.dart';
 import '../../services/floating_call_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import '../../widgets/chat widgets/chat_common.dart';
+import '../../services/ai_chat_service.dart';
+import '../../res/config/api_config.dart';
 import 'media_gallery_screen.dart';
 import 'photo_viewer_dialog.dart';
 
@@ -65,7 +67,7 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
 
 class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
-  final TextEditingController _messageController = TextEditingController();
+  final _messageController = _MentionTextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -158,9 +160,19 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   // Optimistic messages (shown immediately before server confirms)
   final List<Map<String, dynamic>> _optimisticMessages = [];
 
-  // Mention functionality
+  // Fetched user data (may be more accurate than passed-in UserProfile)
+  String? _fetchedOtherName;
+  String? _fetchedOtherPhoto;
+  String get _otherName => (_fetchedOtherName != null && _fetchedOtherName!.isNotEmpty)
+      ? _fetchedOtherName!
+      : widget.otherUser.name;
+  String? get _otherPhoto => (_fetchedOtherPhoto != null && _fetchedOtherPhoto!.isNotEmpty)
+      ? _fetchedOtherPhoto
+      : widget.otherUser.profileImageUrl;
+
+  // Mention functionality (WhatsApp-style)
   bool _showMentionSuggestions = false;
-  List<Map<String, dynamic>> _filteredUsers = [];
+  List<Map<String, dynamic>> _mentionSuggestions = [];
   int _mentionStartIndex = -1;
 
   @override
@@ -184,12 +196,15 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           .doc(widget.otherUser.uid)
           .snapshots();
 
+      // Fetch real user data from Firestore (passed-in UserProfile may have incomplete data)
+      _fetchOtherUserProfile();
+
       WidgetsBinding.instance.addObserver(this);
 
       // Initialize conversation IMMEDIATELY for faster loading
       _initializeConversation();
 
-      // Set this chat as active to suppress notifications (SingleTap-style)
+      // Set this chat as active to suppress notifications (Single Tap-style)
       _activeChatService.setActiveChat(
         conversationId: _conversationId,
         userId: widget.otherUser.uid,
@@ -208,10 +223,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         try {
           _markMessagesAsRead();
 
-          // If there's an initial message, set it in the message controller
-          if (widget.initialMessage != null) {
-            _messageController.text = widget.initialMessage!;
-            FocusScope.of(context).requestFocus(_messageFocusNode);
+          // If there's an initial message, auto-send it after conversation is ready
+          if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
+            _autoSendInitialMessage(widget.initialMessage!);
           }
 
           // Listen for incoming messages for sound/vibration feedback
@@ -343,6 +357,49 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
+  Future<void> _fetchOtherUserProfile() async {
+    try {
+      // Try direct document lookup first
+      final doc = await _firestore
+          .collection('users')
+          .doc(widget.otherUser.uid)
+          .get();
+      if (doc.exists && mounted) {
+        _applyFetchedProfile(doc.data()!);
+        return;
+      }
+
+      // If direct lookup fails, the uid might be a UUID v5 from the API
+      // Query by user_uuid field to find the real user
+      debugPrint('EnhancedChat: direct lookup failed for ${widget.otherUser.uid}, trying user_uuid query...');
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('user_uuid', isEqualTo: widget.otherUser.uid)
+          .limit(1)
+          .get();
+      if (querySnapshot.docs.isNotEmpty && mounted) {
+        debugPrint('EnhancedChat: found user by user_uuid: ${querySnapshot.docs.first.id}');
+        _applyFetchedProfile(querySnapshot.docs.first.data());
+      }
+    } catch (e) {
+      debugPrint('EnhancedChat: Failed to fetch other user profile: $e');
+    }
+  }
+
+  void _applyFetchedProfile(Map<String, dynamic> data) {
+    final name = data['name']?.toString() ?? '';
+    final photo = (data['photoUrl']?.toString() ?? '').isNotEmpty
+        ? data['photoUrl'].toString()
+        : data['profileImageUrl']?.toString() ?? '';
+    debugPrint('EnhancedChat: resolved name="$name" hasPhoto=${photo.isNotEmpty}');
+    if (name.isNotEmpty || photo.isNotEmpty) {
+      setState(() {
+        if (name.isNotEmpty) _fetchedOtherName = name;
+        if (photo.isNotEmpty) _fetchedOtherPhoto = photo;
+      });
+    }
+  }
+
   Future<void> _initializeConversation() async {
     try {
       // If chatId is provided from Live Connect, use it directly
@@ -414,7 +471,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
   @override
   void dispose() {
-    // Clear active chat status to re-enable notifications (SingleTap-style)
+    // Clear active chat status to re-enable notifications (Single Tap-style)
     _activeChatService.clearActiveChat();
 
     try {
@@ -667,19 +724,19 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         radius: 18,
                         backgroundImage:
                             PhotoUrlHelper.isValidUrl(
-                              widget.otherUser.profileImageUrl,
+                              _otherPhoto,
                             )
                             ? CachedNetworkImageProvider(
-                                widget.otherUser.profileImageUrl!,
+                                _otherPhoto!,
                               )
                             : null,
                         child:
                             !PhotoUrlHelper.isValidUrl(
-                              widget.otherUser.profileImageUrl,
+                              _otherPhoto,
                             )
                             ? Text(
-                                widget.otherUser.name.isNotEmpty
-                                    ? widget.otherUser.name[0].toUpperCase()
+                                _otherName.isNotEmpty
+                                    ? _otherName[0].toUpperCase()
                                     : '?',
                               )
                             : null,
@@ -751,8 +808,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                         children: [
                           Flexible(
                             child: Text(
-                              widget.otherUser.name.isNotEmpty
-                                  ? widget.otherUser.name
+                              _otherName.isNotEmpty
+                                  ? _otherName
                                   : 'Unknown User',
                               style: AppTextStyles.bodyLarge.copyWith(
                                 fontWeight: FontWeight.w600,
@@ -965,7 +1022,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
 
         // Convert Firestore documents to MessageModel
-        // Filter out messages deleted for current user (SingleTap-style "Delete for me")
+        // Filter out messages deleted for current user (Single Tap-style "Delete for me")
         // Also filter out videos/images that are still uploading (status == sending) for receivers
         final currentUserId = _currentUserId;
         final seenMsgIds = <String>{};
@@ -1113,7 +1170,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           data['imageUrl'] as String?),
                 localPath:
                     data['localPath']
-                        as String?, // For SingleTap-style preview during upload
+                        as String?, // For Single Tap-style preview during upload
                 audioUrl: isDeleted ? null : data['audioUrl'] as String?,
                 audioDuration: _parseIntFromDynamic(data['audioDuration']),
                 timestamp: data['timestamp'] != null
@@ -1275,18 +1332,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           const SizedBox(height: 16),
           Text(
             'No messages yet',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Send a message to start the conversation',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
         ],
@@ -1441,10 +1498,36 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                   );
                 }
 
+                // Add spacing between call and non-call messages
+                final isCall = message.type == MessageType.voiceCall ||
+                    message.type == MessageType.missedCall ||
+                    message.type == MessageType.videoCall;
+                // List is reversed: index-1 = below (later), index+1 = above (earlier)
+                final prevMsg = index + 1 < displayMessages.length
+                    ? displayMessages[index + 1]
+                    : null;
+                final nextMsg = index - 1 >= 0
+                    ? displayMessages[index - 1]
+                    : null;
+                final prevIsCall = prevMsg != null &&
+                    (prevMsg.type == MessageType.voiceCall ||
+                     prevMsg.type == MessageType.missedCall ||
+                     prevMsg.type == MessageType.videoCall);
+                final nextIsCall = nextMsg != null &&
+                    (nextMsg.type == MessageType.voiceCall ||
+                     nextMsg.type == MessageType.missedCall ||
+                     nextMsg.type == MessageType.videoCall);
+
+                // Space above: if this is call and previous is not call (or vice versa)
+                final needTopSpace = isCall != prevIsCall && prevMsg != null;
+                // Space below: if this is call and next is not call (or vice versa)
+                final needBottomSpace = isCall != nextIsCall && nextMsg != null;
+
                 return Column(
                   key: ValueKey(message.id),
                   children: [
                     if (dateSeparator != null) dateSeparator,
+                    if (needTopSpace) const SizedBox(height: 3),
                     _buildMessageBubble(
                       message,
                       isMe,
@@ -1453,6 +1536,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       isHighlighted: isHighlighted,
                       searchQuery: _isSearching ? _searchQuery : null,
                     ),
+                    if (needBottomSpace) const SizedBox(height: 3),
                   ],
                 );
               },
@@ -1517,7 +1601,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 16),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1535,7 +1619,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           ),
           child: Text(
             dateText,
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: TextStyle(fontFamily: 'Poppins',
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: isDarkMode ? AppColors.iosGray : AppColors.iosGray,
@@ -1555,17 +1639,22 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     bool isHighlighted = false,
     String? searchQuery,
   }) {
-    // Handle deleted messages first (SingleTap-style "This message was deleted")
+    // Handle deleted messages first (Single Tap-style "This message was deleted")
     // This applies to ALL message types including calls
     if (message.isDeleted) {
       return _buildDeletedMessageBubble(message, isMe, isDarkMode);
     }
 
-    // Handle call messages (SingleTap-style centered call events)
+    // Handle call messages (Single Tap-style centered call events)
     if (message.type == MessageType.voiceCall ||
         message.type == MessageType.missedCall ||
         message.type == MessageType.videoCall) {
       return _buildCallMessageBubble(message, isMe, isDarkMode);
+    }
+
+    // Handle AI messages
+    if (message.senderId == ApiConfig.singletapAiSenderId) {
+      return _buildAiMessageBubble(message, isDarkMode);
     }
 
     final isSelected = _selectedMessageIds.contains(message.id);
@@ -1614,10 +1703,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           },
           child: Padding(
             padding: const EdgeInsets.only(
-              bottom: 8,
+              bottom: 3,
               left: 4,
               right: 4,
-            ), // Increased spacing
+            ),
             child: Row(
               mainAxisAlignment: isMe
                   ? MainAxisAlignment.end
@@ -1634,18 +1723,18 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       IntrinsicWidth(
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.5,
+                            maxWidth: MediaQuery.of(context).size.width * 0.7,
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(20),
-                              topRight: const Radius.circular(20),
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
                               bottomLeft: isMe
-                                  ? const Radius.circular(20)
-                                  : const Radius.circular(4),
+                                  ? const Radius.circular(16)
+                                  : Radius.zero,
                               bottomRight: isMe
-                                  ? const Radius.circular(4)
-                                  : const Radius.circular(20),
+                                  ? Radius.zero
+                                  : const Radius.circular(16),
                             ),
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -1690,14 +1779,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                         )
                                       : null,
                                   borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(20),
-                                    topRight: const Radius.circular(20),
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
                                     bottomLeft: isMe
-                                        ? const Radius.circular(20)
-                                        : const Radius.circular(4),
+                                        ? const Radius.circular(16)
+                                        : Radius.zero,
                                     bottomRight: isMe
-                                        ? const Radius.circular(4)
-                                        : const Radius.circular(20),
+                                        ? Radius.zero
+                                        : const Radius.circular(16),
                                   ),
                                 ),
                                 child: Column(
@@ -1747,81 +1836,10 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                     // Audio message player UI with time/status below
                                     if (message.type == MessageType.audio &&
                                         message.audioUrl != null)
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          _buildAudioMessagePlayer(
-                                            message,
-                                            isMe,
-                                            isDarkMode: isDarkMode,
-                                          ),
-                                          // Time and status below audio player (always show time, hide ticks when sending)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 4,
-                                              top: 4,
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                if (message.isEdited ==
-                                                    true) ...[
-                                                  Text(
-                                                    'edited ',
-                                                    style: TextStyle(fontFamily: 'Poppins', 
-                                                      color: isMe
-                                                          ? Colors.white
-                                                                .withValues(
-                                                                  alpha: 0.55,
-                                                                )
-                                                          : (isDarkMode
-                                                                ? Colors
-                                                                      .grey[500]
-                                                                : Colors
-                                                                      .grey[600]),
-                                                      fontSize: 11,
-                                                      fontStyle:
-                                                          FontStyle.italic,
-                                                    ),
-                                                  ),
-                                                ],
-                                                // Time (always show)
-                                                Text(
-                                                  _formatMessageTime(
-                                                    message.timestamp,
-                                                  ),
-                                                  style: TextStyle(fontFamily: 'Poppins', 
-                                                    color: isMe
-                                                        ? Colors.white
-                                                              .withValues(
-                                                                alpha: 0.55,
-                                                              )
-                                                        : (isDarkMode
-                                                              ? Colors.grey[500]
-                                                              : Colors
-                                                                    .grey[600]),
-                                                    fontSize: 11,
-                                                  ),
-                                                ),
-                                                // Status tick (only for my messages, hide when sending)
-                                                if (isMe &&
-                                                    message.status !=
-                                                        MessageStatus.sending &&
-                                                    message.audioUrl != null &&
-                                                    message
-                                                        .audioUrl!
-                                                        .isNotEmpty) ...[
-                                                  const SizedBox(width: 4),
-                                                  _buildMessageStatusIcon(
-                                                    message.status,
-                                                    isMe,
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ],
+                                      _buildAudioBubbleWithTime(
+                                        message,
+                                        isMe,
+                                        isDarkMode,
                                       ),
                                     if (message.text != null &&
                                         message.text!.isNotEmpty)
@@ -1849,14 +1867,14 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                             ? _buildHighlightedText(
                                                 message.text!,
                                                 searchQuery,
-                                                TextStyle(fontFamily: 'Poppins', 
+                                                TextStyle(fontFamily: 'Poppins',
                                                   color: isMe
                                                       ? Colors.white
                                                       : (isDarkMode
                                                             ? Colors.white
                                                             : AppColors
                                                                   .iosGrayDark),
-                                                  fontSize: 16,
+                                                  fontSize: 14,
                                                   height: 1.35,
                                                   letterSpacing: -0.2,
                                                 ),
@@ -1893,7 +1911,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                     color: isDarkMode
                                         ? Colors.grey[500]
                                         : Colors.grey[600],
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
@@ -1905,7 +1923,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                   color: isDarkMode
                                       ? Colors.grey[500]
                                       : Colors.grey[600],
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                 ),
                               ),
                               // Status tick (only for my messages)
@@ -1944,7 +1962,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           ),
                           child: Text(
                             message.reactions!.join(' '),
-                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 16),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
                           ),
                         ),
                     ],
@@ -2367,7 +2385,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   String _formatMessageTime(DateTime? timestamp) {
     if (timestamp == null) return '';
 
-    // Always show actual time like SingleTap/iMessage
+    // Always show actual time like Single Tap/iMessage
     final hour = timestamp.hour;
     final minute = timestamp.minute.toString().padLeft(2, '0');
     final period = hour >= 12 ? 'PM' : 'AM';
@@ -2454,8 +2472,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(12),
               topRight: const Radius.circular(12),
-              bottomLeft: Radius.circular(isMe ? 12 : 1),
-              bottomRight: Radius.circular(isMe ? 1 : 12),
+              bottomLeft: Radius.circular(isMe ? 12 : 0),
+              bottomRight: Radius.circular(isMe ? 0 : 12),
             ),
             border: Border(
               left: BorderSide(
@@ -2531,8 +2549,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               children: [
                 Text(
                   isReplyingToSelf ? 'You' : widget.otherUser.name,
-                  style: const TextStyle(fontFamily: 'Poppins', 
-                    fontSize: 13,
+                  style: const TextStyle(fontFamily: 'Poppins',
+                    fontSize: 12,
                     color: Color(0xFFE91E63), // Pink color
                     fontWeight: FontWeight.w600,
                   ),
@@ -2540,8 +2558,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 const SizedBox(height: 2),
                 Text(
                   _replyToMessage!.text ?? 'Photo',
-                  style: TextStyle(fontFamily: 'Poppins', 
-                    fontSize: 14,
+                  style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 13,
                     color: Colors.grey[300], // Always light for dark background
                   ),
                   maxLines: 1,
@@ -2652,69 +2670,130 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
         final isTyping = data['isTyping']?[widget.otherUser.uid] ?? false;
+        final isAiTyping = data['isTyping']?[ApiConfig.singletapAiSenderId] ?? false;
 
-        if (!isTyping) return const SizedBox.shrink();
+        if (!isTyping && !isAiTyping) return const SizedBox.shrink();
 
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: isDarkMode
-                    ? AppColors.iosGrayDark
-                    : AppColors.iosGrayLight,
-                backgroundImage:
-                    PhotoUrlHelper.isValidUrl(widget.otherUser.profileImageUrl)
-                    ? CachedNetworkImageProvider(
-                        widget.otherUser.profileImageUrl!,
-                      )
-                    : null,
-                child:
-                    !PhotoUrlHelper.isValidUrl(widget.otherUser.profileImageUrl)
-                    ? Text(
-                        widget.otherUser.name.isNotEmpty
-                            ? widget.otherUser.name[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(fontFamily: 'Poppins', 
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.iosBlue,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isDarkMode
-                      ? AppColors.iosGrayDark
-                      : AppColors.iosGrayTertiary,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    topRight: Radius.circular(18),
-                    bottomLeft: Radius.circular(4),
-                    bottomRight: Radius.circular(18),
-                  ),
-                ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // AI typing indicator
+            if (isAiTyping)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildTypingDot(0, isDarkMode),
-                    const SizedBox(width: 3),
-                    _buildTypingDot(1, isDarkMode),
-                    const SizedBox(width: 3),
-                    _buildTypingDot(2, isDarkMode),
+                    const CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Color(0xFF6366F1),
+                      child: Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6366F1).withValues(alpha: 0.3),
+                            const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.zero,
+                          bottomRight: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Single Tap AI is thinking',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: Color(0xFF6366F1),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          _buildTypingDot(0, isDarkMode),
+                          const SizedBox(width: 3),
+                          _buildTypingDot(1, isDarkMode),
+                          const SizedBox(width: 3),
+                          _buildTypingDot(2, isDarkMode),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
+            // User typing indicator
+            if (isTyping)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: isDarkMode
+                          ? AppColors.iosGrayDark
+                          : AppColors.iosGrayLight,
+                      backgroundImage:
+                          PhotoUrlHelper.isValidUrl(widget.otherUser.profileImageUrl)
+                          ? CachedNetworkImageProvider(
+                              widget.otherUser.profileImageUrl!,
+                            )
+                          : null,
+                      child:
+                          !PhotoUrlHelper.isValidUrl(widget.otherUser.profileImageUrl)
+                          ? Text(
+                              widget.otherUser.name.isNotEmpty
+                                  ? widget.otherUser.name[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(fontFamily: 'Poppins',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.iosBlue,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? AppColors.iosGrayDark
+                            : AppColors.iosGrayTertiary,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomLeft: Radius.zero,
+                          bottomRight: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildTypingDot(0, isDarkMode),
+                          const SizedBox(width: 3),
+                          _buildTypingDot(1, isDarkMode),
+                          const SizedBox(width: 3),
+                          _buildTypingDot(2, isDarkMode),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         );
       },
     );
@@ -2743,63 +2822,111 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   Widget _buildMentionSuggestions() {
-    if (!_showMentionSuggestions || _filteredUsers.isEmpty) {
+    if (!_showMentionSuggestions || _mentionSuggestions.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 200),
+      constraints: const BoxConstraints(maxHeight: 220),
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.2),
+          color: Colors.white.withValues(alpha: 0.15),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: _filteredUsers.length,
-        separatorBuilder: (context, index) =>
-            Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
-        itemBuilder: (context, index) {
-          final user = _filteredUsers[index];
-          final name = user['name'] as String;
-          final photo = user['photo'] as String?;
-          final userId = user['id'] as String;
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          itemCount: _mentionSuggestions.length,
+          separatorBuilder: (_, __) => Divider(
+            color: Colors.white.withValues(alpha: 0.08),
+            height: 1,
+            indent: 56,
+          ),
+          itemBuilder: (context, index) {
+            final item = _mentionSuggestions[index];
+            final name = item['name'] as String;
+            final photo = item['photo'] as String?;
+            final isAi = item['isAi'] == true;
 
-          return ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
-            leading: CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.grey[800],
-              backgroundImage: PhotoUrlHelper.isValidUrl(photo)
-                  ? CachedNetworkImageProvider(photo!)
-                  : null,
-              child: !PhotoUrlHelper.isValidUrl(photo)
-                  ? Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
-                    )
-                  : null,
-            ),
-            title: Text(
-              name,
-              style: const TextStyle(fontFamily: 'Poppins', 
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            return InkWell(
+              onTap: () => _insertMention(item['id'] as String, name),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    if (isAi)
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      )
+                    else
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.grey[800],
+                        backgroundImage: PhotoUrlHelper.isValidUrl(photo)
+                            ? CachedNetworkImageProvider(photo!)
+                            : null,
+                        child: !PhotoUrlHelper.isValidUrl(photo)
+                            ? Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white),
+                              )
+                            : null,
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: isAi ? const Color(0xFF818CF8) : Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (isAi)
+                            Text(
+                              'Ask me anything',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.grey[500],
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            onTap: () => _insertMention(userId, name),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -3004,14 +3131,17 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         // Recording timer
-                                        Text(
-                                          _formatRecordingTime(
-                                            _recordingDuration,
-                                          ),
-                                          style: const TextStyle(fontFamily: 'Poppins', 
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                        Flexible(
+                                          child: Text(
+                                            _formatRecordingTime(
+                                              _recordingDuration,
+                                            ),
+                                            style: const TextStyle(fontFamily: 'Poppins',
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            overflow: TextOverflow.clip,
                                           ),
                                         ),
                                         const SizedBox(width: 1),
@@ -3270,7 +3400,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
 
       // Reload messages to show the new message instantly
-      setState(() {});
+      if (mounted) setState(() {});
 
       // Send push notification to the other user
       final currentUserProfile = ref
@@ -3285,10 +3415,41 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         type: 'message',
         data: {'conversationId': _conversationId},
       );
+
+      // Check if message contains @Single Tap AI mention
+      if (AiChatService.containsAiMention(text)) {
+        AiChatService().processAiMention(
+          conversationId: _conversationId!,
+          userMessage: text,
+          userName: currentUserName,
+          isGroupChat: false,
+        );
+      }
+
     } catch (e) {
       if (!mounted) return;
       // ignore: use_build_context_synchronously
       SnackBarHelper.showError(context, 'Failed to send message: $e');
+    }
+  }
+
+  void _autoSendInitialMessage(String message) async {
+    // Wait until conversation is initialized
+    for (int i = 0; i < 30; i++) {
+      if (_conversationId != null) break;
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    if (_conversationId == null || !mounted) return;
+
+    try {
+      await _hybridChatService.sendMessage(
+        conversationId: _conversationId!,
+        receiverId: widget.otherUser.uid,
+        text: message,
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Auto-send initial message error: $e');
     }
   }
 
@@ -3584,7 +3745,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
   }
 
   void _forwardMessage(MessageModel message) async {
-    // Show SingleTap-style forward screen
+    // Show Single Tap-style forward screen
     final result = await Navigator.push<List<UserProfile>>(
       context,
       MaterialPageRoute(
@@ -4438,7 +4599,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     });
   }
 
-  /// Delete message for current user only (SingleTap-style "Delete for me")
+  /// Delete message for current user only (Single Tap-style "Delete for me")
   /// The message is hidden for current user but still visible to other user
   Future<void> _deleteMessageForMe(MessageModel message) async {
     try {
@@ -4494,7 +4655,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Delete message for everyone - SingleTap style "This message was deleted"
+  /// Delete message for everyone - Single Tap style "This message was deleted"
   /// Message is marked as deleted, content cleared, but document remains
   Future<void> _deleteMessageForEveryone(MessageModel message) async {
     try {
@@ -4562,7 +4723,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         }
       }
 
-      // Mark message as deleted (SingleTap style - shows "This message was deleted")
+      // Mark message as deleted (Single Tap style - shows "This message was deleted")
       await _firestore
           .collection('conversations')
           .doc(_conversationId!)
@@ -4766,7 +4927,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
 
       //   Don't increment counter yet - wait for user to actually pick images!
 
-      // Pick multiple images (max 4) like SingleTap
+      // Pick multiple images (max 4) like Single Tap
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 70,
         maxWidth: 1280,
@@ -5248,7 +5409,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Show media preview screen (SingleTap-style) before sending multiple images/videos
+  /// Show media preview screen (Single Tap-style) before sending multiple images/videos
   void _showMediaPreviewScreen(List<File> mediaFiles, {required bool isVideo}) {
     Navigator.push(
       context,
@@ -5326,7 +5487,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     try {
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.mp4';
-      final ref = _storage.ref().child('chat_videos/$conversationId/$fileName');
+      final ref = _storage.ref().child('chat_media/$currentUserId/$fileName');
 
       final uploadTask = ref.putFile(
         videoFile,
@@ -5461,7 +5622,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_$currentUserId.jpg';
       final storageRef = _storage.ref().child(
-        'chat_images/$conversationId/$fileName',
+        'chat_media/$currentUserId/$fileName',
       );
 
       final uploadTask = storageRef.putFile(
@@ -5775,8 +5936,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       final fileName = 'voice_${currentUserId}_$timestamp.aac';
       final storageRef = _storage
           .ref()
-          .child('voice_messages')
-          .child(conversationId)
+          .child('chat_media')
+          .child(currentUserId)
           .child(fileName);
 
       final uploadTask = storageRef.putFile(
@@ -5917,7 +6078,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Build image message with SingleTap-style upload preview
+  /// Build image message with Single Tap-style upload preview
   /// Shows local image immediately with blur/progress overlay while uploading
   Widget _buildImageMessage(MessageModel message, bool isMe, bool isDarkMode) {
     final hasMediaUrl =
@@ -5960,44 +6121,47 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             width: 1,
           ),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
             bottomLeft: isMe
-                ? const Radius.circular(20)
-                : const Radius.circular(4),
+                ? const Radius.circular(16)
+                : Radius.zero,
             bottomRight: isMe
-                ? const Radius.circular(4)
-                : const Radius.circular(20),
+                ? Radius.zero
+                : const Radius.circular(16),
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
             bottomLeft: isMe
-                ? const Radius.circular(20)
-                : const Radius.circular(4),
+                ? const Radius.circular(16)
+                : Radius.zero,
             bottomRight: isMe
-                ? const Radius.circular(4)
-                : const Radius.circular(20),
+                ? Radius.zero
+                : const Radius.circular(16),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180, maxWidth: 220),
+            constraints: BoxConstraints(
+              maxHeight: 180,
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
             child: Stack(
               children: [
                 // Show local file or network image
                 isLocalFile
                     ? Image.file(
                         File(imageSource),
-                        width: 200,
+                        width: MediaQuery.of(context).size.width * 0.7,
                         fit: BoxFit.cover,
                       )
                     : CachedNetworkImage(
                         imageUrl: imageSource,
-                        width: 200,
+                        width: MediaQuery.of(context).size.width * 0.7,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
-                          width: 200,
+                          width: MediaQuery.of(context).size.width * 0.7,
                           height: 180,
                           color: Colors.grey[300],
                           child: const Center(
@@ -6005,7 +6169,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                           ),
                         ),
                         errorWidget: (context, url, error) => Container(
-                          width: 200,
+                          width: MediaQuery.of(context).size.width * 0.7,
                           height: 180,
                           color: Colors.grey[300],
                           child: const Icon(Icons.error),
@@ -6075,33 +6239,33 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
             width: 1,
           ),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
             bottomLeft: isMe
-                ? const Radius.circular(20)
-                : const Radius.circular(4),
+                ? const Radius.circular(16)
+                : Radius.zero,
             bottomRight: isMe
-                ? const Radius.circular(4)
-                : const Radius.circular(20),
+                ? Radius.zero
+                : const Radius.circular(16),
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
             bottomLeft: isMe
-                ? const Radius.circular(20)
-                : const Radius.circular(4),
+                ? const Radius.circular(16)
+                : Radius.zero,
             bottomRight: isMe
-                ? const Radius.circular(4)
-                : const Radius.circular(20),
+                ? Radius.zero
+                : const Radius.circular(16),
           ),
           child: Stack(
             children: [
               // Video thumbnail or placeholder
               Container(
-                width: 200,
-                height: 150,
+                width: MediaQuery.of(context).size.width * 0.7,
+                height: 200,
                 color: Colors.black,
                 child: const Icon(
                   Icons.play_circle_outline,
@@ -6145,7 +6309,148 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     );
   }
 
-  /// Build deleted message bubble (SingleTap-style "This message was deleted")
+  /// Build AI message bubble - normal incoming message style with "Single Tap AI" label outside
+  Widget _buildAiMessageBubble(MessageModel message, bool isDarkMode) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3, left: 4, right: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // "Single Tap AI" label outside the bubble, top-left
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/logo/SingleTap.png',
+                        width: 14,
+                        height: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Single Tap AI',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: Color(0xFF6366F1),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Normal incoming message bubble (glass style matching other messages)
+                IntrinsicWidth(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.7,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.zero,
+                      ),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF6366F1).withValues(alpha: 0.30),
+                                const Color(0xFF8B5CF6).withValues(alpha: 0.20),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                              color: const Color(0xFF6366F1).withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(16),
+                              topRight: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                              bottomLeft: Radius.zero,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 5, right: 5, top: 3, bottom: 5),
+                            child: _buildAiRichText(message.text ?? ''),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Timestamp below
+                Padding(
+                  padding: const EdgeInsets.only(top: 1, left: 4),
+                  child: Text(
+                    _formatMessageTime(message.timestamp),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 10.5,
+                      color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Parse **bold** markers in AI text and render with highlight color
+  Widget _buildAiRichText(String text) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*');
+    int lastEnd = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          color: Color(0xFF818CF8),
+          fontSize: 14,
+          height: 1.35,
+          letterSpacing: -0.2,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          color: Colors.white,
+          fontSize: 14,
+          height: 1.35,
+          letterSpacing: -0.2,
+        ),
+        children: spans,
+      ),
+    );
+  }
+
+  /// Build deleted message bubble (Single Tap-style "This message was deleted")
   Widget _buildDeletedMessageBubble(
     MessageModel message,
     bool isMe,
@@ -6340,7 +6645,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  /// Build SingleTap-style call message UI (left for incoming, right for outgoing)
+  /// Build Single Tap-style call message UI (left for incoming, right for outgoing)
   Widget _buildCallMessageBubble(
     MessageModel message,
     bool isMe,
@@ -6382,55 +6687,38 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     // isMe means current user was the CALLER (senderId = current user)
     // !isMe means current user was the RECEIVER
 
-    // Determine call text, icon, and color based on call type (SingleTap style)
-    String callLabel; // "Incoming" or "Outgoing" or "Missed"
+    // Determine call text, icon, and color based on call type (Single Tap style)
     String callDurationText; // Duration like "0:45" or status text
     IconData callIcon;
-    IconData directionIcon; // Arrow icon for direction
     Color iconColor;
 
     if (isMissed) {
-      //   Missed call - RED color for all missed calls
-      iconColor = Colors.red;
-
       if (isMe) {
-        // Caller viewing their outgoing missed call (cancelled/no answer)
-        callLabel = 'Outgoing';
-        callDurationText = isVideoCall ? 'Video call, cancelled' : 'Cancelled';
-        callIcon = isVideoCall ? Icons.videocam : Icons.phone;
-        directionIcon = Icons.call_made; // Outgoing arrow
+        // Caller viewing their outgoing missed call (cancelled/no answer) — GREEN
+        iconColor = const Color(0xFF25D366);
+        callDurationText = isVideoCall ? 'Outgoing video call' : 'Outgoing call';
+        callIcon = isVideoCall ? Icons.videocam : Icons.call_made;
       } else {
-        // Receiver viewing their missed incoming call
-        callLabel = 'Missed';
-        callDurationText = isVideoCall ? 'Video call' : 'Voice call';
+        // Receiver viewing their missed incoming call — RED
+        iconColor = Colors.red;
+        callDurationText = 'Missed call';
         callIcon = Icons.phone_missed;
-        directionIcon = Icons.call_received; // Incoming arrow
       }
     } else {
       //   Answered call - GREEN color for all answered calls
-      iconColor = const Color(0xFF25D366); // SingleTap green
+      iconColor = const Color(0xFF25D366); // Single Tap green
 
-      debugPrint(
-        '  Setting GREEN color for answered call: isVideoCall=$isVideoCall',
-      );
-
-      // Determine if incoming or outgoing
-      callLabel = isMe ? 'Outgoing' : 'Incoming';
-      directionIcon = isMe ? Icons.call_made : Icons.call_received;
+      callIcon = isMe ? Icons.call_made : Icons.call_received;
 
       // Extract duration from stored text or show default
       final storedText = message.text ?? '';
+      final prefix = isMe ? 'Outgoing call' : 'Incoming call';
       if (storedText.isNotEmpty && !storedText.contains('call')) {
-        callDurationText = storedText; // Duration like "0:45" or "1:23"
+        callDurationText = '$prefix • $storedText';
       } else {
-        callDurationText = isVideoCall ? 'Video call' : 'Voice call';
-      }
-
-      // Set GREEN icons for answered calls
-      if (isVideoCall) {
-        callIcon = Icons.videocam;
-      } else {
-        callIcon = Icons.phone;
+        callDurationText = isVideoCall
+            ? (isMe ? 'Outgoing video call' : 'Incoming video call')
+            : prefix;
       }
     }
 
@@ -6439,7 +6727,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
         ? 'RED'
         : (iconColor == const Color(0xFF25D366) ? 'GREEN(#25D366)' : 'UNKNOWN');
     debugPrint(
-      '  Call Icon: $callIcon, Color: $colorHex, isMissed: $isMissed, isVideoCall: $isVideoCall, isMe: $isMe, label: "$callLabel", duration: "$callDurationText"',
+      '  Call Icon: $callIcon, Color: $colorHex, isMissed: $isMissed, isVideoCall: $isVideoCall, isMe: $isMe, duration: "$callDurationText"',
     );
 
     // Sanity check: Verify iconColor is actually set
@@ -6448,98 +6736,74 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       'Icon color must be either RED or GREEN, but got: $iconColor',
     );
 
-    // SingleTap-style call widget (exact replica)
-    final callWidget = Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    // Call bubble - matching group chat style
+    final callWidget = IntrinsicWidth(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
-        border: Border.all(color: Colors.white, width: 1),
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(20),
-          topRight: const Radius.circular(20),
-          bottomLeft: isMe
-              ? const Radius.circular(20)
-              : const Radius.circular(4),
-          bottomRight: isMe
-              ? const Radius.circular(4)
-              : const Radius.circular(20),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Call icon inside circular background (SingleTap style)
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isMe
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : iconColor.withValues(alpha: 0.15),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0.25),
+                Colors.white.withValues(alpha: 0.15),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Icon(
-              callIcon,
-              size: 20,
-              color: isMe ? Colors.white : iconColor,
-              semanticLabel: 'Call icon',
+            border: Border.all(color: Colors.white, width: 1),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: isMe
+                  ? const Radius.circular(16)
+                  : Radius.zero,
+              bottomRight: isMe
+                  ? Radius.zero
+                  : const Radius.circular(16),
             ),
           ),
-          const SizedBox(width: 10),
-          // SingleTap-style call info: direction + label, duration, time
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // First line: Direction arrow + Call label (Incoming/Outgoing/Missed)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    directionIcon,
-                    size: 14,
-                    color: isMe ? Colors.white : iconColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    callLabel,
-                    style: TextStyle(fontFamily: 'Poppins', 
-                      color: isMe ? Colors.white : iconColor,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              // Second line: Call duration or status
-              Text(
-                callDurationText,
-                style: const TextStyle(fontFamily: 'Poppins', 
-                  color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w400,
+              // Call icon inside circular background
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: iconColor.withValues(alpha: 0.15),
+                ),
+                child: Icon(
+                  callIcon,
+                  size: 16,
+                  color: iconColor,
+                  semanticLabel: 'Call icon',
                 ),
               ),
-              const SizedBox(height: 2),
-              // Third line: Time
-              Text(
-                _formatMessageTime(message.timestamp),
-                style: TextStyle(fontFamily: 'Poppins', 
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 12,
+              const SizedBox(width: 8),
+              // Call info: duration text
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      callDurationText,
+                      style: TextStyle(fontFamily: 'Poppins',
+                        color: iconColor,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
 
@@ -6586,26 +6850,41 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
     }
 
-    // Normal mode - SingleTap style: outgoing (right), incoming (left)
+    // Normal mode - Single Tap style: outgoing (right), incoming (left)
     return Padding(
-      padding: EdgeInsets.only(
-        top: 4,
-        bottom: 4,
-        left: isMe ? 60 : 16,
-        right: isMe ? 16 : 60,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: isMe
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () {
-              // Tap to call back
-              _showCallBackConfirmation(isVideoCall: isVideoCall);
-            },
-            onLongPress: () => _showCallDeleteConfirmation(message),
-            child: callWidget,
+          Column(
+            crossAxisAlignment: isMe
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  _showCallBackConfirmation(isVideoCall: isVideoCall);
+                },
+                onLongPress: () => _showCallDeleteConfirmation(message),
+                child: callWidget,
+              ),
+              // Timestamp below the call card
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 4, top: 1),
+                child: Text(
+                  _formatMessageTime(message.timestamp),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -6631,7 +6910,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     }
 
-    // Waveform bar heights pattern (30 bars for SingleTap style)
+    // Waveform bar heights pattern (30 bars for Single Tap style)
     final heights = [
       6.0,
       10.0,
@@ -6665,9 +6944,9 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       8.0,
     ];
 
-    // Audio player SingleTap style - gradient background
+    // Audio player Single Tap style - gradient background
     return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
+      width: MediaQuery.of(context).size.width * 0.7,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -6687,7 +6966,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           color: Colors.white.withValues(alpha: isMe ? 0.3 : 0.15),
           width: 1,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -6703,7 +6982,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               decoration: BoxDecoration(
                 color: isOptimistic
                     ? Colors.orange.withOpacity(0.9)
-                    : Colors.white.withOpacity(0.9),
+                    : AppColors.iosBlue,
                 shape: BoxShape.circle,
               ),
               child: isOptimistic
@@ -6724,7 +7003,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                       isCurrentlyPlaying
                           ? Icons.pause_rounded
                           : Icons.play_arrow_rounded,
-                      color: const Color(0xFF3A3A3A),
+                      color: Colors.white,
                       size: 20,
                     ),
             ),
@@ -6760,8 +7039,8 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           // Duration
           Text(
             formatDuration(duration),
-            style: TextStyle(fontFamily: 'Poppins', 
-              color: Colors.white.withOpacity(0.9),
+            style: TextStyle(fontFamily: 'Poppins',
+              color: Colors.white.withValues(alpha: 0.9),
               fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
@@ -6769,6 +7048,52 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
           const SizedBox(width: 4),
         ],
       ),
+    );
+  }
+
+  /// Audio bubble with time & tick shown below the card
+  Widget _buildAudioBubbleWithTime(
+    MessageModel message,
+    bool isMe,
+    bool isDarkMode,
+  ) {
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        _buildAudioMessagePlayer(message, isMe, isDarkMode: isDarkMode),
+        // Time + tick below the audio card
+        Padding(
+          padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.isEdited == true)
+                Text(
+                  'edited ',
+                  style: TextStyle(fontFamily: 'Poppins',
+                    color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              Text(
+                _formatMessageTime(message.timestamp),
+                style: TextStyle(fontFamily: 'Poppins',
+                  color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                  fontSize: 10,
+                ),
+              ),
+              if (isMe &&
+                  message.status != MessageStatus.sending &&
+                  message.audioUrl != null &&
+                  message.audioUrl!.isNotEmpty) ...[
+                const SizedBox(width: 3),
+                _buildMessageStatusIcon(message.status, isMe),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -7773,68 +8098,79 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
     }
   }
 
-  // Mention-related methods
-  // Handle mention (@) detection
+  // ── WhatsApp-style @mention methods ──
+
   void _handleMentionDetection(String text) {
     final cursorPosition = _messageController.selection.baseOffset;
+    if (cursorPosition <= 0 || cursorPosition > text.length) {
+      _dismissMentionSuggestions();
+      return;
+    }
 
-    // Find the last @ before cursor
+    // Walk backwards from cursor to find @ symbol
     int atIndex = -1;
     for (int i = cursorPosition - 1; i >= 0; i--) {
       if (text[i] == '@') {
-        // Check if @ is at start or preceded by space
         if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
           atIndex = i;
-          break;
         }
-      } else if (text[i] == ' ' || text[i] == '\n') {
-        // Stop at space before finding @
         break;
       }
+      if (text[i] == '\n') break;
     }
 
-    if (atIndex != -1 && atIndex < cursorPosition) {
-      // Extract query after @
-      final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+    if (atIndex == -1) {
+      _dismissMentionSuggestions();
+      return;
+    }
 
-      // For 1-to-1 chat, only show the other user
-      final otherUserName = widget.otherUser.name;
-      final otherUserPhoto = widget.otherUser.profileImageUrl;
+    final query = text.substring(atIndex + 1, cursorPosition).toLowerCase();
+    _mentionStartIndex = atIndex;
 
-      if (otherUserName.toLowerCase().contains(query)) {
-        setState(() {
-          _mentionStartIndex = atIndex;
-          _filteredUsers = [
-            {
-              'id': widget.otherUser.uid,
-              'name': otherUserName,
-              'photo': otherUserPhoto,
-            },
-          ];
-          _showMentionSuggestions = true;
-        });
-      } else {
-        setState(() {
-          _showMentionSuggestions = false;
-          _filteredUsers = [];
-          _mentionStartIndex = -1;
-        });
-      }
-    } else {
+    final suggestions = <Map<String, dynamic>>[];
+
+    // Single Tap AI always first
+    const aiName = 'Single Tap AI';
+    if (query.isEmpty || aiName.toLowerCase().startsWith(query) ||
+        aiName.toLowerCase().contains(query)) {
+      suggestions.add({
+        'id': ApiConfig.singletapAiSenderId,
+        'name': aiName,
+        'photo': null,
+        'isAi': true,
+      });
+    }
+
+    // Add the other user in this 1-on-1 chat
+    final otherName = widget.otherUser.name;
+    if (query.isEmpty || otherName.toLowerCase().contains(query)) {
+      suggestions.add({
+        'id': widget.otherUser.uid,
+        'name': otherName,
+        'photo': widget.otherUser.profileImageUrl,
+      });
+    }
+
+    setState(() {
+      _mentionSuggestions = suggestions;
+      _showMentionSuggestions = suggestions.isNotEmpty;
+    });
+  }
+
+  void _dismissMentionSuggestions() {
+    if (_showMentionSuggestions) {
       setState(() {
         _showMentionSuggestions = false;
-        _filteredUsers = [];
+        _mentionSuggestions = [];
         _mentionStartIndex = -1;
       });
     }
   }
 
-  // Insert mention when user selects from suggestions
   void _insertMention(String userId, String userName) {
     final text = _messageController.text;
     final cursorPosition = _messageController.selection.baseOffset;
 
-    // Replace from @ to cursor with @UserName
     final beforeMention = text.substring(0, _mentionStartIndex);
     final afterMention = text.substring(cursorPosition);
     final mentionText = '@$userName ';
@@ -7847,37 +8183,33 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       selection: TextSelection.collapsed(offset: newCursorPosition),
     );
 
-    setState(() {
-      _showMentionSuggestions = false;
-      _filteredUsers = [];
-      _mentionStartIndex = -1;
-    });
-
-    // Keep focus on text field
+    _dismissMentionSuggestions();
     _messageFocusNode.requestFocus();
   }
 
-  // Build text with highlighted mentions
   Widget _buildTextWithMentions(
     String text,
     bool isMe,
     bool isDarkMode,
     bool isDeleted,
   ) {
-    final regex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    // Match @Single Tap AI (multi-word) first, then any @Word mentions
+    final regex = RegExp(r'@Single\s*Tap\s+AI|@\w+', caseSensitive: false);
     final matches = regex.allMatches(text);
 
+    final normalColor = isDeleted
+        ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
+        : (isMe
+              ? Colors.white
+              : (isDarkMode ? Colors.white : AppColors.iosGrayDark));
+
     if (matches.isEmpty) {
-      // No mentions, return simple text
       return Text(
         text,
-        style: TextStyle(fontFamily: 'Poppins', 
-          color: isDeleted
-              ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
-              : (isMe
-                    ? Colors.white
-                    : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-          fontSize: 16,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          color: normalColor,
+          fontSize: 14,
           height: 1.35,
           letterSpacing: -0.2,
           fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
@@ -7885,70 +8217,48 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
       );
     }
 
-    // Build rich text with highlighted mentions
     final spans = <TextSpan>[];
     int lastIndex = 0;
 
     for (final match in matches) {
-      // Add text before mention
       if (match.start > lastIndex) {
-        spans.add(
-          TextSpan(
-            text: text.substring(lastIndex, match.start),
-            style: TextStyle(fontFamily: 'Poppins', 
-              color: isDeleted
-                  ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
-                  : (isMe
-                        ? Colors.white
-                        : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-            ),
-          ),
-        );
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: TextStyle(fontFamily: 'Poppins', color: normalColor),
+        ));
       }
 
-      // Add highlighted mention
-      spans.add(
-        TextSpan(
-          text: match.group(0), // @Username
-          style: TextStyle(fontFamily: 'Poppins', 
-            color: isMe
-                ? Colors.white
-                : (isDarkMode
-                      ? const Color(0xFF64B5F6)
-                      : const Color(0xFF1976D2)),
-            fontWeight: FontWeight.w600,
-            backgroundColor: isMe
-                ? Colors.white.withValues(alpha: 0.2)
-                : (isDarkMode
-                      ? const Color(0xFF1976D2).withValues(alpha: 0.2)
-                      : const Color(0xFF64B5F6).withValues(alpha: 0.2)),
-          ),
+      final matchText = match.group(0)!;
+      final isAiMention = RegExp(r'single\s*tap', caseSensitive: false).hasMatch(matchText);
+      spans.add(TextSpan(
+        text: matchText,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          color: isAiMention
+              ? const Color(0xFF818CF8)
+              : (isMe
+                    ? const Color(0xFF00E5FF)
+                    : (isDarkMode
+                          ? const Color(0xFF00E5FF)
+                          : const Color(0xFF00B8D4))),
+          fontWeight: FontWeight.w600,
         ),
-      );
-
+      ));
       lastIndex = match.end;
     }
 
-    // Add remaining text
     if (lastIndex < text.length) {
-      spans.add(
-        TextSpan(
-          text: text.substring(lastIndex),
-          style: TextStyle(fontFamily: 'Poppins', 
-            color: isDeleted
-                ? (isDarkMode ? Colors.grey[600] : Colors.grey[500])
-                : (isMe
-                      ? Colors.white
-                      : (isDarkMode ? Colors.white : AppColors.iosGrayDark)),
-          ),
-        ),
-      );
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: TextStyle(fontFamily: 'Poppins', color: normalColor),
+      ));
     }
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(fontFamily: 'Poppins', 
-          fontSize: 16,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 14,
           height: 1.35,
           letterSpacing: -0.2,
           fontStyle: isDeleted ? FontStyle.italic : FontStyle.normal,
@@ -8402,11 +8712,65 @@ class _ChatInfoScreen extends StatefulWidget {
 class _ChatInfoScreenState extends State<_ChatInfoScreen> {
   bool _isMuted = false;
   bool _isLoading = true;
+  // Fetched user data from Firestore (may be more complete than passed-in UserProfile)
+  String? _fetchedName;
+  String? _fetchedPhoto;
+  String? _fetchedLocation;
+
+  String get _displayName => (_fetchedName != null && _fetchedName!.isNotEmpty)
+      ? _fetchedName!
+      : widget.otherUser.name;
+  String? get _displayPhoto => (_fetchedPhoto != null && _fetchedPhoto!.isNotEmpty)
+      ? _fetchedPhoto
+      : widget.otherUser.profileImageUrl;
+  String? get _displayLocation => (_fetchedLocation != null && _fetchedLocation!.isNotEmpty)
+      ? _fetchedLocation
+      : widget.otherUser.location;
 
   @override
   void initState() {
     super.initState();
     _loadMuteStatus();
+    _fetchUserProfile();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      // Try direct lookup first
+      final doc = await firestore
+          .collection('users')
+          .doc(widget.otherUser.uid)
+          .get();
+      if (doc.exists && mounted) {
+        _applyProfileData(doc.data()!);
+        return;
+      }
+      // Fallback: uid might be a UUID v5 from the API
+      final query = await firestore
+          .collection('users')
+          .where('user_uuid', isEqualTo: widget.otherUser.uid)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty && mounted) {
+        _applyProfileData(query.docs.first.data());
+      }
+    } catch (e) {
+      debugPrint('ChatInfo: Failed to fetch user profile: $e');
+    }
+  }
+
+  void _applyProfileData(Map<String, dynamic> data) {
+    final name = data['name']?.toString() ?? '';
+    final photo = (data['photoUrl']?.toString() ?? '').isNotEmpty
+        ? data['photoUrl'].toString()
+        : data['profileImageUrl']?.toString() ?? '';
+    final location = data['location']?.toString() ?? '';
+    setState(() {
+      _fetchedName = name;
+      _fetchedPhoto = photo;
+      _fetchedLocation = location;
+    });
   }
 
   Future<void> _loadMuteStatus() async {
@@ -8549,22 +8913,22 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                       backgroundColor: Colors.grey[800],
                                       backgroundImage:
                                           PhotoUrlHelper.isValidUrl(
-                                            widget.otherUser.profileImageUrl,
+                                            _displayPhoto,
                                           )
                                           ? CachedNetworkImageProvider(
-                                              widget.otherUser.profileImageUrl!,
+                                              _displayPhoto!,
                                             )
                                           : null,
                                       child:
                                           !PhotoUrlHelper.isValidUrl(
-                                            widget.otherUser.profileImageUrl,
+                                            _displayPhoto,
                                           )
                                           ? Text(
-                                              widget.otherUser.name.isNotEmpty
-                                                  ? widget.otherUser.name[0]
+                                              _displayName.isNotEmpty
+                                                  ? _displayName[0]
                                                         .toUpperCase()
                                                   : 'U',
-                                              style: const TextStyle(fontFamily: 'Poppins', 
+                                              style: const TextStyle(fontFamily: 'Poppins',
                                                 fontSize: 48,
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.bold,
@@ -8578,8 +8942,8 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
 
                                   // Name
                                   Text(
-                                    widget.otherUser.name,
-                                    style: const TextStyle(fontFamily: 'Poppins', 
+                                    _displayName,
+                                    style: const TextStyle(fontFamily: 'Poppins',
                                       color: Colors.white,
                                       fontSize: 28,
                                       fontWeight: FontWeight.bold,
@@ -8587,10 +8951,8 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                     textAlign: TextAlign.center,
                                   ),
 
-                                  if (widget.otherUser.location != null &&
-                                      widget
-                                          .otherUser
-                                          .location!
+                                  if (_displayLocation != null &&
+                                      _displayLocation!
                                           .isNotEmpty) ...[
                                     const SizedBox(height: 12),
                                     Row(
@@ -8608,8 +8970,8 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                                         const SizedBox(width: 8),
                                         Flexible(
                                           child: Text(
-                                            widget.otherUser.location!,
-                                            style: TextStyle(fontFamily: 'Poppins', 
+                                            _displayLocation!,
+                                            style: TextStyle(fontFamily: 'Poppins',
                                               color: Colors.white.withValues(
                                                 alpha: 0.7,
                                               ),
@@ -8630,6 +8992,13 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
                         ),
 
                         const SizedBox(height: 30),
+
+                        // View Profile option
+                        _buildOptionTile(
+                          icon: Icons.person_rounded,
+                          title: 'View Profile',
+                          onTap: () => _showUserProfileSheet(context),
+                        ),
 
                         // Options
                         _buildOptionTile(
@@ -8708,6 +9077,15 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showUserProfileSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _UserProfileSheet(otherUser: widget.otherUser),
     );
   }
 
@@ -8904,7 +9282,7 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
   }
 }
 
-// SingleTap-style Forward Message Screen
+// Single Tap-style Forward Message Screen
 class _ForwardMessageScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -9122,7 +9500,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
 
     if (_searchQuery.isEmpty) return contactsWithoutSelf;
     return contactsWithoutSelf.where((contact) {
-      final name = (contact['name'] as String).toLowerCase();
+      final name = (contact['name']?.toString() ?? '').toLowerCase();
       return name.contains(_searchQuery.toLowerCase());
     }).toList();
   }
@@ -9360,7 +9738,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                                           contact['photoUrl'],
                                         )
                                         ? Text(
-                                            (contact['name'] as String)[0]
+                                            ((contact['name']?.toString() ?? 'U').isNotEmpty ? (contact['name']?.toString() ?? 'U')[0] : 'U')
                                                 .toUpperCase(),
                                             style: const TextStyle(fontFamily: 'Poppins', 
                                               color: Colors.white,
@@ -9893,7 +10271,7 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date header like SingleTap
+            // Date header like Single Tap
             Container(
               margin: const EdgeInsets.symmetric(vertical: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -9989,8 +10367,8 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
   }
 
   Widget _buildLinkItem(Map<String, dynamic> item) {
-    final url = item['url'] as String;
-    final timestamp = item['timestamp'] as DateTime;
+    final url = item['url'] as String? ?? '';
+    final timestamp = item['timestamp'] as DateTime? ?? DateTime.now();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -10032,8 +10410,8 @@ class _SharedMediaScreenState extends State<_SharedMediaScreen> {
   }
 
   Widget _buildDocItem(Map<String, dynamic> item) {
-    final name = item['name'] as String;
-    final timestamp = item['timestamp'] as DateTime;
+    final name = item['name'] as String? ?? 'Document';
+    final timestamp = item['timestamp'] as DateTime? ?? DateTime.now();
     final size = _EnhancedChatScreenState._parseIntFromDynamic(item['size']);
 
     return Container(
@@ -10606,7 +10984,8 @@ class _FullScreenMediaViewerState extends State<_FullScreenMediaViewer> {
 
   Future<void> _saveCurrentImage() async {
     try {
-      final url = widget.mediaItems[_currentIndex]['url'] as String;
+      final url = widget.mediaItems[_currentIndex]['url'] as String? ?? '';
+      if (url.isEmpty) return;
 
       // Request storage permission
       final status = await Permission.storage.request();
@@ -10679,7 +11058,7 @@ class _FullScreenMediaViewerState extends State<_FullScreenMediaViewer> {
   }
 
   void _shareCurrentImage() async {
-    final url = widget.mediaItems[_currentIndex]['url'] as String;
+    final url = widget.mediaItems[_currentIndex]['url'] as String? ?? '';
     await Clipboard.setData(ClipboardData(text: url));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -11020,7 +11399,7 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                   ),
                 ),
               ),
-              // Audio Player UI - SingleTap style
+              // Audio Player UI - Single Tap style
               Container(
                 decoration: BoxDecoration(
                   border: Border.all(
@@ -11047,13 +11426,9 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                         child: Container(
                           width: 44,
                           height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                          decoration: const BoxDecoration(
+                            color: AppColors.iosBlue,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
                           ),
                           child: Icon(
                             _isPlaying
@@ -11193,19 +11568,8 @@ class _VoicePreviewPopupState extends State<_VoicePreviewPopup> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white.withValues(alpha: 0.25),
-                            Colors.white.withValues(alpha: 0.15),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: AppColors.iosBlue,
                         borderRadius: BorderRadius.circular(25),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -11439,7 +11803,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
   }
 }
 
-/// SingleTap-style media preview screen for multiple images/videos
+/// Single Tap-style media preview screen for multiple images/videos
 class _MediaPreviewScreen extends StatefulWidget {
   final List<File> mediaFiles;
   final bool isVideo;
@@ -11743,3 +12107,383 @@ class _MediaPreviewScreenState extends State<_MediaPreviewScreen> {
     );
   }
 }
+
+/// Custom TextEditingController that highlights @mentions with color while typing
+class _MentionTextEditingController extends TextEditingController {
+  static final _mentionRegex =
+      RegExp(r'@Single\s*Tap\s+AI|@\w+', caseSensitive: false);
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final text = this.text;
+    final matches = _mentionRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      return TextSpan(text: text, style: style);
+    }
+
+    final spans = <TextSpan>[];
+    int lastIndex = 0;
+
+    for (final match in matches) {
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: style,
+        ));
+      }
+
+      final matchText = match.group(0)!;
+      final isAi = RegExp(r'single\s*tap', caseSensitive: false)
+          .hasMatch(matchText);
+      spans.add(TextSpan(
+        text: matchText,
+        style: style?.copyWith(
+          color: isAi ? const Color(0xFF818CF8) : const Color(0xFF00E5FF),
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: style,
+      ));
+    }
+
+    return TextSpan(children: spans, style: style);
+  }
+}
+
+/// Bottom sheet that shows the other user's full profile fetched from Firestore
+class _UserProfileSheet extends StatefulWidget {
+  final UserProfile otherUser;
+
+  const _UserProfileSheet({required this.otherUser});
+
+  @override
+  State<_UserProfileSheet> createState() => _UserProfileSheetState();
+}
+
+class _UserProfileSheetState extends State<_UserProfileSheet> {
+  Map<String, dynamic>? _profileData;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      // Try direct lookup
+      final doc = await firestore.collection('users').doc(widget.otherUser.uid).get();
+      if (doc.exists && mounted) {
+        setState(() { _profileData = doc.data(); _isLoading = false; });
+        return;
+      }
+      // Fallback: uid might be UUID v5
+      final query = await firestore
+          .collection('users')
+          .where('user_uuid', isEqualTo: widget.otherUser.uid)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty && mounted) {
+        setState(() { _profileData = query.docs.first.data(); _isLoading = false; });
+      } else if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Color.fromRGBO(24, 24, 24, 1),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[700],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Profile',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.iosBlue),
+                    )
+                  : SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _buildProfileContent(),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileContent() {
+    final data = _profileData ?? {};
+    final name = widget.otherUser.name;
+    final photo = widget.otherUser.profileImageUrl;
+    final location = data['location']?.toString() ?? widget.otherUser.location ?? '';
+    final bio = data['bio']?.toString() ?? '';
+    final interests = (data['interests'] is List)
+        ? (data['interests'] as List).map((e) => e.toString()).toList()
+        : <String>[];
+    final isOnline = data['isOnline'] == true;
+    final accountType = data['accountType']?.toString() ?? 'Personal';
+    final occupation = data['occupation']?.toString() ?? '';
+
+    return Column(
+      children: [
+        // Avatar
+        Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: CircleAvatar(
+                radius: 55,
+                backgroundColor: Colors.grey[800],
+                backgroundImage: PhotoUrlHelper.isValidUrl(photo)
+                    ? CachedNetworkImageProvider(photo!)
+                    : null,
+                child: !PhotoUrlHelper.isValidUrl(photo)
+                    ? Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 44,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: isOnline ? Colors.green : Colors.grey,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color.fromRGBO(24, 24, 24, 1), width: 3),
+              ),
+              width: 20,
+              height: 20,
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Name
+        Text(
+          name,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
+
+        if (occupation.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            occupation,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 14,
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 8),
+
+        // Status & Account type
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isOnline
+                    ? Colors.green.withValues(alpha: 0.2)
+                    : Colors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isOnline ? 'Online' : 'Offline',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: isOnline ? Colors.green : Colors.grey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.iosBlue.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                accountType,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: AppColors.iosBlue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        if (location.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.location_on_rounded, color: Colors.white.withValues(alpha: 0.6), size: 18),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  location,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        if (bio.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _buildSection('About', bio),
+        ],
+
+        if (interests.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Interests',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: interests.map((interest) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.iosBlue.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.iosBlue.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                interest,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
+              ),
+            )).toList(),
+          ),
+        ],
+
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  Widget _buildSection(String title, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            content,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+

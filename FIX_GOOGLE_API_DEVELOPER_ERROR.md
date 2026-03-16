@@ -87,7 +87,7 @@ Copy the **SHA-1** hash (looks like: `AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:
           "client_id": "...",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.plink.supper",
+            "package_name": "com.plink.singletap",
             "certificate_hash": "YOUR_SHA1_HERE"  // Add your SHA-1 hash
           }
         }
@@ -163,7 +163,7 @@ SHA1: 8B:61:9D:1D:C2:66:08:EF:51:97:00:1C:2E:87:90:FA:11:4E:0D:15
 **Step 4: Scroll to "Your apps" section**
 
 **Step 5: Find "Android" app**
-- Package name: `com.plink.supper`
+- Package name: `com.plink.singletap`
 
 **Step 6: Add your SHA-1 hash**
 - If field exists, update it
@@ -277,7 +277,7 @@ But this is NOT a permanent solution - you need to fix the certificate hash.
 4. Find **OAuth 2.0 Client IDs** (type: Android)
 5. Click the client ID
 6. Under **Authorized JavaScript origins**, you should see:
-   - Package name: `com.plink.supper`
+   - Package name: `com.plink.singletap`
    - SHA-1 fingerprints: (list of your registered hashes)
 7. If your app's SHA-1 is NOT in the list → That's the problem!
 8. Click **+ Add Fingerprint**
@@ -324,7 +324,7 @@ If you're stuck:
 1. **Verify SHA-1 format**: Should be 40 characters, all uppercase, no colons
 2. **Wait for propagation**: Firebase Console changes take 5-10 minutes
 3. **Clear cache**: `flutter clean` before rebuilding
-4. **Check package name**: Must match `com.plink.supper` exactly
+4. **Check package name**: Must match `com.plink.singletap` exactly
 5. **Rebuild app**: App must be signed with the certificate you registered
 
 ---

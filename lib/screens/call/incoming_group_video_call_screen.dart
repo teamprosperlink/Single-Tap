@@ -5,7 +5,7 @@ import '../../res/config/app_colors.dart';
 import '../../widgets/common widgets/safe_circle_avatar.dart';
 import 'group_video_call_screen.dart';
 
-/// Incoming Group Video Call Screen (SingleTap style)
+/// Incoming Group Video Call Screen (Single Tap style)
 class IncomingGroupVideoCallScreen extends StatefulWidget {
   final String callId;
   final String callerName;
@@ -245,7 +245,7 @@ class _IncomingGroupVideoCallScreenState
 
                 const Spacer(flex: 3),
 
-                // Action buttons (SingleTap style)
+                // Action buttons (Single Tap style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 50),
                   child: Row(

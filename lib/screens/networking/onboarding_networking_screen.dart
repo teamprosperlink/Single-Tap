@@ -123,34 +123,39 @@ class _LiveConnectScreenState extends State<LiveConnectScreen>
         title: 'Getting Started',
         automaticallyImplyLeading: false,
       ),
+      extendBody: true,
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: NetworkingWidgets.bodyGradient(),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
+          top: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 12),
 
-              /// Step cards
-              Expanded(
-                child: SingleChildScrollView(
+                /// Step cards
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
-                  physics: const BouncingScrollPhysics(),
                   child: Column(
                     children: [
                       for (int i = 0; i < _steps.length; i++)
                         _buildStepRow(i),
-                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Page dots
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
+                /// Page dots
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _pageDot(true),
@@ -160,61 +165,62 @@ class _LiveConnectScreenState extends State<LiveConnectScreen>
                     _pageDot(false),
                   ],
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-                child: GestureDetector(
-                  onTap: () {
-                    if (!mounted) return;
-                    HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LiveConnectFeaturesScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
+                /// Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (!mounted) return;
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LiveConnectFeaturesScreen(),
                         ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "See Features",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF007AFF).withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white, size: 20),
-                      ],
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "See Features",
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded,
+                              color: Colors.white, size: 20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -513,6 +519,7 @@ class _LiveConnectFeaturesScreenState extends State<LiveConnectFeaturesScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
+      extendBody: true,
       appBar: NetworkingWidgets.networkingAppBar(
         title: 'Features',
         onBack: () {
@@ -522,31 +529,37 @@ class _LiveConnectFeaturesScreenState extends State<LiveConnectFeaturesScreen>
         },
       ),
       body: Container(
-        decoration: NetworkingWidgets.bodyGradient(),
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
+          top: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 12),
 
-              /// Feature list
-              Expanded(
-                child: SingleChildScrollView(
+                /// Feature list
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
-                  physics: const BouncingScrollPhysics(),
                   child: Column(
                     children: [
                       for (int i = 0; i < _features.length; i++)
                         _buildFeatureRow(i),
-                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Page dots
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
+                /// Page dots
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _pageDot(false),
@@ -556,62 +569,63 @@ class _LiveConnectFeaturesScreenState extends State<LiveConnectFeaturesScreen>
                     _pageDot(false),
                   ],
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-                child: GestureDetector(
-                  onTap: () {
-                    if (!mounted) return;
-                    HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SmartLiveConnect(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              const Color(0xFF007AFF).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
+                /// Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (!mounted) return;
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SmartLiveConnect(),
                         ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Find Your Vibe',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF007AFF).withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white, size: 20),
-                      ],
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Find Your Vibe',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded,
+                              color: Colors.white, size: 20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -886,32 +900,39 @@ class _SmartLiveConnectState extends State<SmartLiveConnect>
           Navigator.pop(context);
         },
       ),
+      extendBody: true,
       body: Container(
-        decoration: NetworkingWidgets.bodyGradient(),
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
+        ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
+          top: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 12),
 
-              /// Tab feature cards
-              Expanded(
-                child: SingleChildScrollView(
+                /// Tab feature cards
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
-                  physics: const BouncingScrollPhysics(),
                   child: Column(
                     children: [
                       for (int i = 0; i < _tabs.length; i++)
                         _buildTabRow(i),
-                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Page dots
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
+                /// Page dots
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _pageDot(false),
@@ -921,68 +942,69 @@ class _SmartLiveConnectState extends State<SmartLiveConnect>
                     _pageDot(true),
                   ],
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              /// Button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-                child: GestureDetector(
-                  onTap: () async {
-                    if (!mounted) return;
-                    HapticFeedback.lightImpact();
-                    final result = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            const CreateNetworkingProfileScreen(
-                                createdFrom: 'Networking'),
-                      ),
-                    );
-                    if (result == true && context.mounted) {
-                      Navigator.of(context)
-                          .popUntil((route) => route.isFirst);
-                    }
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF007AFF)
-                              .withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
+                /// Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+                  child: GestureDetector(
+                    onTap: () async {
+                      if (!mounted) return;
+                      HapticFeedback.lightImpact();
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const CreateNetworkingProfileScreen(
+                                  createdFrom: 'Networking'),
                         ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Discover People',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
+                      );
+                      if (result == true && context.mounted) {
+                        Navigator.of(context)
+                            .popUntil((route) => route.isFirst);
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF007AFF), Color(0xFF0060D0)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF007AFF)
+                                .withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white, size: 20),
-                      ],
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Discover People',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded,
+                              color: Colors.white, size: 20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

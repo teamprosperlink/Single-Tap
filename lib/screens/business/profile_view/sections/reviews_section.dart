@@ -3,8 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../models/business_model.dart';
 import '../../../../services/business_service.dart';
 import '../../../../config/category_profile_config.dart';
-import 'package:supper/res/config/app_colors.dart';
-import 'package:supper/config/app_theme.dart';
+import 'package:single_tap/res/config/app_colors.dart';
+import 'package:single_tap/config/app_theme.dart';
 
 /// Section displaying customer reviews
 class ReviewsSection extends StatelessWidget {

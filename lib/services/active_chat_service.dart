@@ -1,5 +1,5 @@
 /// Service to track which chat screen is currently active
-/// Used to prevent notifications for messages in the open chat (SingleTap-style)
+/// Used to prevent notifications for messages in the open chat (Single Tap-style)
 class ActiveChatService {
   static final ActiveChatService _instance = ActiveChatService._internal();
   factory ActiveChatService() => _instance;

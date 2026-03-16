@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/screens/product/confirming_order_screen.dart';
+import 'package:single_tap/screens/product/confirming_order_screen.dart';
 
 class OrderSummaryScreen extends StatelessWidget {
   final Map<String, dynamic> item;
@@ -158,7 +158,7 @@ class OrderSummaryScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -218,7 +218,7 @@ class OrderSummaryScreen extends StatelessWidget {
                                   'Order #$orderId',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -261,7 +261,7 @@ class OrderSummaryScreen extends StatelessWidget {
                                     Text(
                                       item['name'] as String? ?? 'Product',
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -322,7 +322,7 @@ class OrderSummaryScreen extends StatelessWidget {
                               Text(
                                 priceStr,
                                 style: const TextStyle(
-                                  fontSize: 17,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
@@ -526,7 +526,7 @@ class OrderSummaryScreen extends StatelessWidget {
                               const Text(
                                 'Payment Summary',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
@@ -576,7 +576,7 @@ class OrderSummaryScreen extends StatelessWidget {
                                   const Text(
                                     'Amount to Pay',
                                     style: TextStyle(
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -584,7 +584,7 @@ class OrderSummaryScreen extends StatelessWidget {
                                   Text(
                                     '₹${total.toStringAsFixed(0)}',
                                     style: const TextStyle(
-                                      fontSize: 24,
+                                      fontSize: 20,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.white,
                                     ),
@@ -742,7 +742,7 @@ class OrderSummaryScreen extends StatelessWidget {
                       '${_getButtonLabel()} ₹${total.toStringAsFixed(0)}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -778,11 +778,11 @@ class OrderSummaryScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
         Text(
           value,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: valueColor ?? Colors.white,
           ),

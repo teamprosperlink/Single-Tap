@@ -142,12 +142,10 @@ class _MyNetworkingProfileScreenState extends State<MyNetworkingProfileScreen> {
     final gender = data['gender'] as String?;
     final category = data['networkingCategory'] as String?;
     final subcategory = data['networkingSubcategory'] as String?;
-    final ageStart = data['ageRangeStart'] as num?;
-    final ageEnd = data['ageRangeEnd'] as num?;
-    final distStart = data['distanceRangeStart'] as num?;
-    final distEnd = data['distanceRangeEnd'] as num?;
+    final dateOfBirth = data['dateOfBirth'] as String?;
     final discoveryEnabled = data['discoveryModeEnabled'] ?? true;
-    final city = data['city'] as String? ?? data['location'] as String?;
+    final rawCity = data['city'] as String? ?? data['location'] as String? ?? '';
+    final city = rawCity.toLowerCase().contains('mountain view') ? '' : rawCity;
     final categoryFilters = data['categoryFilters'] is Map
         ? (data['categoryFilters'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()))
         : <String, String>{};
@@ -213,20 +211,19 @@ class _MyNetworkingProfileScreenState extends State<MyNetworkingProfileScreen> {
           NetworkingWidgets.detailRow('Gender', gender ?? 'Not set'),
           const SizedBox(height: 8),
           NetworkingWidgets.detailRow(
-            'Age Range',
-            ageStart != null && ageEnd != null
-                ? '${ageStart.round()} - ${ageEnd.round() == 60 ? "60+" : ageEnd.round()}'
+            'Date of Birth',
+            dateOfBirth != null && dateOfBirth.isNotEmpty
+                ? (() {
+                    final parts = dateOfBirth.split('-');
+                    if (parts.length == 3) {
+                      return '${parts[2]}/${parts[1]}/${parts[0]}';
+                    }
+                    return dateOfBirth;
+                  })()
                 : 'Not set',
           ),
           const SizedBox(height: 8),
-          NetworkingWidgets.detailRow(
-            'Distance',
-            distStart != null && distEnd != null
-                ? '${distStart.round()} km - ${distEnd.round() == 500 ? "500+" : "${distEnd.round()}"} km'
-                : 'Not set',
-          ),
-          const SizedBox(height: 8),
-          NetworkingWidgets.detailRow('City', city != null && city.isNotEmpty ? city : 'Not set'),
+          NetworkingWidgets.detailRow('Location', city.isNotEmpty ? city : 'Not set'),
 
           const SizedBox(height: 24),
         ],

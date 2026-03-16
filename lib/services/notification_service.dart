@@ -205,7 +205,7 @@ class NotificationService {
 
         debugPrint('  _handleCallAccepted: currentUserId=$currentUserId');
 
-        // IMMEDIATE NAVIGATION - SingleTap-like instant call screen
+        // IMMEDIATE NAVIGATION - Single Tap-like instant call screen
         // Dismiss CallKit and navigate FIRST, then update status in background
         debugPrint(
           '  _handleCallAccepted: Navigating IMMEDIATELY to call screen...',
@@ -309,7 +309,7 @@ class NotificationService {
           );
         }
 
-        // Dismiss CallKit UI IMMEDIATELY (no await) for SingleTap-like smooth transition
+        // Dismiss CallKit UI IMMEDIATELY (no await) for Single Tap-like smooth transition
         FlutterCallkitIncoming.endCall(callId)
             .then((_) {
               debugPrint('  _handleCallAccepted: CallKit UI dismissed');
@@ -513,7 +513,7 @@ class NotificationService {
     }
   }
 
-  /// Request all Android permissions needed for SingleTap-style incoming calls
+  /// Request all Android permissions needed for Single Tap-style incoming calls
   Future<void> _requestAndroidPermissions() async {
     try {
       // Android 13+ requires POST_NOTIFICATIONS permission
@@ -695,7 +695,7 @@ class NotificationService {
 
     // CRITICAL FIX: For call notifications, ALWAYS show full-screen CallKit UI
     // Even when app is in foreground (both devices active)
-    // This ensures SingleTap-style incoming call experience
+    // This ensures Single Tap-style incoming call experience
     if (type == 'call') {
       debugPrint('  FOREGROUND 1-ON-1 CALL: Showing full-screen CallKit UI');
       _navigateToCall(data); // Show full-screen incoming call
@@ -703,14 +703,14 @@ class NotificationService {
     }
 
     // CRITICAL FIX: For GROUP call notifications, ALWAYS show full-screen CallKit UI
-    // Even when app is in foreground - SingleTap-style
+    // Even when app is in foreground - Single Tap-style
     if (type == 'group_audio_call') {
       debugPrint('  FOREGROUND GROUP CALL: Showing full-screen CallKit UI');
       _navigateToGroupCall(data); // Show full-screen incoming group call
       return;
     }
 
-    // SingleTap-style: Don't show notification for messages in the CURRENT OPEN chat
+    // Single Tap-style: Don't show notification for messages in the CURRENT OPEN chat
     // Check if user is currently viewing this conversation
     if (type == 'message') {
       final senderId = data['senderId'] as String?;
@@ -906,12 +906,12 @@ class NotificationService {
 
     debugPrint('  _navigateToCall: Showing CallKit incoming call UI');
 
-    // Show CallKit incoming call UI (like SingleTap)
+    // Show CallKit incoming call UI (like Single Tap)
     // This provides full-screen native call UI
     final callKitParams = CallKitParams(
       id: callId,
       nameCaller: callerName,
-      appName: 'SingleTap',
+      appName: 'Single Tap',
       avatar: callerPhoto,
       handle: 'Voice Call',
       type: 0, // Audio call
@@ -1371,8 +1371,9 @@ class NotificationService {
         '    Total group_calls documents in system: ${allCalls.docs.length}',
       );
       for (var doc in allCalls.docs) {
-        final status = doc['status'];
-        final rawP = doc['participants'];
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final status = data['status'];
+        final rawP = data['participants'];
         final participants = rawP is List ? rawP : null;
         debugPrint(
           '    - Doc ${doc.id}: status=$status, participants=$participants',
@@ -1389,8 +1390,9 @@ class NotificationService {
         '    Group calls where user is participant: ${userCalls.docs.length}',
       );
       for (var doc in userCalls.docs) {
-        final status = doc['status'];
-        final callerId = doc['callerId'];
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final status = data['status'];
+        final callerId = data['callerId'];
         debugPrint('    - Doc ${doc.id}: status=$status, callerId=$callerId');
       }
 
@@ -1405,8 +1407,9 @@ class NotificationService {
         '    Active group calls for user: ${activeUserCalls.docs.length}',
       );
       for (var doc in activeUserCalls.docs) {
-        final callerId = doc['callerId'];
-        final groupName = doc['groupName'];
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final callerId = data['callerId'];
+        final groupName = data['groupName'];
         debugPrint(
           '    - Doc ${doc.id}: callerId=$callerId, groupName=$groupName',
         );
@@ -1714,7 +1717,7 @@ class NotificationService {
     }
   }
 
-  /// Request all permissions needed for SingleTap-style calls (public API)
+  /// Request all permissions needed for Single Tap-style calls (public API)
   Future<bool> requestCallPermissions() async {
     if (kIsWeb) return true;
 
@@ -1754,11 +1757,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (callId != null && callerId != null) {
       debugPrint('  Background: Showing incoming 1-on-1 call from $callerName');
 
-      // Show SingleTap-style incoming call UI
+      // Show Single Tap-style incoming call UI
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName,
-        appName: 'SingleTap',
+        appName: 'Single Tap',
         avatar: callerPhoto,
         handle: 'Voice Call',
         type: 0, // Audio call
@@ -1812,7 +1815,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
     }
   }
-  // Handle incoming GROUP call in background - SingleTap style
+  // Handle incoming GROUP call in background - Single Tap style
   else if (type == 'group_audio_call') {
     final callId = data['callId'] as String?;
     final callerId = data['callerId'] as String?;
@@ -1826,11 +1829,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         '  Background: Showing incoming GROUP call from $callerName in $groupName',
       );
 
-      // Show SingleTap-style incoming GROUP call UI with full-screen notification
+      // Show Single Tap-style incoming GROUP call UI with full-screen notification
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName,
-        appName: 'SingleTap',
+        appName: 'Single Tap',
         avatar: callerPhoto,
         handle: 'Group Voice Call - $groupName',
         type: 0, // Audio call
@@ -1864,7 +1867,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           incomingCallNotificationChannelName: 'Incoming Calls',
           missedCallNotificationChannelName: 'Missed Calls',
           isShowCallID: false,
-          isShowFullLockedScreen: true, // Full-screen like SingleTap
+          isShowFullLockedScreen: true, // Full-screen like Single Tap
         ),
         ios: const IOSParams(
           iconName: 'CallKitLogo',

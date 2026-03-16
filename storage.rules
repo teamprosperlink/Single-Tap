@@ -86,6 +86,13 @@ service firebase.storage {
       allow write: if false; // Admin only
     }
     
+    // Networking profile images
+    match /networking_profile_images/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isImage() && isValidImageSize();
+      allow delete: if isAuthenticated();
+    }
+
     // User galleries - Private albums
     match /galleries/{userId}/{albumId}/{fileName} {
       allow read: if isOwner(userId) || isAuthenticated(); // Can be made public

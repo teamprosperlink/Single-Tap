@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supper/screens/login/login_screen.dart';
-import '../../res/config/app_colors.dart';
+import 'package:single_tap/screens/login/login_screen.dart';
 
 class ChooseAccountTypeScreen extends StatefulWidget {
   const ChooseAccountTypeScreen({super.key});
@@ -47,10 +46,14 @@ class _ChooseAccountTypeScreenState extends State<ChooseAccountTypeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.splashDark3,
+      backgroundColor: Colors.black,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppColors.splashGradient,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
+          ),
         ),
         child: SafeArea(
         child: Column(

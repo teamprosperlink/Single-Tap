@@ -16,7 +16,6 @@ import '../networking/live_connect_tab_screen.dart';
 import '../networking/user_profile_detail_screen.dart';
 import '../near by/near_by_screen.dart';
 import '../chat/conversations_screen.dart';
-import '../networking/pending_requests_screen.dart';
 import '../networking/my_networking_profile_screen.dart';
 import '../networking/create_networking_profile_screen.dart';
 import '../networking/onboarding_networking_screen.dart';
@@ -70,8 +69,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   int _networkingProfileCount = 0;
   StreamSubscription? _profileCountSub;
 
-  // GlobalKeys to access LiveConnectTabScreen state for filter dialog
-  final GlobalKey<LiveConnectTabScreenState> _discoverConnectKey = GlobalKey();
+  // GlobalKey to access LiveConnectTabScreen state for filter dialog
   final GlobalKey<LiveConnectTabScreenState> _smartConnectKey = GlobalKey();
 
 
@@ -92,10 +90,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Initialize TabController with 4 tabs
+    // Initialize TabController with 5 tabs (Home, CreatePost, Chat, Nearby, Networking)
     _tabController = TabController(length: 4, vsync: this);
 
-    // Networking sub-tabs: Discover Connect, Smart Connect & Requests
+    // Networking sub-tabs: Around Me, My Network & Requests
     _networkingTabController = TabController(length: 3, vsync: this);
     _networkingTabController.addListener(() {
       if (!_networkingTabController.indexIsChanging) {
@@ -186,10 +184,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       if (mounted) {
         setState(() => _networkingProfileCount = snapshot.docs.length);
       }
+    }, onError: (e) {
+      debugPrint('Error listening networking profiles: $e');
     });
   }
 
   void _safeInit() {
+    // Ensure Firestore auth token is ready before starting any listeners.
+    // FirebaseAuth.currentUser can be non-null but the Firestore token may
+    // not have propagated yet, causing permission-denied on first queries.
+    _waitForAuthAndInit();
+  }
+
+  Future<void> _waitForAuthAndInit() async {
+    // Force-refresh the auth token so Firestore has valid credentials
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.getIdToken(true);
+      }
+    } catch (e) {
+      debugPrint('Auth token refresh failed: $e');
+    }
+
+    if (!mounted) return;
+
     _listenNetworkingProfileCount();
     try {
       _listenUnread();
@@ -662,7 +681,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       debugPrint('  Error getting call type: $e');
     }
 
-    // CRITICAL FIX: Use CallKit for SingleTap-style full-screen incoming call UI
+    // CRITICAL FIX: Use CallKit for Single Tap-style full-screen incoming call UI
     // This replaces the old IncomingCallScreen widget approach
     // CallKit provides native full-screen UI even when app is in foreground
 
@@ -683,12 +702,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       return;
     }
 
-    // Show CallKit full-screen incoming call UI (like SingleTap)
+    // Show CallKit full-screen incoming call UI (like Single Tap)
     try {
       final callKitParams = CallKitParams(
         id: callId,
         nameCaller: callerName.isNotEmpty ? callerName : 'Unknown',
-        appName: 'SingleTap',
+        appName: 'Single Tap',
         avatar: callerPhoto,
         handle: 'Voice Call',
         type: 0, // Audio call
@@ -1316,14 +1335,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     }) {
       final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
-      // Calculate distance string
+      // Calculate distance string (reject stale/null-island coords)
       String? distanceStr;
+      final otherStale = otherLat != null && otherLng != null &&
+          (otherLat.abs() < 0.01 && otherLng.abs() < 0.01);
       if (myLat != null &&
           myLng != null &&
           otherLat != null &&
-          otherLng != null) {
+          otherLng != null &&
+          !otherStale) {
         final km = calcDistance(myLat, myLng, otherLat, otherLng);
-        if (km < 1) {
+        if (km > 10000) {
+          distanceStr = null; // Skip unrealistic distances
+        } else if (km < 1) {
           distanceStr = '${(km * 1000).round()} m';
         } else {
           distanceStr = '${km.toStringAsFixed(1)} km';
@@ -1465,9 +1489,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             debugPrint('Accept result: $result');
                             if (!context.mounted) return;
                             if (result['success'] == true) {
-                              // Update Discover & Smart Connect tabs
-                              _discoverConnectKey.currentState
-                                  ?.updateConnectionCache(userId, true);
+                              // Update Smart Connect tab
                               _smartConnectKey.currentState
                                   ?.updateConnectionCache(userId, true);
                               // Navigate to profile detail with chat button
@@ -1591,8 +1613,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             : null,
         builder: (context, mySnap) {
           final myData = mySnap.data?.data() as Map<String, dynamic>?;
-          final myLat = (myData?['latitude'] as num?)?.toDouble();
-          final myLng = (myData?['longitude'] as num?)?.toDouble();
+          final myCity = (myData?['city'] as String? ?? '').toLowerCase();
+          final rawMyLat = (myData?['latitude'] as num?)?.toDouble();
+          final rawMyLng = (myData?['longitude'] as num?)?.toDouble();
+          final myStale = myCity.contains('mountain view') ||
+              (rawMyLat != null && rawMyLng != null && rawMyLat.abs() < 0.01 && rawMyLng.abs() < 0.01);
+          final myLat = myStale ? null : rawMyLat;
+          final myLng = myStale ? null : rawMyLng;
 
           return StreamBuilder<List<Map<String, dynamic>>>(
             stream: connectionService.getAcceptedAsReceiverStream(),
@@ -1624,7 +1651,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   final asReceiver = receiverSnap.data ?? [];
                   final asSender = senderSnap.data ?? [];
 
-                  // Deduplicate by otherUserId to avoid showing same person twice
+                  // Deduplicate by otherUserId and filter invalid entries
                   final seen = <String>{};
                   final connections = <Map<String, dynamic>>[];
                   for (final conn in [...asReceiver, ...asSender]) {
@@ -1633,9 +1660,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     final otherUserId = senderId == currentUid
                         ? receiverId
                         : senderId;
-                    if (otherUserId != null && seen.add(otherUserId)) {
-                      connections.add(conn);
+                    // Skip self-connections, null IDs, and duplicates
+                    if (otherUserId == null ||
+                        otherUserId == currentUid ||
+                        !seen.add(otherUserId)) {
+                      continue;
                     }
+                    connections.add(conn);
                   }
 
                   connections.sort((a, b) {
@@ -1719,11 +1750,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         : (conn['senderLongitude'] as num?)?.toDouble();
 
 
-                    // Calculate stored distance for fallback
+                    // Calculate stored distance for fallback (reject stale coords)
                     double? storedDist;
                     if (myLat != null && myLng != null &&
                         storedLat != null && storedLng != null) {
                       storedDist = calcDistance(myLat, myLng, storedLat, storedLng);
+                      // Skip unrealistic distances (likely stale Mountain View data)
+                      if (storedDist > 10000) storedDist = null;
                     }
                     final storedAgeInt = storedAge is int
                         ? storedAge
@@ -1763,12 +1796,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                         final occupation =
                             userData['occupation'] as String? ??
                             storedOccupation;
-                        final userLat =
-                            (userData['latitude'] as num?)?.toDouble() ??
-                            storedLat;
-                        final userLng =
-                            (userData['longitude'] as num?)?.toDouble() ??
-                            storedLng;
+                        // Reject Mountain View / null-island from other user
+                        final otherCity = (userData['city'] as String? ?? '').toLowerCase();
+                        final otherIsMountainView = otherCity.contains('mountain view');
+                        final rawUserLat = (userData['latitude'] as num?)?.toDouble();
+                        final rawUserLng = (userData['longitude'] as num?)?.toDouble();
+                        final otherNullIsland = rawUserLat != null && rawUserLng != null &&
+                            rawUserLat.abs() < 0.01 && rawUserLng.abs() < 0.01;
+                        final userLat = (otherIsMountainView || otherNullIsland) ? null : (rawUserLat ?? storedLat);
+                        final userLng = (otherIsMountainView || otherNullIsland) ? null : (rawUserLng ?? storedLng);
                         final isOnline =
                             userData['isOnline'] as bool? ?? false;
                         final networkingCat =
@@ -1780,6 +1816,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                           fetchedDist = calcDistance(
                             myLat, myLng, userLat, userLng,
                           );
+                          if (fetchedDist > 10000) fetchedDist = null;
                         }
 
                         final fixedPhoto = photo != null
@@ -1813,8 +1850,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                 ),
                               ),
                             ).then((_) {
-                              // Refresh Discover tabs when returning (handles disconnect)
-                              _discoverConnectKey.currentState?.refreshPeople();
+                              // Refresh Smart Connect tab when returning (handles disconnect)
                               _smartConnectKey.currentState?.refreshPeople();
                             });
                           },
@@ -1891,8 +1927,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             : null,
         builder: (context, mySnap) {
           final myData = mySnap.data?.data() as Map<String, dynamic>?;
-          final myLat = (myData?['latitude'] as num?)?.toDouble();
-          final myLng = (myData?['longitude'] as num?)?.toDouble();
+          final myCity2 = (myData?['city'] as String? ?? '').toLowerCase();
+          final rawMyLat2 = (myData?['latitude'] as num?)?.toDouble();
+          final rawMyLng2 = (myData?['longitude'] as num?)?.toDouble();
+          final myStale2 = myCity2.contains('mountain view') ||
+              (rawMyLat2 != null && rawMyLng2 != null && rawMyLat2.abs() < 0.01 && rawMyLng2.abs() < 0.01);
+          final myLat = myStale2 ? null : rawMyLat2;
+          final myLng = myStale2 ? null : rawMyLng2;
 
           // Only show received requests (requests sent TO current user)
           return StreamBuilder<List<Map<String, dynamic>>>(
@@ -2087,10 +2128,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                             final age = userData['age'];
                             final occupation =
                                 userData['occupation'] as String?;
-                            final userLat = (userData['latitude'] as num?)
-                                ?.toDouble();
-                            final userLng = (userData['longitude'] as num?)
-                                ?.toDouble();
+                            // Reject Mountain View / null-island from other user
+                            final reqCity = (userData['city'] as String? ?? '').toLowerCase();
+                            final reqMV = reqCity.contains('mountain view');
+                            final rawReqLat = (userData['latitude'] as num?)?.toDouble();
+                            final rawReqLng = (userData['longitude'] as num?)?.toDouble();
+                            final reqNI = rawReqLat != null && rawReqLng != null &&
+                                rawReqLat.abs() < 0.01 && rawReqLng.abs() < 0.01;
+                            final userLat = (reqMV || reqNI) ? null : rawReqLat;
+                            final userLng = (reqMV || reqNI) ? null : rawReqLng;
                             return buildRequestCard(
                               context: context,
                               userId: otherUserId,
@@ -2194,135 +2240,246 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       );
     }
 
-    if (_currentIndex == 1) {
-      return Scaffold(
-        extendBody: true,
-        backgroundColor: Colors.transparent,
-        body: const ConversationsScreen(),
-        bottomNavigationBar: buildBottomNavBar(),
-      );
+    // Map _currentIndex to IndexedStack index (0=Home, 1=Chat, 2=Networking, 3=Nearby)
+    int stackIndex;
+    switch (_currentIndex) {
+      case 1: stackIndex = 1; break;  // Chat
+      case 2: stackIndex = 2; break;  // Networking
+      case 4: stackIndex = 3; break;  // Nearby
+      default: stackIndex = 0; break; // Home
     }
-    if (_currentIndex == 2) {
-      // If user has no networking profile, show onboarding screen
-      if (_networkingProfileCount == 0) {
-        return Scaffold(
+
+    // All 4 main tabs stay alive via IndexedStack — data loads once on app open
+    return IndexedStack(
+      index: stackIndex,
+      children: [
+        // ── Tab 0: Home ──
+        Scaffold(
+          key: MainNavigationScreen.scaffoldKey,
+          extendBodyBehindAppBar: true,
           extendBody: true,
           backgroundColor: Colors.transparent,
-          body: const LiveConnectScreen(),
-          bottomNavigationBar: buildBottomNavBar(),
-        );
-      }
-      return Scaffold(
-        extendBody: true,
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          centerTitle: true,
-          toolbarHeight: 56,
-          automaticallyImplyLeading: false,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          scrolledUnderElevation: 0,
-          leadingWidth: 56,
-          leading: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MyNetworkingProfileScreen(),
-                ),
-              );
+          endDrawer: AppDrawer(
+            key: AppDrawer.globalKey,
+            onNewChat: () async {
+              await HomeScreen.globalKey.currentState?.saveConversationAndReset();
+              setState(() => _currentIndex = 0);
             },
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16),
+            onLoadChat: (chatId) async {
+              await HomeScreen.globalKey.currentState?.loadConversation(chatId);
+              setState(() => _currentIndex = 0);
+            },
+            onNewChatInProject: (projectId) {
+              HomeScreen.globalKey.currentState?.startNewChatInProject(projectId);
+              setState(() => _currentIndex = 0);
+            },
+            onNavigate: (index) {
+              setState(() {
+                _currentIndex = index;
+                if (index <= 3) {
+                  _tabController.index = _convertToTabIndex(index);
+                }
+              });
+              _saveScreenIndex(index);
+            },
+          ),
+          appBar: AppBar(
+            centerTitle: false,
+            toolbarHeight: 56,
+            leading: const Padding(
+              padding: EdgeInsets.only(left: 16),
               child: Center(
-                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('networking_profiles')
-                      .doc(_auth.currentUser?.uid)
-                      .snapshots(),
-                  builder: (ctx, snap) {
-                    final photoUrl =
-                        snap.data?.data()?['photoUrl'] as String?;
-                    return Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.4),
-                          width: 1.5,
-                        ),
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
-                      child: ClipOval(
-                        child: photoUrl != null && photoUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: photoUrl,
-                                width: 34,
-                                height: 34,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => const Icon(
-                                  Icons.person_rounded,
-                                  size: 18,
-                                  color: Colors.white54,
-                                ),
-                                errorWidget: (context, url, error) =>
-                                    const Icon(
-                                  Icons.person_rounded,
-                                  size: 18,
-                                  color: Colors.white54,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.person_rounded,
-                                size: 18,
-                                color: Colors.white54,
-                              ),
-                      ),
-                    );
-                  },
+                child: Text(
+                  'Single Tap',
+                  style: TextStyle(fontFamily: 'Poppins',
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
-          ),
-          title: const Text(
-            'Networking',
-            style: TextStyle(fontFamily: 'Poppins', 
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            leadingWidth: 100,
+            title: const SizedBox.shrink(),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            scrolledUnderElevation: 0,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    AppDrawer.globalKey.currentState?.refreshChatHistory();
+                    MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.menu_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(40, 40, 40, 1),
+                    Color.fromRGBO(64, 64, 64, 1),
+                  ],
+                ),
+                border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+              ),
             ),
           ),
-          actions: [
-            // Pending requests icon with badge
-            StreamBuilder<int>(
-              stream: ConnectionService().getPendingRequestsCountStream(),
-              builder: (context, snapshot) {
-                final count = snapshot.data ?? 0;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: GestureDetector(
+          body: Stack(
+            children: [
+              HomeScreen(key: HomeScreen.globalKey),
+              Positioned(
+                left: 0,
+                top: 0,
+                height: size.height - 100,
+                width: 20,
+                child: _SwipeDetector(
+                  onSwipeRight: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() => _currentIndex = 7);
+                  },
+                ),
+              ),
+            ],
+          ),
+          bottomNavigationBar: buildBottomNavBar(),
+        ),
+
+        // ── Tab 1: Chat / Messages ──
+        Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent,
+          body: const ConversationsScreen(),
+          bottomNavigationBar: buildBottomNavBar(),
+        ),
+
+        // ── Tab 2: Networking ──
+        _networkingProfileCount == 0
+            ? Scaffold(
+                extendBody: true,
+                backgroundColor: Colors.transparent,
+                body: const LiveConnectScreen(),
+                bottomNavigationBar: buildBottomNavBar(),
+              )
+            : Scaffold(
+                extendBody: true,
+                backgroundColor: Colors.transparent,
+                appBar: AppBar(
+                  centerTitle: true,
+                  toolbarHeight: 56,
+                  automaticallyImplyLeading: false,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  scrolledUnderElevation: 0,
+                  leadingWidth: 56,
+                  leading: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       HapticFeedback.lightImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const PendingRequestsScreen(),
+                          builder: (_) => const MyNetworkingProfileScreen(),
                         ),
                       );
                     },
-                    child: SizedBox(
-                      width: 44,
-                      height: 36,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Center(
+                        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('networking_profiles')
+                              .doc(_auth.currentUser?.uid)
+                              .snapshots(),
+                          builder: (ctx, snap) {
+                            final photoUrl =
+                                snap.data?.data()?['photoUrl'] as String?;
+                            return Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  width: 1.5,
+                                ),
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
+                              child: ClipOval(
+                                child: photoUrl != null && photoUrl.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        imageUrl: photoUrl,
+                                        width: 34,
+                                        height: 34,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => const Icon(
+                                          Icons.person_rounded,
+                                          size: 18,
+                                          color: Colors.white54,
+                                        ),
+                                        errorWidget: (context, url, error) =>
+                                            const Icon(
+                                          Icons.person_rounded,
+                                          size: 18,
+                                          color: Colors.white54,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.person_rounded,
+                                        size: 18,
+                                        color: Colors.white54,
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: const Text(
+                    'Networking',
+                    style: TextStyle(fontFamily: 'Poppins',
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  actions: [
+                    if (_networkingTabIndex == 0)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _smartConnectKey.currentState?.showFilterDialog();
+                          },
+                          child: Container(
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
@@ -2334,326 +2491,144 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                               ),
                             ),
                             child: const Icon(
-                              Icons.person_add_rounded,
+                              Icons.filter_list_rounded,
                               color: Colors.white,
-                              size: 18,
+                              size: 20,
                             ),
                           ),
-                          if (count > 0)
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Colors.redAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Text(
-                                  count > 9 ? '9+' : '$count',
-                                  style: const TextStyle(fontFamily: 'Poppins', 
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
+                        ),
+                      ),
+                  ],
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(48),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: TabBar(
+                        controller: _networkingTabController,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicatorColor: Colors.white,
+                        indicatorWeight: 2,
+                        dividerColor: Colors.transparent,
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        labelStyle: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.normal,
+                        ),
+                        tabs: const [
+                          Tab(text: 'Around Me'),
+                          Tab(text: 'My Network'),
+                          Tab(text: 'Request'),
                         ],
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-            // Filter icon — only on Smart Connect tab
-            if (_networkingTabIndex == 1)
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    // Call showFilterDialog on the active tab's LiveConnectTabScreen
-                    if (_networkingTabIndex == 0) {
-                      _discoverConnectKey.currentState?.showFilterDialog();
-                    } else {
-                      _smartConnectKey.currentState?.showFilterDialog();
-                    }
-                  },
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 1,
+                  flexibleSpace: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color.fromRGBO(40, 40, 40, 1),
+                          Color.fromRGBO(64, 64, 64, 1),
+                        ],
+                      ),
+                      border: Border(
+                        bottom: BorderSide(color: Colors.white, width: 0.5),
                       ),
                     ),
-                    child: const Icon(
-                      Icons.filter_list_rounded,
-                      color: Colors.white,
-                      size: 20,
+                  ),
+                ),
+                body: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color.fromRGBO(64, 64, 64, 1),
+                        Color.fromRGBO(0, 0, 0, 1),
+                      ],
                     ),
                   ),
-                ),
-              ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(48),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    width: 1,
+                  child: TabBarView(
+                    controller: _networkingTabController,
+                    children: [
+                      LiveConnectTabScreen(
+                        key: _smartConnectKey,
+                        activateNetworkingFilter: true,
+                      ),
+                      buildMyNetworkTab(),
+                      buildRequestsTab(),
+                    ],
                   ),
                 ),
-              ),
-              child: TabBar(
-                controller: _networkingTabController,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicatorColor: Colors.white,
-                indicatorWeight: 2,
-                dividerColor: Colors.transparent,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
-                labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                labelStyle: const TextStyle(fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-                unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.normal,
-                ),
-                tabs: const [
-                  Tab(text: 'Discover All'),
-                  Tab(text: 'Smart Connect'),
-                  Tab(text: 'My Network'),
-                ],
-              ),
-            ),
-          ),
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.fromRGBO(40, 40, 40, 1),
-                  Color.fromRGBO(64, 64, 64, 1),
-                ],
-              ),
-              border: Border(
-                bottom: BorderSide(color: Colors.white, width: 0.5),
-              ),
-            ),
-          ),
-        ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(64, 64, 64, 1),
-                Color.fromRGBO(0, 0, 0, 1),
-              ],
-            ),
-          ),
-          child: TabBarView(
-            controller: _networkingTabController,
-            children: [
-              LiveConnectTabScreen(
-                key: _discoverConnectKey,
-                activateNetworkingFilter: false,
-              ),
-              LiveConnectTabScreen(
-                key: _smartConnectKey,
-                activateNetworkingFilter: true,
-              ),
-              buildMyNetworkTab(),
-            ],
-          ),
-        ),
-        floatingActionButton: (_networkingTabIndex == 2 || _networkingProfileCount >= 3)
-            ? null
-            : Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: FloatingActionButton(
-                  onPressed: () async {
-                    HapticFeedback.lightImpact();
-                    final navigator = Navigator.of(context);
-                    if (!mounted) return;
-                    final tabNames = ['Discover All', 'Smart Connect', null];
-                    final currentTab = tabNames[_networkingTabIndex];
-                    final saved = await navigator.push<bool>(
-                      MaterialPageRoute(
-                        builder: (_) => CreateNetworkingProfileScreen(
-                          createdFrom: currentTab,
+                floatingActionButton: (_networkingTabIndex >= 1 || _networkingProfileCount >= 3)
+                    ? null
+                    : FloatingActionButton.extended(
+                        heroTag: 'networking_create_profile',
+                        onPressed: () async {
+                          HapticFeedback.lightImpact();
+                          final navigator = Navigator.of(context);
+                          if (!mounted) return;
+                          final tabNames = ['Around Me', null];
+                          final currentTab = tabNames[_networkingTabIndex];
+                          final saved = await navigator.push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => CreateNetworkingProfileScreen(
+                                createdFrom: currentTab,
+                              ),
+                            ),
+                          );
+                          if (saved == true) {
+                            _smartConnectKey.currentState?.refreshPeople();
+                          }
+                        },
+                        backgroundColor: const Color(0xFF007AFF),
+                        foregroundColor: Colors.white,
+                        elevation: 6,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        label: const Text(
+                          'Create Profile',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    );
-                    if (saved == true) {
-              
-                      _discoverConnectKey.currentState?.refreshPeople();
-                      _smartConnectKey.currentState?.refreshPeople();
-                    }
-                  },
-                  backgroundColor: const Color(0xFF007AFF),
-                  shape: const CircleBorder(),
-                  child: const Icon(Icons.add, color: Colors.white, size: 28),
-                ),
+                floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+                bottomNavigationBar: buildBottomNavBar(),
               ),
-        bottomNavigationBar: buildBottomNavBar(),
-      );
-    }
-    if (_currentIndex == 4) {
-      return Scaffold(
-        extendBody: true,
-        backgroundColor: Colors.transparent,
-        body: NearByScreen(
-          onBack: () {
-            setState(() {
-              _currentIndex = 0;
-              _tabController.index = 0;
-            });
-          },
-        ),
-        bottomNavigationBar: buildBottomNavBar(),
-      );
-    }
 
-    // For Home screen - show with icon-based bottom navigation (same as Messages screen)
-    return Scaffold(
-      key: MainNavigationScreen.scaffoldKey,
-      extendBodyBehindAppBar: true,
-      extendBody: true,
-      backgroundColor: Colors.transparent,
-      endDrawer: AppDrawer(
-        key: AppDrawer.globalKey,
-        onNewChat: () async {
-          // Reset for new chat (conversations are auto-saved)
-          await HomeScreen.globalKey.currentState?.saveConversationAndReset();
-          // Navigate to home screen
-          setState(() => _currentIndex = 0);
-        },
-        onLoadChat: (chatId) async {
-          // Load conversation from history (SingleTap style)
-          await HomeScreen.globalKey.currentState?.loadConversation(chatId);
-          // Navigate to home screen
-          setState(() => _currentIndex = 0);
-        },
-        onNewChatInProject: (projectId) {
-          // Start a new chat linked to a project
-          HomeScreen.globalKey.currentState?.startNewChatInProject(projectId);
-          // Navigate to home screen
-          setState(() => _currentIndex = 0);
-        },
-        onNavigate: (index) {
-          setState(() {
-            _currentIndex = index;
-            if (index <= 3) {
-              _tabController.index = _convertToTabIndex(index);
-            }
-          });
-          _saveScreenIndex(index);
-        },
-      ),
-      appBar: AppBar(
-        centerTitle: false,
-        toolbarHeight: 56,
-        leading: const Padding(
-          padding: EdgeInsets.only(left: 16),
-          child: Center(
-            child: Text(
-              'SingleTap',
-              style: TextStyle(fontFamily: 'Poppins', 
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+        // ── Tab 3: Nearby ──
+        Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent,
+          body: NearByScreen(
+            isVisible: _currentIndex == 4,
+            onBack: () {
+              setState(() {
+                _currentIndex = 0;
+                _tabController.index = 0;
+              });
+            },
           ),
+          bottomNavigationBar: buildBottomNavBar(),
         ),
-        leadingWidth: 100,
-        title: const SizedBox.shrink(),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                // Refresh chat list when drawer opens (not on every message)
-                AppDrawer.globalKey.currentState?.refreshChatHistory();
-                MainNavigationScreen.scaffoldKey.currentState?.openEndDrawer();
-              },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.menu_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-            ),
-          ),
-        ],
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.fromRGBO(40, 40, 40, 1),
-                Color.fromRGBO(64, 64, 64, 1),
-              ],
-            ),
-            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
-          ),
-        ),
-      ),
-      body: Stack(
-        children: [
-          HomeScreen(key: HomeScreen.globalKey),
-
-          // Swipe gesture detector for Feed
-          Positioned(
-            left: 0,
-            top: 0,
-            height: size.height - 100,
-            width: 20,
-            child: _SwipeDetector(
-              onSwipeRight: () {
-                HapticFeedback.mediumImpact();
-                setState(() => _currentIndex = 7);
-              },
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: buildBottomNavBar(),
+      ],
     );
   }
 
@@ -2670,9 +2645,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
           HapticFeedback.lightImpact();
           setState(() {
             _currentIndex = index;
-            if (index <= 3) {
-              _tabController.index = _convertToTabIndex(index);
-            }
+            _tabController.index = _convertToTabIndex(index);
           });
         },
         child: Column(

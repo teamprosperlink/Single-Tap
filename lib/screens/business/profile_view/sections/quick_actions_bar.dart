@@ -6,8 +6,8 @@ import '../../../../models/business_model.dart';
 import '../../../../models/user_profile.dart';
 import '../../../../config/category_profile_config.dart';
 import '../../../chat/enhanced_chat_screen.dart';
-import 'package:supper/res/config/app_colors.dart';
-import 'package:supper/config/app_theme.dart';
+import 'package:single_tap/res/config/app_colors.dart';
+import 'package:single_tap/config/app_theme.dart';
 
 /// Horizontal bar of quick action buttons (Call, Book, Order, etc.)
 class QuickActionsBar extends StatelessWidget {
@@ -227,7 +227,7 @@ class _ActionButton extends StatelessWidget {
   Future<void> _openSingleTap(BuildContext context) async {
     final SingleTap = business.contact.SingleTap ?? business.contact.phone;
     if (SingleTap == null || SingleTap.isEmpty) {
-      _showError(context, 'No SingleTap number available');
+      _showError(context, 'No Single Tap number available');
       return;
     }
 
@@ -239,7 +239,7 @@ class _ActionButton extends StatelessWidget {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (context.mounted) {
-        _showError(context, 'Could not open SingleTap');
+        _showError(context, 'Could not open Single Tap');
       }
     }
   }
@@ -537,7 +537,7 @@ class _ActionButton extends StatelessWidget {
                     ),
                     child: const Icon(Icons.chat, color: Colors.green),
                   ),
-                  title: const Text('SingleTap'),
+                  title: const Text('Single Tap'),
                   subtitle: Text(
                     business.contact.SingleTap ?? business.contact.phone!,
                   ),

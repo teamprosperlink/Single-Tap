@@ -1248,6 +1248,7 @@ class _BusinessDashboardScreenState
 
   Widget _buildFAB(bool isDarkMode) {
     return FloatingActionButton.extended(
+        heroTag: null,
       onPressed: () {
         HapticFeedback.lightImpact();
         _showAddOptions();
@@ -1470,7 +1471,7 @@ class _BusinessDashboardScreenState
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch SingleTap')),
+          const SnackBar(content: Text('Could not launch Single Tap')),
         );
       }
     }

@@ -9,7 +9,7 @@ import '../../res/config/app_text_styles.dart';
 import '../call/video_call_screen.dart';
 import '../call/call_history_screen.dart';
 
-/// SingleTap-style incoming video call screen
+/// Single Tap-style incoming video call screen
 /// Shows caller's photo/name with accept/decline buttons
 class IncomingVideoCallScreen extends StatefulWidget {
   final String callId;
@@ -604,7 +604,7 @@ class _IncomingVideoCallScreenState extends State<IncomingVideoCallScreen>
 
                 const Spacer(),
 
-                // Accept and Decline buttons (SingleTap style)
+                // Accept and Decline buttons (Single Tap style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 60),
                   child: Row(

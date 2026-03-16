@@ -953,8 +953,8 @@ class _ProfileWithHistoryScreenState
                                   GestureDetector(
                                     onTap: () {
                                       Share.share(
-                                        'Check out SingleTap - the AI-powered matching app that connects you with the right people! Download now: https://supper.app',
-                                        subject: 'Join me on SingleTap!',
+                                        'Check out Single Tap - the AI-powered matching app that connects you with the right people! Download now: https://singletap.app',
+                                        subject: 'Join me on Single Tap!',
                                       );
                                     },
                                     child: Icon(

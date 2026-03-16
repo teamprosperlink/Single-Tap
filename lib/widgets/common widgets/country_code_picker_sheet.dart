@@ -1,7 +1,4 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import '../../res/config/app_colors.dart';
-import '../../res/config/app_assets.dart';
 
 class CountryCodePickerSheet extends StatefulWidget {
   final List<Map<String, String>> countryCodes;
@@ -59,45 +56,30 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
         height: MediaQuery.of(context).size.height * 0.7,
         child: Stack(
           children: [
-            // Background Image
+            // Dark gradient background
             Positioned.fill(
-              child: Image.asset(
-                AppAssets.homeBackgroundImage,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.splashGradient,
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Dark overlay
-            Positioned.fill(
-              child: Container(color: AppColors.darkOverlay(alpha: 0.5)),
-            ),
-            // Content with glassmorphism
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.glassBackgroundDark(alpha: 0.15),
-                      AppColors.glassBackgroundDark(alpha: 0.05),
-                    ],
+                    colors: [Color.fromRGBO(64, 64, 64, 1), Color.fromRGBO(0, 0, 0, 1)],
                   ),
-                  border: Border(
-                    top: BorderSide(
-                      color: AppColors.glassBorder(alpha: 0.3),
-                      width: 1,
-                    ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+              ),
+            ),
+            // Content
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white24,
+                    width: 1,
                   ),
                 ),
+              ),
                 child: Column(
                   children: [
                     // Handle bar
@@ -110,17 +92,47 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Title
-                    Text(
-                      'Select Country Code',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 4,
+                    // Title with close button
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 32),
+                          Expanded(
+                            child: Text(
+                              'Select Country Code',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -284,7 +296,6 @@ class _CountryCodePickerSheetState extends State<CountryCodePickerSheet> {
                   ],
                 ),
               ),
-            ),
           ],
         ),
       ),

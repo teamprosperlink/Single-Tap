@@ -29,9 +29,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() ||
                      (resource != null && (
-                       resource.data.get('activeDeviceToken') != null ||
-                       resource.data.get('forceLogout') != null ||
-                       resource.data.get('deviceInfo') != null
+                       'activeDeviceToken' in resource.data ||
+                       'forceLogout' in resource.data ||
+                       'deviceInfo' in resource.data
                      ));
 
       allow create: if isOwner(userId);
@@ -189,10 +189,11 @@ service cloud.firestore {
     //   source, timestamp, createdAt, offer, answer
     // ============================================================
     match /calls/{callId} {
-      // Both caller and receiver can read
+      // Both caller and receiver can read (supports both field check and participants array query)
       allow read: if isAuthenticated() &&
         (resource.data.callerId == request.auth.uid ||
-         resource.data.receiverId == request.auth.uid);
+         resource.data.receiverId == request.auth.uid ||
+         request.auth.uid in resource.data.participants);
 
       // Caller creates the call doc
       allow create: if isAuthenticated() &&
@@ -537,21 +538,25 @@ service cloud.firestore {
     match /networking_profiles/{profileId} {
       allow read: if isAuthenticated();
 
+      // Owner can create their own profile (profileId == uid),
+      // OR any auth user can create a doc with only connection fields
       allow create: if isAuthenticated() &&
-        (request.resource.data.userId == request.auth.uid ||
+        (profileId == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid ||
          request.resource.data.keys().hasOnly(['connections', 'connectionCount']));
 
       // Owner can update anything, OR any auth user can update connection fields
-      // Also allow if new data has matching userId (for first profile save when doc only has connections)
       allow update: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid ||
+        (profileId == request.auth.uid ||
+         resource.data.userId == request.auth.uid ||
          request.resource.data.userId == request.auth.uid ||
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
            'connections', 'connectionCount'
          ]));
 
       allow delete: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
+        (profileId == request.auth.uid ||
+         resource.data.userId == request.auth.uid);
 
       // Multiple profiles subcollection
       match /profiles/{subProfileId} {
@@ -629,6 +634,15 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // PROJECTS COLLECTION
+    // ============================================================
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
+    }
+
+    // ============================================================
     // USER STATUS/PRESENCE
     // ============================================================
     match /status/{userId} {
@@ -680,6 +694,14 @@ service cloud.firestore {
     // ============================================================
     match /temp/{docId} {
       allow read, write: if isAuthenticated();
+    }
+
+    // ============================================================
+    // LISTING IMAGES (cache for nearby/feed cards)
+    // ============================================================
+    match /listing_images/{listingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
     }
   }
 }

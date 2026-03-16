@@ -28,12 +28,22 @@ class UniversalIntentService {
       // Import and use UnifiedPostService
       final unifiedService = UnifiedPostService();
 
+      // Reject Mountain View / null-island from user profile
+      final profileCity = (userProfile['city'] as String? ?? '').toLowerCase();
+      final profileLat = userProfile['latitude']?.toDouble();
+      final profileLng = userProfile['longitude']?.toDouble();
+      final isMV = profileCity.contains('mountain view') ||
+          (profileLat != null && profileLng != null &&
+           (profileLat - 37.422).abs() < 0.05 && (profileLng + 122.084).abs() < 0.05);
+      final isNI = profileLat != null && profileLng != null &&
+          (profileLat as double).abs() < 0.01 && (profileLng as double).abs() < 0.01;
+
       // Create post using unified service (stores in posts collection only)
       final result = await unifiedService.createPost(
         originalPrompt: userInput,
-        location: userProfile['location'],
-        latitude: userProfile['latitude']?.toDouble(),
-        longitude: userProfile['longitude']?.toDouble(),
+        location: isMV ? null : userProfile['location'],
+        latitude: (isMV || isNI) ? null : profileLat,
+        longitude: (isMV || isNI) ? null : profileLng,
       );
 
       if (result['success'] != true) {
@@ -62,41 +72,46 @@ class UniversalIntentService {
     }
   }
 
-  // Helper to enrich matches with user profiles
+  // Helper to enrich matches with user profiles (parallel batch fetch)
   Future<List<Map<String, dynamic>>> _enrichMatchesWithProfiles(
     List<PostModel> matches,
   ) async {
-    List<Map<String, dynamic>> enrichedMatches = [];
+    if (matches.isEmpty) return [];
 
-    for (var match in matches) {
-      // Get user profile
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(match.userId)
-          .get();
+    // Fetch all user profiles in parallel instead of sequentially
+    final userIds = matches.map((m) => m.userId).toSet().toList();
+    final profileFutures = userIds.map(
+      (uid) => _firestore.collection('users').doc(uid).get(),
+    );
+    final profileDocs = await Future.wait(profileFutures);
 
-      if (userDoc.exists) {
-        final userProfile = userDoc.data();
-
-        enrichedMatches.add({
-          'id': match.id,
-          'userId': match.userId,
-          'title': match.title,
-          'description': match.description,
-          'originalPrompt': match.originalPrompt,
-          'intentAnalysis': match.intentAnalysis,
-          'location': match.location,
-          'latitude': match.latitude,
-          'longitude': match.longitude,
-          'price': match.price,
-          'matchScore': match.similarityScore ?? 0.0,
-          'userProfile': userProfile,
-          'createdAt': match.createdAt,
-        });
+    // Build userId -> profile map
+    final profileMap = <String, Map<String, dynamic>?>{};
+    for (int i = 0; i < userIds.length; i++) {
+      if (profileDocs[i].exists) {
+        profileMap[userIds[i]] = profileDocs[i].data();
       }
     }
 
-    return enrichedMatches;
+    // Build enriched matches
+    return matches
+        .where((match) => profileMap.containsKey(match.userId))
+        .map((match) => {
+              'id': match.id,
+              'userId': match.userId,
+              'title': match.title,
+              'description': match.description,
+              'originalPrompt': match.originalPrompt,
+              'intentAnalysis': match.intentAnalysis,
+              'location': match.location,
+              'latitude': match.latitude,
+              'longitude': match.longitude,
+              'price': match.price,
+              'matchScore': match.similarityScore ?? 0.0,
+              'userProfile': profileMap[match.userId],
+              'createdAt': match.createdAt,
+            })
+        .toList();
   }
 
   // UPDATED: Get user's active posts (changed from user_intents to posts)

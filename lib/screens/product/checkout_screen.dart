@@ -1,7 +1,7 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supper/screens/product/order_summary_screen.dart';
+import 'package:single_tap/screens/product/order_summary_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Map<String, dynamic> item;
@@ -161,7 +161,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -228,7 +228,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       widget.item['name'] as String? ??
                                           'Product',
                                       style: const TextStyle(
-                                        fontSize: 17,
+                                        fontSize: 15,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -239,7 +239,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     Text(
                                       _getSubtitle(),
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 12,
                                         color: Colors.grey[500],
                                       ),
                                     ),
@@ -257,7 +257,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                             '$rating',
                                             style: const TextStyle(
                                               color: Colors.amber,
-                                              fontSize: 13,
+                                              fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
@@ -266,7 +266,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         Text(
                                           priceStr,
                                           style: const TextStyle(
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             color: Colors.white,
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -516,7 +516,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               const Text(
                                 'Price Details',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
@@ -1022,7 +1022,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
         Text(
           value,
           style: TextStyle(

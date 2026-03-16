@@ -42,6 +42,7 @@ class _RoomsTabState extends State<RoomsTab> {
       ),
       floatingActionButton: _hasRooms
           ? FloatingActionButton.extended(
+        heroTag: null,
               onPressed: _addRoom,
               backgroundColor: const Color(0xFF00D67D),
               icon: const Icon(Icons.add, color: Colors.white),

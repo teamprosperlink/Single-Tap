@@ -369,49 +369,47 @@ class ConnectionService {
 
     final Set<String> connectedIds = {};
 
-    // Source 1: networking_profiles connections array
-    try {
-      final doc = await _firestore
-          .collection('networking_profiles')
-          .doc(currentUserId)
-          .get();
-      final profileConnections = List<String>.from(doc.data()?['connections'] ?? []);
-      connectedIds.addAll(profileConnections);
-      debugPrint('ConnectionService: Source 1 (networking_profiles) found ${profileConnections.length} connections');
-    } catch (e) {
-      debugPrint('ConnectionService: Error reading networking_profiles connections: $e');
-    }
-
-    // Source 2: connection_requests where current user is RECEIVER and status is 'accepted'
-    try {
-      final receivedAccepted = await _firestore
-          .collection('connection_requests')
+    // Run all 3 sources in PARALLEL for speed
+    final results = await Future.wait([
+      // Source 1: networking_profiles connections array
+      _firestore.collection('networking_profiles').doc(currentUserId).get().then((doc) {
+        return List<String>.from(doc.data()?['connections'] ?? []);
+      }).catchError((e) {
+        debugPrint('ConnectionService: Error reading networking_profiles connections: $e');
+        return <String>[];
+      }),
+      // Source 2: connection_requests where current user is RECEIVER and status is 'accepted'
+      _firestore.collection('connection_requests')
           .where('receiverId', isEqualTo: currentUserId)
           .where('status', isEqualTo: 'accepted')
-          .get();
-      for (final reqDoc in receivedAccepted.docs) {
-        final senderId = reqDoc.data()['senderId'] as String?;
-        if (senderId != null) connectedIds.add(senderId);
-      }
-      debugPrint('ConnectionService: Source 2 (received accepted) found ${receivedAccepted.docs.length} requests');
-    } catch (e) {
-      debugPrint('ConnectionService: Error querying received accepted requests: $e');
-    }
-
-    // Source 3: connection_requests where current user is SENDER and status is 'accepted'
-    try {
-      final sentAccepted = await _firestore
-          .collection('connection_requests')
+          .get().then((snap) {
+        return snap.docs
+            .map((d) => d.data()['senderId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+      }).catchError((e) {
+        debugPrint('ConnectionService: Error querying received accepted requests: $e');
+        return <String>[];
+      }),
+      // Source 3: connection_requests where current user is SENDER and status is 'accepted'
+      _firestore.collection('connection_requests')
           .where('senderId', isEqualTo: currentUserId)
           .where('status', isEqualTo: 'accepted')
-          .get();
-      for (final reqDoc in sentAccepted.docs) {
-        final receiverId = reqDoc.data()['receiverId'] as String?;
-        if (receiverId != null) connectedIds.add(receiverId);
-      }
-      debugPrint('ConnectionService: Source 3 (sent accepted) found ${sentAccepted.docs.length} requests');
-    } catch (e) {
-      debugPrint('ConnectionService: Error querying sent accepted requests: $e');
+          .get().then((snap) {
+        return snap.docs
+            .map((d) => d.data()['receiverId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+      }).catchError((e) {
+        debugPrint('ConnectionService: Error querying sent accepted requests: $e');
+        return <String>[];
+      }),
+    ]);
+
+    for (final list in results) {
+      connectedIds.addAll(list);
     }
 
     debugPrint('ConnectionService: Total unique connections: ${connectedIds.length}');
@@ -425,34 +423,40 @@ class ConnectionService {
 
     final Set<String> pendingIds = {};
 
-    // Pending requests sent BY current user
-    try {
-      final sentPending = await _firestore
-          .collection('connection_requests')
+    // Run both queries in PARALLEL for speed
+    final results = await Future.wait([
+      // Pending requests sent BY current user
+      _firestore.collection('connection_requests')
           .where('senderId', isEqualTo: currentUserId)
           .where('status', isEqualTo: 'pending')
-          .get();
-      for (final reqDoc in sentPending.docs) {
-        final receiverId = reqDoc.data()['receiverId'] as String?;
-        if (receiverId != null) pendingIds.add(receiverId);
-      }
-    } catch (e) {
-      debugPrint('ConnectionService: Error querying sent pending requests: $e');
-    }
-
-    // Pending requests received BY current user
-    try {
-      final receivedPending = await _firestore
-          .collection('connection_requests')
+          .get().then((snap) {
+        return snap.docs
+            .map((d) => d.data()['receiverId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+      }).catchError((e) {
+        debugPrint('ConnectionService: Error querying sent pending requests: $e');
+        return <String>[];
+      }),
+      // Pending requests received BY current user
+      _firestore.collection('connection_requests')
           .where('receiverId', isEqualTo: currentUserId)
           .where('status', isEqualTo: 'pending')
-          .get();
-      for (final reqDoc in receivedPending.docs) {
-        final senderId = reqDoc.data()['senderId'] as String?;
-        if (senderId != null) pendingIds.add(senderId);
-      }
-    } catch (e) {
-      debugPrint('ConnectionService: Error querying received pending requests: $e');
+          .get().then((snap) {
+        return snap.docs
+            .map((d) => d.data()['senderId'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+      }).catchError((e) {
+        debugPrint('ConnectionService: Error querying received pending requests: $e');
+        return <String>[];
+      }),
+    ]);
+
+    for (final list in results) {
+      pendingIds.addAll(list);
     }
 
     debugPrint('ConnectionService: Total pending request users: ${pendingIds.length}');

@@ -9,8 +9,9 @@ import 'dart:io';
 import '../../res/config/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_manager.dart';
-import '../../services/location_services/location_service.dart';
+import '../../services/ip_location_service.dart';
 import '../../widgets/common widgets/shared_form_widgets.dart';
+import '../../widgets/common widgets/country_code_picker_sheet.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -24,7 +25,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final UserManager _userManager = UserManager();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-  final LocationService _locationService = LocationService();
   final ImagePicker _imagePicker = ImagePicker();
 
   final _formKey = GlobalKey<FormState>();
@@ -44,6 +44,42 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   String? _selectedGender;
   String? _selectedOccupation;
   DateTime? _selectedDateOfBirth;
+
+  // Country code data
+  String _selectedCountryCode = '+91';
+
+  final List<Map<String, String>> _countryCodes = [
+    {'code': '+91', 'country': 'India', 'flag': '🇮🇳'},
+    {'code': '+1', 'country': 'USA', 'flag': '🇺🇸'},
+    {'code': '+44', 'country': 'UK', 'flag': '🇬🇧'},
+    {'code': '+61', 'country': 'Australia', 'flag': '🇦🇺'},
+    {'code': '+971', 'country': 'UAE', 'flag': '🇦🇪'},
+    {'code': '+966', 'country': 'Saudi Arabia', 'flag': '🇸🇦'},
+    {'code': '+65', 'country': 'Singapore', 'flag': '🇸🇬'},
+    {'code': '+60', 'country': 'Malaysia', 'flag': '🇲🇾'},
+    {'code': '+49', 'country': 'Germany', 'flag': '🇩🇪'},
+    {'code': '+33', 'country': 'France', 'flag': '🇫🇷'},
+    {'code': '+39', 'country': 'Italy', 'flag': '🇮🇹'},
+    {'code': '+81', 'country': 'Japan', 'flag': '🇯🇵'},
+    {'code': '+82', 'country': 'South Korea', 'flag': '🇰🇷'},
+    {'code': '+86', 'country': 'China', 'flag': '🇨🇳'},
+    {'code': '+55', 'country': 'Brazil', 'flag': '🇧🇷'},
+    {'code': '+52', 'country': 'Mexico', 'flag': '🇲🇽'},
+    {'code': '+27', 'country': 'South Africa', 'flag': '🇿🇦'},
+    {'code': '+234', 'country': 'Nigeria', 'flag': '🇳🇬'},
+    {'code': '+92', 'country': 'Pakistan', 'flag': '🇵🇰'},
+    {'code': '+880', 'country': 'Bangladesh', 'flag': '🇧🇩'},
+    {'code': '+977', 'country': 'Nepal', 'flag': '🇳🇵'},
+    {'code': '+94', 'country': 'Sri Lanka', 'flag': '🇱🇰'},
+    {'code': '+63', 'country': 'Philippines', 'flag': '🇵🇭'},
+    {'code': '+62', 'country': 'Indonesia', 'flag': '🇮🇩'},
+    {'code': '+66', 'country': 'Thailand', 'flag': '🇹🇭'},
+    {'code': '+84', 'country': 'Vietnam', 'flag': '🇻🇳'},
+    {'code': '+7', 'country': 'Russia', 'flag': '🇷🇺'},
+    {'code': '+34', 'country': 'Spain', 'flag': '🇪🇸'},
+    {'code': '+31', 'country': 'Netherlands', 'flag': '🇳🇱'},
+    {'code': '+46', 'country': 'Sweden', 'flag': '🇸🇪'},
+  ];
 
   List<String> get _genderOptions => SharedFormWidgets.genderOptions;
   List<String> get _occupationOptions => SharedFormWidgets.occupationOptions;
@@ -68,7 +104,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
       if (profileData != null) {
         _nameController.text = profileData['name'] ?? '';
-        _phoneController.text = profileData['phone'] ?? '';
+        _parsePhoneNumber(profileData['phone'] ?? '');
         _locationController.text =
             profileData['city'] ?? profileData['location'] ?? '';
         _bioController.text = profileData['bio'] ?? '';
@@ -172,13 +208,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         }
       }
 
+      // Combine country code + phone number
+      final phoneNumber = _phoneController.text.trim().isNotEmpty
+          ? '$_selectedCountryCode${_phoneController.text.trim()}'
+          : '';
+
       // Update Firestore directly
       await _firestore.collection('users').doc(user!.uid).set({
         'uid': user!.uid,
         'name': _nameController.text.trim(),
         'email': user!.email ?? '',
         'photoUrl': photoUrl,
-        'phone': _phoneController.text.trim(),
+        'phone': phoneNumber,
         'location': _locationController.text.trim(),
         'city': _locationController.text.trim(),
         'bio': _bioController.text.trim(),
@@ -194,7 +235,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       await _userManager.updateProfile({
         'name': _nameController.text.trim(),
         'photoUrl': photoUrl,
-        'phone': _phoneController.text.trim(),
+        'phone': phoneNumber,
         'location': _locationController.text.trim(),
         'city': _locationController.text.trim(),
         'bio': _bioController.text.trim(),
@@ -213,12 +254,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
 
         // Reload profile to ensure everything is synced
         await _loadUserProfile();
@@ -336,64 +379,38 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     });
 
     try {
-      debugPrint('ProfileEditScreen: Getting GPS location (user-initiated)...');
-      // User manually clicked location button, so NOT silent mode
-      final position = await _locationService.getCurrentLocation(silent: false);
+      debugPrint('ProfileEditScreen: Detecting location...');
+      final result = await IpLocationService.detectLocation();
 
-      if (position != null) {
-        debugPrint(
-          'ProfileEditScreen: Got GPS position: ${position.latitude}, ${position.longitude}',
-        );
-        final addressData = await _locationService.getCityFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-
-        if (addressData != null &&
-            addressData['city'] != null &&
-            addressData['city'].toString().isNotEmpty &&
-            mounted) {
-          // Only show real location with valid city name
-          final locationString = addressData['display'] ?? addressData['city'];
-          debugPrint('ProfileEditScreen: Got real location: $locationString');
+      if (result != null && mounted) {
+        final display = result['displayAddress'] as String?;
+        debugPrint('ProfileEditScreen: Got location: $display');
+        if (display != null && display.isNotEmpty) {
           setState(() {
-            _locationController.text = locationString;
+            _locationController.text = display;
           });
-
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Location detected: $locationString'),
+              content: Text('Location detected: $display'),
               backgroundColor: Colors.green,
             ),
           );
         } else {
-          debugPrint(
-            'ProfileEditScreen: Geocoding failed or returned invalid data',
-          );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Could not get address from GPS coordinates. Please check internet connection.',
-                ),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
-      } else {
-        debugPrint('ProfileEditScreen: Could not get GPS position');
-        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Location permission denied or GPS is disabled. Please enable in settings.',
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
+              content: Text('Could not get address. Please check internet connection.'),
+              backgroundColor: Colors.orange,
             ),
           );
         }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not detect location. Please check internet connection.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
       }
     } catch (e) {
       debugPrint('ProfileEditScreen: Error updating location: $e');
@@ -412,6 +429,55 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         });
       }
     }
+  }
+
+  void _parsePhoneNumber(String fullPhone) {
+    if (fullPhone.isEmpty) {
+      _phoneController.text = '';
+      return;
+    }
+
+    // Try to match a known country code from the saved phone number
+    if (fullPhone.startsWith('+')) {
+      // Sort by code length descending so longer codes match first (e.g. +880 before +8)
+      final sortedCodes = List<Map<String, String>>.from(_countryCodes)
+        ..sort((a, b) => b['code']!.length.compareTo(a['code']!.length));
+
+      for (final country in sortedCodes) {
+        if (fullPhone.startsWith(country['code']!)) {
+          _selectedCountryCode = country['code']!;
+          _phoneController.text = fullPhone.substring(country['code']!.length).trim();
+          return;
+        }
+      }
+      // Unknown code - put everything after + in phone field
+      _phoneController.text = fullPhone;
+    } else {
+      // No country code prefix, just set as phone number
+      _phoneController.text = fullPhone;
+    }
+  }
+
+  void _showCountryCodePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color.fromRGBO(64, 64, 64, 1),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return CountryCodePickerSheet(
+          countryCodes: _countryCodes,
+          selectedCountryCode: _selectedCountryCode,
+          onSelect: (code, flag) {
+            setState(() {
+              _selectedCountryCode = code;
+            });
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -440,7 +506,53 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      appBar: AppBar(
+        centerTitle: true,
+        toolbarHeight: 56,
+        leading: GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+          },
+          child: const Padding(
+            padding: EdgeInsets.all(8),
+            child: Icon(
+              Icons.arrow_back_ios,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+        ),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+          ),
+        ),
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -450,66 +562,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.fromRGBO(40, 40, 40, 1),
-                      Color.fromRGBO(64, 64, 64, 1),
-                    ],
-                  ),
-                  border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
-                ),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'Edit Profile',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 40),
-                  ],
-                ),
-              ),
-
-              // Content
-              Expanded(
-                child: _isLoading
+          child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: Colors.white))
                     : SingleChildScrollView(
                         padding: const EdgeInsets.all(20),
@@ -615,17 +668,121 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                               ),
                               const SizedBox(height: 16),
 
-                              // Phone Number Field
-                              TextFormField(
-                                controller: _phoneController,
-                                style: const TextStyle(color: Colors.white, fontSize: 16),
-                                cursorColor: Colors.white,
-                                decoration: _glassInputDecoration(
-                                  hintText: '+1 234 567 8900',
-                                  prefixIcon: Icons.phone_rounded,
-                                  labelText: 'Phone Number',
+                              // Phone Number Field with Country Code Picker
+                              Theme(
+                                data: Theme.of(context).copyWith(
+                                  inputDecorationTheme: const InputDecorationTheme(filled: false),
                                 ),
-                                keyboardType: TextInputType.phone,
+                                child: InputDecorator(
+                                  decoration: InputDecoration(
+                                    labelText: 'Phone Number',
+                                    labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                    floatingLabelStyle: const TextStyle(color: Colors.white70, fontSize: 14),
+                                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                                    filled: true,
+                                    fillColor: Colors.white.withValues(alpha: 0.15),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: Colors.white.withValues(alpha: 0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: Colors.white.withValues(alpha: 0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    isDense: true,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Phone icon
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 12),
+                                        child: Icon(
+                                          Icons.phone_rounded,
+                                          color: Colors.grey[400],
+                                          size: 22,
+                                        ),
+                                      ),
+                                      // Country code section
+                                      Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: _showCountryCodePicker,
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _selectedCountryCode,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Icon(
+                                                  Icons.keyboard_arrow_down,
+                                                  color: Colors.white.withValues(alpha: 0.6),
+                                                  size: 20,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      // Divider
+                                      Container(
+                                        width: 1,
+                                        height: 28,
+                                        color: Colors.white.withValues(alpha: 0.2),
+                                      ),
+                                      // Phone number input
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _phoneController,
+                                          keyboardType: TextInputType.phone,
+                                          maxLength: 15,
+                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                          cursorColor: Colors.white,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: 'Enter phone number',
+                                            hintStyle: TextStyle(
+                                              color: Colors.white.withValues(alpha: 0.35),
+                                              fontSize: 15,
+                                            ),
+                                            counterText: '',
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            filled: false,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 16),
 
@@ -860,9 +1017,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           ),
                         ),
                       ),
-              ),
-            ],
-          ),
         ),
       ),
     );

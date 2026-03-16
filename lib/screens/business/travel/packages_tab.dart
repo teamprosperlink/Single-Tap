@@ -377,6 +377,7 @@ class _PackagesTabState extends State<PackagesTab> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showPackageForm(context),
         backgroundColor: const Color(0xFF06B6D4),
         icon: const Icon(Icons.add),

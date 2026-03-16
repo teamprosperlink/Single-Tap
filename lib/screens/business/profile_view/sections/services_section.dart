@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../models/business_model.dart';
 import '../../../../config/category_profile_config.dart';
-import 'package:supper/res/config/app_colors.dart';
-import 'package:supper/config/app_theme.dart';
+import 'package:single_tap/res/config/app_colors.dart';
+import 'package:single_tap/config/app_theme.dart';
 
 /// Service item model for display
 class ServiceItem {

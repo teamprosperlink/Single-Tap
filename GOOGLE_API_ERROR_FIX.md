@@ -70,7 +70,7 @@ Your google-services.json has:
 ```
 
 ### 3. Security & Verification
-- Package name: `com.plink.supper` ✅
+- Package name: `com.plink.singletap` ✅
 - SHA-1 fingerprint: `738cb209a9f1fdf76dd7867865f3ff8b5867f890` ✅
 - Web Client ID added: ✅
 
@@ -111,7 +111,7 @@ flutter run --release
   },
   "client": [{
     "android_info": {
-      "package_name": "com.plink.supper",
+      "package_name": "com.plink.singletap",
       "certificate_hash": "738cb209a9f1fdf76dd7867865f3ff8b5867f890"
     },
     "oauth_client": [
@@ -189,7 +189,7 @@ If you still see the error after rebuilding:
    - Go to Firebase Console
    - Project: suuper2
    - Settings → Your apps
-   - com.plink.supper (Android)
+   - com.plink.singletap (Android)
    - Verify SHA-1 fingerprint is registered ✅
 
 4. **Rebuild and test**:

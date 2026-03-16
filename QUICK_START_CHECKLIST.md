@@ -109,7 +109,7 @@ Add this to your main screen or navigation wrapper:
 
 ```dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   // Your existing code...
@@ -176,7 +176,7 @@ For production apps with background notifications, set up FCM:
 ```dart
 // In your notification_service.dart
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:supper/utils/group_call_helper.dart';
+import 'package:single_tap/utils/group_call_helper.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;

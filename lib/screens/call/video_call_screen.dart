@@ -862,7 +862,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       ),
               ),
 
-            // When connected, show local video as Picture-in-Picture (SingleTap style - top right)
+            // When connected, show local video as Picture-in-Picture (Single Tap style - top right)
             if (_callStatus == 'connected' && hasLocalVideo && _isVideoEnabled)
               Positioned(
                 top: 60,
@@ -940,7 +940,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
 
-            // Top overlay with call info (SingleTap style)
+            // Top overlay with call info (Single Tap style)
             Positioned(
               top: 0,
               left: 0,
@@ -1004,7 +1004,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               ),
             ),
 
-            // Bottom control buttons and end call button (SingleTap style)
+            // Bottom control buttons and end call button (Single Tap style)
             Positioned(
               bottom: 0,
               left: 0,
@@ -1028,7 +1028,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Control buttons row (SingleTap style - simple and clean)
+                      // Control buttons row (Single Tap style - simple and clean)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
@@ -1066,14 +1066,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         ],
                       ),
                       const SizedBox(height: 30),
-                      // End call button (SingleTap style - prominent red button)
+                      // End call button (Single Tap style - prominent red button)
                       GestureDetector(
                         onTap: _endCall,
                         child: Container(
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF3B30), // SingleTap red
+                            color: const Color(0xFFFF3B30), // Single Tap red
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -1103,7 +1103,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 
-  // SingleTap-style control button (minimal, clean design)
+  // Single Tap-style control button (minimal, clean design)
   Widget _buildSingleTapControlButton({
     required IconData icon,
     required VoidCallback onPressed,

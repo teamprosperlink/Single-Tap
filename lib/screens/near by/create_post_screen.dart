@@ -1,14 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../res/utils/snackbar_helper.dart';
+import '../../services/ip_location_service.dart';
+import '../../services/product_api_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -19,13 +19,10 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final ProductApiService _productApiService = ProductApiService();
   final ImagePicker _imagePicker = ImagePicker();
 
-  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
 
   // Speech to text
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -34,35 +31,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   final List<File> _selectedImages = [];
   bool _isLoading = false;
-  bool _allowCalls = true;
-  bool _isDonation = false;
-  String _selectedCurrency = 'INR';
-
-  final List<Map<String, String>> _currencies = [
-    {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
-    {'code': 'USD', 'symbol': '\$', 'name': 'US Dollar'},
-    {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
-    {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
-    {'code': 'AED', 'symbol': 'د.إ', 'name': 'UAE Dirham'},
-    {'code': 'SAR', 'symbol': '﷼', 'name': 'Saudi Riyal'},
-  ];
+  bool _postCreated = false;
+  String _loadingStage = '';
 
   bool get _isFormValid =>
-      _titleController.text.trim().isNotEmpty && _selectedImages.isNotEmpty;
+      _descriptionController.text.trim().isNotEmpty &&
+      _selectedImages.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _initSpeech();
-    _titleController.addListener(() => setState(() {}));
+    _descriptionController.addListener(() { if (mounted) setState(() {}); });
   }
 
   @override
   void dispose() {
-    _speech.stop();
-    _titleController.dispose();
+    try { _speech.stop(); } catch (_) {}
     _descriptionController.dispose();
-    _priceController.dispose();
     super.dispose();
   }
 
@@ -128,9 +114,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1080,
-        maxHeight: 1080,
-        imageQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 45,
       );
       if (image != null && mounted) {
         setState(() {
@@ -150,9 +136,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1080,
-        maxHeight: 1080,
-        imageQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 45,
       );
       if (image != null && mounted) {
         setState(() {
@@ -164,34 +150,36 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  Future<List<String>> _convertImagesToBase64() async {
+    final base64Images = <String>[];
+    int totalBytes = 0;
+    const int maxTotalBytes = 9 * 1024 * 1024; // 9MB safety margin
 
+    for (final file in _selectedImages) {
+      try {
+        final bytes = await file.readAsBytes();
+        totalBytes += bytes.length;
 
-  Future<List<String>> _uploadImages() async {
-    if (_selectedImages.isEmpty) return [];
+        if (totalBytes > maxTotalBytes) {
+          debugPrint('CreatePost: payload would exceed 9MB at image ${base64Images.length + 1}');
+          _showSnackBar(
+            'Images are too large. Using first ${base64Images.length} image(s) only.',
+            isError: false,
+          );
+          break;
+        }
 
-    final List<String> urls = [];
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return [];
-
-      for (int i = 0; i < _selectedImages.length; i++) {
-        final fileName = 'post_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
-        final ref = _storage.ref().child('posts/$userId/$fileName');
-        await ref.putFile(_selectedImages[i]);
-        final url = await ref.getDownloadURL();
-        urls.add(url);
+        base64Images.add(base64Encode(bytes));
+      } catch (e) {
+        debugPrint('CreatePost: failed to encode image: $e');
       }
-    } catch (e) {
-      debugPrint('Error uploading images: $e');
     }
-    return urls;
+
+    return base64Images;
   }
 
   Future<void> _createPost() async {
-    if (_titleController.text.trim().isEmpty) {
-      _showSnackBar('Please enter a title', isError: true);
-      return;
-    }
+    if (_isLoading || _postCreated) return;
 
     if (_descriptionController.text.trim().isEmpty) {
       _showSnackBar('Please enter a description', isError: true);
@@ -205,6 +193,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     setState(() {
       _isLoading = true;
+      _loadingStage = 'Preparing...';
     });
 
     try {
@@ -214,78 +203,76 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         return;
       }
 
-      // Upload images if selected
-      final imageUrls = await _uploadImages();
+      // Detect location via IpLocationService
+      if (mounted) setState(() => _loadingStage = 'Detecting location...');
+      double lat = 0;
+      double lng = 0;
+      String locationName = '';
 
-      // Get user data
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final userData = userDoc.data() ?? {};
-
-      // Parse price
-      double? price;
-      if (_priceController.text.isNotEmpty) {
-        price = double.tryParse(_priceController.text);
+      try {
+        final locResult = await IpLocationService.detectLocation();
+        if (locResult != null) {
+          lat = (locResult['lat'] as num?)?.toDouble() ?? 0;
+          lng = (locResult['lng'] as num?)?.toDouble() ?? 0;
+          locationName = (locResult['displayAddress'] as String?) ?? '';
+        }
+      } catch (e) {
+        debugPrint('CreatePost: location error: $e');
       }
 
-      // Get user name - fallback to phone number for phone login users
-      String userName = userData['name'] ?? userData['displayName'] ?? '';
-      if (userName.isEmpty || userName == 'User') {
-        userName = userData['phone'] ?? 'User';
+      // Convert images to base64 for API upload
+      if (mounted) setState(() => _loadingStage = 'Preparing images...');
+      final base64Images = await _convertImagesToBase64();
+
+      if (base64Images.isEmpty) {
+        _showSnackBar('Failed to process images. Please try again.', isError: true);
+        return;
       }
 
-      // Create post data
-      final postData = <String, dynamic>{
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'originalPrompt': _titleController.text.trim(),
-        'userId': currentUser.uid,
-        'userName': userName,
-        'userPhoto':
-            userData['photoUrl'] ??
-            userData['photoURL'] ??
-            userData['profileImageUrl'],
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'allowCalls': _allowCalls,
-        'isDonation': _isDonation,
-        'currency': _selectedCurrency,
-        'hashtags': <String>[],
-      };
+      // Build query from description
+      final desc = _descriptionController.text.trim();
+      final autoTitle = desc.length > 30 ? '${desc.substring(0, 27)}...' : desc;
 
-      if (imageUrls.isNotEmpty) {
-        postData['imageUrl'] = imageUrls.first;
-        postData['images'] = imageUrls;
-      }
+      // Call API via ProductApiService
+      if (mounted) setState(() => _loadingStage = 'Creating post...');
+      final result = await _productApiService.createPost(
+        query: desc,
+        category: 'sell',
+        title: autoTitle,
+        description: desc,
+        lat: lat,
+        lng: lng,
+        images: base64Images,
+        locationName: locationName,
+      );
 
-      if (price != null) {
-        postData['price'] = price;
-      }
+      if (!mounted) return;
 
-      await _firestore.collection('posts').add(postData);
-
-      if (mounted) {
+      if (result['success'] == true) {
+        _postCreated = true;
         _showSnackBar('Post created successfully!', isError: false);
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
+      } else {
+        final error = result['error'] as String? ?? 'Failed to create post';
+        _showSnackBar(error, isError: true);
       }
     } catch (e) {
-      debugPrint('Error creating post: $e');
+      debugPrint('CreatePost: unexpected error: $e');
       if (mounted) {
-        _showSnackBar('Failed to create post', isError: true);
+        _showSnackBar('Failed to create post. Please try again.', isError: true);
       }
     } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _loadingStage = '';
         });
       }
     }
   }
 
   void _showSnackBar(String message, {required bool isError}) {
+    if (!mounted) return;
     if (isError) {
       SnackBarHelper.showError(context, message);
     } else {
@@ -296,7 +283,40 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      extendBody: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
+        toolbarHeight: 56,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color.fromRGBO(40, 40, 40, 1), Color.fromRGBO(64, 64, 64, 1)],
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
+          ),
+        ),
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+        ),
+        title: const Text(
+          'Create NearBy Post',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -311,9 +331,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  // Header
-                  _buildHeader(),
-
                   // Form
                   Expanded(
                     child: SingleChildScrollView(
@@ -321,65 +338,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Title Field
-                          _buildLabeledField(
-                            label: 'Title',
-                            controller: _titleController,
-                            maxLength: 30,
-                            child: _buildGlassTextField(
-                              controller: _titleController,
-                              hintText: 'What are you posting?',
-                              prefixIcon: Icons.title_rounded,
-                              maxLines: 1,
-                              maxLength: 30,
-                              showMic: true,
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
+                          // Photo Upload Section
+                          _buildPhotoSection(),
+                          const SizedBox(height: 12),
 
                           // Description Field
                           _buildLabeledField(
                             label: 'Description',
+                            isMandatory: true,
                             controller: _descriptionController,
                             maxLength: 250,
                             child: _buildGlassTextField(
                               controller: _descriptionController,
                               hintText: 'Add more details...',
                               prefixIcon: Icons.description_outlined,
-                              maxLines: 1,
+                              maxLines: null,
                               maxLength: 250,
                               showMic: true,
                             ),
                           ),
-
                           const SizedBox(height: 20),
-
-                          // Photo Upload Section
-                          _buildPhotoSection(),
-
-                          const SizedBox(height: 20),
-
-                          // Donation Toggle
-                          _buildDonationToggle(),
-
-                          const SizedBox(height: 12),
-
-                          // Currency and Price Row (hidden when donation)
-                          if (!_isDonation) ...[
-                            _buildPriceSection(),
-                            const SizedBox(height: 20),
-                          ],
-
-                          // Allow Calls Toggle
-                          _buildCallToggle(),
-
-                          const SizedBox(height: 32),
 
                           // Create Button
                           _buildCreateButton(),
-
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
@@ -393,8 +375,25 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               Positioned.fill(
                 child: Container(
                   color: Colors.black54,
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.white),
+                        if (_loadingStage.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            _loadingStage,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -404,68 +403,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color.fromRGBO(40, 40, 40, 1),
-            Color.fromRGBO(64, 64, 64, 1),
-          ],
-        ),
-        border: Border(bottom: BorderSide(color: Colors.white, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 0.5,
-                ),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-          ),
-
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Create Post',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-
-          // Placeholder for symmetry
-          const SizedBox(width: 40),
-        ],
-      ),
-    );
-  }
 
   Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
     required int maxLength,
     required Widget child,
+    bool isMandatory = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,8 +417,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: label),
+                  if (isMandatory)
+                    const TextSpan(
+                      text: ' *',
+                      style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                ],
+              ),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: Colors.white70,
                 fontWeight: FontWeight.w600,
@@ -486,6 +439,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 return Text(
                   '${controller.text.length}/$maxLength',
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     color: controller.text.length >= maxLength
                         ? Colors.red
                         : Colors.grey[400],
@@ -507,11 +461,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     required TextEditingController controller,
     required String hintText,
     required IconData prefixIcon,
-    int maxLines = 1,
+    int? maxLines = 1,
     int? maxLength,
     TextInputType? keyboardType,
     String? prefixText,
+    String? suffixText,
     bool showMic = false,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     final bool isListening = _activeController == controller;
     return Container(
@@ -579,6 +535,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             ? controller.text
                             : 'Listening...',
                         style: TextStyle(
+                          fontFamily: 'Poppins',
                           color: controller.text.isNotEmpty
                               ? Colors.white
                               : Colors.grey[400],
@@ -612,28 +569,32 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         child: Text(
                           '$currentLength/$maxLength',
                           style: TextStyle(
+                            fontFamily: 'Poppins',
                             color: Colors.grey[400],
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                       );
                     }
                   : null,
               keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
               cursorColor: Colors.white,
               style: const TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w400,
               ),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.grey[400],
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w400,
                 ),
-                prefixIcon: Icon(prefixIcon, color: Colors.grey[400], size: 22),
+                prefixIcon: Icon(prefixIcon, color: Colors.grey[400], size: 20),
                 suffixIcon: showMic
                     ? GestureDetector(
                         onTap: () => _toggleMic(controller),
@@ -644,8 +605,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                       )
                     : null,
+                suffixText: suffixText,
+                suffixStyle: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white70,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
                 prefixText: prefixText,
-                prefixStyle: const TextStyle(color: Colors.white, fontSize: 16),
+                prefixStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 16),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -669,8 +637,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Add Photo',
+            Text.rich(
+              const TextSpan(
+                children: [
+                  TextSpan(text: 'Add Photo'),
+                  TextSpan(
+                    text: ' *',
+                    style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                ],
+              ),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: Colors.white70,
                 fontWeight: FontWeight.w600,
@@ -679,6 +655,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             Text(
               '${_selectedImages.length}/3',
               style: TextStyle(
+                fontFamily: 'Poppins',
                 color: _selectedImages.length >= 3
                     ? Colors.red
                     : Colors.grey[400],
@@ -747,20 +724,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         if (_selectedImages.length < 3)
           Row(
             children: [
-              Expanded(
-                child: _buildPhotoButton(
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Camera',
-                  onTap: _pickImageFromCamera,
-                ),
+              _buildPhotoButton(
+                icon: Icons.camera_alt_rounded,
+                label: 'Camera',
+                onTap: _pickImageFromCamera,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPhotoButton(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  onTap: _pickImageFromGallery,
-                ),
+              const SizedBox(width: 14),
+              _buildPhotoButton(
+                icon: Icons.photo_library_rounded,
+                label: 'Gallery',
+                onTap: _pickImageFromGallery,
               ),
             ],
           ),
@@ -779,9 +752,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         onTap();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        width: 80,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(
             colors: [
               Colors.white.withValues(alpha: 0.25),
@@ -796,14 +770,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 32),
-            const SizedBox(height: 8),
+            Icon(icon, color: Colors.white, size: 22),
+            const SizedBox(height: 4),
             Text(
               label,
               style: const TextStyle(
+                fontFamily: 'Poppins',
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -812,286 +788,53 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ),
     );
   }
-
-  Widget _buildPriceSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Price (Optional)',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            // Currency Dropdown
-            Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.white.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedCurrency,
-                  dropdownColor: const Color(0xFF2D2D3A),
-                  icon: Icon(Icons.arrow_drop_down, color: Colors.grey[400]),
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  borderRadius: BorderRadius.circular(16),
-                  menuMaxHeight: 300,
-                  items: _currencies.map((currency) {
-                    return DropdownMenuItem<String>(
-                      value: currency['code'],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          '${currency['symbol']} ${currency['code']}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedCurrency = value;
-                      });
-                    }
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Price Field
-            Expanded(
-              child: Container(
-                height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.25),
-                      Colors.white.withValues(alpha: 0.15),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Center(
-                  child: TextField(
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d{0,2}'),
-                      ),
-                    ],
-                    cursorColor: Colors.white,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Enter price',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
-                      filled: true,
-                      fillColor: Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCallToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _allowCalls
-                  ? AppColors.vibrantGreen.withValues(alpha: 0.2)
-                  : Colors.grey.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.call_rounded,
-              color: _allowCalls ? AppColors.vibrantGreen : Colors.grey,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Allow Calls',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Switch(
-            value: _allowCalls,
-            onChanged: (value) {
-              HapticFeedback.lightImpact();
-              setState(() {
-                _allowCalls = value;
-              });
-            },
-            activeThumbColor: AppColors.vibrantGreen,
-            activeTrackColor: AppColors.vibrantGreen.withValues(alpha: 0.3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDonationToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.25),
-            Colors.white.withValues(alpha: 0.15),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _isDonation
-                  ? Colors.orange.withValues(alpha: 0.2)
-                  : Colors.grey.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.volunteer_activism_rounded,
-              color: _isDonation ? Colors.orange : Colors.grey,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Donation',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Switch(
-            value: _isDonation,
-            onChanged: (value) {
-              HapticFeedback.lightImpact();
-              setState(() {
-                _isDonation = value;
-                if (value) _priceController.clear();
-              });
-            },
-            activeThumbColor: Colors.orange,
-            activeTrackColor: Colors.orange.withValues(alpha: 0.3),
-          ),
-        ],
-      ),
-    );
-  }
-
 
   Widget _buildCreateButton() {
     final bool enabled = _isFormValid && !_isLoading;
     return GestureDetector(
       onTap: enabled ? _createPost : null,
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.4,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.iosBlue,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Center(
-            child: Text(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: enabled
+              ? const Color(0xFF016CFF)
+              : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF016CFF).withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_circle_outline,
+              color: enabled
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.35),
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Text(
               'Create Post',
               style: TextStyle(
-                color: AppColors.buttonForeground,
-                fontSize: 18,
+                fontFamily: 'Poppins',
+                color: enabled
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.35),
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

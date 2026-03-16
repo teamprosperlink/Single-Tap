@@ -4,13 +4,21 @@ class AppAssets {
   AppAssets._(); // Private constructor to prevent instantiation
 
   //    LOCAL ASSET PATHS
-  static const String logoPath = 'assets/logo/AppLogo.png';
+  static const String logoPath = 'assets/logo/SingleTap.png';
   static const String searchRequirementImage =
       'assets/logo/searchRequirementData.jpeg';
   static const String searchAnnounceImage =
       'assets/logo/searchannaunceData.jpeg';
   static const String searchDataImage = 'assets/logo/searchData.jpeg';
   static const String homeBackgroundImage = 'assets/logo/home_background.webp';
+
+  //    PRODUCT API
+  static const String productApiBaseUrl = 'https://singletap-backend.onrender.com';
+  static const String productApiUrl = '$productApiBaseUrl/search-and-match';
+  static const String createPostUrl = '$productApiBaseUrl/create-post';
+  static const String nearbyFeedUrl = '$productApiBaseUrl/nearby/feed';
+  static const String nearbyForMeUrl = '$productApiBaseUrl/nearby/for-me';
+  static const String storeListingUrl = '$productApiBaseUrl/store-listing';
 
   //    API ENDPOINTS
   static const String osmReverseGeocode =

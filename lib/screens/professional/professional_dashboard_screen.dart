@@ -652,6 +652,7 @@ class _ProfessionalDashboardScreenState
 
   Widget _buildFAB(bool isDarkMode) {
     return FloatingActionButton.extended(
+        heroTag: null,
       onPressed: () {
         HapticFeedback.lightImpact();
         _showAddOptions();

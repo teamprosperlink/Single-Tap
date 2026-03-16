@@ -307,6 +307,7 @@ class _HealthcareServicesTabState extends State<HealthcareServicesTab> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _showAddServiceSheet(),
         backgroundColor: const Color(0xFF2196F3),
         foregroundColor: Colors.white,

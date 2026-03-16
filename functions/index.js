@@ -1,5 +1,5 @@
 /**
- * Supper App - Firebase Cloud Functions
+ * Single Tap App - Firebase Cloud Functions
  *
  * Push Notification System
  *

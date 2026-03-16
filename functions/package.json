@@ -1,6 +1,6 @@
 {
-  "name": "supper-functions",
-  "description": "Firebase Cloud Functions for Supper App - Push Notifications",
+  "name": "single-tap-functions",
+  "description": "Firebase Cloud Functions for Single Tap App - Push Notifications",
   "scripts": {
     "lint": "eslint .",
     "serve": "firebase emulators:start --only functions",

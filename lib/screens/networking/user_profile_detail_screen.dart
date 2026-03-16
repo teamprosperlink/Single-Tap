@@ -13,6 +13,7 @@ import '../../services/notification_service.dart';
 import '../call/voice_call_screen.dart';
 import '../chat/enhanced_chat_screen.dart';
 import '../../widgets/networking/networking_constants.dart';
+import '../../widgets/networking/networking_helpers.dart';
 import '../../widgets/networking/networking_widgets.dart';
 
 class UserProfileDetailScreen extends StatefulWidget {
@@ -112,6 +113,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
   }
 
   void _onScroll() {
+    if (!mounted) return;
     final offset = _scrollController.offset;
     final shouldShowTitle = offset > 250;
 
@@ -133,7 +135,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
       child: Scaffold(
         backgroundColor: const Color.fromRGBO(0, 0, 0, 1),
         appBar: NetworkingWidgets.networkingAppBar(
-          title: 'Profile Details',
+          title: 'Networking Profile Details',
           onBack: () => Navigator.pop(context),
           actions: [
             if (widget.connectionStatus == 'connected')
@@ -1354,30 +1356,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         if (!mounted) return;
                         if (result['success'] == true) {
                           setState(() => _requestSentLocally = true);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('Connection request sent!', style: TextStyle(fontFamily: 'Poppins')),
-                              backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              margin: const EdgeInsets.all(16),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
+                          NetworkingHelpers.showSuccessSnackBar(context, 'Connection request sent!');
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                result['message'] ?? 'Failed to send request',
-                                style: const TextStyle(fontFamily: 'Poppins'),
-                              ),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              margin: const EdgeInsets.all(16),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
+                          NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed to send request');
                         }
                       }
                     },
@@ -1401,7 +1382,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         children: [
                           ClipOval(
                             child: Image.asset(
-                              'assets/logo/AppLogo.png',
+                              'assets/logo/SingleTap.png',
                               width: 24,
                               height: 24,
                               fit: BoxFit.cover,
@@ -1438,27 +1419,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         ),
                       ],
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClipOval(
-                          child: Image.asset(
-                            'assets/logo/AppLogo.png',
-                            width: 24,
-                            height: 24,
-                            fit: BoxFit.cover,
-                          ),
+                    child: const Center(
+                      child: Text(
+                        'Request Sent',
+                        style: TextStyle(fontFamily: 'Poppins',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Request Sent',
-                          style: TextStyle(fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -1592,28 +1561,10 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
               );
               if (!mounted) return;
               if (result['success'] == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Disconnected successfully', style: TextStyle(fontFamily: 'Poppins')),
-                    backgroundColor: Colors.orange,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                NetworkingHelpers.showWarningSnackBar(context, 'Disconnected successfully');
                 Navigator.of(context).popUntil((route) => route.isFirst);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(result['message'] ?? 'Failed to disconnect', style: const TextStyle(fontFamily: 'Poppins')),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed to disconnect');
               }
             },
             style: TextButton.styleFrom(
@@ -1689,18 +1640,22 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
 
       if (!mounted) return;
 
-      NotificationService().sendNotificationToUser(
-        userId: user.uid,
-        title: 'Incoming Call',
-        body: '$currentUserName is calling you',
-        type: 'call',
-        data: {
-          'callId': callDoc.id,
-          'callerId': currentUserId,
-          'callerName': currentUserName,
-          'callerPhoto': currentUserPhoto,
-        },
-      );
+      try {
+        await NotificationService().sendNotificationToUser(
+          userId: user.uid,
+          title: 'Incoming Call',
+          body: '$currentUserName is calling you',
+          type: 'call',
+          data: {
+            'callId': callDoc.id,
+            'callerId': currentUserId,
+            'callerName': currentUserName,
+            'callerPhoto': currentUserPhoto,
+          },
+        );
+      } catch (e) {
+        debugPrint('Error sending call notification: $e');
+      }
 
       final userProfile = UserProfile(
         uid: user.uid,
@@ -1716,6 +1671,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
         interests: user.interests,
       );
 
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -1729,15 +1685,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     } catch (e) {
       debugPrint('Error making voice call: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to start call. Please try again.', style: TextStyle(fontFamily: 'Poppins')),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
+        NetworkingHelpers.showErrorSnackBar(context, 'Failed to start call. Please try again.');
       }
     }
   }

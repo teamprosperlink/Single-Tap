@@ -147,7 +147,7 @@ dependencies → ✅ 81 packages have updates (non-blocking)
 ```json
 {
   "project_id": "suuper2",
-  "package_name": "com.plink.supper",
+  "package_name": "com.plink.singletap",
   "oauth_client": [
     {
       "client_id": "1027499426345-34ni7qkf40gboph4pnmfl6q1gl3lv3nb.apps.googleusercontent.com",

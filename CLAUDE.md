@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Supper** is a Flutter-based AI-powered matching app that connects people for various purposes (marketplace, dating, friendship, jobs, lost & found, etc.) through intelligent intent understanding and semantic matching.
+**Single Tap** is a Flutter-based AI-powered matching app that connects people for various purposes (marketplace, dating, friendship, jobs, lost & found, etc.) through intelligent intent understanding and semantic matching.
 
 ### Core Technology Stack
 - **Flutter 3.35.7** (Dart 3.9.2)
@@ -240,7 +240,7 @@ The app uses several optimization strategies:
 
 ### Creating a Post
 ```dart
-import 'package:supper/services/unified_post_service.dart';
+import 'package:single_tap/services/unified_post_service.dart';
 
 final service = UnifiedPostService();
 final result = await service.createPost(
@@ -278,7 +278,7 @@ if (clarification['needsClarification'] == true) {
 
 ### Location Updates
 ```dart
-import 'package:supper/services/location_service.dart';
+import 'package:single_tap/services/location_service.dart';
 
 final locationService = LocationService();
 

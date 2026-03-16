@@ -302,7 +302,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -408,7 +408,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                               : _getProcessingTitle(),
                                           key: ValueKey(_isConfirmed),
                                           style: const TextStyle(
-                                            fontSize: 22,
+                                            fontSize: 18,
                                             fontWeight: FontWeight.w700,
                                             color: Colors.white,
                                           ),
@@ -420,7 +420,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                             ? 'Your order has been placed successfully'
                                             : 'Please wait while we process your order...',
                                         style: TextStyle(
-                                          fontSize: 14,
+                                          fontSize: 12,
                                           color: Colors.grey[500],
                                         ),
                                       ),
@@ -445,7 +445,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                 const Text(
                                   'Order Status',
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
                                   ),
@@ -465,7 +465,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                     '#$orderId',
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -509,7 +509,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                     widget.item['name'] as String? ??
                                         'Product',
                                     style: const TextStyle(
-                                      fontSize: 15,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
                                     ),
@@ -533,7 +533,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                 Text(
                                   '₹${total.toStringAsFixed(0)}',
                                   style: const TextStyle(
-                                    fontSize: 17,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
                                   ),
@@ -567,7 +567,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                   Text(
                                     _getDeliveryTime(),
                                     style: const TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -595,7 +595,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                                   const Text(
                                     'Park Street',
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -677,7 +677,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                       'Back to Home',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -760,7 +760,7 @@ class _ConfirmingOrderScreenState extends State<ConfirmingOrderScreen>
                     Text(
                       step['title'] as String,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight:
                             isDone ? FontWeight.w600 : FontWeight.w400,
                         color: isDone ? Colors.white : Colors.grey[600],

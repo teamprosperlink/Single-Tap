@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+
 import '../res/utils/performance_monitor.dart';
+import '../widgets/common widgets/app_background.dart';
 
 class PerformanceDebugScreen extends StatefulWidget {
   const PerformanceDebugScreen({super.key});
@@ -32,364 +34,494 @@ class _PerformanceDebugScreenState extends State<PerformanceDebugScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Performance Debug'),
-        backgroundColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-        elevation: 0.5,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadPerformanceMetrics,
-            tooltip: 'Refresh Metrics',
+        title: const Text(
+          'Performance Debug',
+          style: TextStyle(color: Colors.white),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(40, 40, 40, 1),
+                Color.fromRGBO(64, 64, 64, 1),
+              ],
+            ),
+            border: Border(
+              bottom: BorderSide(color: Colors.white, width: 0.5),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.clear_all),
-            onPressed: () {
-              PerformanceTracker.clear();
-              _loadPerformanceMetrics();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Performance metrics cleared')),
-              );
-            },
-            tooltip: 'Clear Metrics',
-          ),
-        ],
+        ),
+        actions: const [],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: AppBackground(
+        showParticles: false,
+        overlayOpacity: 0.7,
+        child: ListView(
+          padding: const EdgeInsets.only(
+            top: kToolbarHeight + 44,
+            left: 16,
+            right: 16,
+            bottom: 16,
+          ),
+          children: [
+            _buildDebugOptionsCard(),
+            const SizedBox(height: 16),
+            _buildPerformanceMetricsCard(),
+            const SizedBox(height: 16),
+            _buildFrameRateCard(),
+            const SizedBox(height: 16),
+            _buildMemoryCard(),
+            const SizedBox(height: 16),
+            _buildTestActionsCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDebugOptionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDebugOptionsCard(isDarkMode),
+          const Text(
+            'Debug Options',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 16),
-          _buildPerformanceMetricsCard(isDarkMode),
-          const SizedBox(height: 16),
-          _buildFrameRateCard(isDarkMode),
-          const SizedBox(height: 16),
-          _buildMemoryCard(isDarkMode),
-          const SizedBox(height: 16),
-          _buildTestActionsCard(isDarkMode),
+          SwitchListTile(
+            title: const Text(
+              'Performance Overlay',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Show FPS and frame timing',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+            value: _showPerformanceOverlay,
+            activeThumbColor: Colors.blue,
+            onChanged: (value) {
+              setState(() {
+                _showPerformanceOverlay = value;
+              });
+            },
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Material Grid',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Show material design grid',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+            value: _showMaterialGrid,
+            activeThumbColor: Colors.blue,
+            onChanged: (value) {
+              setState(() {
+                _showMaterialGrid = value;
+              });
+            },
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Semantics Debugger',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Show accessibility tree',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+            value: _showSemantics,
+            activeThumbColor: Colors.blue,
+            onChanged: (value) {
+              setState(() {
+                _showSemantics = value;
+              });
+            },
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Checkerboard Images',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Highlight cached images',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+            value: _checkerboardImages,
+            activeThumbColor: Colors.blue,
+            onChanged: (value) {
+              setState(() {
+                _checkerboardImages = value;
+              });
+            },
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Checkerboard Layers',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Highlight rendering layers',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+            value: _checkerboardLayers,
+            activeThumbColor: Colors.blue,
+            onChanged: (value) {
+              setState(() {
+                _checkerboardLayers = value;
+              });
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDebugOptionsCard(bool isDarkMode) {
-    return Card(
-      color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Debug Options',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('Performance Overlay'),
-              subtitle: const Text('Show FPS and frame timing'),
-              value: _showPerformanceOverlay,
-              onChanged: (value) {
-                setState(() {
-                  _showPerformanceOverlay = value;
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Material Grid'),
-              subtitle: const Text('Show material design grid'),
-              value: _showMaterialGrid,
-              onChanged: (value) {
-                setState(() {
-                  _showMaterialGrid = value;
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Semantics Debugger'),
-              subtitle: const Text('Show accessibility tree'),
-              value: _showSemantics,
-              onChanged: (value) {
-                setState(() {
-                  _showSemantics = value;
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Checkerboard Images'),
-              subtitle: const Text('Highlight cached images'),
-              value: _checkerboardImages,
-              onChanged: (value) {
-                setState(() {
-                  _checkerboardImages = value;
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Checkerboard Layers'),
-              subtitle: const Text('Highlight rendering layers'),
-              value: _checkerboardLayers,
-              onChanged: (value) {
-                setState(() {
-                  _checkerboardLayers = value;
-                });
-              },
-            ),
+  Widget _buildPerformanceMetricsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
         ),
       ),
-    );
-  }
-
-  Widget _buildPerformanceMetricsCard(bool isDarkMode) {
-    return Card(
-      color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Performance Metrics',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Performance Metrics',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            const SizedBox(height: 16),
-            if (_performanceMetrics.isEmpty)
-              Text(
-                'No metrics collected yet',
-                style: TextStyle(
-                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                ),
-              )
-            else
-              ..._performanceMetrics.entries.map((entry) {
-                final metrics = entry.value as Map<String, dynamic>;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.key,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: isDarkMode ? Colors.white : Colors.black,
+          ),
+          const SizedBox(height: 16),
+          if (_performanceMetrics.isEmpty)
+            Text(
+              'No metrics collected yet',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+            )
+          else
+            ..._performanceMetrics.entries.map((entry) {
+              final metrics = entry.value as Map<String, dynamic>;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.key,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildMetric(
+                          'Avg',
+                          '${metrics['average']}ms',
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildMetric(
-                            'Avg',
-                            '${metrics['average']}ms',
-                            isDarkMode,
-                          ),
-                          _buildMetric(
-                            'Min',
-                            '${metrics['min']}ms',
-                            isDarkMode,
-                          ),
-                          _buildMetric(
-                            'Max',
-                            '${metrics['max']}ms',
-                            isDarkMode,
-                          ),
-                          _buildMetric(
-                            'Count',
-                            '${metrics['count']}',
-                            isDarkMode,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
+                        _buildMetric(
+                          'Min',
+                          '${metrics['min']}ms',
+                        ),
+                        _buildMetric(
+                          'Max',
+                          '${metrics['max']}ms',
+                        ),
+                        _buildMetric(
+                          'Count',
+                          '${metrics['count']}',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
 
-  Widget _buildMetric(String label, String value, bool isDarkMode) {
+  Widget _buildMetric(String label, String value) {
     return Column(
       children: [
         Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            color: Colors.white.withValues(alpha: 0.6),
           ),
         ),
         Text(
           value,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: isDarkMode ? Colors.white : Colors.black,
+            color: Colors.white,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildFrameRateCard(bool isDarkMode) {
-    return Card(
-      color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Frame Rate Analysis',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            StreamBuilder(
-              stream: Stream.periodic(const Duration(seconds: 1)),
-              builder: (context, snapshot) {
-                final frameTime =
-                    SchedulerBinding.instance.currentFrameTimeStamp;
-                final fps = (1000000 / frameTime.inMicroseconds).clamp(0, 120);
-
-                return Column(
-                  children: [
-                    LinearProgressIndicator(
-                      value: fps / 60,
-                      backgroundColor: Colors.red.withValues(alpha: 0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        fps >= 55
-                            ? Colors.green
-                            : fps >= 30
-                            ? Colors.orange
-                            : Colors.red,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${fps.toStringAsFixed(1)} FPS',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: fps >= 55
-                            ? Colors.green
-                            : fps >= 30
-                            ? Colors.orange
-                            : Colors.red,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+  Widget _buildFrameRateCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Frame Rate Analysis',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder(
+            stream: Stream.periodic(const Duration(seconds: 1)),
+            builder: (context, snapshot) {
+              final frameTime =
+                  SchedulerBinding.instance.currentFrameTimeStamp;
+              final fps = (1000000 / frameTime.inMicroseconds).clamp(0, 120);
+
+              return Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: fps / 60,
+                    backgroundColor: Colors.red.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      fps >= 55
+                          ? Colors.green
+                          : fps >= 30
+                          ? Colors.orange
+                          : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${fps.toStringAsFixed(1)} FPS',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: fps >= 55
+                          ? Colors.green
+                          : fps >= 30
+                          ? Colors.orange
+                          : Colors.red,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMemoryCard(bool isDarkMode) {
-    return Card(
-      color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Memory Usage',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Run with --profile flag to see memory metrics',
-              style: TextStyle(
-                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () {
-                // Trigger garbage collection hint
-                // Note: This is just a hint, actual GC is controlled by Dart VM
-                for (int i = 0; i < 10; i++) {
-                  List.generate(1000000, (index) => index);
-                }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Triggered memory pressure')),
-                );
-              },
-              icon: const Icon(Icons.memory),
-              label: const Text('Force Memory Pressure'),
-            ),
+  Widget _buildMemoryCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Memory Usage',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Run with --profile flag to see memory metrics',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () {
+              // Trigger garbage collection hint
+              // Note: This is just a hint, actual GC is controlled by Dart VM
+              for (int i = 0; i < 10; i++) {
+                List.generate(1000000, (index) => index);
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Triggered memory pressure')),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF007AFF),
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.memory),
+            label: const Text('Force Memory Pressure'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTestActionsCard(bool isDarkMode) {
-    return Card(
-      color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Performance Tests',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton(
-                  onPressed: _runScrollTest,
-                  child: const Text('Test Scroll Performance'),
-                ),
-                ElevatedButton(
-                  onPressed: _runAnimationTest,
-                  child: const Text('Test Animation'),
-                ),
-                ElevatedButton(
-                  onPressed: _runHeavyComputation,
-                  child: const Text('Heavy Computation'),
-                ),
-                ElevatedButton(
-                  onPressed: _runNetworkTest,
-                  child: const Text('Network Stress Test'),
-                ),
-              ],
-            ),
+  Widget _buildTestActionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.25),
+            Colors.white.withValues(alpha: 0.15),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Performance Tests',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton(
+                onPressed: _runScrollTest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Test Scroll Performance'),
+              ),
+              ElevatedButton(
+                onPressed: _runAnimationTest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Test Animation'),
+              ),
+              ElevatedButton(
+                onPressed: _runHeavyComputation,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Heavy Computation'),
+              ),
+              ElevatedButton(
+                onPressed: _runNetworkTest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Network Stress Test'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -431,12 +563,14 @@ class _PerformanceDebugScreenState extends State<PerformanceDebugScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1C1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1)),
+        content: const Row(
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(color: Colors.white),
             SizedBox(width: 20),
-            Text('Running computation...'),
+            Text('Running computation...', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
           ],
         ),
       ),

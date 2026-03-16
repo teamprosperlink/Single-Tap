@@ -269,7 +269,7 @@ class OrderTrackingScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -372,7 +372,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                     Text(
                                       estimatedDelivery,
                                       style: const TextStyle(
-                                        fontSize: 18,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -394,7 +394,7 @@ class OrderTrackingScreen extends StatelessWidget {
                               const Text(
                                 'Order Status',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
@@ -436,7 +436,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                       orderData['itemName'] as String? ??
                                           'Product',
                                       style: const TextStyle(
-                                        fontSize: 15,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: Colors.white,
                                       ),
@@ -460,7 +460,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                   Text(
                                     '₹${totalAmount.toStringAsFixed(0)}',
                                     style: const TextStyle(
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -495,7 +495,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                     Text(
                                       estimatedDelivery,
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -523,7 +523,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                     const Text(
                                       'Park Street',
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),
@@ -553,7 +553,7 @@ class OrderTrackingScreen extends StatelessWidget {
                               const Text(
                                 'Payment Summary',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
@@ -587,7 +587,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                   const Text(
                                     'Total',
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -595,7 +595,7 @@ class OrderTrackingScreen extends StatelessWidget {
                                   Text(
                                     '₹${totalAmount.toStringAsFixed(0)}',
                                     style: const TextStyle(
-                                      fontSize: 18,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -668,7 +668,7 @@ class OrderTrackingScreen extends StatelessWidget {
                       'Back to Orders',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -705,7 +705,7 @@ class OrderTrackingScreen extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
         ),
         Text(
           value,
@@ -788,7 +788,7 @@ class OrderTrackingScreen extends StatelessWidget {
                     Text(
                       step['title'] as String,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight:
                             isDone ? FontWeight.w600 : FontWeight.w400,
                         color: isDone ? Colors.white : Colors.grey[600],
