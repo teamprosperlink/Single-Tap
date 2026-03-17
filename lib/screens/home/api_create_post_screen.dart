@@ -254,79 +254,88 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
       _showSnackBar('Please enter a description', isError: true);
       return;
     }
-    if (_selectedImages.isEmpty) {
-      _showSnackBar('Please add at least one image', isError: true);
-      return;
-    }
-
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       _showSnackBar('Please login to create a post', isError: true);
       return;
     }
 
-    // Validate all image files exist in parallel
-    final existChecks = await Future.wait(
-      _selectedImages.map((file) async => (await file.exists()) ? file : null),
-    );
-    final validImages = existChecks.whereType<File>().toList();
-    if (validImages.isEmpty) {
-      if (mounted) _showSnackBar('Selected images are no longer available. Please re-select.', isError: true);
-      return;
-    }
+    // Set loading IMMEDIATELY to prevent duplicate taps (before any async work)
+    setState(() {
+      _isLoading = true;
+      _loadingStage = _selectedImages.isNotEmpty ? 'Preparing images...' : 'Processing...';
+    });
 
     final priceText = _priceController.text.trim();
     final double? price = priceText.isNotEmpty ? double.tryParse(priceText) : null;
 
-    setState(() {
-      _isLoading = true;
-      _loadingStage = 'Preparing images...';
-    });
-
     try {
-      // ── Read ALL images in parallel ──
-      debugPrint('CreatePost: reading ${validImages.length} images in parallel...');
-      final allBytes = await Future.wait(
-        validImages.map((file) async {
-          try {
-            return await file.readAsBytes();
-          } catch (e) {
-            debugPrint('CreatePost: failed to read ${file.path}: $e');
-            return Uint8List(0);
+      List<String> base64Images = [];
+
+      if (_selectedImages.isNotEmpty) {
+        // Validate all image files exist in parallel
+        final existChecks = await Future.wait(
+          _selectedImages.map((file) async => (await file.exists()) ? file : null),
+        );
+        final validImages = existChecks.whereType<File>().toList();
+        if (validImages.isEmpty) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            _showSnackBar('Selected images are no longer available. Please re-select.', isError: true);
           }
-        }),
-      );
-      final bytesList = allBytes.where((b) => b.length > 100).toList();
+          return;
+        }
 
-      if (bytesList.isEmpty) {
-        if (mounted) _showSnackBar('Failed to read images. Please re-select.', isError: true);
-        return;
+        // ── Read ALL images in parallel ──
+        debugPrint('CreatePost: reading ${validImages.length} images in parallel...');
+        final allBytes = await Future.wait(
+          validImages.map((file) async {
+            try {
+              return await file.readAsBytes();
+            } catch (e) {
+              debugPrint('CreatePost: failed to read ${file.path}: $e');
+              return Uint8List(0);
+            }
+          }),
+        );
+        final bytesList = allBytes.where((b) => b.length > 100).toList();
+
+        if (bytesList.isEmpty) {
+          if (mounted) _showSnackBar('Failed to read images. Please re-select.', isError: true);
+          return;
+        }
+        debugPrint('CreatePost: ${bytesList.length} images read successfully');
+
+        // ── Encode images + reuse pre-fetched location (started in initState) ──
+        if (mounted) setState(() => _loadingStage = 'Uploading & AI analyzing...');
+
+        final encodingFuture = compute(_encodeBytesIsolate, bytesList);
+        _locationFuture ??= _detectLocation(currentUser.uid);
+
+        final results = await Future.wait([encodingFuture, _locationFuture!]);
+        base64Images = results[0] as List<String>;
+
+        if (base64Images.isEmpty) {
+          if (mounted) {
+            _showSnackBar('Images are too large. Please use smaller photos (under 500KB each).', isError: true);
+          }
+          return;
+        }
+        debugPrint('CreatePost: ${base64Images.length} images encoded to base64');
+
+        // Warn if some images were skipped
+        if (base64Images.length < bytesList.length && mounted) {
+          _showSnackBar('${bytesList.length - base64Images.length} large image(s) skipped', isError: false);
+        }
+      } else {
+        // No images — just fetch location
+        if (mounted) setState(() => _loadingStage = 'AI analyzing...');
+        _locationFuture ??= _detectLocation(currentUser.uid);
       }
-      debugPrint('CreatePost: ${bytesList.length} images read successfully');
 
-      // ── Encode images + reuse pre-fetched location (started in initState) ──
-      if (mounted) setState(() => _loadingStage = 'Uploading & AI analyzing...');
-
-      final encodingFuture = compute(_encodeBytesIsolate, bytesList);
       // Reuse pre-fetched location from initState; fallback to fresh fetch
       _locationFuture ??= _detectLocation(currentUser.uid);
-
-      final results = await Future.wait([encodingFuture, _locationFuture!]);
-      final base64Images = results[0] as List<String>;
-      final locData = results[1] as Map<String, dynamic>;
-
-      if (base64Images.isEmpty) {
-        if (mounted) {
-          _showSnackBar('Images are too large. Please use smaller photos (under 500KB each).', isError: true);
-        }
-        return;
-      }
-      debugPrint('CreatePost: ${base64Images.length} images encoded to base64');
-
-      // Warn if some images were skipped
-      if (base64Images.length < bytesList.length && mounted) {
-        _showSnackBar('${bytesList.length - base64Images.length} large image(s) skipped', isError: false);
-      }
+      final locData = await _locationFuture!;
 
       final double lat = locData['lat'] as double;
       final double lng = locData['lng'] as double;
@@ -364,8 +373,9 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
       // Clear search cache so next search fetches fresh results with new post
       ProductApiService().resetCache();
 
-      // ── Save to Firestore (fire-and-forget — API already succeeded) ──
-      _savePostToFirestore(
+      // ── Save to Firestore — await so post shows in My Posts ──
+      if (mounted) setState(() => _loadingStage = 'Saving post...');
+      await _savePostToFirestore(
         currentUser: currentUser,
         userData: userData,
         result: result,
@@ -976,16 +986,8 @@ class _ApiCreatePostScreenState extends State<ApiCreatePostScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text.rich(
-              const TextSpan(
-                children: [
-                  TextSpan(text: 'Add Photo'),
-                  TextSpan(
-                    text: ' *',
-                    style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.w700, fontSize: 15),
-                  ),
-                ],
-              ),
+            Text(
+              'Add Photo',
               style: AppTextStyles.bodyMedium.copyWith(
                 color: Colors.white70,
                 fontWeight: FontWeight.w600,

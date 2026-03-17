@@ -366,7 +366,9 @@ class _ProfileWithHistoryScreenState
             _isStatusLoading = false;
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(
             SnackBar(
               content: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -440,12 +442,14 @@ class _ProfileWithHistoryScreenState
           setState(() {
             _isStatusLoading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to update status: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(
+              SnackBar(
+                content: Text('Failed to update status: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
         }
       }
     }

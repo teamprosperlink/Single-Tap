@@ -1347,21 +1347,84 @@ class AppDrawerState extends State<AppDrawer> {
             onTap: () {
               setState(() => _showProfileMenu = false);
               Navigator.pop(context);
-              // Sign out and force navigate to login screen
-              FirebaseAuth.instance.signOut().then((_) {
-                navigatorKey.currentState?.pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-                  (route) => false,
-                );
-              });
-              // Full cleanup in background
-              AuthService().signOut().catchError((_) {});
+              _showLogoutConfirmationDialog();
             },
           ),
 
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+
+  void _showLogoutConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(
+              color: Colors.white24,
+              width: 1,
+            ),
+          ),
+          title: const Text(
+            'Log out',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'Are you sure you want to log out?',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70, fontSize: 15),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                // Sign out and force navigate to login screen
+                FirebaseAuth.instance.signOut().then((_) {
+                  navigatorKey.currentState?.pushAndRemoveUntil(
+                    MaterialPageRoute(
+                        builder: (_) => const OnboardingScreen()),
+                    (route) => false,
+                  );
+                });
+                // Full cleanup in background
+                AuthService().signOut().catchError((_) {});
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Confirm',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

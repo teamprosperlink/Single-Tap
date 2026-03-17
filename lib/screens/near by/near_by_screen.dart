@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,56 +19,6 @@ import '../../widgets/other widgets/glass_text_field.dart';
 import '../../models/nearby_model.dart';
 import 'near_by_post_detail_screen.dart';
 import 'saved_nearby_screen.dart';
-
-// Floating card animation — same as networking screen
-class _FloatingCard extends StatefulWidget {
-  final Widget child;
-  final int animationIndex;
-
-  const _FloatingCard({required this.child, this.animationIndex = 0});
-
-  @override
-  State<_FloatingCard> createState() => _FloatingCardState();
-}
-
-class _FloatingCardState extends State<_FloatingCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _floatAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    final ms = 1600 + (widget.animationIndex % 6) * 220;
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: ms),
-    );
-    _controller.value = (widget.animationIndex * 0.17) % 1.0;
-    _controller.repeat(reverse: true);
-    _floatAnim = Tween<double>(begin: -6.0, end: 6.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _floatAnim,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _floatAnim.value),
-        child: child,
-      ),
-      child: widget.child,
-    );
-  }
-}
 
 class NearByScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -383,50 +332,91 @@ class _NearByScreenState extends State<NearByScreen>
               if (uid.isNotEmpty) userIds.add(uid);
             }
 
-            // Batch-fetch user locations (also check api_user_mappings for Firebase UIDs)
-            final userLocations = <String, Map<String, double>>{};
-            for (final uid in userIds) {
+            // Batch-fetch user locations + profile IN PARALLEL (not sequentially)
+            final userProfiles = <String, Map<String, dynamic>>{};
+            final uidList = userIds.toList();
+            final profileFutures = uidList.map((uid) async {
               try {
-                // Try direct user doc first
+                String? firebaseUid;
                 var userDoc = await _firestore.collection('users').doc(uid).get();
-                if (!userDoc.exists) {
-                  // Try api_user_mappings to resolve Firebase UID
+                if (userDoc.exists) {
+                  firebaseUid = uid;
+                } else {
+                  // Try api_user_mappings
                   final mappingDoc = await _firestore.collection('api_user_mappings').doc(uid).get();
                   final fbUid = mappingDoc.data()?['firebaseUid']?.toString();
                   if (fbUid != null && fbUid.isNotEmpty) {
+                    firebaseUid = fbUid;
                     userDoc = await _firestore.collection('users').doc(fbUid).get();
+                  }
+                  // Try user_uuid field
+                  if (!userDoc.exists) {
+                    final uuidQuery = await _firestore
+                        .collection('users')
+                        .where('user_uuid', isEqualTo: uid)
+                        .limit(1)
+                        .get();
+                    if (uuidQuery.docs.isNotEmpty) {
+                      firebaseUid = uuidQuery.docs.first.id;
+                      userDoc = uuidQuery.docs.first;
+                      // Save mapping for future lookups
+                      _firestore.collection('api_user_mappings').doc(uid).set({
+                        'firebaseUid': firebaseUid,
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      }, SetOptions(merge: true)).catchError((_) {});
+                    }
                   }
                 }
                 if (userDoc.exists) {
-                  final uData = userDoc.data();
-                  final lat = (uData?['latitude'] as num?)?.toDouble();
-                  final lng = (uData?['longitude'] as num?)?.toDouble();
-                  if (lat != null && lng != null) {
-                    userLocations[uid] = {'lat': lat, 'lng': lng};
-                  }
+                  final uData = userDoc.data() ?? {};
+                  final lat = (uData['latitude'] as num?)?.toDouble();
+                  final lng = (uData['longitude'] as num?)?.toDouble();
+                  return MapEntry(uid, <String, dynamic>{
+                    if (lat != null) 'lat': lat,
+                    if (lng != null) 'lng': lng,
+                    'firebaseUid': firebaseUid ?? '',
+                    'name': uData['name']?.toString() ?? '',
+                    'photoUrl': (uData['photoUrl'] ?? uData['photoURL'] ?? uData['profileImageUrl'])?.toString() ?? '',
+                  });
                 }
               } catch (e) {
-                debugPrint('NearBy: Failed to fetch location for $uid: $e');
+                debugPrint('NearBy: Failed to fetch profile for $uid: $e');
               }
+              return null;
+            }).toList();
+            final results = await Future.wait(profileFutures);
+            for (final entry in results) {
+              if (entry != null) userProfiles[entry.key] = entry.value;
             }
 
-            // Inject lat/lng and calculated distance into cards
+            // Inject location, distance, and profile data into cards
             for (final card in allCards) {
               final uid = (card['user_id'] ?? '').toString();
-              final loc = userLocations[uid];
-              if (loc != null) {
-                card['latitude'] = loc['lat'];
-                card['longitude'] = loc['lng'];
-                final dist = _calcDistance(loc['lat'], loc['lng']);
-                if (dist != null && dist > 0) {
-                  card['distance_km'] = dist;
-                  card['distanceText'] = dist < 1
-                      ? '${(dist * 1000).toInt()} m'
-                      : '${dist.toStringAsFixed(1)} km';
+              final profile = userProfiles[uid];
+              if (profile != null) {
+                final lat = profile['lat'] as double?;
+                final lng = profile['lng'] as double?;
+                if (lat != null && lng != null) {
+                  card['latitude'] = lat;
+                  card['longitude'] = lng;
+                  final dist = _calcDistance(lat, lng);
+                  if (dist != null && dist > 0) {
+                    card['distance_km'] = dist;
+                    card['distanceText'] = dist < 1
+                        ? '${(dist * 1000).toInt()} m'
+                        : '${dist.toStringAsFixed(1)} km';
+                  }
+                }
+                // Inject Firebase profile for Chat/Call
+                final fbUid = (profile['firebaseUid'] ?? '').toString();
+                if (fbUid.isNotEmpty) {
+                  card['userId'] = fbUid;
+                  card['userName'] = profile['name'] ?? '';
+                  card['userPhoto'] = profile['photoUrl'] ?? '';
                 }
               }
             }
-            debugPrint('NearBy: Enriched ${userLocations.length}/${userIds.length} users with locations');
+            debugPrint('NearBy: Enriched ${userProfiles.length}/${userIds.length} users with locations & profiles');
           }
 
           // Categorize into tabs, deduplicate by listing_id AND
@@ -945,12 +935,9 @@ class _NearByScreenState extends State<NearByScreen>
                                   itemBuilder: (context, index) {
                                     final data = tabPosts[index];
                                     final postId = _getPostId(data);
-                                    return _FloatingCard(
-                                      animationIndex: index,
-                                      child: _buildPostCard(
-                                        postId: postId,
-                                        post: data,
-                                      ),
+                                    return _buildPostCard(
+                                      postId: postId,
+                                      post: data,
                                     );
                                   },
                                 ),
@@ -1062,11 +1049,21 @@ class _NearByScreenState extends State<NearByScreen>
       }
     }
 
-    debugPrint('CARD_DEBUG[$postId] → title=$title, distText=$distanceText, distKm=${post['distance_km']}, preFormatted=${post['distanceText']}, location=$locationStr');
-
-    return Container(
-        height: 200,
-        margin: const EdgeInsets.only(left: 4, right: 4, bottom: 6),
+    return RepaintBoundary(child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            _ExpandRoute(
+              builder: (_) => NearByPostDetailScreen(
+                postId: postId,
+                post: post,
+                distanceText: distanceText,
+                tabCategory: _selectedCategory,
+              ),
+            ),
+          );
+        },
+        child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -1082,266 +1079,217 @@ class _NearByScreenState extends State<NearByScreen>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(15),
-          child: Stack(
-            fit: StackFit.expand,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Full cover image or gradient placeholder
-              if (imageUrl != null)
-                CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey.shade800,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  ),
-                  errorWidget: (context, url, error) => _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
-                )
-              else
-                _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
-
-              // Bottom gradient fade
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.1),
-                        Colors.black.withValues(alpha: 0.80),
-                      ],
-                      stops: const [0.35, 0.6, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Full card tap area for navigation
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      _ExpandRoute(
-                        builder: (_) => NearByPostDetailScreen(
-                          postId: postId,
-                          post: post,
-                          distanceText: distanceText,
-                          tabCategory: _selectedCategory,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // Top-left badge: Domain (e.g. "technology & electronics")
-              if (domainStr.isNotEmpty)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: IgnorePointer(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3).withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Text(
-                            domainStr,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
+              // Image area with domain badge and bookmark
+              SizedBox(
+                height: 110,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Cover image or gradient placeholder
+                    if (imageUrl != null)
+                      CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey.shade800,
+                          child: const Center(
+                            child: CircularProgressIndicator(
                               color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
+                              strokeWidth: 2,
                             ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
+                      )
+                    else
+                      _buildGradientPlaceholder(domainStr, itemType: (post['item_type'] ?? '').toString()),
+
+                    // Top-left badge: Domain
+                    if (domainStr.isNotEmpty)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: IgnorePointer(
+                          child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF007AFF).withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                domainStr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                    // Top-right bookmark button
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () => _toggleSavePost(postId, post),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF007AFF),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                          ),
+                          child: Icon(
+                            _savedPostIds.contains(postId)
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            color: _savedPostIds.contains(postId)
+                                ? Colors.white
+                                : Colors.white70,
+                            size: 16,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-
-              // Top-right bookmark button
-              Positioned(
-                top: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: () => _toggleSavePost(postId, post),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF007AFF),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-                    ),
-                    child: Icon(
-                      _savedPostIds.contains(postId)
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      color: _savedPostIds.contains(postId)
-                          ? Colors.white
-                          : Colors.white70,
-                      size: 16,
-                    ),
-                  ),
+                  ],
                 ),
               ),
 
-              // Bottom glassmorphism info bar (IgnorePointer — non-interactive)
-              Positioned(
-                left: 4,
-                right: 4,
-                bottom: 4,
-                child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            width: 0.5,
+              // Bottom info section — dynamic height based on content
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                ),
+                child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Line 1: Product name (model or title)
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Line 1: Product name (model or title)
-                            Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            // Line 2: Brand + Buy/Sell badge in one row
-                            if (brand.isNotEmpty || feedCategory.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  if (brand.isNotEmpty)
-                                    Expanded(
-                                      child: Text(
-                                        brand,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: Colors.grey[400],
-                                          fontSize: 10.5,
-                                        ),
-                                      ),
+                        // Line 2: Brand + Buy/Sell badge in one row
+                        if (brand.isNotEmpty || feedCategory.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              if (brand.isNotEmpty)
+                                Expanded(
+                                  child: Text(
+                                    brand,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.grey[400],
+                                      fontSize: 10.5,
                                     ),
-                                  if (brand.isEmpty) const Spacer(),
-                                  if (feedCategory.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: feedCategory == 'sell'
-                                            ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                                            : feedCategory == 'buy'
-                                                ? const Color(0xFFFF9800).withValues(alpha: 0.85)
-                                                : Colors.white.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        feedCategory == 'sell' ? 'Selling' : feedCategory == 'buy' ? 'Buying' : _toTitleCase(feedCategory),
-                                        style: const TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                  ),
+                                ),
+                              if (brand.isEmpty) const Spacer(),
+                              if (feedCategory.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: feedCategory == 'sell'
+                                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
+                                        : feedCategory == 'buy'
+                                            ? const Color(0xFFFF9800).withValues(alpha: 0.85)
+                                            : Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    feedCategory == 'sell' ? 'Selling' : feedCategory == 'buy' ? 'Buying' : _toTitleCase(feedCategory),
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                  ],
-                                ],
-                              ),
+                                  ),
+                                ),
+                              ],
                             ],
-                            // Line 3: Price
-                            if (priceText != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                priceText,
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.green[400],
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                          ),
+                        ],
+                        // Line 3: Price
+                        if (priceText != null) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            priceText,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: Colors.green[400],
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                        // Line 4: Location / distance
+                        if (distanceText.isNotEmpty || locationStr.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.near_me,
+                                size: 11,
+                                color: Colors.grey[500],
+                              ),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  [
+                                    if (locationStr.isNotEmpty) locationStr,
+                                    if (distanceText.isNotEmpty) distanceText,
+                                  ].join(' • '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: Colors.grey[400],
+                                    fontSize: 10.5,
+                                  ),
                                 ),
                               ),
                             ],
-                            // Line 4: Location / distance
-                            if (distanceText.isNotEmpty || locationStr.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.near_me,
-                                    size: 11,
-                                    color: Colors.grey[500],
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Flexible(
-                                    child: Text(
-                                      [
-                                        if (locationStr.isNotEmpty) locationStr,
-                                        if (distanceText.isNotEmpty) distanceText,
-                                      ].join(' • '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        color: Colors.grey[400],
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                ),
               ),
-
             ],
           ),
         ),
+      ),
+    ),
     );
   }
 

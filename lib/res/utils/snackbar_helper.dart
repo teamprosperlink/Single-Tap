@@ -29,7 +29,7 @@ class SnackBarHelper {
     // Use root ScaffoldMessenger to avoid Hero conflicts with nested Scaffolds
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-    messenger.hideCurrentSnackBar();
+    messenger.clearSnackBars();
     messenger.showSnackBar(
       _buildSnackBar(message: message, icon: icon, accentColor: accentColor),
     );

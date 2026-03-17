@@ -77,15 +77,6 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
   String? _currentUserPhoto;
   bool _isAutoDeleting = false;
 
-  // Image is compulsory — posts without images are hidden
-  bool _hasImage(Map<String, dynamic> data) {
-    final hasImageUrl = (data['imageUrl'] ?? '').toString().trim().isNotEmpty;
-    final rawImages = data['images'];
-    final hasImages = (rawImages is List)
-        ? rawImages.any((img) => img != null && img.toString().trim().isNotEmpty)
-        : false;
-    return hasImageUrl || hasImages;
-  }
 
   @override
   void initState() {
@@ -248,7 +239,6 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
       stream: _firestore
           .collection('posts')
           .where('userId', isEqualTo: currentUserId)
-          .where('isActive', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
@@ -280,8 +270,8 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
         final myPosts = snapshot.data!.docs.where((d) {
           if (!seen.add(d.id)) return false;
           final data = d.data() as Map<String, dynamic>? ?? {};
-          if (data['source'] != 'api_listing') return false;
-          if (!_hasImage(data)) return false;
+          // Show active posts only (filtered client-side to avoid composite index)
+          if (data['isActive'] == false) return false;
           return true;
         }).toList();
 
@@ -430,7 +420,6 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
       stream: _firestore
           .collection('posts')
           .where('userId', isEqualTo: currentUserId)
-          .where('isActive', isEqualTo: false)
           .orderBy('createdAt', descending: true)
           .limit(100)
           .snapshots(),
@@ -468,11 +457,8 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
           if (!seenDeleted.add(doc.id)) continue;
           final data = doc.data() as Map<String, dynamic>? ?? {};
 
-          // Only show api_listing posts
-          if (data['source'] != 'api_listing') continue;
-
-          // Skip posts without images
-          if (!_hasImage(data)) continue;
+          // Only show deleted (inactive) posts
+          if (data['isActive'] != false) continue;
 
           final deletedAt = data['deletedAt'];
           if (deletedAt != null && deletedAt is Timestamp) {
@@ -690,7 +676,7 @@ class _ApiMyPostsScreenState extends State<ApiMyPostsScreen>
                             decoration: BoxDecoration(
                               color: remainingDays <= 7
                                   ? AppColors.error.withValues(alpha: 0.7)
-                                  : Colors.black.withValues(alpha: 0.45),
+                                  : const Color(0xFF007AFF).withValues(alpha: 0.85),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.25),

@@ -885,11 +885,16 @@ class HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     try {
+      // Ensure location is loaded before searching — retry if still null
+      if (_currentUserLat == null || _currentUserLng == null) {
+        await _loadUserProfile();
+      }
+
       // Call backend API with timeout to prevent infinite loading
       final sw = Stopwatch()..start();
       final productResult = await ProductApiService()
           .searchWithResponse(intent, bidirectionalMatching: true, lat: _currentUserLat, lng: _currentUserLng)
-          .timeout(const Duration(seconds: 250), onTimeout: () {
+          .timeout(const Duration(minutes: 5), onTimeout: () {
         debugPrint('ProductAPI: overall timeout for "$intent"');
         return <String, dynamic>{
           'products': <Map<String, dynamic>>[],
@@ -898,6 +903,7 @@ class HomeScreenState extends State<HomeScreen>
         };
       });
       final apiMessage = productResult['message'] as String? ?? '';
+      final isApiError = productResult['_error'] == true;
       final productCards =
           productResult['products'] as List<Map<String, dynamic>>? ?? [];
 
@@ -955,10 +961,10 @@ class HomeScreenState extends State<HomeScreen>
         final scorePercent = (simScore * 100).toStringAsFixed(0);
         card['match_score'] = '$scorePercent%';
 
-        // Keep API's match_type; only set fallback if empty/null
+        // Keep API's match_type as source of truth; fallback to 'similar'
         final apiMatchType = card['match_type']?.toString() ?? '';
         if (apiMatchType.isEmpty) {
-          card['match_type'] = simScore >= 1.0 ? 'exact' : 'similar';
+          card['match_type'] = 'similar';
         }
 
         apiCards.add(card);
@@ -980,16 +986,17 @@ class HomeScreenState extends State<HomeScreen>
         debugPrint('ProductAPI: PROCESSED card[$i] name="${apiCards[i]['name']}" sim=${apiCards[i]['similarity_score']} match_score="${apiCards[i]['match_score']}"');
       }
 
-      // Build result text — use API message (has exact+similar breakdown)
+      // Build result text with exact vs similar breakdown (only API match_type decides)
       final String aiText;
-      if (apiCards.isNotEmpty && apiMessage.isNotEmpty) {
-        aiText = apiMessage;
-      } else if (apiCards.isNotEmpty) {
-        aiText = 'Found ${apiCards.length} matches for "$intent"';
-      } else if (apiMessage.isNotEmpty) {
-        aiText = apiMessage;
+      if (apiCards.isNotEmpty) {
+        final exactCount = apiCards.where((c) => c['match_type'] == 'exact').length;
+        final similarCount = apiCards.length - exactCount;
+        final parts = <String>[];
+        if (exactCount > 0) parts.add('$exactCount exact match${exactCount > 1 ? 'es' : ''}');
+        if (similarCount > 0) parts.add('$similarCount similar listing${similarCount > 1 ? 's' : ''}');
+        aiText = 'Found ${parts.join(' and ')}';
       } else {
-        aiText = 'No matches found for "$intent".';
+        aiText = apiMessage.isNotEmpty ? apiMessage : 'No matches found for "$intent".';
       }
       setState(() {
         // Remove ALL skeleton cards (reliable — no reference issues)
@@ -1009,8 +1016,9 @@ class HomeScreenState extends State<HomeScreen>
             'data': apiCards,
             'query': intent,
           });
-        } else {
-          // Suggest creating a post when no results found
+        } else if (!isApiError) {
+          // Suggest creating a post only when search succeeded but found no matches
+          // Don't show this on connection/server errors (post wasn't stored)
           _conversation.add({
             'text': '',
             'isUser': false,
@@ -1825,13 +1833,15 @@ class HomeScreenState extends State<HomeScreen>
               icon: Icons.content_copy_rounded,
               onTap: () {
                 Clipboard.setData(ClipboardData(text: textForTts));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Copied to clipboard'),
-                    duration: Duration(seconds: 1),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                ScaffoldMessenger.of(context)
+                  ..clearSnackBars()
+                  ..showSnackBar(
+                    const SnackBar(
+                      content: Text('Copied to clipboard'),
+                      duration: Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
               },
             ),
             const SizedBox(width: 6),
@@ -2356,38 +2366,34 @@ class HomeScreenState extends State<HomeScreen>
                           ? _buildUserInitialsPlaceholder(item['name'] as String? ?? '')
                           : _buildImagePlaceholder(itemType.isNotEmpty ? itemType : category),
                 ),
-                // Match type / score badge — use API match_type as source of truth
-                if (matchType.isNotEmpty) ...[
-                  () {
-                    final simScore = (item['similarity_score'] as num?)?.toDouble() ?? 0.0;
-                    final isExact = matchType == 'exact';
-                    final scoreLabel = simScore < 0.10
-                        ? 'Similar'
-                        : '${(simScore * 100).toStringAsFixed(0)}% Match';
-                    return Positioned(
-                      top: 6,
-                      left: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isExact
-                              ? Colors.green.withValues(alpha: 0.85)
-                              : Colors.orange.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          isExact ? 'Exact' : scoreLabel,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
+                // Match type badge — only API match_type=='exact' is Exact, rest is Similar
+                () {
+                  final simScore = (item['similarity_score'] as num?)?.toDouble() ?? 0.0;
+                  final scorePercent = (simScore * 100).toStringAsFixed(0);
+                  final isExact = matchType == 'exact';
+                  return Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isExact
+                            ? Colors.green.withValues(alpha: 0.85)
+                            : Colors.orange.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isExact ? 'Exact Match' : 'Similar $scorePercent%',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    );
-                  }(),
-                ],
+                    ),
+                  );
+                }(),
                 // Save / Bookmark button (top-right)
                 Positioned(
                   top: 6,

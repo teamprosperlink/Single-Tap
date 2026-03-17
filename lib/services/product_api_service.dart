@@ -112,14 +112,13 @@ class ProductApiService {
   }
 
   /// Common POST call — returns cards only
-  Future<List<Map<String, dynamic>>> _callApi(String query, {bool bidirectionalMatching = true}) async {
-    final result = await _callApiFull(query, bidirectionalMatching: bidirectionalMatching);
+  Future<List<Map<String, dynamic>>> _callApi(String query, {bool bidirectionalMatching = true, double? lat, double? lng}) async {
+    final result = await _callApiFull(query, bidirectionalMatching: bidirectionalMatching, lat: lat, lng: lng);
     return result['products'] as List<Map<String, dynamic>>;
   }
 
   /// Full API call to /search-and-match — returns both products and message.
-  /// Backend only accepts: query, user_id, bidirectional_matching.
-  Future<Map<String, dynamic>> _callApiFull(String query, {bool bidirectionalMatching = true}) async {
+  Future<Map<String, dynamic>> _callApiFull(String query, {bool bidirectionalMatching = true, double? lat, double? lng}) async {
     if (_backendQuotaExceeded && _quotaExceededAt != null) {
       final elapsed = DateTime.now().difference(_quotaExceededAt!);
       if (elapsed < const Duration(minutes: 10)) {
@@ -156,49 +155,51 @@ class ProductApiService {
       'query': query,
       'user_id': userUuid,
       'bidirectional_matching': true,
+      'lat': lat ?? 0,
+      'lng': lng ?? 0,
     };
     final body = json.encode(bodyMap);
     debugPrint('ProductAPI: REQUEST body=$body');
 
-    http.Response? response;
+    late http.Response response;
     const apiTimeout = Duration(seconds: 120);
-    try {
-      response = await http
-          .post(uri, headers: headers, body: body)
-          .timeout(apiTimeout);
-      debugPrint(
-          'ProductAPI: [${sw.elapsedMilliseconds}ms] response received, status=${response.statusCode}');
-    } on TimeoutException {
-      debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] timed out after ${apiTimeout.inSeconds}s — retrying once...');
-      // Retry once on timeout (Render free-tier cold starts can be slow)
+    const maxRetries = 2; // Retry up to 2 times (3 attempts total) for cold-start resilience
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         response = await http
             .post(uri, headers: headers, body: body)
             .timeout(apiTimeout);
         debugPrint(
-            'ProductAPI: [${sw.elapsedMilliseconds}ms] retry succeeded, status=${response.statusCode}');
+            'ProductAPI: [${sw.elapsedMilliseconds}ms] response received (attempt ${attempt + 1}), status=${response.statusCode}');
+
+        // Retry on 502/503/504 — Render returns these during cold start
+        if ((response.statusCode == 502 || response.statusCode == 503 || response.statusCode == 504) && attempt < maxRetries) {
+          debugPrint('ProductAPI: server not ready (${response.statusCode}), retrying in 3s...');
+          await Future.delayed(const Duration(seconds: 3));
+          continue;
+        }
+        break; // Success or non-retryable status — exit retry loop
       } on TimeoutException {
-        debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] retry also timed out');
-        return {
-          'products': <Map<String, dynamic>>[],
-          'message': 'Search is taking too long. The server may be warming up — please try again in a moment.',
-          '_error': true,
-        };
+        debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] attempt ${attempt + 1} timed out');
+        if (attempt == maxRetries) {
+          return {
+            'products': <Map<String, dynamic>>[],
+            'message': 'Search is taking too long. The server may be warming up — please try again in a moment.',
+            '_error': true,
+          };
+        }
       } catch (e) {
-        debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] retry error: $e');
-        return {
-          'products': <Map<String, dynamic>>[],
-          'message': 'Connection error. Please check your internet and try again.',
-          '_error': true,
-        };
+        debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] attempt ${attempt + 1} error: $e');
+        if (attempt == maxRetries) {
+          return {
+            'products': <Map<String, dynamic>>[],
+            'message': 'Connection error. Please check your internet and try again.',
+            '_error': true,
+          };
+        }
+        // Brief pause before retry to let backend wake up
+        await Future.delayed(const Duration(seconds: 2));
       }
-    } catch (e) {
-      debugPrint('ProductAPI: [${sw.elapsedMilliseconds}ms] error: $e');
-      return {
-        'products': <Map<String, dynamic>>[],
-        'message': 'Connection error. Please check your internet and try again.',
-        '_error': true,
-      };
     }
 
     if (response.statusCode == 200) {
@@ -293,7 +294,16 @@ class ProductApiService {
       });
       if (cards.length != beforeUserFilter) {
         debugPrint('ProductAPI: removed ${beforeUserFilter - cards.length} own posts → ${cards.length} remaining');
+        // Update message to reflect actual remaining count after filtering
+        if (cards.isEmpty) {
+          message = 'No matches found from other users. Try a different search.';
+        } else {
+          message = 'Found ${cards.length} match${cards.length == 1 ? '' : 'es'} for you';
+        }
       }
+
+      // Resolve Firebase UIDs for remaining cards so Chat/Call work on detail screen
+      await _resolveFirebaseUids(cards);
 
       return {'products': cards, 'message': message};
     } else {
@@ -331,31 +341,36 @@ class ProductApiService {
   Future<Map<String, dynamic>> searchWithResponse(String query, {bool bidirectionalMatching = true, double? lat, double? lng}) async {
     final sw = Stopwatch()..start();
 
-    // Wait for warmup if still running (max 10s)
-    if (_warmUpFuture != null && !_isWarmedUp) {
-      debugPrint('ProductAPI: waiting briefly for health warmup...');
-      await _warmUpFuture!.timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          debugPrint('ProductAPI: health warmup still running, proceeding with search');
-        },
-      );
+    // Ensure backend is warmed up before searching
+    if (!_isWarmedUp) {
+      if (_warmUpFuture == null) {
+        debugPrint('ProductAPI: warmup not started, triggering now...');
+        warmUp(); // fire warmup in parallel
+      }
+      if (_warmUpFuture != null) {
+        debugPrint('ProductAPI: waiting for health warmup...');
+        await _warmUpFuture!.timeout(
+          const Duration(seconds: 30), // Render free tier needs time
+          onTimeout: () {
+            debugPrint('ProductAPI: health warmup still running, proceeding with search');
+          },
+        );
+      }
     }
 
     // Always fetch fresh real-time results — no cache
+    // Call _callApiFull directly (it handles all errors internally and always
+    // returns a valid map with 'products', 'message', and '_error' keys).
     Map<String, dynamic> data;
     try {
-      final searchResult = await ApiErrorHandler.handleApiCall<Map<String, dynamic>>(
-        () => _callApiFull(query, bidirectionalMatching: bidirectionalMatching),
-        fallback: () => <String, dynamic>{'products': <Map<String, dynamic>>[], 'message': ''},
-        onError: (errorType) {
-          debugPrint('ProductApiService: Search error - ${ApiErrorHandler.getErrorMessage(errorType)}');
-        },
-      );
-      data = searchResult ?? <String, dynamic>{'products': <Map<String, dynamic>>[], 'message': ''};
+      data = await _callApiFull(query, bidirectionalMatching: bidirectionalMatching, lat: lat, lng: lng);
     } catch (e) {
-      debugPrint('ProductAPI: search error: $e');
-      data = <String, dynamic>{'products': <Map<String, dynamic>>[], 'message': ''};
+      debugPrint('ProductAPI: unexpected search error: $e');
+      data = <String, dynamic>{
+        'products': <Map<String, dynamic>>[],
+        'message': 'Something went wrong. Please try again.',
+        '_error': true,
+      };
     }
 
     final products = data['products'] as List<Map<String, dynamic>>? ?? [];
@@ -679,6 +694,116 @@ class ProductApiService {
         return serverMessage.isNotEmpty
             ? serverMessage
             : 'Something went wrong (error $statusCode). Please try again.';
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  RESOLVE FIREBASE UIDs FOR API CARDS (enables Chat/Call)
+  // ─────────────────────────────────────────────────────────────
+
+  /// Static in-memory cache: API user_id → { firebaseUid, name, photoUrl }
+  static final Map<String, Map<String, String>> _uidCache = {};
+
+  /// Batch-resolve Firebase UIDs for search result cards.
+  /// Injects 'userId', 'userName', 'userPhoto' into each card so the
+  /// detail screen's Chat/Call buttons work immediately.
+  Future<void> _resolveFirebaseUids(List<Map<String, dynamic>> cards) async {
+    if (cards.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+
+    // Collect unique user_ids that need resolution
+    final needsResolution = <String>{};
+    for (final card in cards) {
+      final apiUid = (card['user_id']?.toString() ?? '').trim();
+      if (apiUid.isEmpty) continue;
+      if (_uidCache.containsKey(apiUid)) {
+        // Apply cached data immediately
+        final cached = _uidCache[apiUid]!;
+        card['userId'] = cached['firebaseUid'] ?? '';
+        card['userName'] = cached['name'] ?? '';
+        card['userPhoto'] = cached['photoUrl'] ?? '';
+      } else {
+        needsResolution.add(apiUid);
+      }
+    }
+
+    if (needsResolution.isEmpty) return;
+    debugPrint('ProductAPI: resolving ${needsResolution.length} user_ids for Chat/Call');
+
+    // Resolve each unique user_id
+    for (final apiUid in needsResolution) {
+      String? fbUid;
+      String name = '';
+      String photo = '';
+
+      try {
+        // Strategy 1: api_user_mappings collection
+        final mappingDoc = await firestore.collection('api_user_mappings').doc(apiUid).get();
+        if (mappingDoc.exists) {
+          fbUid = mappingDoc.data()?['firebaseUid']?.toString();
+        }
+
+        // Strategy 2: users collection by user_uuid field
+        if (fbUid == null) {
+          final userQuery = await firestore
+              .collection('users')
+              .where('user_uuid', isEqualTo: apiUid)
+              .limit(1)
+              .get();
+          if (userQuery.docs.isNotEmpty) {
+            fbUid = userQuery.docs.first.id;
+            // Save mapping for future lookups
+            firestore.collection('api_user_mappings').doc(apiUid).set({
+              'firebaseUid': fbUid,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true)).catchError((_) {});
+          }
+        }
+
+        // Strategy 3: Try user_id directly as Firebase UID
+        if (fbUid == null) {
+          final directDoc = await firestore.collection('users').doc(apiUid).get();
+          if (directDoc.exists) {
+            fbUid = apiUid;
+          }
+        }
+
+        // Fetch name/photo if we found the Firebase UID
+        if (fbUid != null && fbUid.isNotEmpty) {
+          final userDoc = await firestore.collection('users').doc(fbUid).get();
+          if (userDoc.exists) {
+            final data = userDoc.data() ?? {};
+            name = data['name']?.toString() ?? '';
+            photo = (data['photoUrl'] ?? data['photoURL'] ?? data['profileImageUrl'])?.toString() ?? '';
+          }
+        }
+      } catch (e) {
+        debugPrint('ProductAPI: uid resolution error for $apiUid: $e');
+      }
+
+      // Cache result (even if null, to avoid re-querying)
+      final resolved = {
+        'firebaseUid': fbUid ?? '',
+        'name': name,
+        'photoUrl': photo,
+      };
+      _uidCache[apiUid] = resolved;
+
+      if (fbUid != null && fbUid.isNotEmpty) {
+        debugPrint('ProductAPI: resolved $apiUid → $fbUid ($name)');
+      }
+    }
+
+    // Apply resolved data to all cards
+    for (final card in cards) {
+      final apiUid = (card['user_id']?.toString() ?? '').trim();
+      if (apiUid.isEmpty) continue;
+      final cached = _uidCache[apiUid];
+      if (cached != null && (cached['firebaseUid'] ?? '').isNotEmpty) {
+        card['userId'] = cached['firebaseUid']!;
+        card['userName'] = cached['name'] ?? '';
+        card['userPhoto'] = cached['photoUrl'] ?? '';
+      }
     }
   }
 

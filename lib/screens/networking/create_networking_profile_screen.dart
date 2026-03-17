@@ -39,7 +39,7 @@ class _CreateNetworkingProfileScreenState
 
   // Image picker
   final ImagePicker _imagePicker = ImagePicker();
-  File? _selectedImage;
+  XFile? _selectedImage;
   String? _currentPhotoUrl;
 
   // Active status & location
@@ -173,8 +173,10 @@ class _CreateNetworkingProfileScreenState
         } catch (e) {
           debugPrint('Failed to upload image: $e');
           if (mounted) {
-            NetworkingHelpers.showSnackBar(context, 'Failed to upload image: $e', isError: true);
+            setState(() => _isSaving = false);
+            NetworkingHelpers.showSnackBar(context, 'Failed to upload photo. Please try again.', isError: true);
           }
+          return;
         }
       }
 
@@ -473,7 +475,7 @@ class _CreateNetworkingProfileScreenState
         maxHeight: 1920,
       );
       if (image != null && mounted) {
-        setState(() => _selectedImage = File(image.path));
+        setState(() => _selectedImage = image);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -490,7 +492,7 @@ class _CreateNetworkingProfileScreenState
         maxHeight: 1920,
       );
       if (photo != null && mounted) {
-        setState(() => _selectedImage = File(photo.path));
+        setState(() => _selectedImage = photo);
       }
     } catch (e) {
       debugPrint('Error taking photo: $e');
@@ -723,7 +725,7 @@ class _CreateNetworkingProfileScreenState
                                       child: ClipOval(
                                         child: _selectedImage != null
                                             ? Image.file(
-                                                _selectedImage!,
+                                                File(_selectedImage!.path),
                                                 width: 100,
                                                 height: 100,
                                                 fit: BoxFit.cover,

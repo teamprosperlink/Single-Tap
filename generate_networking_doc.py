@@ -263,54 +263,61 @@ def add_table(headers, rows, col_widths=None):
     return table
 
 
-def add_screenshot_placeholder(screen_name):
-    """Compact screenshot placeholder card."""
-    table = doc.add_table(rows=1, cols=1)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    cell = table.rows[0].cells[0]
-
-    set_cell_shading(cell, 'F5F5F5')
-    set_cell_width(cell, 7937)
-
-    tcPr = cell._tc.get_or_add_tcPr()
-    borders_xml = (
-        f'<w:tcBorders {nsdecls("w")}>'
-        f'  <w:top w:val="dashed" w:sz="8" w:color="999999" w:space="0"/>'
-        f'  <w:bottom w:val="dashed" w:sz="8" w:color="999999" w:space="0"/>'
-        f'  <w:left w:val="dashed" w:sz="8" w:color="999999" w:space="0"/>'
-        f'  <w:right w:val="dashed" w:sz="8" w:color="999999" w:space="0"/>'
-        f'</w:tcBorders>'
+def _add_paragraph_border(paragraph, color='999999', style='dashed', size='8'):
+    """Add a box border around a paragraph using pBdr XML."""
+    pPr = paragraph._element.get_or_add_pPr()
+    bdr_xml = (
+        f'<w:pBdr {nsdecls("w")}>'
+        f'  <w:top w:val="{style}" w:sz="{size}" w:color="{color}" w:space="8"/>'
+        f'  <w:bottom w:val="{style}" w:sz="{size}" w:color="{color}" w:space="8"/>'
+        f'  <w:left w:val="{style}" w:sz="{size}" w:color="{color}" w:space="8"/>'
+        f'  <w:right w:val="{style}" w:sz="{size}" w:color="{color}" w:space="8"/>'
+        f'</w:pBdr>'
     )
-    tcPr.append(parse_xml(borders_xml))
+    pPr.append(parse_xml(bdr_xml))
 
-    cell.text = ''
-    p0 = cell.paragraphs[0]
-    p0.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p0.paragraph_format.space_before = Emu(635000)  # 50pt
-    p0.paragraph_format.space_after = Emu(0)
-    r1 = p0.add_run('\U0001F4F1')
-    r1.font.size = Emu(406400)  # 32pt
 
-    p1 = cell.add_paragraph()
-    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p1.paragraph_format.space_before = Emu(127000)   # 10pt
-    p1.paragraph_format.space_after = Emu(0)
-    r2 = p1.add_run(f'[ {screen_name} ]')
-    r2.font.size = Emu(139700)  # 11pt
-    r2.bold = True
-    r2.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
-    r2.font.name = 'Calibri'
+def _add_paragraph_shading(paragraph, fill='F5F5F5'):
+    """Add background shading to a paragraph."""
+    pPr = paragraph._element.get_or_add_pPr()
+    shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill}" w:val="clear"/>')
+    pPr.append(shading)
 
-    p2 = cell.add_paragraph()
-    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p2.paragraph_format.space_before = Emu(0)
-    p2.paragraph_format.space_after = Emu(635000)  # 50pt
-    r3 = p2.add_run('Paste screenshot here')
-    r3.font.size = Emu(127000)  # 10pt
-    r3.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
-    r3.font.name = 'Calibri'
 
-    keep_table_on_one_page(table)
+def add_screenshot_placeholder(screen_name):
+    """Screenshot placeholder — uses plain paragraphs (NOT a table).
+
+    Plain paragraphs accept image paste in Word without any restrictions.
+    The user can click on the placeholder text and paste/insert an image.
+    """
+    add_spacer(4)
+
+    # Label paragraph — screen name
+    p_label = doc.add_paragraph()
+    p_label.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_label.paragraph_format.space_before = Emu(0)
+    p_label.paragraph_format.space_after = Emu(0)
+    r_label = p_label.add_run(f'\U0001F4F1  [ {screen_name} ]')
+    r_label.font.size = Emu(139700)  # 11pt
+    r_label.bold = True
+    r_label.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
+    r_label.font.name = 'Calibri'
+
+    # Main paste area — single paragraph with border + shading
+    # User clicks here, deletes placeholder text, and pastes screenshot
+    p_paste = doc.add_paragraph()
+    p_paste.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_paste.paragraph_format.space_before = Emu(508000)   # 40pt top padding
+    p_paste.paragraph_format.space_after = Emu(508000)    # 40pt bottom padding
+    _add_paragraph_border(p_paste)
+    _add_paragraph_shading(p_paste)
+
+    r_paste = p_paste.add_run('Click here and paste screenshot (Ctrl+V)')
+    r_paste.font.size = Emu(127000)  # 10pt
+    r_paste.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+    r_paste.font.name = 'Calibri'
+
+    add_spacer(4)
 
 
 def add_code_block(text):

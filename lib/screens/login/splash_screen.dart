@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:single_tap/main.dart';
 import 'dart:async';
 import '../../res/config/app_colors.dart';
@@ -30,7 +31,20 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _initializeAndNavigate() async {
-    // Wait for minimum splash time (3 seconds)
+    // If user is already logged in, skip splash delay and go directly
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      // Already authenticated - skip splash, go directly to app
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AuthWrapper()),
+        );
+      }
+      return;
+    }
+
+    // Not logged in - show splash for 3 seconds
     await Future.delayed(const Duration(seconds: 3));
 
     // Navigate after splash

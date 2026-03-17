@@ -1501,9 +1501,11 @@ class _ApiListingDetailScreenState extends State<ApiListingDetailScreen> {
     } catch (e) {
       debugPrint('Call error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to start call. Please try again.')),
-        );
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            const SnackBar(content: Text('Failed to start call. Please try again.')),
+          );
       }
     } finally {
       if (mounted) setState(() => _isActionLoading = false);

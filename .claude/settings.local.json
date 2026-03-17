@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter clean:*)",
       "Read(/C:\\Desktop\\Plink\\flutter6\\lib\\services/**)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

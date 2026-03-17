@@ -18,7 +18,7 @@ import '../near by/near_by_screen.dart';
 import '../chat/conversations_screen.dart';
 import '../networking/my_networking_profile_screen.dart';
 import '../networking/create_networking_profile_screen.dart';
-import '../networking/onboarding_networking_screen.dart';
+import '../networking/networking_onboarding_screen.dart';
 import '../../models/extended_user_profile.dart';
 
 // Professional & Business screens
@@ -50,6 +50,10 @@ class MainNavigationScreen extends StatefulWidget {
   static final GlobalKey<ScaffoldState> scaffoldKey =
       GlobalKey<ScaffoldState>();
 
+  /// Static callback to reset the incoming call flag from external code
+  /// (e.g., NotificationService after CallKit accept/decline/timeout)
+  static VoidCallback? onCallHandled;
+
   const MainNavigationScreen({
     super.key,
     this.initialIndex,
@@ -64,6 +68,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   int _currentIndex = 0;
   late TabController _tabController;
+
+  // ── Bottom nav bar hide-on-scroll & smooth slide ──
+  final ValueNotifier<bool> _isNavBarVisible = ValueNotifier<bool>(true);
+  int? _dragHoverIndex; // legacy, kept for compatibility
+  // Smooth sliding active card (iPhone pane-style)
+  late AnimationController _navSlideController;
+  double _navDragOffset = 0; // extra pixel offset while dragging
+  bool _isDraggingNav = false;
   late TabController _networkingTabController;
   int _networkingTabIndex = 0;
   int _networkingProfileCount = 0;
@@ -89,6 +101,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _navSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
 
     // Initialize TabController with 5 tabs (Home, CreatePost, Chat, Nearby, Networking)
     _tabController = TabController(length: 4, vsync: this);
@@ -135,8 +152,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       }
     });
 
+    // Register static callback so NotificationService can reset _isShowingIncomingCall
+    MainNavigationScreen.onCallHandled = _resetIncomingCallFlag;
+
     // Initialize listeners with error handling
     _safeInit();
+  }
+
+  /// Reset the incoming call flag so future calls can be shown
+  void _resetIncomingCallFlag() {
+    _isShowingIncomingCall = false;
+    debugPrint('  _isShowingIncomingCall reset to false');
   }
 
   // Convert main index to tab index (0-3)
@@ -319,15 +345,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     // Snackbar removed - missed call is shown in chat instead
   }
 
+  // Handle scroll notifications to hide/show bottom nav bar
+  bool _handleScrollNotification(ScrollNotification notification) {
+    // Nav bar always visible — no hide on scroll
+    return false;
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _networkingTabController.dispose();
+    _navSlideController.dispose();
+    _isNavBarVisible.dispose();
 
     _unreadSubscription?.cancel();
     _incomingCallSubscription?.cancel();
     _profileCountSub?.cancel();
+    MainNavigationScreen.onCallHandled = null;
     super.dispose();
   }
 
@@ -655,6 +690,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   }) async {
     if (_isShowingIncomingCall) return;
 
+    // Prevent duplicate: mark globally so FCM handler won't show CallKit again
+    if (globalHandledCallIds.contains(callId)) {
+      debugPrint('  _showIncomingCall: Call $callId already handled globally, skipping');
+      return;
+    }
+    globalHandledCallIds.add(callId);
+
     _isShowingIncomingCall = true;
     HapticFeedback.heavyImpact();
 
@@ -912,8 +954,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               for (var doc in snap.docs) {
                 total += ((doc["unreadCount"]?[user.uid] ?? 0) as num).toInt();
               }
-              // Unread count updated
-              setState(() {});
+              // Only update badge count - no setState needed (avoids full page rebuild)
               NotificationService().updateBadgeCount(total);
             } catch (e) {
               debugPrint('Error processing unread count: $e');
@@ -1513,16 +1554,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                                 ),
                               );
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(result['message'] ?? 'Failed', style: const TextStyle(fontFamily: 'Poppins')),
-                                  backgroundColor: Colors.red,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  margin: const EdgeInsets.all(16),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
+                              ScaffoldMessenger.of(context)
+                                ..clearSnackBars()
+                                ..showSnackBar(
+                                  SnackBar(
+                                    content: Text(result['message'] ?? 'Failed', style: const TextStyle(fontFamily: 'Poppins')),
+                                    backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    margin: const EdgeInsets.all(16),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
                             }
                           },
                           child: Container(
@@ -2181,58 +2224,173 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       ); // FutureBuilder
     }
 
-    // Create bottom navigation bar widget with gradient like AppBar
+    // Navigation items definition
+    final List<Map<String, dynamic>> navItems = [
+      {'icon': Icons.home, 'label': 'Home', 'index': 0},
+      {'icon': Icons.chat_bubble, 'label': 'Chat', 'index': 1},
+      {'icon': Icons.explore, 'label': 'Nearby', 'index': 4},
+      {'icon': Icons.business_center, 'label': 'Networking', 'index': 2},
+    ];
+
+    // Find which visual slot (0-3) is active
+    int activeSlot = navItems.indexWhere((e) => e['index'] == _currentIndex);
+    if (activeSlot < 0) activeSlot = 0;
+
+    // iPhone pane-style smooth sliding bottom nav bar
     Widget buildBottomNavBar() {
       return ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  Color.fromRGBO(40, 40, 40, 1),
-                  Color.fromRGBO(64, 64, 64, 1),
-                ],
-              ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              border: Border(top: BorderSide(color: Colors.white, width: 0.5)),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(64, 64, 64, 1),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.15),
+              width: 0.5,
             ),
-            child: SafeArea(
-              top: false,
-              child: SizedBox(
-                height: 64,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavItem(
-                      icon: Icons.home,
-                      label: 'Home',
-                      index: 0,
-                      isActive: _currentIndex == 0,
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+                height: 68,
+                child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final totalWidth = constraints.maxWidth;
+                  final tabWidth = totalWidth / navItems.length;
+                  // Active card position: center of the active slot + drag offset
+                  final cardW = 78.0;
+                  final baseLeft = activeSlot * tabWidth + (tabWidth - cardW) / 2;
+                  final clampedLeft = (baseLeft + _navDragOffset)
+                      .clamp(0.0, totalWidth - cardW);
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart: (_) {
+                      _isDraggingNav = true;
+                      _navDragOffset = 0;
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      setState(() {
+                        _navDragOffset += details.delta.dx;
+                      });
+                    },
+                    onHorizontalDragEnd: (details) {
+                      // Find nearest slot based on final card center position
+                      final cardCenter = clampedLeft + cardW / 2;
+                      int nearestSlot = 0;
+                      double minDist = double.infinity;
+                      for (int i = 0; i < navItems.length; i++) {
+                        final slotCenter = i * tabWidth + tabWidth / 2;
+                        final dist = (cardCenter - slotCenter).abs();
+                        if (dist < minDist) {
+                          minDist = dist;
+                          nearestSlot = i;
+                        }
+                      }
+                      final targetIndex = navItems[nearestSlot]['index'] as int;
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _isDraggingNav = false;
+                        _navDragOffset = 0;
+                        _currentIndex = targetIndex;
+                        _tabController.index = _convertToTabIndex(targetIndex);
+                      });
+                      _saveScreenIndex(targetIndex);
+                    },
+                    onHorizontalDragCancel: () {
+                      setState(() {
+                        _isDraggingNav = false;
+                        _navDragOffset = 0;
+                      });
+                    },
+                    child: Stack(
+                      children: [
+                        // Layer 1: Sliding glass pane (behind icons)
+                        AnimatedPositioned(
+                          duration: _isDraggingNav
+                              ? Duration.zero
+                              : const Duration(milliseconds: 350),
+                          curve: Curves.easeOutCubic,
+                          left: clampedLeft,
+                          top: 8,
+                          bottom: 7,
+                          child: IgnorePointer(
+                            child: Container(
+                              width: cardW,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromRGBO(75, 75, 75, 1),
+                                  borderRadius: BorderRadius.circular(25),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.3),
+                                      blurRadius: 5,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Layer 2: Fixed icons on top (never move) — fill entire Stack
+                        Positioned.fill(
+                          child: Row(
+                            children: List.generate(navItems.length, (i) {
+                              final item = navItems[i];
+                              final idx = item['index'] as int;
+                              final isActive = i == activeSlot;
+                              return Expanded(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    _isNavBarVisible.value = true;
+                                    setState(() {
+                                      _currentIndex = idx;
+                                      _tabController.index = _convertToTabIndex(idx);
+                                      _navDragOffset = 0;
+                                    });
+                                    _saveScreenIndex(idx);
+                                  },
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.max,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        item['icon'] as IconData,
+                                        color: isActive
+                                            ? Colors.white
+                                            : Colors.white.withValues(alpha: 0.5),
+                                        size: 22,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        item['label'] as String,
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: isActive
+                                              ? Colors.white
+                                              : Colors.white54,
+                                          fontSize: 10,
+                                          fontWeight: isActive
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      ],
                     ),
-                    _buildNavItem(
-                      icon: Icons.chat_bubble,
-                      label: 'Chat',
-                      index: 1,
-                      isActive: _currentIndex == 1,
-                    ),
-                    _buildNavItem(
-                      icon: Icons.explore,
-                      label: 'Nearby',
-                      index: 4,
-                      isActive: _currentIndex == 4,
-                    ),
-                    _buildNavItem(
-                      icon: Icons.business_center,
-                      label: 'Networking',
-                      index: 2,
-                      isActive: _currentIndex == 2,
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -2290,7 +2448,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               padding: EdgeInsets.only(left: 16),
               child: Center(
                 child: Text(
-                  'Single Tap',
+                  'SingleTap',
                   style: TextStyle(fontFamily: 'Poppins',
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -2349,22 +2507,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               ),
             ),
           ),
-          body: Stack(
-            children: [
-              HomeScreen(key: HomeScreen.globalKey),
-              Positioned(
-                left: 0,
-                top: 0,
-                height: size.height - 100,
-                width: 20,
-                child: _SwipeDetector(
-                  onSwipeRight: () {
-                    HapticFeedback.mediumImpact();
-                    setState(() => _currentIndex = 7);
-                  },
+          body: NotificationListener<ScrollNotification>(
+            onNotification: _handleScrollNotification,
+            child: Stack(
+              children: [
+                HomeScreen(key: HomeScreen.globalKey),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  height: size.height - 100,
+                  width: 20,
+                  child: _SwipeDetector(
+                    onSwipeRight: () {
+                      HapticFeedback.mediumImpact();
+                      setState(() => _currentIndex = 7);
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           bottomNavigationBar: buildBottomNavBar(),
         ),
@@ -2373,7 +2534,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         Scaffold(
           extendBody: true,
           backgroundColor: Colors.transparent,
-          body: const ConversationsScreen(),
+          body: NotificationListener<ScrollNotification>(
+            onNotification: _handleScrollNotification,
+            child: const ConversationsScreen(),
+          ),
           bottomNavigationBar: buildBottomNavBar(),
         ),
 
@@ -2382,7 +2546,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             ? Scaffold(
                 extendBody: true,
                 backgroundColor: Colors.transparent,
-                body: const LiveConnectScreen(),
+                body: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollNotification,
+                  child: const NetworkingOnboardingScreen(),
+                ),
                 bottomNavigationBar: buildBottomNavBar(),
               )
             : Scaffold(
@@ -2551,27 +2718,30 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                     ),
                   ),
                 ),
-                body: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color.fromRGBO(64, 64, 64, 1),
-                        Color.fromRGBO(0, 0, 0, 1),
+                body: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollNotification,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color.fromRGBO(64, 64, 64, 1),
+                          Color.fromRGBO(0, 0, 0, 1),
+                        ],
+                      ),
+                    ),
+                    child: TabBarView(
+                      controller: _networkingTabController,
+                      children: [
+                        LiveConnectTabScreen(
+                          key: _smartConnectKey,
+                          activateNetworkingFilter: true,
+                        ),
+                        buildMyNetworkTab(),
+                        buildRequestsTab(),
                       ],
                     ),
-                  ),
-                  child: TabBarView(
-                    controller: _networkingTabController,
-                    children: [
-                      LiveConnectTabScreen(
-                        key: _smartConnectKey,
-                        activateNetworkingFilter: true,
-                      ),
-                      buildMyNetworkTab(),
-                      buildRequestsTab(),
-                    ],
                   ),
                 ),
                 floatingActionButton: (_networkingTabIndex >= 1 || _networkingProfileCount >= 3)
@@ -2617,14 +2787,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         Scaffold(
           extendBody: true,
           backgroundColor: Colors.transparent,
-          body: NearByScreen(
-            isVisible: _currentIndex == 4,
-            onBack: () {
-              setState(() {
-                _currentIndex = 0;
-                _tabController.index = 0;
-              });
-            },
+          body: NotificationListener<ScrollNotification>(
+            onNotification: _handleScrollNotification,
+            child: NearByScreen(
+              isVisible: _currentIndex == 4,
+              onBack: () {
+                setState(() {
+                  _currentIndex = 0;
+                  _tabController.index = 0;
+                });
+              },
+            ),
           ),
           bottomNavigationBar: buildBottomNavBar(),
         ),
@@ -2632,49 +2805,162 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     );
   }
 
-  // Build navigation item for bottom nav
-  Widget _buildNavItem({
+  // Each nav item: active one is a raised draggable card, others are DragTargets
+  Widget _buildNavDragTarget({
     required IconData icon,
     required String label,
     required int index,
     required bool isActive,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() {
-            _currentIndex = index;
-            _tabController.index = _convertToTabIndex(index);
-          });
-        },
-        child: Column(
+    final isHovered = _dragHoverIndex == index;
+
+    // ── The icon + label content ──
+    Widget navContent({bool raised = false, bool dragging = false}) {
+      if (raised) {
+        // Active tab: raised card with icon inside
+        return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: isActive
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.5),
-              size: 22,
+            Container(
+              width: 52,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(75, 75, 75, 1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 18),
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(fontFamily: 'Poppins', 
-                color: isActive
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.5),
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
+        );
+      }
+
+      // Inactive tab: simple icon on top, label below — same color always
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: Colors.white.withValues(alpha: 0.5),
+            size: 22,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white54,
+              fontSize: 10,
+              fontWeight: FontWeight.normal,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ── Active tab: Draggable raised card ──
+    if (isActive) {
+      return Expanded(
+        child: DragTarget<int>(
+          onWillAcceptWithDetails: (_) => false, // Can't drop on itself
+          builder: (context, _, __) {
+            return Draggable<int>(
+              data: index,
+              feedback: Material(
+                color: Colors.transparent,
+                child: navContent(raised: true, dragging: true),
+              ),
+              childWhenDragging: Opacity(
+                opacity: 0.3,
+                child: navContent(raised: true),
+              ),
+              onDragStarted: () => HapticFeedback.lightImpact(),
+              onDraggableCanceled: (_, __) =>
+                  setState(() => _dragHoverIndex = null),
+              onDragEnd: (_) => setState(() => _dragHoverIndex = null),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _isNavBarVisible.value = true;
+                },
+                child: navContent(raised: true),
+              ),
+            );
+          },
         ),
+      );
+    }
+
+    // ── Inactive tabs: DragTarget ──
+    return Expanded(
+      child: DragTarget<int>(
+        onWillAcceptWithDetails: (details) {
+          if (_dragHoverIndex != index) {
+            HapticFeedback.selectionClick();
+            setState(() => _dragHoverIndex = index);
+          }
+          return true;
+        },
+        onLeave: (_) {
+          if (_dragHoverIndex == index) {
+            setState(() => _dragHoverIndex = null);
+          }
+        },
+        onAcceptWithDetails: (_) {
+          HapticFeedback.mediumImpact();
+          _isNavBarVisible.value = true;
+          setState(() {
+            _dragHoverIndex = null;
+            _currentIndex = index;
+            _tabController.index = _convertToTabIndex(index);
+          });
+        },
+        builder: (context, candidateData, rejectedData) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _isNavBarVisible.value = true;
+              setState(() {
+                _currentIndex = index;
+                _tabController.index = _convertToTabIndex(index);
+              });
+            },
+            child: AnimatedScale(
+              scale: isHovered ? 1.1 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: navContent(),
+            ),
+          );
+        },
       ),
     );
   }
+
 }
 
 // Swipe Detector for Feed access

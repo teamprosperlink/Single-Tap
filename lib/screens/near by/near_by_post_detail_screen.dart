@@ -44,6 +44,7 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
   String _computedDistance = '';
   String _ownerName = '';
   String _ownerPhoto = '';
+  Future<void>? _ownerProfileFuture;
 
   static double? _cachedUserLat;
   static double? _cachedUserLng;
@@ -54,7 +55,7 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
   void initState() {
     super.initState();
     _checkIfSaved();
-    _fetchOwnerProfile();
+    _ownerProfileFuture = _fetchOwnerProfile();
     if (widget.distanceText.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _computeDistance();
@@ -1438,8 +1439,15 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
     try {
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) return;
-      final receiverId = post['userId'] as String?;
-      if (receiverId == null) return;
+
+      // Wait for owner profile resolution if not done yet
+      await _ownerProfileFuture;
+
+      final receiverId = (post['userId'] as String?)?.trim() ?? '';
+      if (receiverId.isEmpty) {
+        if (mounted) SnackBarHelper.showError(context, 'Unable to identify post owner. Please try again.');
+        return;
+      }
 
       if (currentUserId == receiverId) {
         if (mounted) SnackBarHelper.showError(context, 'This is your own listing');
@@ -1495,8 +1503,15 @@ class _NearByPostDetailScreenState extends State<NearByPostDetailScreen> {
     try {
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) return;
-      final receiverId = post['userId'] as String?;
-      if (receiverId == null) return;
+
+      // Wait for owner profile resolution if not done yet
+      await _ownerProfileFuture;
+
+      final receiverId = (post['userId'] as String?)?.trim() ?? '';
+      if (receiverId.isEmpty) {
+        if (mounted) SnackBarHelper.showError(context, 'Unable to identify post owner. Please try again.');
+        return;
+      }
 
       if (currentUserId == receiverId) {
         if (mounted) SnackBarHelper.showError(context, 'You cannot call yourself');

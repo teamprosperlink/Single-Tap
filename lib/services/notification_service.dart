@@ -17,10 +17,16 @@ import '../screens/call/voice_call_screen.dart';
 import '../screens/call/group_audio_call_screen.dart';
 import '../screens/call/incoming_group_audio_call_screen.dart';
 import 'active_chat_service.dart';
+import '../screens/home/main_navigation_screen.dart';
 
 /// Global navigator key for notification navigation
 /// Set this in main.dart MaterialApp
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Global set of call IDs already shown via CallKit — shared between
+/// the Firestore real-time listener (MainNavigationScreen) and the FCM
+/// foreground handler (NotificationService) to prevent duplicate CallKit UI.
+final Set<String> globalHandledCallIds = {};
 
 /// Callback type for handling notification navigation
 typedef NotificationNavigationCallback =
@@ -85,6 +91,8 @@ class NotificationService {
                 case Event.actionCallAccept:
                   // User accepted the call - navigate to voice call screen
                   debugPrint('  CallKit: Call accepted - callId=$callId');
+                  // Reset incoming call flag so future calls can be shown
+                  MainNavigationScreen.onCallHandled?.call();
                   if (callId != null && callerId != null) {
                     await _handleCallAccepted(
                       callId: callId,
@@ -98,6 +106,8 @@ class NotificationService {
                 case Event.actionCallDecline:
                   // User declined the call - update Firestore
                   debugPrint('  CallKit: Call declined - callId=$callId');
+                  // Reset incoming call flag so future calls can be shown
+                  MainNavigationScreen.onCallHandled?.call();
                   if (callId != null) {
                     await _handleCallDeclined(
                       callId: callId,
@@ -109,6 +119,8 @@ class NotificationService {
                 case Event.actionCallTimeout:
                   // Call timed out - mark as missed
                   debugPrint('  CallKit: Call timeout - callId=$callId');
+                  // Reset incoming call flag so future calls can be shown
+                  MainNavigationScreen.onCallHandled?.call();
                   if (callId != null) {
                     await _handleCallMissed(
                       callId: callId,
@@ -121,6 +133,8 @@ class NotificationService {
                 case Event.actionCallEnded:
                   // Call ended
                   debugPrint('  CallKit: Call ended - callId=$callId');
+                  // Reset incoming call flag so future calls can be shown
+                  MainNavigationScreen.onCallHandled?.call();
                   break;
 
                 default:
@@ -321,14 +335,16 @@ class NotificationService {
             });
 
         // Navigate INSTANTLY to VoiceCallScreen with zero transition delay
+        // Use push (NOT pushReplacement) to keep MainNavigationScreen alive
+        // This prevents page refresh when returning from call
         try {
           if (navigatorKey.currentState != null) {
             debugPrint(
               '  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
             );
-            // Use pushReplacement to avoid underlying page refresh
-            navigatorKey.currentState?.pushReplacement(
+            navigatorKey.currentState?.push(
               PageRouteBuilder(
+                opaque: true,
                 pageBuilder: (context, animation, secondaryAnimation) {
                   return VoiceCallScreen(
                     callId: callId,
@@ -852,6 +868,13 @@ class NotificationService {
       debugPrint('  _navigateToCall: Missing callId or callerId');
       return;
     }
+
+    // Prevent duplicate: if Firestore listener already handled this call, skip
+    if (globalHandledCallIds.contains(callId)) {
+      debugPrint('  _navigateToCall: Call $callId already handled by Firestore listener, skipping');
+      return;
+    }
+    globalHandledCallIds.add(callId);
 
     // Check if call is still active before navigating
     // This handles the case when user taps notification but call was already ended/missed

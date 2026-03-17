@@ -17,6 +17,7 @@ import 'package:single_tap/screens/login/onboarding_screen.dart';
 import 'widgets/common widgets/firebase_options.dart';
 import 'screens/login/splash_screen.dart';
 import 'screens/home/main_navigation_screen.dart';
+import 'screens/profile/profile_create_screen.dart';
 import 'screens/call/voice_call_screen.dart';
 import 'models/user_profile.dart';
 
@@ -430,6 +431,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
   bool _hasInitializedServices = false;
   String? _lastInitializedUserId;
+  Future<DocumentSnapshot>? _profileCheckFuture;
+  String? _profileCheckUid;
   bool _isInitializing = false;
   bool _isPerformingLogout = false; // Prevent multiple logout calls
   bool _isStartingListener =
@@ -949,8 +952,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
             );
             return const OnboardingScreen();
           }
-          print('[BUILD] Showing loading screen');
-          return _buildLoadingScreen();
+          // User already logged in, skip loading and go directly to home
+          print('[BUILD] User exists during waiting, skipping loading screen');
         }
 
         if (snapshot.hasError) {
@@ -1041,38 +1044,45 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     );
   }
 
-  /// Build main navigation screen
+  /// Build main navigation screen - checks if profile exists first
   Widget _buildMainScreenWithValidation() {
-    return const MainNavigationScreen();
-  }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const OnboardingScreen();
 
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0f0f23),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f0f23)],
-          ),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.white),
-              SizedBox(height: 16),
-              Text(
-                'Loading...',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // Cache the future so it doesn't re-fetch on every rebuild
+    if (_profileCheckUid != uid || _profileCheckFuture == null) {
+      _profileCheckUid = uid;
+      _profileCheckFuture = FirebaseFirestore.instance.collection('users').doc(uid).get();
+    }
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: _profileCheckFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting || snapshot.hasError) {
+          // Skip loading screen, go directly to home (profile is already cached/validated)
+          return const MainNavigationScreen();
+        }
+
+        // If profile doesn't exist or has no name, show create profile
+        final data = snapshot.data;
+        bool hasProfile = false;
+        if (data != null && data.exists) {
+          final profileData = data.data() as Map<String, dynamic>?;
+          final name = profileData?['name'];
+          if (name != null && name is String && name.trim().isNotEmpty) {
+            hasProfile = true;
+          }
+        }
+
+        if (!hasProfile) {
+          return const ProfileCreateScreen();
+        }
+
+        return const MainNavigationScreen();
+      },
     );
   }
+
 
   Widget _buildErrorScreen(String error) {
     return Scaffold(
