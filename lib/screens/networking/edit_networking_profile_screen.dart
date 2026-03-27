@@ -231,11 +231,12 @@ class _EditNetworkingProfileScreenState
             'networking_profile_images/$uid.jpg',
           );
           final metadata = SettableMetadata(contentType: 'image/jpeg');
-          final bytes = await _selectedImage!.readAsBytes();
-          await ref.putData(bytes, metadata);
+          final file = File(_selectedImage!.path);
+          await ref.putFile(file, metadata);
           photoUrl = await ref.getDownloadURL();
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('Failed to upload image: $e');
+          debugPrint('Stack trace: $stackTrace');
           if (mounted) {
             setState(() => _isSaving = false);
             _showSnackBar('Failed to upload photo. Please try again.', isError: true);

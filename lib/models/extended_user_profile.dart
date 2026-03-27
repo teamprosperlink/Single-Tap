@@ -100,7 +100,6 @@ class ExtendedUserProfile {
   });
 
   // Helper getters
-  bool get isProfessional => accountType == AccountType.professional;
   bool get isBusiness => accountType == AccountType.business;
   bool get isPersonal => accountType == AccountType.personal;
   bool get isVerifiedAccount => verificationStatus == VerificationStatus.verified;
@@ -124,19 +123,13 @@ class ExtendedUserProfile {
       }).toList();
     }
 
-    // Extract business name from professional or business profile
+    // Extract business name from business profile
     String? businessName;
     String? category;
-    final profProfile = map['professionalProfile'];
-    if (profProfile is Map<String, dynamic>) {
-      businessName = profProfile['businessName']?.toString();
-      category = profProfile['category']?.toString();
-    } else {
-      final bizProfile = map['businessProfile'];
-      if (bizProfile is Map<String, dynamic>) {
-        businessName = bizProfile['companyName']?.toString();
-        category = bizProfile['industry']?.toString();
-      }
+    final bizProfile = map['businessProfile'];
+    if (bizProfile is Map<String, dynamic>) {
+      businessName = bizProfile['businessName']?.toString() ?? bizProfile['companyName']?.toString();
+      category = bizProfile['softLabel']?.toString() ?? bizProfile['industry']?.toString();
     }
 
     // Extract verification status

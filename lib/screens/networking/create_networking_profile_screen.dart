@@ -167,11 +167,12 @@ class _CreateNetworkingProfileScreenState
             'networking_profile_images/${uid}_$timestamp.jpg',
           );
           final metadata = SettableMetadata(contentType: 'image/jpeg');
-          final bytes = await _selectedImage!.readAsBytes();
-          await ref.putData(bytes, metadata);
+          final file = File(_selectedImage!.path);
+          await ref.putFile(file, metadata);
           photoUrl = await ref.getDownloadURL();
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('Failed to upload image: $e');
+          debugPrint('Stack trace: $stackTrace');
           if (mounted) {
             setState(() => _isSaving = false);
             NetworkingHelpers.showSnackBar(context, 'Failed to upload photo. Please try again.', isError: true);

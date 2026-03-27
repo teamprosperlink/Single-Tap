@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/post_model.dart';
+import 'location_services/gemini_service.dart';
 
 /// Unified Post Service - Single source of truth for all post operations
 ///
@@ -304,6 +305,149 @@ class UnifiedPostService {
     }
     if (post.title.isEmpty) {
       throw Exception('Post must have title');
+    }
+  }
+
+  // ── Business post sync ──────────────────────────────────────────────────
+
+  /// Sync a business profile as a discoverable post in the posts collection.
+  Future<void> syncBusinessPost(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data();
+      if (userData == null) return;
+      if (userData['accountType'] != 'business') return;
+
+      final bp = userData['businessProfile'] as Map<String, dynamic>?;
+      if (bp == null) return;
+
+      final businessName = bp['businessName'] as String? ?? '';
+      if (businessName.isEmpty) return;
+
+      final description = bp['description'] as String? ?? '';
+      final softLabel = bp['softLabel'] as String? ?? '';
+      final address = bp['address'] as String? ?? '';
+
+      // Get available catalog items
+      final catalogSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('catalog')
+          .where('isAvailable', isEqualTo: true)
+          .limit(50)
+          .get();
+
+      final catalogNames = <String>[];
+      for (final doc in catalogSnap.docs) {
+        final data = doc.data();
+        final name = data['name'] as String? ?? '';
+        if (name.isNotEmpty) catalogNames.add(name);
+      }
+      final catalogSummary = catalogNames.join(', ');
+
+      // Build rich text for embedding
+      final embeddingParts = <String>[businessName];
+      if (softLabel.isNotEmpty) embeddingParts.add(softLabel);
+      if (description.isNotEmpty) embeddingParts.add(description);
+      if (catalogSummary.isNotEmpty) {
+        embeddingParts.add('Services and Products: $catalogSummary');
+      }
+
+      final embeddingText = '$businessName $softLabel $description $catalogSummary';
+
+      final gemini = GeminiService();
+      final embedding = await gemini.generateEmbedding(embeddingText);
+      final keywords = _extractKeywords(
+        '$businessName $softLabel $description $catalogSummary',
+      );
+
+      final userPhoto = userData['photoUrl'] ??
+          userData['photoURL'] ??
+          userData['profileImageUrl'];
+
+      final postTitle = softLabel.isNotEmpty
+          ? softLabel
+          : catalogSummary.isNotEmpty
+              ? 'Offering: $catalogSummary'
+              : businessName;
+
+      final postDescription = description.isNotEmpty
+          ? description
+          : catalogSummary.isNotEmpty
+              ? catalogSummary
+              : 'Business services';
+
+      final postData = {
+        'userId': userId,
+        'originalPrompt': embeddingParts.join('. '),
+        'title': postTitle,
+        'description': postDescription,
+        'intentAnalysis': {
+          'primary_intent': 'Business offering $softLabel services/products',
+          'action_type': 'offering',
+          'domain': softLabel.isNotEmpty ? softLabel.toLowerCase() : 'services',
+          'service_type': 'in_person',
+          'is_symmetric': false,
+          'exchange_model': 'paid',
+          'complementary_intents': [
+            'looking for $softLabel',
+            'need $softLabel services',
+            if (catalogNames.isNotEmpty) 'looking for ${catalogNames.first}',
+          ],
+          'search_keywords': keywords,
+        },
+        'embedding': embedding,
+        'keywords': keywords,
+        'metadata': {
+          'createdBy': 'BusinessProfileSync',
+          'version': '2.0',
+          'isBusinessPost': true,
+          'businessName': businessName,
+          'softLabel': softLabel,
+          'catalogItemCount': catalogSnap.docs.length,
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt': null,
+        'isActive': true,
+        'location': userData['location'] ?? address,
+        'latitude': userData['latitude'],
+        'longitude': userData['longitude'],
+        'viewCount': 0,
+        'matchedUserIds': [],
+        'clarificationAnswers': {},
+        'userName': businessName,
+        'userPhoto': userPhoto,
+        'action_type': 'offering',
+      };
+
+      await _firestore
+          .collection('posts')
+          .doc('business_$userId')
+          .set(postData);
+
+      debugPrint(
+        ' Business post synced for $businessName (${catalogNames.length} catalog items)',
+      );
+    } catch (e) {
+      debugPrint('Error syncing business post: $e');
+    }
+  }
+
+  /// Re-sync the current user's business post if it was created with an older
+  /// version (stale embeddings / missing domain). Called on business hub load.
+  Future<void> resyncIfStale(String userId) async {
+    try {
+      final doc = await _firestore.collection('posts').doc('business_$userId').get();
+      if (!doc.exists) return;
+      final data = doc.data()!;
+      final metadata = data['metadata'] as Map<String, dynamic>?;
+      final version = metadata?['version'] as String?;
+      if (version != '2.0') {
+        debugPrint('Business post stale (version=$version), re-syncing...');
+        await syncBusinessPost(userId);
+      }
+    } catch (e) {
+      debugPrint('Error checking business post staleness: $e');
     }
   }
 

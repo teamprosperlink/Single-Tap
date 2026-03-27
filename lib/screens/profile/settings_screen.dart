@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../home/main_navigation_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/other providers/theme_provider.dart';
@@ -724,7 +725,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             stream: _firestore
                 .collection('users')
                 .doc(_currentUserId)
-                .collection('blocked')
+                .collection('blocked_users')
+                .orderBy('blockedAt', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
@@ -758,6 +760,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 itemCount: blockedUsers.length,
                 itemBuilder: (context, index) {
                   final blockedUser = blockedUsers[index];
+                  final data = blockedUser.data() as Map<String, dynamic>? ?? {};
+                  // Support both old field names ('name') and new ('blockedUserName')
+                  final userName = (data['blockedUserName'] as String?)?.isNotEmpty == true
+                      ? data['blockedUserName'] as String
+                      : (data['name'] as String?)?.isNotEmpty == true
+                          ? data['name'] as String
+                          : 'Unknown';
+                  final userPhoto = (data['blockedUserPhoto'] as String?)?.isNotEmpty == true
+                      ? data['blockedUserPhoto'] as String?
+                      : data['photo'] as String?;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -777,15 +789,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       children: [
                         CircleAvatar(
                           backgroundColor: Colors.white.withValues(alpha: 0.2),
-                          child: Text(
-                            blockedUser['name']?[0] ?? 'U',
-                            style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
-                          ),
+                          backgroundImage: (userPhoto != null && userPhoto.isNotEmpty)
+                              ? NetworkImage(userPhoto)
+                              : null,
+                          child: (userPhoto == null || userPhoto.isEmpty)
+                              ? Text(
+                                  userName[0],
+                                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            blockedUser['name'] ?? 'Unknown',
+                            userName,
                             style: const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 15),
                           ),
                         ),
@@ -794,7 +811,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             await _firestore
                                 .collection('users')
                                 .doc(_currentUserId)
-                                .collection('blocked')
+                                .collection('blocked_users')
                                 .doc(blockedUser.id)
                                 .delete();
                             if (context.mounted) {
@@ -1331,15 +1348,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           TextButton(
             onPressed: () async {
               if (confirmController.text == 'DELETE') {
+                Navigator.pop(context); // Close dialog first
                 try {
-                  // Delete user data from Firestore
-                  final userId = _currentUserId;
-                  if (userId != null) {
-                    await _firestore.collection('users').doc(userId).delete();
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) return;
+                  final userId = user.uid;
+
+                  // Re-authenticate before deletion (Firebase requires recent login)
+                  try {
+                    final providerIds = user.providerData.map((p) => p.providerId).toList();
+                    if (providerIds.contains('google.com')) {
+                      final googleSignIn = GoogleSignIn();
+                      final googleUser = await googleSignIn.signIn();
+                      if (googleUser == null) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please sign in to confirm deletion'), backgroundColor: Colors.orange),
+                          );
+                        }
+                        return;
+                      }
+                      final googleAuth = await googleUser.authentication;
+                      final credential = GoogleAuthProvider.credential(
+                        accessToken: googleAuth.accessToken,
+                        idToken: googleAuth.idToken,
+                      );
+                      await user.reauthenticateWithCredential(credential);
+                    } else if (providerIds.contains('phone')) {
+                      // Phone auth users - try token refresh
+                      await user.getIdToken(true);
+                    }
+                  } catch (e) {
+                    debugPrint('Re-authentication failed: $e');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please sign in again to delete your account'), backgroundColor: Colors.red),
+                      );
+                    }
+                    return;
                   }
 
-                  // Delete authentication account
-                  await FirebaseAuth.instance.currentUser?.delete();
+                  // Delete user data from Firestore (subcollections + main doc)
+                  final batch = _firestore.batch();
+                  // Delete subcollections
+                  for (final sub in ['blocked_users', 'blocked']) {
+                    final docs = await _firestore.collection('users').doc(userId).collection(sub).get();
+                    for (final doc in docs.docs) {
+                      batch.delete(doc.reference);
+                    }
+                  }
+                  batch.delete(_firestore.collection('users').doc(userId));
+                  await batch.commit();
+
+                  // Delete user's posts
+                  final posts = await _firestore.collection('posts').where('userId', isEqualTo: userId).get();
+                  for (final doc in posts.docs) {
+                    await doc.reference.delete();
+                  }
+
+                  // Delete networking profile
+                  await _firestore.collection('networking_profiles').doc(userId).delete();
+
+                  // Delete Firebase Auth account (must be last)
+                  await user.delete();
 
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
@@ -1350,8 +1421,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     );
                   }
                 } catch (e) {
+                  debugPrint('Failed to delete account: $e');
                   if (context.mounted) {
-                    Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Failed to delete account: $e'),

@@ -54,8 +54,8 @@ class InquiryService {
         professionalId: professionalId,
         professionalName:
             proData['name'] ??
-            proData['professionalProfile']?['businessName'] ??
-            'Professional',
+            proData['businessProfile']?['businessName'] ??
+            'Business',
         serviceId: serviceId,
         serviceName: serviceName,
         message: message,

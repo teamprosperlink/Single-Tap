@@ -9261,8 +9261,8 @@ class _ChatInfoScreenState extends State<_ChatInfoScreen> {
           .doc(widget.otherUser.uid)
           .set({
             'blockedUserId': widget.otherUser.uid,
-            'blockedUserName': widget.otherUser.name,
-            'blockedUserPhoto': widget.otherUser.profileImageUrl,
+            'blockedUserName': _displayName,
+            'blockedUserPhoto': _displayPhoto ?? '',
             'blockedAt': FieldValue.serverTimestamp(),
           });
 

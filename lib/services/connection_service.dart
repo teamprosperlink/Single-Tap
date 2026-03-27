@@ -667,10 +667,10 @@ class ConnectionService {
     if (occupation != null && occupation.isNotEmpty) return occupation;
     final profession = data['profession'] as String?;
     if (profession != null && profession.isNotEmpty) return profession;
-    final profProfile = data['professionalProfile'] as Map<String, dynamic>?;
-    if (profProfile != null) {
-      final category = profProfile['category'] as String?;
-      if (category != null && category.isNotEmpty) return category;
+    final bizProfile = data['businessProfile'] as Map<String, dynamic>?;
+    if (bizProfile != null) {
+      final label = bizProfile['softLabel'] as String?;
+      if (label != null && label.isNotEmpty) return label;
     }
     final subcat = data['networkingSubcategory'] as String?;
     if (subcat != null && subcat.isNotEmpty) return subcat;

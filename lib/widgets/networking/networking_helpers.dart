@@ -69,11 +69,11 @@ class NetworkingHelpers {
     final profession = profRaw is String ? profRaw : profRaw?.toString();
     if (profession != null && profession.isNotEmpty) return profession;
 
-    final profProfileRaw = data['professionalProfile'];
-    if (profProfileRaw is Map<String, dynamic>) {
-      final catRaw = profProfileRaw['category'];
-      final category = catRaw is String ? catRaw : catRaw?.toString();
-      if (category != null && category.isNotEmpty) return category;
+    final bizProfileRaw = data['businessProfile'];
+    if (bizProfileRaw is Map<String, dynamic>) {
+      final labelRaw = bizProfileRaw['softLabel'];
+      final label = labelRaw is String ? labelRaw : labelRaw?.toString();
+      if (label != null && label.isNotEmpty) return label;
     }
 
     final subcatRaw = data['networkingSubcategory'];

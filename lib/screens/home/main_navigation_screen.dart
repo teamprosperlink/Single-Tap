@@ -21,9 +21,8 @@ import '../networking/create_networking_profile_screen.dart';
 import '../networking/networking_onboarding_screen.dart';
 import '../../models/extended_user_profile.dart';
 
-// Professional & Business screens
-import '../professional/professional_dashboard_screen.dart';
-import '../business/business_main_screen.dart';
+// Business screens
+import '../business/simple/business_hub_screen.dart';
 
 // Call screens - Now using CallKit instead of IncomingCallScreen widget
 // Video call disabled
@@ -107,8 +106,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       duration: const Duration(milliseconds: 350),
     );
 
-    // Initialize TabController with 5 tabs (Home, CreatePost, Chat, Nearby, Networking)
-    _tabController = TabController(length: 4, vsync: this);
+    // Initialize TabController with 5 tabs (Home, Chat, Networking, Business, Nearby)
+    _tabController = TabController(length: 5, vsync: this);
 
     // Networking sub-tabs: Around Me, My Network & Requests
     _networkingTabController = TabController(length: 3, vsync: this);
@@ -129,7 +128,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     } else if (widget.loginAccountType != null) {
       // Set initial screen based on account type from login
       if (widget.loginAccountType == 'Business Account') {
-        _currentIndex = 6; // Business dashboard
+        _currentIndex = 3; // Business tab in bottom nav
+        _tabController.index = _convertToTabIndex(3);
       } else {
         _currentIndex = 0; // Home screen for Personal
         _tabController.index = _convertToTabIndex(0);
@@ -165,7 +165,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     debugPrint('  _isShowingIncomingCall reset to false');
   }
 
-  // Convert main index to tab index (0-3)
+  // Convert main index to tab index (0-4)
   int _convertToTabIndex(int mainIndex) {
     switch (mainIndex) {
       case 0:
@@ -174,14 +174,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         return 1; // Chat
       case 4:
         return 2; // Nearby
+      case 3:
+        return 3; // Business
       case 2:
-        return 3; // Networking
+        return 4; // Networking
       default:
         return 0;
     }
   }
 
-  // Convert tab index (0-3) to main index
+  // Convert tab index (0-4) to main index
   int _convertFromTabIndex(int tabIndex) {
     switch (tabIndex) {
       case 0:
@@ -191,6 +193,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       case 2:
         return 4; // Nearby
       case 3:
+        return 3; // Business
+      case 4:
         return 2; // Networking
       default:
         return 0;
@@ -966,27 +970,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         );
   }
 
-  Widget _buildScreen() {
-    switch (_currentIndex) {
-      case 5:
-        return const ProfessionalDashboardScreen();
-      case 6:
-        return const BusinessMainScreen();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // For Business and Professional screens, show without TabBar
-    if (_currentIndex == 6 || _currentIndex == 5) {
-      return Scaffold(body: _buildScreen());
-    }
-
-    // For Chat, Networking, and Nearby - show them fullscreen without the main TabBar
+    // For Chat, Networking, Business, and Nearby - show them fullscreen without the main TabBar
     // But still keep the bottom navigation for easy switching between screens
 
     String formatTimeAgo(DateTime dateTime) {
@@ -2230,6 +2218,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       {'icon': Icons.chat_bubble, 'label': 'Chat', 'index': 1},
       {'icon': Icons.explore, 'label': 'Nearby', 'index': 4},
       {'icon': Icons.business_center, 'label': 'Networking', 'index': 2},
+      {'icon': Icons.storefront, 'label': 'Business', 'index': 3},
     ];
 
     // Find which visual slot (0-3) is active
@@ -2398,16 +2387,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
       );
     }
 
-    // Map _currentIndex to IndexedStack index (0=Home, 1=Chat, 2=Networking, 3=Nearby)
+    // Map _currentIndex to IndexedStack index (0=Home, 1=Chat, 2=Networking, 3=Business, 4=Nearby)
     int stackIndex;
     switch (_currentIndex) {
       case 1: stackIndex = 1; break;  // Chat
       case 2: stackIndex = 2; break;  // Networking
-      case 4: stackIndex = 3; break;  // Nearby
+      case 3: stackIndex = 3; break;  // Business
+      case 4: stackIndex = 4; break;  // Nearby
       default: stackIndex = 0; break; // Home
     }
 
-    // All 4 main tabs stay alive via IndexedStack — data loads once on app open
+    // All 5 main tabs stay alive via IndexedStack — data loads once on app open
     return IndexedStack(
       index: stackIndex,
       children: [
@@ -2783,7 +2773,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 bottomNavigationBar: buildBottomNavBar(),
               ),
 
-        // ── Tab 3: Nearby ──
+        // ── Tab 3: Business ──
+        Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent,
+          body: NotificationListener<ScrollNotification>(
+            onNotification: _handleScrollNotification,
+            child: const BusinessHubScreen(),
+          ),
+          bottomNavigationBar: buildBottomNavBar(),
+        ),
+
+        // ── Tab 4: Nearby ──
         Scaffold(
           extendBody: true,
           backgroundColor: Colors.transparent,

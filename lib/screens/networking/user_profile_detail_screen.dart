@@ -512,15 +512,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
     }
 
     // Account type badge
-    if (user.isProfessional) {
-      items.add(
-        const _InfoItem(
-          icon: Icons.verified_user_rounded,
-          label: 'Professional',
-          gradient: [Color(0xFFA855F7), Color(0xFFC084FC)],
-        ),
-      );
-    } else if (user.isBusiness) {
+    if (user.isBusiness) {
       items.add(
         const _InfoItem(
           icon: Icons.storefront_rounded,
