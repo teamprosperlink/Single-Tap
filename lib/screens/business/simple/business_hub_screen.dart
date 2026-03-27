@@ -6,6 +6,7 @@ import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/account_type_service.dart';
+import '../../../services/unified_post_service.dart';
 import '../../../services/booking_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
 import 'business_info_edit.dart';
@@ -35,7 +36,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     super.initState();
     final uid = _userId;
     if (uid != null) {
-      // TODO: resyncIfStale not available on this branch
+      UnifiedPostService().syncBusinessPost(uid);
       _pendingCountFuture = BookingService().getPendingCount(uid);
       _catalogStream = _catalogService.streamCatalog(uid);
     }

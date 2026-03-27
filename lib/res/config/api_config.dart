@@ -51,12 +51,24 @@ class ApiConfig {
   static const Duration embeddingCacheDuration = Duration(hours: 24);
   static const Duration matchCacheDuration = Duration(minutes: 30);
 
-  /// Matching thresholds
+  /// Matching thresholds (legacy weights)
   static const double intentMatchWeight = 0.4;
   static const double semanticMatchWeight = 0.3;
   static const double locationMatchWeight = 0.15;
   static const double timeMatchWeight = 0.10;
   static const double keywordMatchWeight = 0.05;
+
+  /// Matching algorithm constants (unified post matching)
+  static const double matchPreFilterThreshold = 0.40;
+  static const double matchFinalThreshold = 0.60;
+  static const double matchRealtimeThreshold = 0.65;
+  static const double matchIntentBonus = 0.15;
+  static const double matchLocationWeight = 0.05;
+  static const double matchLifestylePenalty = 0.15;
+  static const double matchDomainMismatchPenalty = 0.10;
+  static const double matchKeywordDamping = 0.70;
+  static const int matchQueryLimit = 200;
+  static const int matchMaxResults = 20;
 
   /// Timeout configuration
   static const Duration connectionTimeout = Duration(seconds: 10);

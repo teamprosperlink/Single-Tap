@@ -10,6 +10,7 @@ import '../../../models/catalog_item.dart';
 import '../../../services/account_type_service.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/location_services/gemini_service.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'business_hours_edit.dart';
 
 class BusinessInfoEdit extends StatefulWidget {
@@ -585,19 +586,19 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
               child: Column(
                 children: [
                   _socialField(_instagramController, 'Instagram',
-                      Icons.camera_alt, isDark, textColor),
+                      FontAwesomeIcons.instagram, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_facebookController, 'Facebook',
-                      Icons.facebook, isDark, textColor),
+                      FontAwesomeIcons.facebookF, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_twitterController, 'X (Twitter)',
-                      Icons.close, isDark, textColor),
+                      FontAwesomeIcons.xTwitter, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_linkedinController, 'LinkedIn',
-                      Icons.work, isDark, textColor),
+                      FontAwesomeIcons.linkedinIn, isDark, textColor),
                   const SizedBox(height: 12),
                   _socialField(_youtubeController, 'YouTube',
-                      Icons.play_circle_fill, isDark, textColor),
+                      FontAwesomeIcons.youtube, isDark, textColor),
                 ],
               ),
             ),
@@ -811,10 +812,13 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
   Widget _socialField(
     TextEditingController controller,
     String label,
-    IconData icon,
+    FaIconData icon,
     bool isDark,
     Color textColor,
   ) {
+    final iconColor = isDark
+        ? Colors.white.withValues(alpha: 0.4)
+        : Colors.black.withValues(alpha: 0.3);
     return TextFormField(
       controller: controller,
       style: TextStyle(color: textColor, fontSize: 14),
@@ -829,10 +833,8 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
         ),
         prefixIcon: Padding(
             padding: const EdgeInsets.all(12),
-            child: Icon(icon,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.4)
-                    : Colors.black.withValues(alpha: 0.3),
+            child: FaIcon(icon,
+                color: iconColor,
                 size: 18)),
         filled: true,
         fillColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),

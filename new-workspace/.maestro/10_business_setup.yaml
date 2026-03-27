@@ -1,0 +1,98 @@
+appId: com.plink.supper
+---
+# =============================================================
+# TEST: Business Profile Setup Flow
+# Verifies creating a new business profile
+# Prerequisites: User must be logged in with personal account
+# =============================================================
+
+# Step 1: Launch app
+- launchApp
+- waitForAnimationToEnd
+
+# Step 2: Navigate to Business tab
+- tapOn: "Business"
+- waitForAnimationToEnd
+
+# Step 3: Verify Business Hub empty state
+- assertVisible: "Business"
+
+# Step 4: Look for Get Started button (empty state)
+- assertVisible:
+    text: "Get Started"
+    optional: true
+
+# Step 5: Tap Get Started to begin business setup
+- tapOn:
+    text: "Get Started"
+    optional: true
+- waitForAnimationToEnd
+
+# Step 6: Verify Business Setup screen
+- assertVisible: "Set Up Business"
+
+# Step 7: Verify setup form sections
+- assertVisible: "Business Type"
+
+# Step 8: Select business type
+- tapOn: "Services"
+
+# Step 9: Enter business name
+- tapOn: "Business Name *"
+- inputText: "Maestro Test Salon"
+
+# Step 10: Enter description
+- tapOn: "Description (what you offer)"
+- inputText: "Professional hair styling and beauty services"
+
+# Step 11: Select a suggested label
+- tapOn: "Salon"
+
+# Step 12: Scroll down for more fields
+- scroll
+
+# Step 13: Enter phone number
+- tapOn: "Phone"
+- inputText: "+1 555 987 6543"
+
+# Step 14: Enter email
+- tapOn: "Email"
+- inputText: "maestro.salon@example.com"
+
+# Step 15: Enter address
+- tapOn: "Address"
+- inputText: "123 Main Street, Test City"
+
+# Step 16: Take screenshot of filled form
+- takeScreenshot: 10_business_setup_form
+
+# Step 17: Scroll down to social links section
+- scrollUntilVisible:
+    element: "Social Links"
+    direction: DOWN
+
+# Step 18: Enter Instagram (optional)
+- tapOn: "Instagram (optional)"
+- inputText: "maestro_salon"
+
+# Step 19: Scroll to submit button
+- scrollUntilVisible:
+    element: "Create Business Profile"
+    direction: DOWN
+
+# Step 20: Tap Create Business Profile
+- tapOn: "Create Business Profile"
+- waitForAnimationToEnd
+
+# Step 21: Verify success
+- assertVisible:
+    text: "Business profile created!"
+    optional: true
+
+# Step 22: Take screenshot
+- takeScreenshot: 10_business_setup_complete
+
+# Step 23: Verify Business Hub now shows business stats
+- assertVisible:
+    text: "Catalog"
+    optional: true
