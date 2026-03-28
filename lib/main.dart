@@ -279,8 +279,8 @@ void main() async {
     if (!kDebugMode) {
       try {
         await FirebaseAppCheck.instance.activate(
-          androidProvider: AndroidProvider.playIntegrity,
-          appleProvider: AppleProvider.deviceCheck,
+          providerAndroid: const AndroidPlayIntegrityProvider(),
+          providerApple: const AppleDeviceCheckProvider(),
         );
       } catch (e) {
         debugPrint('App Check activation failed: $e');

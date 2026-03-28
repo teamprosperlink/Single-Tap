@@ -101,6 +101,10 @@ class NearbyListing {
   Map<String, dynamic> data; // raw data map — fully dynamic
   DateTime? createdAt;
   List<String> images;
+  // Top-level listing fields (from Firestore post document, outside 'data')
+  double? latitude;
+  double? longitude;
+  String? locationName;
 
   NearbyListing({
     required this.listingId,
@@ -109,12 +113,31 @@ class NearbyListing {
     required this.data,
     this.createdAt,
     this.images = const [],
+    this.latitude,
+    this.longitude,
+    this.locationName,
   });
 
   factory NearbyListing.fromJson(Map<String, dynamic> json) {
     final dataMap = json['data'] is Map
         ? Map<String, dynamic>.from(json['data'] as Map)
         : <String, dynamic>{};
+
+    // Capture top-level location fields (Firestore post fields outside 'data')
+    double? lat = (json['latitude'] as num?)?.toDouble()
+        ?? (json['lat'] as num?)?.toDouble();
+    double? lng = (json['longitude'] as num?)?.toDouble()
+        ?? (json['lng'] as num?)?.toDouble();
+    String? locName;
+    final rawLocation = json['location'];
+    if (rawLocation is String && rawLocation.isNotEmpty) {
+      locName = rawLocation;
+    } else if (rawLocation is Map) {
+      locName = (rawLocation['canonical_name'] ?? rawLocation['name']
+          ?? rawLocation['city'] ?? '').toString().trim();
+      lat ??= (rawLocation['lat'] as num?)?.toDouble();
+      lng ??= (rawLocation['lng'] as num?)?.toDouble();
+    }
 
     // Resolve images
     List<String> imgs = [];
@@ -149,6 +172,9 @@ class NearbyListing {
       data: dataMap,
       createdAt: created,
       images: imgs,
+      latitude: lat,
+      longitude: lng,
+      locationName: locName != null && locName.isNotEmpty ? locName : null,
     );
   }
 
@@ -187,6 +213,10 @@ class NearbyListing {
       } else if (targetLoc is String && targetLoc.isNotEmpty) {
         location = targetLoc.trim();
       }
+    }
+    // Fallback: use top-level listing location name (from Firestore post)
+    if (location.isEmpty && locationName != null) {
+      location = locationName!;
     }
     final reasoning = data['reasoning']?.toString() ?? '';
     final targetsubintent = data['targetsubintent']?.toString() ?? '';
@@ -341,7 +371,8 @@ class NearbyListing {
         feedCategory == 'provide';
     final postType = isService ? 'Services' : 'Products';
 
-    // Extract flat lat/lng from location map
+    // Extract flat lat/lng — try data.location map, then data.target_location,
+    // then top-level listing fields (from Firestore post document)
     double? postLat;
     double? postLng;
     final locMap = data['location'];
@@ -354,6 +385,9 @@ class NearbyListing {
       postLat ??= (tgtLocMap['lat'] as num?)?.toDouble();
       postLng ??= (tgtLocMap['lng'] as num?)?.toDouble();
     }
+    // Fallback: top-level listing lat/lng (Firestore post fields)
+    postLat ??= latitude;
+    postLng ??= longitude;
 
     // Pre-format distance text from API value
     final String distanceText = distanceKm > 0
@@ -361,8 +395,6 @@ class NearbyListing {
             ? '${(distanceKm * 1000).round()} m'
             : '${distanceKm.toStringAsFixed(1)} km')
         : '';
-
-    debugPrint('TOCARD[$listingId] distanceKm=$distanceKm distanceText=$distanceText lat=$postLat lng=$postLng location=$location');
 
     return {
       'listing_id': listingId,

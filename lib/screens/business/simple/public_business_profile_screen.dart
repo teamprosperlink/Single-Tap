@@ -275,7 +275,7 @@ class _PublicBusinessProfileScreenState
                       ],
                     ],
                   ),
-                  if (bp.address != null) ...[
+                  if (bp.address != null || _profile?.location != null) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -285,7 +285,7 @@ class _PublicBusinessProfileScreenState
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
-                            bp.address!,
+                            bp.address ?? _profile?.location ?? '',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 12,

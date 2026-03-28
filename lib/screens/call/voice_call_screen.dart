@@ -353,11 +353,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     );
 
     // Provide immediate UI feedback by popping screen first
+    // Schedule after current frame to avoid navigator lock if a transition is in progress
     if (mounted) {
       debugPrint(
-        '  VoiceCallScreen: Popping screen immediately for instant feedback',
+        '  VoiceCallScreen: Scheduling pop for next frame',
       );
-      Navigator.of(context).pop();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      });
     }
 
     // Cancel timers and subscriptions first

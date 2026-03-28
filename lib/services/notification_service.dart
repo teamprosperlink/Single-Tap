@@ -46,6 +46,12 @@ class NotificationService {
 
   String? _fcmToken;
 
+  /// Stream subscriptions — stored so they can be cancelled on re-init / dispose
+  StreamSubscription? _callKitSubscription;
+  StreamSubscription? _fcmForegroundSubscription;
+  StreamSubscription? _fcmOpenedAppSubscription;
+  StreamSubscription? _fcmTokenRefreshSubscription;
+
   /// Track shown notifications to prevent duplicates
   final Set<String> _shownNotificationIds = {};
 
@@ -69,11 +75,25 @@ class NotificationService {
     }
   }
 
+  /// Cancel all stream subscriptions to prevent leaks on logout/re-init
+  Future<void> dispose() async {
+    await _callKitSubscription?.cancel();
+    await _fcmForegroundSubscription?.cancel();
+    await _fcmOpenedAppSubscription?.cancel();
+    await _fcmTokenRefreshSubscription?.cancel();
+    _callKitSubscription = null;
+    _fcmForegroundSubscription = null;
+    _fcmOpenedAppSubscription = null;
+    _fcmTokenRefreshSubscription = null;
+  }
+
   /// Initialize CallKit for full-screen incoming call UI
   Future<void> _initializeCallKit() async {
     try {
+      // Cancel existing subscription before re-subscribing
+      await _callKitSubscription?.cancel();
       // Listen for CallKit events (Accept, Decline, etc.)
-      FlutterCallkitIncoming.onEvent.listen(
+      _callKitSubscription = FlutterCallkitIncoming.onEvent.listen(
         (CallEvent? event) async {
           try {
             if (event == null) return;
@@ -238,22 +258,25 @@ class NotificationService {
               });
 
           // Navigate INSTANTLY with minimal data - GroupAudioCallScreen will fetch details
-          navigatorKey.currentState?.push(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) {
-                return GroupAudioCallScreen(
-                  callId: callId,
-                  groupId: groupId,
-                  groupName: groupName ?? 'Unknown Group',
-                  userId: currentUserId,
-                  userName: _auth.currentUser?.displayName ?? 'Unknown',
-                  participants: const [], // Empty - screen will fetch from Firestore
-                );
-              },
-              transitionDuration: Duration.zero, // Instant transition
-              reverseTransitionDuration: Duration.zero,
-            ),
-          );
+          // Schedule after current frame to avoid navigator lock
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) {
+                  return GroupAudioCallScreen(
+                    callId: callId,
+                    groupId: groupId,
+                    groupName: groupName ?? 'Unknown Group',
+                    userId: currentUserId,
+                    userName: _auth.currentUser?.displayName ?? 'Unknown',
+                    participants: const [], // Empty - screen will fetch from Firestore
+                  );
+                },
+                transitionDuration: Duration.zero, // Instant transition
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          });
 
           debugPrint(
             '  _handleCallAccepted: Navigation initiated! Updating status in background...',
@@ -337,27 +360,30 @@ class NotificationService {
         // Navigate INSTANTLY to VoiceCallScreen with zero transition delay
         // Use push (NOT pushReplacement) to keep MainNavigationScreen alive
         // This prevents page refresh when returning from call
+        // Schedule after current frame to avoid navigator lock
         try {
           if (navigatorKey.currentState != null) {
             debugPrint(
               '  _handleCallAccepted: Navigating to VoiceCallScreen with callerProfile: ${callerProfile.name} (${callerProfile.uid})',
             );
-            navigatorKey.currentState?.push(
-              PageRouteBuilder(
-                opaque: true,
-                pageBuilder: (context, animation, secondaryAnimation) {
-                  return VoiceCallScreen(
-                    callId: callId,
-                    otherUser: callerProfile,
-                    isOutgoing: false,
-                  );
-                },
-                transitionDuration: Duration.zero, // Instant transition
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              navigatorKey.currentState?.push(
+                PageRouteBuilder(
+                  opaque: true,
+                  pageBuilder: (context, animation, secondaryAnimation) {
+                    return VoiceCallScreen(
+                      callId: callId,
+                      otherUser: callerProfile,
+                      isOutgoing: false,
+                    );
+                  },
+                  transitionDuration: Duration.zero, // Instant transition
+                  reverseTransitionDuration: Duration.zero,
+                ),
+              );
+            });
             debugPrint(
-              '  _handleCallAccepted: Navigation to VoiceCallScreen initiated!',
+              '  _handleCallAccepted: Navigation to VoiceCallScreen scheduled!',
             );
           } else {
             debugPrint(
@@ -648,11 +674,15 @@ class NotificationService {
   }
 
   Future<void> _configureFCM() async {
+    // Cancel existing subscriptions before re-subscribing
+    await _fcmForegroundSubscription?.cancel();
+    await _fcmOpenedAppSubscription?.cancel();
+
     // Handle foreground messages
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    _fcmForegroundSubscription = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
     // Handle when app is opened from background via notification
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
+    _fcmOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
 
     // Handle when app is launched from terminated state via notification
     final initialMessage = await _fcm.getInitialMessage();
@@ -684,8 +714,10 @@ class NotificationService {
       // Continue without crashing the app
     }
 
+    // Cancel existing token refresh subscription before re-subscribing
+    await _fcmTokenRefreshSubscription?.cancel();
     // Listen for token refresh
-    _fcm.onTokenRefresh.listen((newToken) async {
+    _fcmTokenRefreshSubscription = _fcm.onTokenRefresh.listen((newToken) async {
       try {
         _fcmToken = newToken;
         final uid = _auth.currentUser?.uid;

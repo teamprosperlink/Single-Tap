@@ -34,13 +34,16 @@ class _SplashScreenState extends State<SplashScreen>
     // If user is already logged in, skip splash delay and go directly
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
-      // Already authenticated - skip splash, go directly to app
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AuthWrapper()),
-        );
-      }
+      // Already authenticated - schedule navigation after current frame
+      // to avoid triggering push while navigator is still building
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AuthWrapper()),
+          );
+        }
+      });
       return;
     }
 
