@@ -45,7 +45,7 @@ class _CreateNetworkingProfileScreenState
   // Active status & location
   bool _discoveryModeEnabled = true;
   DateTime? _dateOfBirth;
-  RangeValues _distanceRange = const RangeValues(1, 500);
+  final RangeValues _distanceRange = const RangeValues(1, 500);
   String? _locationCity;
   double? _userLatitude;
   double? _userLongitude;
@@ -805,7 +805,7 @@ class _CreateNetworkingProfileScreenState
                             color: Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
-                        TextSpan(
+                        const TextSpan(
                           text: ' *',
                           style: TextStyle(
                             color: Color(0xFF007AFF),
@@ -1074,7 +1074,7 @@ class _CreateNetworkingProfileScreenState
                             color: Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
-                        TextSpan(
+                        const TextSpan(
                           text: ' *',
                           style: TextStyle(
                             color: Color(0xFF007AFF),
@@ -1103,7 +1103,7 @@ class _CreateNetworkingProfileScreenState
                                 surface: Color(0xFF2A2A2A),
                                 onSurface: Colors.white,
                               ),
-                              dialogBackgroundColor: const Color(0xFF2A2A2A),
+                              dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF2A2A2A)),
                               textButtonTheme: TextButtonThemeData(
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.white,
@@ -1171,7 +1171,7 @@ class _CreateNetworkingProfileScreenState
                             color: Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
-                        TextSpan(
+                        const TextSpan(
                           text: ' *',
                           style: TextStyle(
                             color: Color(0xFF007AFF),

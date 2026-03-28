@@ -70,7 +70,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
   // ── Bottom nav bar hide-on-scroll & smooth slide ──
   final ValueNotifier<bool> _isNavBarVisible = ValueNotifier<bool>(true);
-  int? _dragHoverIndex; // legacy, kept for compatibility
+
   // Smooth sliding active card (iPhone pane-style)
   late AnimationController _navSlideController;
   double _navDragOffset = 0; // extra pixel offset while dragging
@@ -2247,7 +2247,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                   final totalWidth = constraints.maxWidth;
                   final tabWidth = totalWidth / navItems.length;
                   // Active card position: center of the active slot + drag offset
-                  final cardW = 78.0;
+                  const cardW = 78.0;
                   final baseLeft = activeSlot * tabWidth + (tabWidth - cardW) / 2;
                   final clampedLeft = (baseLeft + _navDragOffset)
                       .clamp(0.0, totalWidth - cardW);
@@ -2806,161 +2806,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     );
   }
 
-  // Each nav item: active one is a raised draggable card, others are DragTargets
-  Widget _buildNavDragTarget({
-    required IconData icon,
-    required String label,
-    required int index,
-    required bool isActive,
-  }) {
-    final isHovered = _dragHoverIndex == index;
 
-    // ── The icon + label content ──
-    Widget navContent({bool raised = false, bool dragging = false}) {
-      if (raised) {
-        // Active tab: raised card with icon inside
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 52,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(75, 75, 75, 1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Icon(icon, color: Colors.white, size: 18),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        );
-      }
-
-      // Inactive tab: simple icon on top, label below — same color always
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: Colors.white.withValues(alpha: 0.5),
-            size: 22,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white54,
-              fontSize: 10,
-              fontWeight: FontWeight.normal,
-            ),
-          ),
-        ],
-      );
-    }
-
-    // ── Active tab: Draggable raised card ──
-    if (isActive) {
-      return Expanded(
-        child: DragTarget<int>(
-          onWillAcceptWithDetails: (_) => false, // Can't drop on itself
-          builder: (context, _, __) {
-            return Draggable<int>(
-              data: index,
-              feedback: Material(
-                color: Colors.transparent,
-                child: navContent(raised: true, dragging: true),
-              ),
-              childWhenDragging: Opacity(
-                opacity: 0.3,
-                child: navContent(raised: true),
-              ),
-              onDragStarted: () => HapticFeedback.lightImpact(),
-              onDraggableCanceled: (_, __) =>
-                  setState(() => _dragHoverIndex = null),
-              onDragEnd: (_) => setState(() => _dragHoverIndex = null),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  _isNavBarVisible.value = true;
-                },
-                child: navContent(raised: true),
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    // ── Inactive tabs: DragTarget ──
-    return Expanded(
-      child: DragTarget<int>(
-        onWillAcceptWithDetails: (details) {
-          if (_dragHoverIndex != index) {
-            HapticFeedback.selectionClick();
-            setState(() => _dragHoverIndex = index);
-          }
-          return true;
-        },
-        onLeave: (_) {
-          if (_dragHoverIndex == index) {
-            setState(() => _dragHoverIndex = null);
-          }
-        },
-        onAcceptWithDetails: (_) {
-          HapticFeedback.mediumImpact();
-          _isNavBarVisible.value = true;
-          setState(() {
-            _dragHoverIndex = null;
-            _currentIndex = index;
-            _tabController.index = _convertToTabIndex(index);
-          });
-        },
-        builder: (context, candidateData, rejectedData) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _isNavBarVisible.value = true;
-              setState(() {
-                _currentIndex = index;
-                _tabController.index = _convertToTabIndex(index);
-              });
-            },
-            child: AnimatedScale(
-              scale: isHovered ? 1.1 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              child: navContent(),
-            ),
-          );
-        },
-      ),
-    );
-  }
 
 }
 

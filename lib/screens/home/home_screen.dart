@@ -19,6 +19,9 @@ import '../../services/notification_service.dart';
 import '../../res/utils/snackbar_helper.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../widgets/common widgets/app_drawer.dart';
+import '../../services/unified_post_service.dart';
+import '../../services/location_services/gemini_service.dart';
+import '../business/simple/public_business_profile_screen.dart';
 
 @immutable
 class HomeScreen extends StatefulWidget {
@@ -890,9 +893,28 @@ class HomeScreenState extends State<HomeScreen>
         await _loadUserProfile();
       }
 
-      // Call backend API with timeout to prevent infinite loading
+      // Run backend API search and Firestore business search in parallel
       final sw = Stopwatch()..start();
-      final productResult = await ProductApiService()
+
+      // Business search: generate embedding then query Firestore business posts
+      final businessFuture = () async {
+        try {
+          final emb = await GeminiService().generateEmbedding(intent);
+          if (emb.every((v) => v == 0.0)) return <Map<String, dynamic>>[];
+          return await UnifiedPostService().searchBusinessPosts(
+            query: intent,
+            queryEmbedding: emb,
+            userLat: _currentUserLat,
+            userLng: _currentUserLng,
+          );
+        } catch (e) {
+          debugPrint('Business search error: $e');
+          return <Map<String, dynamic>>[];
+        }
+      }();
+
+      // Backend API search (existing)
+      final apiFuture = ProductApiService()
           .searchWithResponse(intent, bidirectionalMatching: true, lat: _currentUserLat, lng: _currentUserLng)
           .timeout(const Duration(minutes: 5), onTimeout: () {
         debugPrint('ProductAPI: overall timeout for "$intent"');
@@ -902,6 +924,12 @@ class HomeScreenState extends State<HomeScreen>
           '_error': true,
         };
       });
+
+      // Await both in parallel
+      final bothResults = await Future.wait<dynamic>([apiFuture, businessFuture]);
+      final productResult = bothResults[0] as Map<String, dynamic>;
+      final businessCards = bothResults[1] as List<Map<String, dynamic>>;
+
       final apiMessage = productResult['message'] as String? ?? '';
       final isApiError = productResult['_error'] == true;
       final productCards =
@@ -980,20 +1008,46 @@ class HomeScreenState extends State<HomeScreen>
         }
       }
 
+      // ── Merge business cards from Firestore into apiCards ──
+      for (final card in businessCards) {
+        final lat = (card['latitude'] as num?)?.toDouble();
+        final lng = (card['longitude'] as num?)?.toDouble();
+        if (_currentUserLat != null && _currentUserLng != null && lat != null && lng != null) {
+          final distKm = _haversineDistance(_currentUserLat!, _currentUserLng!, lat, lng);
+          card['location'] = distKm < 1
+              ? '${(distKm * 1000).round()} m away'
+              : '${distKm.toStringAsFixed(1)} km away';
+        }
+      }
+      // Deduplicate: skip business cards whose userId already appears in API results
+      final seenUserIds = apiCards
+          .map((c) => c['userId']?.toString() ?? c['user_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      for (final card in businessCards) {
+        final uid = card['_businessUserId']?.toString() ?? '';
+        if (uid.isNotEmpty && !seenUserIds.contains(uid)) {
+          apiCards.add(card);
+          seenUserIds.add(uid);
+        }
+      }
+
       // Log card count before any filtering
       debugPrint('ProductAPI: apiCards count after processing = ${apiCards.length}');
       for (int i = 0; i < apiCards.length; i++) {
         debugPrint('ProductAPI: PROCESSED card[$i] name="${apiCards[i]['name']}" sim=${apiCards[i]['similarity_score']} match_score="${apiCards[i]['match_score']}"');
       }
 
-      // Build result text with exact vs similar breakdown (only API match_type decides)
+      // Build result text with exact vs similar breakdown
       final String aiText;
       if (apiCards.isNotEmpty) {
         final exactCount = apiCards.where((c) => c['match_type'] == 'exact').length;
-        final similarCount = apiCards.length - exactCount;
+        final businessCount = apiCards.where((c) => c['_isBusinessCard'] == true).length;
+        final similarCount = apiCards.length - exactCount - businessCount;
         final parts = <String>[];
         if (exactCount > 0) parts.add('$exactCount exact match${exactCount > 1 ? 'es' : ''}');
         if (similarCount > 0) parts.add('$similarCount similar listing${similarCount > 1 ? 's' : ''}');
+        if (businessCount > 0) parts.add('$businessCount business${businessCount > 1 ? 'es' : ''}');
         aiText = 'Found ${parts.join(' and ')}';
       } else {
         aiText = apiMessage.isNotEmpty ? apiMessage : 'No matches found for "$intent".';
@@ -2301,6 +2355,19 @@ class HomeScreenState extends State<HomeScreen>
           );
           return;
         }
+        // Business card → navigate to PublicBusinessProfileScreen
+        if (item['_isBusinessCard'] == true) {
+          final uid = item['_businessUserId'] as String? ?? '';
+          if (uid.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PublicBusinessProfileScreen(userId: uid),
+              ),
+            );
+            return;
+          }
+        }
         // Product results: navigate to product detail
         Navigator.push(
           context,
@@ -2345,9 +2412,9 @@ class HomeScreenState extends State<HomeScreen>
                           imageUrl,
                           height: 100,
                           width: double.infinity,
-                          fit: matchType == 'match' ? BoxFit.contain : BoxFit.cover,
+                          fit: (matchType == 'match' || matchType == 'business') ? BoxFit.contain : BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return matchType == 'match'
+                            return (matchType == 'match' || matchType == 'business')
                                 ? _buildUserInitialsPlaceholder(item['name'] as String? ?? '')
                                 : _buildImagePlaceholder(itemType.isNotEmpty ? itemType : category);
                           },
@@ -2362,28 +2429,39 @@ class HomeScreenState extends State<HomeScreen>
                             );
                           },
                         )
-                      : matchType == 'match'
+                      : (matchType == 'match' || matchType == 'business')
                           ? _buildUserInitialsPlaceholder(item['name'] as String? ?? '')
                           : _buildImagePlaceholder(itemType.isNotEmpty ? itemType : category),
                 ),
-                // Match type badge — only API match_type=='exact' is Exact, rest is Similar
+                // Match type badge
                 () {
                   final simScore = (item['similarity_score'] as num?)?.toDouble() ?? 0.0;
                   final scorePercent = (simScore * 100).toStringAsFixed(0);
+                  final isBusinessCard = item['_isBusinessCard'] == true;
                   final isExact = matchType == 'exact';
+                  Color badgeColor;
+                  String badgeText;
+                  if (isBusinessCard) {
+                    badgeColor = Colors.blue.withValues(alpha: 0.85);
+                    badgeText = 'Business $scorePercent%';
+                  } else if (isExact) {
+                    badgeColor = Colors.green.withValues(alpha: 0.85);
+                    badgeText = 'Exact Match';
+                  } else {
+                    badgeColor = Colors.orange.withValues(alpha: 0.85);
+                    badgeText = 'Similar $scorePercent%';
+                  }
                   return Positioned(
                     top: 6,
                     left: 6,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isExact
-                            ? Colors.green.withValues(alpha: 0.85)
-                            : Colors.orange.withValues(alpha: 0.85),
+                        color: badgeColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        isExact ? 'Exact Match' : 'Similar $scorePercent%',
+                        badgeText,
                         style: const TextStyle(
                           fontFamily: 'Poppins',
                           color: Colors.white,

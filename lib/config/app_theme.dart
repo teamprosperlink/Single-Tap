@@ -110,4 +110,34 @@ class AppTheme {
   static const double iconSmall = 16.0;
   static const double iconMedium = 20.0;
   static const double iconLarge = 24.0;
+
+  // ============ ELEVATION & SHADOWS ============
+
+  static const double elevationNone = 0;
+  static const double elevationLow = 2;
+  static const double elevationMedium = 4;
+  static const double elevationHigh = 8;
+
+  static List<BoxShadow> cardShadow(bool isDarkMode) => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.08),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+  ];
+
+  static List<BoxShadow> elevatedShadow(bool isDarkMode) => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.12),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  // ============ LAYOUT CONSTANTS ============
+
+  static const double bottomNavHeight = 60;
+  static const double fabHeight = 56;
+  static const double bottomPaddingWithFab = 136;
+  static const double bottomPaddingNoFab = 80;
 }

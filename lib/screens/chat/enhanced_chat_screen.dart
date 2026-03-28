@@ -6178,7 +6178,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 if (isOptimistic)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       child: const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -6277,7 +6277,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Column(
@@ -6980,7 +6980,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
               height: 32,
               decoration: BoxDecoration(
                 color: isOptimistic
-                    ? Colors.orange.withOpacity(0.9)
+                    ? Colors.orange.withValues(alpha: 0.9)
                     : AppColors.iosBlue,
                 shape: BoxShape.circle,
               ),
@@ -7026,7 +7026,7 @@ class _EnhancedChatScreenState extends ConsumerState<EnhancedChatScreen>
                     decoration: BoxDecoration(
                       color: isActive
                           ? Colors.white
-                          : Colors.white.withOpacity(0.4),
+                          : Colors.white.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(1),
                     ),
                   );

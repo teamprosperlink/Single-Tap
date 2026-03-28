@@ -4,6 +4,9 @@ import '../../../config/app_theme.dart';
 import '../../../models/booking_model.dart';
 import '../../../services/booking_service.dart';
 import '../../../services/review_service.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/business_status_badge.dart';
+import '../../../widgets/business/business_empty_state.dart';
 import 'write_review_screen.dart';
 
 class CustomerBookingsScreen extends StatefulWidget {
@@ -113,7 +116,14 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       stream: _bookingService.streamCustomerBookings(_userId!),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: 4,
+            itemBuilder: (_, __) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ShimmerListItem(isDarkMode: isDark),
+            ),
+          );
         }
 
         final all = snapshot.data ?? [];
@@ -121,8 +131,12 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
             all.where((b) => statuses.contains(b.status)).toList();
 
         if (bookings.isEmpty) {
-          return _buildEmptyState(
-              isDark, textColor, emptyIcon, emptyTitle, emptySubtitle);
+          return BusinessEmptyState(
+            icon: emptyIcon,
+            title: emptyTitle,
+            subtitle: emptySubtitle,
+            isDarkMode: isDark,
+          );
         }
 
         return ListView.separated(
@@ -156,6 +170,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: AppTheme.cardShadow(isDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +206,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                   ],
                 ),
               ),
-              _statusChip(booking.status),
+              BusinessStatusBadge.fromBookingStatus(booking.status, isOwnerView: false),
             ],
           ),
           const SizedBox(height: 12),
@@ -308,41 +323,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  Widget _statusChip(BookingStatus status) {
-    Color color;
-    String label;
-    switch (status) {
-      case BookingStatus.pending:
-        color = AppTheme.warningStatus;
-        label = 'Pending';
-      case BookingStatus.confirmed:
-        color = AppTheme.primaryAction;
-        label = 'Confirmed';
-      case BookingStatus.completed:
-        color = AppTheme.successStatus;
-        label = 'Completed';
-      case BookingStatus.cancelled:
-        color = AppTheme.errorStatus;
-        label = 'Cancelled';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
   void _cancelBooking(BookingModel booking) async {
     final reason = await showDialog<String>(
       context: context,
@@ -396,46 +376,6 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     );
   }
 
-  Widget _buildEmptyState(bool isDark, Color textColor, IconData icon,
-      String title, String subtitle) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon,
-                size: 28,
-                color: isDark ? Colors.white24 : Colors.black26),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: isDark ? Colors.white38 : Colors.black38,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // Separate widget to handle async hasUserReviewed check

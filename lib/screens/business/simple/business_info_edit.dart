@@ -41,12 +41,17 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
 
   bool _isLoading = false;
   bool _isUploadingCover = false;
+  bool _isDirty = false;
   String? _coverImageUrl;
   File? _selectedCoverFile;
 
   final List<String> _selectedBusinessTypes = [];
 
   bool get _isSetupMode => widget.businessProfile == null;
+
+  void _markDirty() {
+    if (!_isDirty && mounted) setState(() => _isDirty = true);
+  }
 
   static const List<String> _businessTypeOptions = [
     'Products',
@@ -77,10 +82,36 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
     if (bp?.businessTypes != null) {
       _selectedBusinessTypes.addAll(bp!.businessTypes);
     }
+
+    // Listen for changes to mark form as dirty
+    _nameController.addListener(_markDirty);
+    _descriptionController.addListener(_markDirty);
+    _softLabelController.addListener(_markDirty);
+    _phoneController.addListener(_markDirty);
+    _emailController.addListener(_markDirty);
+    _websiteController.addListener(_markDirty);
+    _addressController.addListener(_markDirty);
+    _instagramController.addListener(_markDirty);
+    _facebookController.addListener(_markDirty);
+    _twitterController.addListener(_markDirty);
+    _linkedinController.addListener(_markDirty);
+    _youtubeController.addListener(_markDirty);
   }
 
   @override
   void dispose() {
+    _nameController.removeListener(_markDirty);
+    _descriptionController.removeListener(_markDirty);
+    _softLabelController.removeListener(_markDirty);
+    _phoneController.removeListener(_markDirty);
+    _emailController.removeListener(_markDirty);
+    _websiteController.removeListener(_markDirty);
+    _addressController.removeListener(_markDirty);
+    _instagramController.removeListener(_markDirty);
+    _facebookController.removeListener(_markDirty);
+    _twitterController.removeListener(_markDirty);
+    _linkedinController.removeListener(_markDirty);
+    _youtubeController.removeListener(_markDirty);
     _nameController.dispose();
     _descriptionController.dispose();
     _softLabelController.dispose();
@@ -198,6 +229,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
               backgroundColor: AppTheme.successStatus,
             ),
           );
+          _isDirty = false;
           Navigator.of(context).pop(true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -245,6 +277,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
               backgroundColor: AppTheme.successStatus,
             ),
           );
+          _isDirty = false;
           Navigator.of(context).pop(true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -360,7 +393,39 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
         ? Colors.white.withValues(alpha: 0.5)
         : Colors.black.withValues(alpha: 0.4);
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldDiscard = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: cardColor,
+            title: Text('Discard changes?',
+                style: TextStyle(color: textColor)),
+            content: Text(
+              'You have unsaved changes. Are you sure you want to go back?',
+              style: TextStyle(color: textColor.withValues(alpha: 0.7)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancel',
+                    style: TextStyle(color: AppTheme.primaryAction)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text('Discard',
+                    style: TextStyle(color: AppTheme.errorStatus)),
+              ),
+            ],
+          ),
+        );
+        if (shouldDiscard == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         title: Text(_isSetupMode ? 'Set Up Business' : 'Edit Business Info'),
@@ -640,6 +705,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
           ],
         ),
       ),
+    ),
     );
   }
 

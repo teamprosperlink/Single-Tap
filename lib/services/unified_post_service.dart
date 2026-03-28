@@ -451,6 +451,159 @@ class UnifiedPostService {
     }
   }
 
+  /// Search business posts by semantic similarity to a user's query.
+  /// Returns card-format maps compatible with HomeScreen's _buildItemCard().
+  Future<List<Map<String, dynamic>>> searchBusinessPosts({
+    required String query,
+    required List<double> queryEmbedding,
+    double? userLat,
+    double? userLng,
+    int limit = 5,
+    double similarityThreshold = 0.45,
+  }) async {
+    final currentUid = _auth.currentUser?.uid;
+    try {
+      // Query active posts – filter isBusinessPost client-side because
+      // Firestore can't filter on nested map fields in a composite index.
+      final snap = await _firestore
+          .collection('posts')
+          .where('isActive', isEqualTo: true)
+          .limit(100)
+          .get();
+
+      // Extract query keywords for keyword-overlap scoring
+      final queryTerms = query
+          .toLowerCase()
+          .split(RegExp(r'[\s,;.!?()"\-_/]+'))
+          .where((w) => w.length > 1)
+          .toSet();
+
+      final scored = <Map<String, dynamic>>[];
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+
+        // Must be a business post
+        final metadata = data['metadata'] as Map<String, dynamic>?;
+        if (metadata == null || metadata['isBusinessPost'] != true) continue;
+
+        // Skip own business
+        final postUserId = data['userId'] as String? ?? '';
+        if (postUserId == currentUid) continue;
+
+        // Require non-empty embedding
+        final rawEmb = data['embedding'];
+        if (rawEmb == null) continue;
+        final embedding = List<double>.from(rawEmb);
+        if (embedding.isEmpty || embedding.every((v) => v == 0.0)) continue;
+
+        // Cosine similarity
+        final similarity = _calculateCosineSimilarity(queryEmbedding, embedding);
+        if (similarity < similarityThreshold) continue;
+
+        // Keyword overlap score
+        final postKeywords = (data['keywords'] as List<dynamic>?)
+                ?.map((e) => e.toString().toLowerCase())
+                .toSet() ??
+            <String>{};
+        final postText =
+            '${data['originalPrompt'] ?? ''} ${data['title'] ?? ''} ${data['description'] ?? ''}'
+                .toLowerCase();
+        final allPostTerms = {
+          ...postKeywords,
+          ...postText
+              .split(RegExp(r'[\s,;.!?()"\-_/]+'))
+              .where((w) => w.length > 1),
+        };
+        final overlap = queryTerms.intersection(allPostTerms).length;
+        final keywordScore =
+            queryTerms.isEmpty ? 0.0 : (overlap / queryTerms.length).clamp(0.0, 1.0);
+
+        // Location proximity bonus
+        double locationBonus = 0.0;
+        if (userLat != null && userLng != null) {
+          final postLat = (data['latitude'] as num?)?.toDouble();
+          final postLng = (data['longitude'] as num?)?.toDouble();
+          if (postLat != null && postLng != null && (postLat != 0 || postLng != 0)) {
+            final distKm = _haversineKm(userLat, userLng, postLat, postLng);
+            if (distKm <= 10) {
+              locationBonus = 1.0;
+            } else if (distKm <= 25) {
+              locationBonus = 0.7;
+            } else if (distKm <= 50) {
+              locationBonus = 0.4;
+            }
+            // Beyond 50 km → 0 bonus
+          }
+        }
+
+        // Composite score
+        final composite =
+            (similarity * 0.65) + (keywordScore * 0.15) + (locationBonus * 0.20);
+        if (composite < 0.40) continue;
+
+        // Build card map
+        final businessName =
+            metadata['businessName'] as String? ?? data['userName'] as String? ?? '';
+        final softLabel = metadata['softLabel'] as String? ?? '';
+
+        scored.add({
+          '_compositeScore': composite,
+          // Card fields expected by _buildItemCard
+          'name': businessName,
+          'category': softLabel,
+          'match_type': 'business',
+          'similarity_score': composite,
+          'match_score': '${(composite * 100).round()}%',
+          'listing_id': doc.id,
+          'user_id': postUserId,
+          'userId': postUserId,
+          'image': data['userPhoto'] as String? ?? '',
+          'images': <String>[],
+          'price': '',
+          'location': '', // will be set by caller after merge
+          'latitude': data['latitude'],
+          'longitude': data['longitude'],
+          '_raw_location': {
+            'lat': data['latitude'],
+            'lng': data['longitude'],
+          },
+          '_isBusinessCard': true,
+          '_businessUserId': postUserId,
+          'smart_message': 'Business offering: ${data['title'] ?? businessName}',
+          'userName': businessName,
+          'userPhoto': data['userPhoto'] as String? ?? '',
+          'brand': '',
+          'model': '',
+          'item_type': softLabel,
+          'description': data['description'] as String? ?? '',
+        });
+      }
+
+      // Sort by composite score descending and cap at limit
+      scored.sort((a, b) =>
+          (b['_compositeScore'] as double).compareTo(a['_compositeScore'] as double));
+      return scored.take(limit).toList();
+    } catch (e) {
+      debugPrint('Error searching business posts: $e');
+      return [];
+    }
+  }
+
+  /// Haversine distance in kilometres between two coordinates.
+  static double _haversineKm(
+      double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371.0;
+    final dLat = (lat2 - lat1) * (pi / 180);
+    final dLon = (lon2 - lon1) * (pi / 180);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * (pi / 180)) *
+            cos(lat2 * (pi / 180)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
   /// Find matching posts for a given post
   Future<List<PostModel>> findMatches(String postId) async {
     try {

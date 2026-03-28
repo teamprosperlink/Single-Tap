@@ -1195,8 +1195,10 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
                         if (!mounted) return;
                         if (result['success'] == true) {
                           setState(() => _requestSentLocally = true);
+                          // ignore: use_build_context_synchronously
                           NetworkingHelpers.showSuccessSnackBar(context, 'Connection request sent!');
                         } else {
+                          // ignore: use_build_context_synchronously
                           NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed to send request');
                         }
                       }
@@ -1400,9 +1402,12 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen>
               );
               if (!mounted) return;
               if (result['success'] == true) {
+                // ignore: use_build_context_synchronously
                 NetworkingHelpers.showWarningSnackBar(context, 'Disconnected successfully');
+                // ignore: use_build_context_synchronously
                 Navigator.of(context).popUntil((route) => route.isFirst);
               } else {
+                // ignore: use_build_context_synchronously
                 NetworkingHelpers.showErrorSnackBar(context, result['message'] ?? 'Failed to disconnect');
               }
             },

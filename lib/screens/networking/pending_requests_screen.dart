@@ -404,13 +404,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                                 .cancelConnectionRequest(
                                                   requestId,
                                                 );
-                                            if (!context.mounted) return;
+                                            if (!mounted) return;
                                           } else {
                                             final result = await connectionService
                                                 .acceptConnectionRequest(
                                                   requestId,
                                                 );
-                                            if (!context.mounted) return;
+                                            if (!mounted) return;
                                             if (result['success'] == true) {
                                               NetworkingHelpers.showSuccessSnackBar(context, 'Connection accepted!');
                                             } else {
@@ -419,7 +419,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                           }
                                         } catch (e) {
                                           debugPrint('Error handling connection request: $e');
-                                          if (context.mounted) {
+                                          if (mounted) {
                                             NetworkingHelpers.showErrorSnackBar(context, 'Something went wrong. Try again.');
                                           }
                                         }

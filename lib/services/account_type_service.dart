@@ -136,6 +136,10 @@ class AccountTypeService {
         'accountType': AccountType.personal.name,
         'accountStatus': 'active',
       });
+
+      // Deactivate the business post so it no longer appears in search
+      await UnifiedPostService().deactivatePost('business_${user.uid}');
+
       return true;
     } catch (e) {
       debugPrint('Error disabling business mode: $e');

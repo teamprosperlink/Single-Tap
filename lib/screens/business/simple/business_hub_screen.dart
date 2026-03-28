@@ -10,6 +10,8 @@ import '../../../services/account_type_service.dart';
 import '../../../services/unified_post_service.dart';
 import '../../../services/booking_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/item_options_sheet.dart';
 import 'business_info_edit.dart';
 import 'catalog_item_form.dart';
 import 'catalog_management_screen.dart';
@@ -58,96 +60,17 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   }
 
   void _showItemOptions(CatalogItem item) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.cardColor(isDark),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final textColor = AppTheme.textPrimary(isDark);
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: Icon(Icons.edit_outlined, color: textColor),
-                title: Text('Edit', style: TextStyle(color: textColor)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _editItem(item);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  item.isAvailable
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: textColor,
-                ),
-                title: Text(
-                  item.isAvailable ? 'Mark Unavailable' : 'Mark Available',
-                  style: TextStyle(color: textColor),
-                ),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _catalogService.toggleAvailability(
-                    item.userId,
-                    item.id,
-                    !item.isAvailable,
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: AppTheme.errorStatus),
-                title:
-                    Text('Delete', style: TextStyle(color: AppTheme.errorStatus)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: AppTheme.cardColor(isDark),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      title: Text('Delete Item',
-                          style: TextStyle(color: textColor)),
-                      content: Text('Delete "${item.name}"?',
-                          style: TextStyle(
-                              color: textColor.withValues(alpha: 0.7))),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text('Delete',
-                              style: TextStyle(color: AppTheme.errorStatus)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true && _userId != null) {
-                    await _catalogService.deleteItem(_userId!, item.id);
-                  }
-                },
-              ),
-            ],
-          ),
-        );
+    ItemOptionsSheet.show(
+      context,
+      item: item,
+      onEdit: () => _editItem(item),
+      onToggleAvailability: () async {
+        await _catalogService.toggleAvailability(item.userId, item.id, !item.isAvailable);
+      },
+      onDelete: () async {
+        if (_userId != null) {
+          await _catalogService.deleteItem(_userId!, item.id);
+        }
       },
     );
   }
@@ -173,7 +96,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         if (userSnapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             backgroundColor: AppTheme.backgroundColor(true),
-            body: const Center(child: CircularProgressIndicator()),
+            body: const ShimmerDashboard(isDarkMode: true),
           );
         }
 
@@ -222,7 +145,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                   color: AppTheme.primaryAction.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(Icons.storefront_rounded,
+                child: const Icon(Icons.storefront_rounded,
                     size: 40, color: AppTheme.primaryAction),
               ),
               const SizedBox(height: 24),
@@ -316,7 +239,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                         stream: _catalogStream,
                         builder: (context, snap) {
                           final count = snap.data?.length ?? 0;
-                          return GestureDetector(
+                          return InkWell(
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -325,6 +248,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                                         const CatalogManagementScreen()),
                               );
                             },
+                            borderRadius: BorderRadius.circular(8),
                             child: Row(
                               children: [
                                 Text(
@@ -337,7 +261,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                                 const SizedBox(width: 4),
                                 Icon(
                                   Icons.chevron_right,
-                                  size: 18,
+                                  size: AppTheme.iconMedium,
                                   color: AppTheme.secondaryText(isDark),
                                 ),
                               ],
@@ -356,7 +280,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
               // Bottom padding (nav bar 60 + FAB ~56 + safe area + margin)
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 140,
+                  height: MediaQuery.of(context).padding.bottom + AppTheme.bottomPaddingWithFab,
                 ),
               ),
             ],
@@ -365,7 +289,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           // Add Item button — positioned, no animation
           Positioned(
             right: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 76,
+            bottom: MediaQuery.of(context).padding.bottom + AppTheme.bottomPaddingNoFab,
             child: Material(
               color: AppTheme.primaryAction,
               borderRadius: BorderRadius.circular(16),
@@ -512,7 +436,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                       ],
                       if (bp.address != null || location != null) ...[
                         Icon(Icons.location_on_outlined,
-                            size: 14,
+                            size: AppTheme.iconSmall,
                             color:
                                 Colors.white.withValues(alpha: 0.8)),
                         const SizedBox(width: 3),
@@ -549,56 +473,60 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   }
 
   Widget _buildLiveChip(BusinessProfile bp) {
-    return GestureDetector(
-      onTap: () => _toggleLive(bp),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: bp.isLive
-              ? AppTheme.successStatus.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(16),
-          border: bp.isLive
-              ? Border.all(
-                  color: AppTheme.successStatus.withValues(alpha: 0.5))
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (bp.isLive) ...[
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: AppTheme.successStatus,
-                  shape: BoxShape.circle,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _toggleLive(bp),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: bp.isLive
+                ? AppTheme.successStatus.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(16),
+            border: bp.isLive
+                ? Border.all(
+                    color: AppTheme.successStatus.withValues(alpha: 0.5))
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (bp.isLive) ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.successStatus,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'Live',
-                style: TextStyle(
-                  color: AppTheme.successStatus,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(width: 5),
+                const Text(
+                  'Live',
+                  style: TextStyle(
+                    color: AppTheme.successStatus,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ] else ...[
-              Icon(Icons.circle_outlined,
-                  size: 12,
-                  color: Colors.white.withValues(alpha: 0.5)),
-              const SizedBox(width: 5),
-              Text(
-                bp.isCurrentlyOpen ? 'Open' : 'Offline',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              ] else ...[
+                Icon(Icons.circle_outlined,
+                    size: 12,
+                    color: Colors.white.withValues(alpha: 0.5)),
+                const SizedBox(width: 5),
+                Text(
+                  bp.isCurrentlyOpen ? 'Open' : 'Offline',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -642,6 +570,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
             color: AppTheme.quickActionCatalog,
             cardBg: cardBg,
             textColor: textColor,
+            isDark: isDark,
             onTap: () {
               Navigator.push(
                 context,
@@ -661,6 +590,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 color: AppTheme.quickActionBookings,
                 cardBg: cardBg,
                 textColor: textColor,
+                isDark: isDark,
                 badge: count > 0 ? count.toString() : null,
                 onTap: () {
                   Navigator.push(
@@ -679,6 +609,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
             color: AppTheme.quickActionReviews,
             cardBg: cardBg,
             textColor: textColor,
+            isDark: isDark,
             onTap: () {
               Navigator.push(
                 context,
@@ -694,6 +625,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
             color: AppTheme.quickActionViews,
             cardBg: cardBg,
             textColor: textColor,
+            isDark: isDark,
             onTap: () {
               Navigator.push(
                 context,
@@ -713,65 +645,73 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     required Color color,
     required Color cardBg,
     required Color textColor,
+    required bool isDark,
     required VoidCallback onTap,
     String? badge,
   }) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.white.withValues(alpha: 0.08),
+          highlightColor: Colors.white.withValues(alpha: 0.04),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: AppTheme.cardShadow(isDark),
+            ),
+            child: Column(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(icon, color: color, size: 22),
                     ),
-                    child: Icon(icon, color: color, size: 22),
-                  ),
-                  if (badge != null)
-                    Positioned(
-                      top: -4,
-                      right: -8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          badge,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
+                    if (badge != null)
+                      Positioned(
+                        top: -4,
+                        right: -8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            badge,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: textColor.withValues(alpha: 0.8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -808,13 +748,14 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         border: Border.all(
           color: AppTheme.primaryAction.withValues(alpha: 0.35),
         ),
+        boxShadow: AppTheme.cardShadow(isDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.task_alt_outlined,
+              const Icon(Icons.task_alt_outlined,
                   size: 15, color: AppTheme.primaryAction),
               const SizedBox(width: 6),
               Text(
@@ -825,7 +766,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                     fontWeight: FontWeight.w600),
               ),
               const Spacer(),
-              GestureDetector(
+              InkWell(
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -833,7 +774,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                         BusinessInfoEdit(businessProfile: bp),
                   ),
                 ),
-                child: Text(
+                child: const Text(
                   'Complete profile \u2192',
                   style: TextStyle(
                     color: AppTheme.primaryAction,
@@ -853,7 +794,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                   ? Colors.white.withValues(alpha: 0.1)
                   : Colors.black.withValues(alpha: 0.06),
               valueColor:
-                  AlwaysStoppedAnimation(AppTheme.primaryAction),
+                  const AlwaysStoppedAnimation(AppTheme.primaryAction),
               minHeight: 6,
             ),
           ),

@@ -131,7 +131,7 @@ class CatalogItemDetail extends StatelessWidget {
                           color: AppTheme.errorStatus.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Currently Unavailable',
                           style: TextStyle(
                             color: AppTheme.errorStatus,
@@ -416,17 +416,21 @@ class _ImageCarouselState extends State<_ImageCarousel> {
               itemCount: widget.images.length,
               onPageChanged: (i) => setState(() => _current = i),
               itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () => _showFullScreen(context, index),
-                  child: Image.network(
-                    widget.images[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: widget.isDark
-                          ? const Color(0xFF2C2C2E)
-                          : const Color(0xFFF0F0F0),
-                      child: const Center(
-                        child: Icon(Icons.broken_image, color: Colors.white38),
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _showFullScreen(context, index),
+                    splashColor: Colors.white.withValues(alpha: 0.08),
+                    child: Image.network(
+                      widget.images[index],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: widget.isDark
+                            ? const Color(0xFF2C2C2E)
+                            : const Color(0xFFF0F0F0),
+                        child: const Center(
+                          child: Icon(Icons.broken_image, color: Colors.white38),
+                        ),
                       ),
                     ),
                   ),

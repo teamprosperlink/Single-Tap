@@ -167,8 +167,8 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                       final currentScale = _transformationController.value
                           .getMaxScaleOnAxis();
                       if (currentScale > 0.5) {
-                        _transformationController.value = Matrix4.identity()
-                          ..scale(currentScale - 0.5);
+                        _transformationController.value =
+                            Matrix4.diagonal3Values(currentScale - 0.5, currentScale - 0.5, 1.0);
                       }
                     },
                   ),
@@ -192,8 +192,8 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
                       final currentScale = _transformationController.value
                           .getMaxScaleOnAxis();
                       if (currentScale < 4.0) {
-                        _transformationController.value = Matrix4.identity()
-                          ..scale(currentScale + 0.5);
+                        _transformationController.value =
+                            Matrix4.diagonal3Values(currentScale + 0.5, currentScale + 0.5, 1.0);
                       }
                     },
                   ),

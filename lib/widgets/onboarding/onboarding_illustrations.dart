@@ -1074,7 +1074,7 @@ class _MessagingIllustrationState extends State<MessagingIllustration>
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.search, color: AppColors.textSecondaryDark, size: 12),
+                        const Icon(Icons.search, color: AppColors.textSecondaryDark, size: 12),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text('Search conversations...',
@@ -1371,7 +1371,7 @@ class _NearbyIllustrationState extends State<NearbyIllustration>
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.search_rounded, size: 12,
+                        const Icon(Icons.search_rounded, size: 12,
                             color: AppColors.textSecondaryDark),
                         const SizedBox(width: 4),
                         Expanded(
@@ -1521,7 +1521,7 @@ class _NearbyIllustrationState extends State<NearbyIllustration>
                           color: const Color(0xFF007AFF),
                           border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                         ),
-                        child: Icon(Icons.bookmark_border_rounded,
+                        child: const Icon(Icons.bookmark_border_rounded,
                             color: Colors.white70, size: 10),
                       ),
                     ),

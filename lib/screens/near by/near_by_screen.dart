@@ -472,7 +472,9 @@ class _NearByScreenState extends State<NearByScreen>
             // Skip current user's own posts — only show others' posts
             final cardOwnerId = (card['user_id'] ?? '').toString();
             if (cardOwnerId.isNotEmpty &&
-                (cardOwnerId == userUuid || cardOwnerId == firebaseUid)) continue;
+                (cardOwnerId == userUuid || cardOwnerId == firebaseUid)) {
+              continue;
+            }
 
             final id = (card['listing_id'] ?? '').toString();
             if (id.isNotEmpty && seenIds.contains(id)) continue;

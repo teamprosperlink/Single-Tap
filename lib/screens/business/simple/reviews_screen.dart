@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../config/app_theme.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/business_empty_state.dart';
 import '../../../models/review_model.dart';
 import '../../../services/review_service.dart';
 
@@ -46,7 +48,14 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
         stream: _reviewService.streamReviews(_userId!),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 4,
+              itemBuilder: (_, __) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ShimmerListItem(isDarkMode: isDark),
+              ),
+            );
           }
 
           final reviews = snapshot.data ?? [];
@@ -209,6 +218,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: BorderRadius.circular(12),
+            boxShadow: AppTheme.cardShadow(isDark),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,7 +317,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
               // Reply button (only if no response yet)
               if (review.businessResponse == null) ...[
                 const SizedBox(height: 8),
-                GestureDetector(
+                InkWell(
                   onTap: () => _showReplySheet(review),
                   child: const Text('Reply',
                       style: TextStyle(
@@ -394,36 +404,11 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
 
   Widget _buildEmptyState(
       bool isDark, Color textColor, Color subtitleColor) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.star_outline_rounded,
-                size: 32,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.3)
-                    : Colors.black.withValues(alpha: 0.2)),
-          ),
-          const SizedBox(height: 16),
-          Text('No reviews yet',
-              style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text('Customer reviews will appear here',
-              style: TextStyle(color: subtitleColor, fontSize: 13)),
-        ],
-      ),
+    return BusinessEmptyState(
+      icon: Icons.star_outline_rounded,
+      title: 'No reviews yet',
+      subtitle: 'Customer reviews will appear here',
+      isDarkMode: isDark,
     );
   }
 }

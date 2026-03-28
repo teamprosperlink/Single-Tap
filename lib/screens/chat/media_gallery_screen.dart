@@ -980,16 +980,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                     // Show confirmation dialog
                     final confirm = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: const Text('Delete Link'),
                         content: const Text('Delete this link?'),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context, false),
+                            onPressed: () => Navigator.pop(dialogContext, false),
                             child: const Text('Cancel'),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pop(context, true),
+                            onPressed: () => Navigator.pop(dialogContext, true),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.red,
                             ),
@@ -1012,7 +1012,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
                             ]),
                           }, SetOptions(merge: true));
 
-                      if (context.mounted) {
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Link deleted'),

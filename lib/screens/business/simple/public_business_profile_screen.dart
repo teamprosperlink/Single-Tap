@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../config/app_theme.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
 import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../models/review_model.dart';
@@ -94,7 +95,7 @@ class _PublicBusinessProfileScreenState
     if (_isLoading) {
       return Scaffold(
         backgroundColor: bgColor,
-        body: const Center(child: CircularProgressIndicator()),
+        body: ShimmerProfileHeader(isDarkMode: isDark),
       );
     }
 
@@ -279,7 +280,7 @@ class _PublicBusinessProfileScreenState
                     Row(
                       children: [
                         Icon(Icons.location_on_outlined,
-                            size: 13,
+                            size: AppTheme.iconSmall,
                             color: Colors.white.withValues(alpha: 0.8)),
                         const SizedBox(width: 3),
                         Expanded(
@@ -324,6 +325,7 @@ class _PublicBusinessProfileScreenState
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: AppTheme.cardShadow(isDark),
       ),
       child: Row(
         children: [
@@ -362,40 +364,54 @@ class _PublicBusinessProfileScreenState
     required VoidCallback onTap,
   }) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.white.withValues(alpha: 0.08),
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 22),
               ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black87,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _openChat() {
+  void _openChat({CatalogItem? item}) {
     if (_profile == null) return;
+    String? initialMessage;
+    if (item != null) {
+      initialMessage = "Hi, I'm interested in ${item.name}"
+          "${item.price != null ? ' (${item.formattedPrice})' : ''}";
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EnhancedChatScreen(otherUser: _profile!),
+        builder: (_) => EnhancedChatScreen(
+          otherUser: _profile!,
+          initialMessage: initialMessage,
+          source: item != null ? 'Catalog' : 'Business',
+        ),
       ),
     );
   }
@@ -429,7 +445,7 @@ class _PublicBusinessProfileScreenState
         context,
         item: target,
         businessUser: _profile!,
-        onEnquire: _openChat,
+        onEnquire: () => _openChat(item: target),
       );
     }
   }
@@ -532,7 +548,7 @@ class _PublicBusinessProfileScreenState
                   context,
                   item: item,
                   businessUser: _profile!,
-                  onEnquire: _openChat,
+                  onEnquire: () => _openChat(item: item),
                 );
               },
             );
@@ -693,7 +709,7 @@ class _PublicBusinessProfileScreenState
               ],
               const Spacer(),
               if (_ratingSummary.totalReviews > 0)
-                GestureDetector(
+                InkWell(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -739,7 +755,7 @@ class _PublicBusinessProfileScreenState
                   ...displayReviews.map((r) => _buildReviewCard(r, isDark)),
                   if (reviews.length > 3) ...[
                     const SizedBox(height: 8),
-                    GestureDetector(
+                    InkWell(
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(

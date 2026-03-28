@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../config/app_theme.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/business_empty_state.dart';
 
 class ProfileViewsScreen extends StatelessWidget {
   const ProfileViewsScreen({super.key});
@@ -58,7 +60,14 @@ class ProfileViewsScreen extends StatelessWidget {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   userSnapshot.connectionState ==
                       ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: 5,
+                  itemBuilder: (_, __) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ShimmerListItem(isDarkMode: isDark),
+                  ),
+                );
               }
 
               if (snapshot.hasError) {
@@ -68,8 +77,14 @@ class ProfileViewsScreen extends StatelessWidget {
                     _buildViewsHeader(
                         counterViews, isDark, textColor, subtitleColor),
                     Expanded(
-                        child: _buildEmptyState(
-                            isDark, textColor, subtitleColor)),
+                        child: BusinessEmptyState(
+                          icon: Icons.visibility_off_outlined,
+                          title: 'No views yet',
+                          subtitle: 'When someone views your profile, it will show up here',
+                          ctaLabel: 'Go live to attract views',
+                          onCtaTap: null,
+                          isDarkMode: isDark,
+                        )),
                   ],
                 );
               }
@@ -85,7 +100,14 @@ class ProfileViewsScreen extends StatelessWidget {
                       totalViews, isDark, textColor, subtitleColor),
                   Expanded(
                     child: grouped.isEmpty
-                        ? _buildEmptyState(isDark, textColor, subtitleColor)
+                        ? BusinessEmptyState(
+                            icon: Icons.visibility_off_outlined,
+                            title: 'No views yet',
+                            subtitle: 'When someone views your profile, it will show up here',
+                            ctaLabel: 'Go live to attract views',
+                            onCtaTap: null,
+                            isDarkMode: isDark,
+                          )
                         : ListView.separated(
                             padding:
                                 const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -299,44 +321,4 @@ class ProfileViewsScreen extends StatelessWidget {
     return '${(diff.inDays / 30).floor()}mo ago';
   }
 
-  Widget _buildEmptyState(
-      bool isDark, Color textColor, Color subtitleColor) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(Icons.visibility_off_outlined,
-                size: 36,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.3)
-                    : Colors.black.withValues(alpha: 0.2)),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No views yet',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'When someone views your profile,\nit will show up here',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: subtitleColor, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
 }

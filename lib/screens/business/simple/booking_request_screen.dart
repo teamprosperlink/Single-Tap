@@ -227,50 +227,60 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
             Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              color: AppTheme.primaryAction, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(dateStr,
-                                style: TextStyle(
-                                    color: textColor, fontSize: 14)),
-                          ),
-                        ],
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(12),
+                      splashColor: Colors.white.withValues(alpha: 0.08),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined,
+                                color: AppTheme.primaryAction, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(dateStr,
+                                  style: TextStyle(
+                                      color: textColor, fontSize: 14)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: _pickTime,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.access_time_outlined,
-                              color: AppTheme.primaryAction, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(timeStr,
-                                style: TextStyle(
-                                    color: textColor, fontSize: 14)),
-                          ),
-                        ],
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _pickTime,
+                      borderRadius: BorderRadius.circular(12),
+                      splashColor: Colors.white.withValues(alpha: 0.08),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.access_time_outlined,
+                                color: AppTheme.primaryAction, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(timeStr,
+                                  style: TextStyle(
+                                      color: textColor, fontSize: 14)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

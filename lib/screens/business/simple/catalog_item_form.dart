@@ -71,8 +71,8 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     final remaining = _maxImages - _totalImageCount;
     if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Maximum 5 images allowed'),
+        const SnackBar(
+          content: Text('Maximum 5 images allowed'),
           backgroundColor: AppTheme.warningStatus,
         ),
       );
@@ -158,8 +158,8 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
         final itemId = await _catalogService.addItem(item);
         if (itemId == null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
+            const SnackBar(
+              content: Text(
                   'Could not add item. You have reached the 100 item limit.'),
               backgroundColor: AppTheme.errorStatus,
             ),
@@ -217,7 +217,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text('Save',
+                : const Text('Save',
                     style: TextStyle(
                         color: AppTheme.primaryAction,
                         fontWeight: FontWeight.w600,
@@ -474,7 +474,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                     color: AppTheme.primaryAction.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('Select Files',
+                  child: const Text('Select Files',
                       style: TextStyle(
                           color: AppTheme.primaryAction,
                           fontSize: 13,
@@ -528,12 +528,12 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                     width: 1.5,
                   ),
                 ),
-                child: Column(
+                child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.add_photo_alternate_outlined,
                         color: AppTheme.primaryAction, size: 28),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text('Add',
                         style: TextStyle(
                             color: AppTheme.primaryAction,

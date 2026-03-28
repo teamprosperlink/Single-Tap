@@ -221,7 +221,7 @@ class _SavedNearbyScreenState extends State<SavedNearbyScreen> {
                   }
 
                   return MasonryGridView.builder(
-                    padding: EdgeInsets.only(
+                    padding: const EdgeInsets.only(
                       left: 12,
                       right: 12,
                       top: 12,

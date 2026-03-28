@@ -5,6 +5,9 @@ import '../../../config/app_theme.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/item_options_sheet.dart';
+import '../../../widgets/business/business_status_badge.dart';
 import 'catalog_item_form.dart';
 
 class CatalogManagementScreen extends StatefulWidget {
@@ -148,101 +151,19 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
   }
 
   void _showItemOptions(CatalogItem item) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.cardColor(isDark),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final textColor = AppTheme.textPrimary(isDark);
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: Icon(Icons.edit_outlined, color: textColor),
-                title: Text('Edit', style: TextStyle(color: textColor)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _editItem(item);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  item.isAvailable
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: textColor,
-                ),
-                title: Text(
-                  item.isAvailable ? 'Mark Sold Out' : 'Mark Available',
-                  style: TextStyle(color: textColor),
-                ),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _catalogService.toggleAvailability(
-                    item.userId,
-                    item.id,
-                    !item.isAvailable,
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppTheme.errorStatus),
-                title:
-                    const Text('Delete', style: TextStyle(color: AppTheme.errorStatus)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) {
-                      final dlgTextColor = AppTheme.textPrimary(isDark);
-                      return AlertDialog(
-                        backgroundColor: AppTheme.cardColor(isDark),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        title: Text('Delete Item',
-                            style: TextStyle(color: dlgTextColor)),
-                        content: Text('Delete "${item.name}"?',
-                            style: TextStyle(
-                                color: dlgTextColor.withValues(alpha: 0.7))),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Delete',
-                                style: TextStyle(color: AppTheme.errorStatus)),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                  if (confirm == true && _userId != null) {
-                    await _catalogService.deleteItem(_userId!, item.id);
-                  }
-                },
-              ),
-            ],
-          ),
-        );
+    ItemOptionsSheet.show(
+      context,
+      item: item,
+      onEdit: () => _editItem(item),
+      onToggleAvailability: () async {
+        await _catalogService.toggleAvailability(item.userId, item.id, !item.isAvailable);
       },
+      onDelete: () async {
+        if (_userId != null) {
+          await _catalogService.deleteItem(_userId!, item.id);
+        }
+      },
+      unavailableLabel: 'Mark Sold Out',
     );
   }
 
@@ -352,8 +273,24 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
             child: StreamBuilder<List<CatalogItem>>(
               stream: _catalogService.streamCatalog(_userId!),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData) {
+                  return _isGridView
+                    ? GridView.count(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.72,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        children: List.generate(4, (_) => ShimmerCard(isDarkMode: isDark)),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                        itemCount: 5,
+                        itemBuilder: (_, __) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: ShimmerListItem(isDarkMode: isDark),
+                        ),
+                      );
                 }
 
                 final allItems = snapshot.data ?? [];
@@ -428,41 +365,45 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
     );
   }
 
-  // ── Filter Chip ──
+  // -- Filter Chip --
 
   Widget _filterChip(
       String label, bool isSelected, VoidCallback onTap, bool isDark) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primaryAction
-              : AppTheme.cardColor(isDark),
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected
-              ? null
-              : Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.black.withValues(alpha: 0.08)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          decoration: BoxDecoration(
             color: isSelected
-                ? Colors.white
-                : (isDark ? Colors.white70 : Colors.black54),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                ? AppTheme.primaryAction
+                : AppTheme.cardColor(isDark),
+            borderRadius: BorderRadius.circular(20),
+            border: isSelected
+                ? null
+                : Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.08)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? Colors.white70 : Colors.black54),
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── List Item Row ──
+  // -- List Item Row --
 
   Widget _buildListItem(
     CatalogItem item,
@@ -487,90 +428,100 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
       }
     }
 
-    return GestureDetector(
-      onTap: () => _editItem(item),
-      onLongPress: () => _showItemOptions(item),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            // Item image/icon
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF2C2C2E)
-                    : const Color(0xFFF0F0F5),
-                borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _editItem(item),
+        onLongPress: () => _showItemOptions(item),
+        borderRadius: BorderRadius.circular(12),
+        splashColor: Colors.white.withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: AppTheme.cardShadow(isDark),
+          ),
+          child: Row(
+            children: [
+              // Item image/icon
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFF0F0F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: item.allImages.isNotEmpty
+                    ? Image.network(
+                        item.allImages.first,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _itemIcon(item, isDark),
+                      )
+                    : _itemIcon(item, isDark),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: item.allImages.isNotEmpty
-                  ? Image.network(
-                      item.allImages.first,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _itemIcon(item, isDark),
-                    )
-                  : _itemIcon(item, isDark),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-            // Name + subtitle + price
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+              // Name + subtitle + price
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: subtitleColor, fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.formattedPrice,
-                    style: const TextStyle(
-                      color: AppTheme.primaryAction,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: subtitleColor, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Status badge
-            _statusBadge(item.isAvailable, isDark),
-            const SizedBox(width: 4),
-
-            // 3-dot menu
-            GestureDetector(
-              onTap: () => _showItemOptions(item),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(
-                  Icons.more_horiz,
-                  color: subtitleColor,
-                  size: 20,
+                    const SizedBox(height: 4),
+                    Text(
+                      item.formattedPrice,
+                      style: const TextStyle(
+                        color: AppTheme.primaryAction,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+
+              // Status badge
+              BusinessStatusBadge.fromAvailability(item.isAvailable),
+              const SizedBox(width: 4),
+
+              // 3-dot menu
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _showItemOptions(item),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.more_horiz,
+                      color: subtitleColor,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -591,27 +542,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
     );
   }
 
-  Widget _statusBadge(bool isAvailable, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isAvailable
-            ? AppTheme.successStatus.withValues(alpha: 0.12)
-            : AppTheme.errorStatus.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        isAvailable ? 'Active' : 'Sold Out',
-        style: TextStyle(
-          color: isAvailable ? AppTheme.successStatus : AppTheme.errorStatus,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  // ── Empty State ──
+  // -- Empty State --
 
   Widget _buildEmptyState(bool isDark, Color textColor, Color subtitleColor) {
     return Center(

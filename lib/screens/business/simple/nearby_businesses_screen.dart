@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../../../models/user_profile.dart';
 import '../../../config/app_theme.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
 import 'public_business_profile_screen.dart';
 
 class NearbyBusinessesScreen extends StatefulWidget {
@@ -119,7 +120,14 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 5,
+              itemBuilder: (_, __) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ShimmerListItem(isDarkMode: isDark),
+              ),
+            )
           : _businesses.isEmpty
               ? Center(
                   child: Column(
@@ -161,139 +169,145 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
                     final dist =
                         _formatDistance(biz.latitude, biz.longitude);
 
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PublicBusinessProfileScreen(
-                              userId: biz.uid,
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PublicBusinessProfileScreen(
+                                userId: biz.uid,
+                              ),
                             ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        splashColor: Colors.white.withValues(alpha: 0.08),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: AppTheme.cardShadow(isDark),
                           ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            // Avatar
-                            CircleAvatar(
-                              radius: 26,
-                              backgroundImage:
-                                  biz.profileImageUrl != null
-                                      ? NetworkImage(
-                                          biz.profileImageUrl!)
-                                      : null,
-                              child: biz.profileImageUrl == null
-                                  ? Text(
-                                      biz.name.isNotEmpty
-                                          ? biz.name[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w600),
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: 14),
-                            // Info
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          bp?.businessName ?? biz.name,
-                                          style: TextStyle(
-                                            color: textColor,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      // Business badge
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFB300)
-                                              .withValues(alpha: 0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: const Icon(
-                                          Icons.verified,
-                                          size: 14,
-                                          color: Color(0xFFFFB300),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      if (bp?.softLabel != null) ...[
-                                        Text(
-                                          bp!.softLabel!,
-                                          style: TextStyle(
-                                            color: subtitleColor,
-                                            fontSize: 13,
+                          child: Row(
+                            children: [
+                              // Avatar
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundImage:
+                                    biz.profileImageUrl != null
+                                        ? NetworkImage(
+                                            biz.profileImageUrl!)
+                                        : null,
+                                child: biz.profileImageUrl == null
+                                    ? Text(
+                                        biz.name.isNotEmpty
+                                            ? biz.name[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w600),
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 14),
+                              // Info
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            bp?.businessName ?? biz.name,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        const SizedBox(width: 6),
+                                        // Business badge
+                                        Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFB300)
+                                                .withValues(alpha: 0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: const Icon(
+                                            Icons.verified,
+                                            size: 14,
+                                            color: Color(0xFFFFB300),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        if (bp?.softLabel != null) ...[
+                                          Text(
+                                            bp!.softLabel!,
+                                            style: TextStyle(
+                                              color: subtitleColor,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          if (dist.isNotEmpty)
+                                            Text(' \u2022 ',
+                                                style: TextStyle(
+                                                    color: subtitleColor,
+                                                    fontSize: 13)),
+                                        ],
                                         if (dist.isNotEmpty)
-                                          Text(' \u2022 ',
+                                          Text(dist,
                                               style: TextStyle(
                                                   color: subtitleColor,
                                                   fontSize: 13)),
                                       ],
-                                      if (dist.isNotEmpty)
-                                        Text(dist,
-                                            style: TextStyle(
-                                                color: subtitleColor,
-                                                fontSize: 13)),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Open/Closed chip
-                            if (bp?.hours != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isOpen
-                                      ? AppTheme.successStatus
-                                          .withValues(alpha: 0.15)
-                                      : AppTheme.errorStatus
-                                          .withValues(alpha: 0.15),
-                                  borderRadius:
-                                      BorderRadius.circular(6),
+                                    ),
+                                  ],
                                 ),
-                                child: Text(
-                                  isOpen ? 'Open' : 'Closed',
-                                  style: TextStyle(
+                              ),
+                              // Open/Closed chip
+                              if (bp?.hours != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
                                     color: isOpen
                                         ? AppTheme.successStatus
-                                        : AppTheme.errorStatus,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                            .withValues(alpha: 0.15)
+                                        : AppTheme.errorStatus
+                                            .withValues(alpha: 0.15),
+                                    borderRadius:
+                                        BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isOpen ? 'Open' : 'Closed',
+                                    style: TextStyle(
+                                      color: isOpen
+                                          ? AppTheme.successStatus
+                                          : AppTheme.errorStatus,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );

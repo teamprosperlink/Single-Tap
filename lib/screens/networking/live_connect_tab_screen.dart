@@ -3242,11 +3242,11 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                     ),
                     children: [
                       SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                      Center(
+                      const Center(
                         child: Column(
                           children: [
                             Icon(Icons.people_outline, size: 64, color: Colors.white24),
-                            const SizedBox(height: 16),
+                            SizedBox(height: 16),
                             Text(
                               'No people found nearby',
                               style: TextStyle(
@@ -3255,7 +3255,7 @@ class LiveConnectTabScreenState extends ConsumerState<LiveConnectTabScreen>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               'Pull down to refresh',
                               style: TextStyle(

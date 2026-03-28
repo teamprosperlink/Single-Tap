@@ -42,7 +42,7 @@ class BusinessProfileComponents {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.star, color: Colors.amber, size: size),
+        Icon(Icons.star, color: AppTheme.warningStatus, size: size),
         const SizedBox(width: 4),
         Text(
           rating.toStringAsFixed(1),

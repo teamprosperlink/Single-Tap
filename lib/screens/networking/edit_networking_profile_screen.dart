@@ -1197,7 +1197,7 @@ class _EditNetworkingProfileScreenState
                                       surface: Color(0xFF2A2A2A),
                                       onSurface: Colors.white,
                                     ),
-                                    dialogBackgroundColor: const Color(0xFF2A2A2A),
+                                    dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF2A2A2A)),
                                     textButtonTheme: TextButtonThemeData(
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.white,

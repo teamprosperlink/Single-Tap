@@ -1582,7 +1582,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     final isOutgoing = callerId == currentUserId;
     final otherUserId = isOutgoing ? receiverId : callerId;
     final callStatus = callData['status'] ?? 'unknown';
-    final callType = callData['type'] ?? 'voice';
+
     final timestamp =
         callData['timestamp'] as Timestamp? ??
         callData['createdAt'] as Timestamp?;
@@ -2694,98 +2694,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
         ],
       ),
-    );
-  }
-
-  /// Build active status text (Online/Offline) for a user
-  Widget _buildActiveStatusText(String userId) {
-    // Check cache first
-    if (_userCache.containsKey(userId)) {
-      final userData = _userCache[userId]!;
-      final showOnlineStatus = userData['showOnlineStatus'] ?? true;
-      if (!showOnlineStatus) return const SizedBox.shrink();
-
-      bool isOnline = userData['isOnline'] ?? false;
-      if (isOnline) {
-        final lastSeen = userData['lastSeen'];
-        if (lastSeen != null && lastSeen is Timestamp) {
-          final difference = DateTime.now().difference(lastSeen.toDate());
-          if (difference.inMinutes > 5) isOnline = false;
-        } else {
-          isOnline = false;
-        }
-      }
-
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isOnline ? Icons.circle : Icons.circle_outlined,
-            size: 8,
-            color: isOnline ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            isOnline ? 'Active' : 'Offline',
-            style: TextStyle(fontFamily: 'Poppins', 
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isOnline
-                  ? const Color(0xFF22C55E)
-                  : const Color(0xFFEF4444),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Stream fallback for first load
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('users').doc(userId).snapshots(),
-      builder: (context, snapshot) {
-        bool isOnline = false;
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          _userCache[userId] = userData;
-          final showOnlineStatus = userData['showOnlineStatus'] ?? true;
-          if (showOnlineStatus) {
-            isOnline = userData['isOnline'] ?? false;
-            if (isOnline) {
-              final lastSeen = userData['lastSeen'];
-              if (lastSeen != null && lastSeen is Timestamp) {
-                final diff = DateTime.now().difference(lastSeen.toDate());
-                if (diff.inMinutes > 5) isOnline = false;
-              } else {
-                isOnline = false;
-              }
-            }
-          }
-        }
-
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isOnline ? Icons.circle : Icons.circle_outlined,
-              size: 8,
-              color: isOnline
-                  ? const Color(0xFF22C55E)
-                  : const Color(0xFFEF4444),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              isOnline ? 'Active' : 'Offline',
-              style: TextStyle(fontFamily: 'Poppins', 
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: isOnline
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 

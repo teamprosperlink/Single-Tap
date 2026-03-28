@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../config/app_theme.dart';
 import '../../../models/booking_model.dart';
 import '../../../services/booking_service.dart';
+import '../../../widgets/business/business_shimmer_widgets.dart';
+import '../../../widgets/business/business_status_badge.dart';
+import '../../../widgets/business/business_empty_state.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
@@ -75,6 +78,7 @@ class _BookingsScreenState extends State<BookingsScreen>
             emptyIcon: Icons.hourglass_empty_rounded,
             emptyTitle: 'No pending bookings',
             emptySubtitle: 'New booking requests will appear here',
+            emptyCtaLabel: 'Share your profile',
           ),
           _buildBookingList(
             filter: BookingStatus.confirmed,
@@ -105,6 +109,7 @@ class _BookingsScreenState extends State<BookingsScreen>
     required IconData emptyIcon,
     required String emptyTitle,
     required String emptySubtitle,
+    String? emptyCtaLabel,
   }) {
     return StreamBuilder<List<BookingModel>>(
       stream: _bookingService.streamOwnerBookings(
@@ -114,14 +119,27 @@ class _BookingsScreenState extends State<BookingsScreen>
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: 4,
+            itemBuilder: (_, __) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ShimmerListItem(isDarkMode: isDark),
+            ),
+          );
         }
 
         final bookings = snapshot.data ?? [];
 
         if (bookings.isEmpty) {
-          return _buildEmptyState(
-              isDark, textColor, emptyIcon, emptyTitle, emptySubtitle);
+          return BusinessEmptyState(
+            icon: emptyIcon,
+            title: emptyTitle,
+            subtitle: emptySubtitle,
+            ctaLabel: emptyCtaLabel,
+            onCtaTap: null,
+            isDarkMode: isDark,
+          );
         }
 
         return ListView.separated(
@@ -147,6 +165,7 @@ class _BookingsScreenState extends State<BookingsScreen>
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: AppTheme.cardShadow(isDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,7 +204,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                   ],
                 ),
               ),
-              _statusChip(booking.status),
+              BusinessStatusBadge.fromBookingStatus(booking.status),
             ],
           ),
 
@@ -215,7 +234,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                     ),
                     if (booking.servicePrice != null)
                       Text(
-                        '₹${booking.servicePrice!.toStringAsFixed(0)}',
+                        '\u20B9${booking.servicePrice!.toStringAsFixed(0)}',
                         style: const TextStyle(
                             color: AppTheme.primaryAction,
                             fontSize: 13,
@@ -366,36 +385,6 @@ class _BookingsScreenState extends State<BookingsScreen>
     );
   }
 
-  Widget _statusChip(BookingStatus status) {
-    Color color;
-    String label;
-    switch (status) {
-      case BookingStatus.pending:
-        color = AppTheme.warningStatus;
-        label = 'Pending';
-      case BookingStatus.confirmed:
-        color = AppTheme.successStatus;
-        label = 'Confirmed';
-      case BookingStatus.completed:
-        color = AppTheme.primaryAction;
-        label = 'Completed';
-      case BookingStatus.cancelled:
-        color = AppTheme.errorStatus;
-        label = 'Cancelled';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-    );
-  }
-
   Future<void> _confirmBooking(BookingModel booking) async {
     await _bookingService.updateBookingStatus(
         booking.id, BookingStatus.confirmed);
@@ -456,41 +445,6 @@ class _BookingsScreenState extends State<BookingsScreen>
             ),
             child: const Text('Decline'),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark, Color textColor, IconData icon,
-      String title, String subtitle) {
-    final subtitleColor = isDark
-        ? Colors.white.withValues(alpha: 0.5)
-        : Colors.black.withValues(alpha: 0.4);
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, size: 32, color: subtitleColor),
-          ),
-          const SizedBox(height: 16),
-          Text(title,
-              style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text(subtitle,
-              style: TextStyle(color: subtitleColor, fontSize: 13)),
         ],
       ),
     );
