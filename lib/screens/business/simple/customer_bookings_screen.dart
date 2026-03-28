@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/booking_model.dart';
 import '../../../services/booking_service.dart';
 import '../../../services/review_service.dart';
@@ -34,8 +35,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? Colors.black : const Color(0xFFF5F5F7);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     if (_userId == null) {
       return Scaffold(
@@ -54,9 +55,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF3B82F6),
+          labelColor: AppTheme.primaryAction,
           unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
-          indicatorColor: const Color(0xFF3B82F6),
+          indicatorColor: AppTheme.primaryAction,
           labelStyle:
               const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           tabs: const [
@@ -145,7 +146,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     Color textColor, {
     bool showReviewButton = false,
   }) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardBg = AppTheme.cardColor(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -165,9 +166,9 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               CircleAvatar(
                 radius: 20,
                 backgroundColor:
-                    const Color(0xFF22C55E).withValues(alpha: 0.12),
+                    AppTheme.primaryAction.withValues(alpha: 0.12),
                 child: const Icon(Icons.storefront,
-                    color: Color(0xFF22C55E), size: 20),
+                    color: AppTheme.primaryAction, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -219,7 +220,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                 Text(
                   '\u20B9${booking.servicePrice!.toStringAsFixed(0)}',
                   style: const TextStyle(
-                    color: Color(0xFF22C55E),
+                    color: AppTheme.primaryAction,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
@@ -247,18 +248,18 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
+                color: AppTheme.errorStatus.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 14, color: Colors.red),
+                  const Icon(Icons.info_outline, size: 14, color: AppTheme.errorStatus),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       booking.cancelReason!,
                       style: const TextStyle(
-                          color: Colors.red, fontSize: 12),
+                          color: AppTheme.errorStatus, fontSize: 12),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -282,7 +283,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
                 TextButton(
                   onPressed: () => _cancelBooking(booking),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
+                    foregroundColor: AppTheme.errorStatus,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     minimumSize: Size.zero,
@@ -312,16 +313,16 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
     String label;
     switch (status) {
       case BookingStatus.pending:
-        color = const Color(0xFFF59E0B);
+        color = AppTheme.warningStatus;
         label = 'Pending';
       case BookingStatus.confirmed:
-        color = const Color(0xFF3B82F6);
+        color = AppTheme.primaryAction;
         label = 'Confirmed';
       case BookingStatus.completed:
-        color = const Color(0xFF22C55E);
+        color = AppTheme.successStatus;
         label = 'Completed';
       case BookingStatus.cancelled:
-        color = Colors.red;
+        color = AppTheme.errorStatus;
         label = 'Cancelled';
     }
 
@@ -349,11 +350,11 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
         final controller = TextEditingController();
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          backgroundColor: AppTheme.cardColor(isDark),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('Cancel Booking',
-              style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+              style: TextStyle(color: AppTheme.textPrimary(isDark))),
           content: TextField(
             controller: controller,
             decoration: InputDecoration(
@@ -361,7 +362,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
               hintStyle: TextStyle(
                   color: isDark ? Colors.white38 : Colors.black38),
             ),
-            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            style: TextStyle(color: AppTheme.textPrimary(isDark)),
             maxLines: 2,
           ),
           actions: [
@@ -372,7 +373,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen>
             TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text),
               child: const Text('Cancel Booking',
-                  style: TextStyle(color: Colors.red)),
+                  style: TextStyle(color: AppTheme.errorStatus)),
             ),
           ],
         );
@@ -476,18 +477,18 @@ class _ReviewButtonState extends State<_ReviewButton> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFF22C55E).withValues(alpha: 0.1),
+          color: AppTheme.successStatus.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check, size: 14, color: Color(0xFF22C55E)),
+            Icon(Icons.check, size: 14, color: AppTheme.successStatus),
             SizedBox(width: 4),
             Text(
               'Reviewed',
               style: TextStyle(
-                color: Color(0xFF22C55E),
+                color: AppTheme.successStatus,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -512,7 +513,7 @@ class _ReviewButtonState extends State<_ReviewButton> {
       icon: const Icon(Icons.star_outline, size: 16),
       label: const Text('Review'),
       style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFFF59E0B),
+        foregroundColor: AppTheme.warningStatus,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,

@@ -22,7 +22,7 @@ class _DeviceLoginDialogState extends State<DeviceLoginDialog> {
 
   @override
   Widget build(BuildContext context) {
-    print(
+    debugPrint(
       '[DeviceLoginDialog]   Dialog build called - deviceName: ${widget.deviceName}',
     );
     return Dialog(

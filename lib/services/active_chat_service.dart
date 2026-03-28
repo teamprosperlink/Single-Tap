@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Service to track which chat screen is currently active
 /// Used to prevent notifications for messages in the open chat (Single Tap-style)
 class ActiveChatService {
@@ -15,14 +17,14 @@ class ActiveChatService {
   void setActiveChat({String? conversationId, String? userId}) {
     _activeConversationId = conversationId;
     _activeUserId = userId;
-    print(
+    debugPrint(
       '[ActiveChat] Active chat set: conversationId=$conversationId, userId=$userId',
     );
   }
 
   /// Clear active chat when user closes the conversation
   void clearActiveChat() {
-    print(
+    debugPrint(
       '[ActiveChat] Clearing active chat: was conversationId=$_activeConversationId, userId=$_activeUserId',
     );
     _activeConversationId = null;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/catalog_item.dart';
 import '../../../models/booking_model.dart';
 import '../../../models/user_profile.dart';
@@ -104,7 +105,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Booking request sent!'),
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: AppTheme.successStatus,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -114,7 +115,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to send booking. Try again.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorStatus,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -126,9 +127,9 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -167,11 +168,11 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                      color: AppTheme.primaryAction.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.build_outlined,
-                        color: Color(0xFF3B82F6), size: 22),
+                        color: AppTheme.primaryAction, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -188,7 +189,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                           widget.item.formattedPrice,
                           style: TextStyle(
                             color: widget.item.price != null
-                                ? const Color(0xFF22C55E)
+                                ? AppTheme.primaryAction
                                 : subtitleColor,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -237,7 +238,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.calendar_today_outlined,
-                              color: Color(0xFF3B82F6), size: 20),
+                              color: AppTheme.primaryAction, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(dateStr,
@@ -262,7 +263,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.access_time_outlined,
-                              color: Color(0xFF3B82F6), size: 20),
+                              color: AppTheme.primaryAction, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(timeStr,
@@ -325,7 +326,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
+                  backgroundColor: AppTheme.primaryAction,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),

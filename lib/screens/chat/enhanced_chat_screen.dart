@@ -24,7 +24,6 @@ import '../../res/config/app_colors.dart';
 import '../../res/config/app_text_styles.dart';
 import '../../widgets/other widgets/glass_text_field.dart';
 import '../../models/user_profile.dart';
-import '../../models/business_model.dart';
 import '../../res/utils/photo_url_helper.dart';
 import '../../models/message_model.dart';
 import '../../services/notification_service.dart';
@@ -47,7 +46,7 @@ class EnhancedChatScreen extends ConsumerStatefulWidget {
   final String? initialMessage;
   final String? chatId; // Optional chatId from Live Connect
   final bool isBusinessChat; // Whether this is a business conversation
-  final BusinessModel? business; // Business info if it's a business chat
+  final UserProfile? business; // Business user profile if it's a business chat
   final String?
   source; // Where conversation originated: Nearby, Networking, Chat, Call
 

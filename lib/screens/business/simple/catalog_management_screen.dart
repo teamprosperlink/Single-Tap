@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 import '../../../widgets/catalog_card_widget.dart';
@@ -81,11 +82,11 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
         return Container(
           height: 52,
           decoration: BoxDecoration(
-            color: const Color(0xFF3B82F6),
+            color: AppTheme.primaryAction,
             borderRadius: BorderRadius.circular(26),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3B82F6).withValues(alpha: 0.38),
+                color: AppTheme.primaryAction.withValues(alpha: 0.38),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
@@ -151,12 +152,12 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      backgroundColor: AppTheme.cardColor(isDark),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        final textColor = isDark ? Colors.white : Colors.black;
+        final textColor = AppTheme.textPrimary(isDark);
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -200,18 +201,17 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                leading: const Icon(Icons.delete_outline, color: AppTheme.errorStatus),
                 title:
-                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                    const Text('Delete', style: TextStyle(color: AppTheme.errorStatus)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) {
-                      final dlgTextColor = isDark ? Colors.white : Colors.black;
+                      final dlgTextColor = AppTheme.textPrimary(isDark);
                       return AlertDialog(
-                        backgroundColor:
-                            isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                        backgroundColor: AppTheme.cardColor(isDark),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -228,7 +228,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, true),
                             child: const Text('Delete',
-                                style: TextStyle(color: Colors.red)),
+                                style: TextStyle(color: AppTheme.errorStatus)),
                           ),
                         ],
                       );
@@ -260,11 +260,9 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final textColor = isDark ? Colors.white : Colors.black;
-    final subtitleColor = isDark
-        ? Colors.white.withValues(alpha: 0.6)
-        : Colors.black.withValues(alpha: 0.5);
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
+    final subtitleColor = AppTheme.secondaryText(isDark);
 
     if (_userId == null) {
       return Scaffold(
@@ -315,7 +313,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
                       )
                     : null,
                 filled: true,
-                fillColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                fillColor: AppTheme.cardColor(isDark),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -440,8 +438,8 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF3B82F6)
-              : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
+              ? AppTheme.primaryAction
+              : AppTheme.cardColor(isDark),
           borderRadius: BorderRadius.circular(20),
           border: isSelected
               ? null
@@ -472,7 +470,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
     Color textColor,
     Color subtitleColor,
   ) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardBg = AppTheme.cardColor(isDark);
 
     // Build subtitle text
     String subtitle = '';
@@ -547,7 +545,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
                   Text(
                     item.formattedPrice,
                     style: const TextStyle(
-                      color: Color(0xFF3B82F6),
+                      color: AppTheme.primaryAction,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
@@ -589,7 +587,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
     return Center(
       child: Icon(icon,
           size: 24,
-          color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
+          color: AppTheme.primaryAction.withValues(alpha: 0.8)),
     );
   }
 
@@ -598,14 +596,14 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isAvailable
-            ? const Color(0xFF22C55E).withValues(alpha: 0.12)
-            : Colors.red.withValues(alpha: 0.12),
+            ? AppTheme.successStatus.withValues(alpha: 0.12)
+            : AppTheme.errorStatus.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         isAvailable ? 'Active' : 'Sold Out',
         style: TextStyle(
-          color: isAvailable ? const Color(0xFF22C55E) : Colors.red,
+          color: isAvailable ? AppTheme.successStatus : AppTheme.errorStatus,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -655,7 +653,7 @@ class _CatalogManagementScreenState extends State<CatalogManagementScreen>
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add Item'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
+              backgroundColor: AppTheme.primaryAction,
               foregroundColor: Colors.white,
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

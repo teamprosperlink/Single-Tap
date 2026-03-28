@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/review_model.dart';
 import '../../../services/review_service.dart';
 
@@ -35,7 +36,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please write a review'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorStatus,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -84,7 +85,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Review submitted!'),
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: AppTheme.successStatus,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -94,7 +95,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to submit review. Try again.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorStatus,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -106,9 +107,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -137,11 +138,11 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                    color: AppTheme.warningStatus.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.store_outlined,
-                      color: Color(0xFFF59E0B), size: 22),
+                      color: AppTheme.warningStatus, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -195,7 +196,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                               : Icons.star_outline_rounded,
                           size: 40,
                           color: starValue <= _rating
-                              ? const Color(0xFFF59E0B)
+                              ? AppTheme.warningStatus
                               : subtitleColor,
                         ),
                       ),
@@ -206,7 +207,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                 Text(
                   _ratingLabel,
                   style: const TextStyle(
-                    color: Color(0xFFF59E0B),
+                    color: AppTheme.warningStatus,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -252,7 +253,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B),
+                backgroundColor: AppTheme.warningStatus,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),

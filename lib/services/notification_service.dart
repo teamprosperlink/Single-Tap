@@ -771,8 +771,6 @@ class NotificationService {
     switch (type) {
       case 'call':
         return 'calls';
-      case 'inquiry':
-        return 'inquiries';
       case 'connection_request':
         return 'connections';
       case 'message':
@@ -809,10 +807,6 @@ class NotificationService {
       case 'group_audio_call':
         debugPrint('    Navigating to group audio call');
         await _navigateToGroupCall(data);
-        break;
-      case 'inquiry':
-        debugPrint('  ❓ Navigating to inquiries');
-        await _navigateToInquiries(data);
         break;
       case 'connection_request':
         debugPrint('  🤝 Navigating to connections');
@@ -1147,11 +1141,6 @@ class NotificationService {
     } catch (e) {
       debugPrint('    Error navigating to group call: $e');
     }
-  }
-
-  /// Navigate to inquiries screen (for professionals)
-  Future<void> _navigateToInquiries(Map<String, dynamic> data) async {
-    // TODO: Navigate to inquiries screen
   }
 
   /// Navigate to connections/requests screen

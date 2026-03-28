@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
 
@@ -70,9 +71,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
     final remaining = _maxImages - _totalImageCount;
     if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maximum 5 images allowed'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: const Text('Maximum 5 images allowed'),
+          backgroundColor: AppTheme.warningStatus,
         ),
       );
       return;
@@ -157,10 +158,10 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
         final itemId = await _catalogService.addItem(item);
         if (itemId == null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+            SnackBar(
+              content: const Text(
                   'Could not add item. You have reached the 100 item limit.'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorStatus,
             ),
           );
           setState(() => _isLoading = false);
@@ -172,14 +173,14 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(widget.isEditing ? 'Item updated' : 'Item added'),
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: AppTheme.successStatus,
         ),
       );
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorStatus),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -189,9 +190,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardColor = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
@@ -216,9 +217,9 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Save',
+                : Text('Save',
                     style: TextStyle(
-                        color: Color(0xFF3B82F6),
+                        color: AppTheme.primaryAction,
                         fontWeight: FontWeight.w600,
                         fontSize: 15)),
           ),
@@ -389,7 +390,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                   Switch(
                     value: _isAvailable,
                     onChanged: (v) => setState(() => _isAvailable = v),
-                    activeThumbColor: const Color(0xFF22C55E),
+                    activeThumbColor: AppTheme.primaryAction,
                   ),
                 ],
               ),
@@ -404,7 +405,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
+                  backgroundColor: AppTheme.primaryAction,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -470,12 +471,12 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                    color: AppTheme.primaryAction.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('Select Files',
+                  child: Text('Select Files',
                       style: TextStyle(
-                          color: Color(0xFF3B82F6),
+                          color: AppTheme.primaryAction,
                           fontSize: 13,
                           fontWeight: FontWeight.w500)),
                 ),
@@ -523,19 +524,19 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
                       : const Color(0xFFF0F0F0),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                    color: AppTheme.primaryAction.withValues(alpha: 0.3),
                     width: 1.5,
                   ),
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.add_photo_alternate_outlined,
-                        color: Color(0xFF3B82F6), size: 28),
-                    SizedBox(height: 4),
+                        color: AppTheme.primaryAction, size: 28),
+                    const SizedBox(height: 4),
                     Text('Add',
                         style: TextStyle(
-                            color: Color(0xFF3B82F6),
+                            color: AppTheme.primaryAction,
                             fontSize: 12,
                             fontWeight: FontWeight.w500)),
                   ],
@@ -592,13 +593,13 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? const Color(0xFF3B82F6)
+                ? AppTheme.primaryAction
                 : (isDark
                     ? const Color(0xFF2C2C2E)
                     : const Color(0xFFF0F0F0)),
             borderRadius: BorderRadius.circular(10),
             border: selected
-                ? Border.all(color: const Color(0xFF3B82F6))
+                ? Border.all(color: AppTheme.primaryAction)
                 : Border.all(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.08)
@@ -639,7 +640,7 @@ class _CatalogItemFormState extends State<CatalogItemForm> {
             : Colors.black.withValues(alpha: 0.3),
       ),
       filled: true,
-      fillColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF5F5F7),
+      fillColor: isDark ? const Color(0xFF2C2C2E) : AppTheme.backgroundColor(false),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide.none,

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' show min;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -48,7 +48,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
   } catch (e) {
     // Firebase initialization failed - log and return
-    print('[FCM] Firebase init error in background handler: $e');
+    debugPrint('[FCM] Firebase init error in background handler: $e');
     return;
   }
 
@@ -56,7 +56,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final data = message.data;
     final type = data['type'] as String?;
 
-    print('[FCM] Background message received - type: $type');
+    debugPrint('[FCM] Background message received - type: $type');
 
     // For 1-to-1 call notifications
     if (type == 'call') {
@@ -97,13 +97,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
             callerPhoto: callerPhoto,
           );
         } catch (e) {
-          print('[FCM] Error showing incoming call: $e');
+          debugPrint('[FCM] Error showing incoming call: $e');
         }
       }
     }
     // For GROUP call notifications (Single Tap-style)
     else if (type == 'group_call') {
-      print('[FCM] Group call notification received in background');
+      debugPrint('[FCM] Group call notification received in background');
       final callId = data['callId'] as String?;
       final callerId = data['callerId'] as String?;
       final callerName = data['callerName'] as String? ?? 'Someone';
@@ -112,7 +112,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       final groupName = data['groupName'] as String? ?? 'Group Call';
 
       if (callId == null || groupId == null) {
-        print('[FCM] Missing callId or groupId');
+        debugPrint('[FCM] Missing callId or groupId');
         return;
       }
 
@@ -124,23 +124,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
             .get();
 
         if (!callDoc.exists) {
-          print('[FCM] Call document does not exist');
+          debugPrint('[FCM] Call document does not exist');
           return;
         }
 
         final callStatus = callDoc.data()?['status'] as String?;
-        print('[FCM] Call status: $callStatus');
+        debugPrint('[FCM] Call status: $callStatus');
 
         // Allow 'calling', 'ringing', or 'active' status
         if (callStatus != 'calling' &&
             callStatus != 'ringing' &&
             callStatus != 'active') {
-          print('[FCM] Call not active, status: $callStatus');
+          debugPrint('[FCM] Call not active, status: $callStatus');
           return;
         }
 
         // Show full-screen incoming call UI using CallKit
-        print('[FCM] Showing group call notification');
+        debugPrint('[FCM] Showing group call notification');
         await showFullScreenIncomingCall(
           callId: callId,
           callerId: callerId ?? '',
@@ -148,7 +148,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           callerPhoto: callerPhoto,
         );
       } catch (e) {
-        print('[FCM] Error verifying group call: $e');
+        debugPrint('[FCM] Error verifying group call: $e');
         // If we can't verify, still show the call
         try {
           await showFullScreenIncomingCall(
@@ -158,12 +158,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
             callerPhoto: callerPhoto,
           );
         } catch (e) {
-          print('[FCM] Error showing incoming group call: $e');
+          debugPrint('[FCM] Error showing incoming group call: $e');
         }
       }
     }
   } catch (e) {
-    print('[FCM] Error processing message in background handler: $e');
+    debugPrint('[FCM] Error processing message in background handler: $e');
   }
 }
 
@@ -488,41 +488,41 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   /// Automatically logs out user if another device logs in with same account
   /// GUARANTEED: Will detect logout signal from other device within 500ms
   Future<void> _startDeviceSessionMonitoring(String userId) async {
-    print(
+    debugPrint(
       '[DeviceSession] >>> _startDeviceSessionMonitoring() called for user: ${userId.substring(0, 8)}...',
     );
 
     try {
       // CRITICAL: Prevent race condition where multiple listeners try to start
       if (_isStartingListener) {
-        print(
+        debugPrint(
           '[DeviceSession] ⚠️ Listener already starting, skipping duplicate start',
         );
         return;
       }
       _isStartingListener = true;
-      print('[DeviceSession] Set _isStartingListener = true');
+      debugPrint('[DeviceSession] Set _isStartingListener = true');
 
       // Cancel any existing subscription
-      print('[DeviceSession] Cancelling existing subscription...');
+      debugPrint('[DeviceSession] Cancelling existing subscription...');
       _deviceSessionSubscription?.cancel();
       _listenerStartTime = DateTime.now(); // Track when listener started
       _listenerReady =
           false; // CRITICAL: Reset readiness flag for new listener initialization
 
-      print(
+      debugPrint(
         '[DeviceSession]  LISTENER STARTED AT: ${_listenerStartTime.toString()} (${_listenerStartTime!.millisecondsSinceEpoch})',
       );
 
       // Get local device token - CRITICAL for device comparison
-      print('[DeviceSession] Getting local device token...');
+      debugPrint('[DeviceSession] Getting local device token...');
       final localToken = await _authService.getLocalDeviceToken();
-      print(
+      debugPrint(
         '[DeviceSession] Local token received: ${localToken != null ? "${localToken.substring(0, min(8, localToken.length))}..." : "NULL"}',
       );
 
       if (localToken == null || localToken.isEmpty) {
-        print('[DeviceSession]  ERROR: No valid local token found');
+        debugPrint('[DeviceSession]  ERROR: No valid local token found');
         _isStartingListener = false; // CRITICAL: Reset flag on error
         return;
       }
@@ -545,7 +545,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // Fix token mismatch - our token should be the active one
           if (serverToken != localToken) {
-            print(
+            debugPrint(
               '[DeviceSession] FIX: Token mismatch detected. Server: ${serverToken?.substring(0, min(8, serverToken.length)) ?? "NULL"}, Local: ${localToken.substring(0, min(8, localToken.length))}',
             );
             fixes['activeDeviceToken'] = localToken;
@@ -553,7 +553,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // Clear stale forceLogout flag
           if (forceLogout == true) {
-            print('[DeviceSession] FIX: Clearing stale forceLogout flag');
+            debugPrint('[DeviceSession] FIX: Clearing stale forceLogout flag');
             fixes['forceLogout'] = false;
             fixes['forceLogoutTime'] = FieldValue.delete();
           }
@@ -564,22 +564,22 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 .collection('users')
                 .doc(userId)
                 .set(fixes, SetOptions(merge: true));
-            print('[DeviceSession] FIX: Firestore state corrected before monitoring');
+            debugPrint('[DeviceSession] FIX: Firestore state corrected before monitoring');
             // Wait for the write to propagate
             await Future.delayed(const Duration(milliseconds: 500));
           }
         }
       } catch (e) {
-        print('[DeviceSession] Warning: Could not verify Firestore state: $e');
+        debugPrint('[DeviceSession] Warning: Could not verify Firestore state: $e');
         // Non-fatal - continue with monitoring
       }
 
-      print('[DeviceSession]  Starting real-time listener');
-      print('[DeviceSession]  User: ${userId.substring(0, 8)}...');
-      print(
+      debugPrint('[DeviceSession]  Starting real-time listener');
+      debugPrint('[DeviceSession]  User: ${userId.substring(0, 8)}...');
+      debugPrint(
         '[DeviceSession]  Local token: ${localToken.substring(0, min(8, localToken.length))}...',
       );
-      print(
+      debugPrint(
         '[DeviceSession]  PROTECTION WINDOW: 10 seconds from ${_listenerStartTime.toString()}',
       );
 
@@ -594,7 +594,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // CRITICAL: Only process if listener initialization is complete
                 // This prevents race conditions where the listener fires before _listenerStartTime is set
                 if (!_listenerReady) {
-                  print(
+                  debugPrint(
                     '[DeviceSession]  Listener not ready yet, skipping snapshot',
                   );
                   return;
@@ -617,16 +617,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // Get snapshot data safely
                 final snapshotData = snapshot.data();
                 if (snapshotData == null) {
-                  print('[DeviceSession]  Snapshot data is NULL, skipping');
+                  debugPrint('[DeviceSession]  Snapshot data is NULL, skipping');
                   return;
                 }
 
                 // DIAGNOSTIC: Log all snapshot data
-                print('[DeviceSession]  Full snapshot data: $snapshotData');
+                debugPrint('[DeviceSession]  Full snapshot data: $snapshotData');
 
                 // Already performing logout - skip
                 if (_isPerformingLogout) {
-                  print(
+                  debugPrint(
                     '[DeviceSession]  Skipping snapshot - already performing logout',
                   );
                   return;
@@ -646,7 +646,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                           1000.0
                     : 0;
 
-                print(
+                debugPrint(
                   '[DeviceSession] Snapshot received: ${secondsSinceListenerStart.toStringAsFixed(2)}s since listener start (listenerStartTime=${_listenerStartTime != null ? "SET" : "NULL"})',
                 );
 
@@ -656,14 +656,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // because legitimate logout signals need to be processed immediately
 
                 if (secondsSinceListenerStart < 8) {
-                  print(
+                  debugPrint(
                     '[DeviceSession]  PROTECTION WINDOW (${(8 - secondsSinceListenerStart).toStringAsFixed(2)}s remaining)',
                   );
                   // Skip ALL checks during protection window to prevent false logouts
                   // Increased to 8s to account for slow Firestore writes and network latency
                   return;
                 } else {
-                  print(
+                  debugPrint(
                     '[DeviceSession]  PROTECTION COMPLETE - ALL CHECKS ACTIVE',
                   );
                 }
@@ -671,16 +671,16 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // ONLY CHECK LOGOUT SIGNALS AFTER 6 SECOND PROTECTION WINDOW
 
                 // PRIORITY 1: Check forceLogout flag (most reliable signal)
-                print(
+                debugPrint(
                   '[DeviceSession]  ALL SNAPSHOT DATA: ${snapshotData.keys.toList()}',
                 );
                 final forceLogoutRaw = snapshotData['forceLogout'];
                 final forceLogoutTimestamp =
                     snapshotData['forceLogoutTime'] as Timestamp?;
-                print(
+                debugPrint(
                   '[DeviceSession]  forceLogout value: $forceLogoutRaw (type: ${forceLogoutRaw.runtimeType})',
                 );
-                print(
+                debugPrint(
                   '[DeviceSession]  forceLogoutTime: $forceLogoutTimestamp',
                 );
 
@@ -694,7 +694,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                       forceLogoutRaw.toString().toLowerCase() == 'true';
                 }
 
-                print('[DeviceSession]  forceLogout parsed: $forceLogout');
+                debugPrint('[DeviceSession]  forceLogout parsed: $forceLogout');
 
                 // CRITICAL: Only logout if forceLogout is TRUE AND it's a genuinely NEW signal
                 // Must have a valid timestamp that is AFTER the listener started
@@ -708,14 +708,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 if (forceLogout == true) {
                   // CRITICAL: If the active token is OUR token, this is our own logout signal - SKIP
                   if (activeToken != null && activeToken == localToken) {
-                    print(
+                    debugPrint(
                       '[DeviceSession]  forceLogout detected but activeToken matches local - this is OUR OWN signal, skipping',
                     );
                     shouldLogout = false;
                   } else if (activeToken != null && activeToken != localToken) {
                     // forceLogout is true AND the active token belongs to ANOTHER device
                     // This is the most reliable signal - no clock skew issues
-                    print(
+                    debugPrint(
                       '[DeviceSession]  forceLogout=true AND token belongs to another device - logging out',
                     );
                     shouldLogout = true;
@@ -729,12 +729,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                     );
                     final isNewSignal = forceLogoutTime.isAfter(listenerTime);
                     shouldLogout = isNewSignal;
-                    print(
+                    debugPrint(
                       '[DeviceSession]  forceLogout timestamp: $forceLogoutTime, listener started: $_listenerStartTime, isNew: $isNewSignal (with 30s skew tolerance)',
                     );
                   } else {
                     // No reliable way to determine if this is a new signal - ignore it
-                    print(
+                    debugPrint(
                       '[DeviceSession]  forceLogout has no reliable signal - stale flag, ignoring',
                     );
                     shouldLogout = false;
@@ -742,7 +742,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 }
 
                 if (shouldLogout) {
-                  print(
+                  debugPrint(
                     '[DeviceSession]    FORCE LOGOUT SIGNAL - LOGGING OUT NOW',
                   );
                   if (mounted && !_isPerformingLogout) {
@@ -751,7 +751,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   }
                   return;
                 } else {
-                  print(
+                  debugPrint(
                     '[DeviceSession]    forceLogout is false or stale signal - NOT logging out',
                   );
                 }
@@ -759,11 +759,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 // Token mismatch and token empty checks removed - too aggressive, caused false logouts
                 // Only forceLogout flag (PRIORITY 1 above) is reliable enough for remote logout
               } catch (e) {
-                print('[DeviceSession]  Error in listener callback: $e');
+                debugPrint('[DeviceSession]  Error in listener callback: $e');
               }
             },
             onError: (e) {
-              print('[DeviceSession]  LISTENER FAILED: $e');
+              debugPrint('[DeviceSession]  LISTENER FAILED: $e');
               // On listener error: still try to stay logged in until next check
             },
           );
@@ -773,36 +773,36 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       _listenerReady = true;
       _isStartingListener =
           false; // CRITICAL: Reset flag to allow next listener start
-      print('[DeviceSession]  Listener ready - protection window now active');
+      debugPrint('[DeviceSession]  Listener ready - protection window now active');
     } catch (e, stackTrace) {
-      print('[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e');
-      print('[DeviceSession]  Stack trace: $stackTrace');
+      debugPrint('[DeviceSession]  EXCEPTION in _startDeviceSessionMonitoring: $e');
+      debugPrint('[DeviceSession]  Stack trace: $stackTrace');
       _isStartingListener = false; // CRITICAL: Reset flag even on error
     }
 
-    print('[DeviceSession] <<< _startDeviceSessionMonitoring() completed');
+    debugPrint('[DeviceSession] <<< _startDeviceSessionMonitoring() completed');
   }
 
   /// Perform remote logout when another device logs in
   Future<void> _performRemoteLogout(String message) async {
-    print('[RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========');
-    print('[RemoteLogout] Reason: $message');
-    print(
+    debugPrint('[RemoteLogout] ========== REMOTE LOGOUT INITIATED ==========');
+    debugPrint('[RemoteLogout] Reason: $message');
+    debugPrint(
       '[RemoteLogout] Current user BEFORE logout: ${_authService.currentUser?.uid ?? "null"}',
     );
-    print('[RemoteLogout] Widget mounted? $mounted');
+    debugPrint('[RemoteLogout] Widget mounted? $mounted');
 
     try {
       // Cancel subscriptions FIRST (before logout)
-      print('[RemoteLogout] Cancelling subscriptions...');
+      debugPrint('[RemoteLogout] Cancelling subscriptions...');
       _deviceSessionSubscription?.cancel();
       _sessionCheckTimer?.cancel();
       _autoCheckTimer?.cancel();
       _authStateSubscription?.cancel(); // Also cancel auth subscription
-      print('[RemoteLogout]  All subscriptions cancelled');
+      debugPrint('[RemoteLogout]  All subscriptions cancelled');
 
       // Clear flags BEFORE logout
-      print('[RemoteLogout] Clearing state flags...');
+      debugPrint('[RemoteLogout] Clearing state flags...');
       _hasInitializedServices = false;
       _lastInitializedUserId = null;
       _isInitializing = false;
@@ -813,78 +813,78 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       // NOTE: Keep _isPerformingLogout = true until the end
 
       // Sign out from Firebase
-      print('[RemoteLogout]  Calling signOut()...');
+      debugPrint('[RemoteLogout]  Calling signOut()...');
       await _authService.signOut();
-      print('[RemoteLogout]  Firebase sign out completed');
+      debugPrint('[RemoteLogout]  Firebase sign out completed');
 
       // CRITICAL: Wait for Firebase to process logout
-      print('[RemoteLogout]  Waiting for Firebase auth state to clear...');
+      debugPrint('[RemoteLogout]  Waiting for Firebase auth state to clear...');
 
       // Wait with multiple checks
       int waitCount = 0;
       while (_authService.currentUser != null && waitCount < 20) {
         await Future.delayed(const Duration(milliseconds: 100));
-        print(
+        debugPrint(
           '[RemoteLogout]  Wait iteration $waitCount - currentUser still: ${_authService.currentUser?.uid ?? "null"}',
         );
         waitCount++;
       }
 
       final stillLoggedIn = _authService.currentUser != null;
-      print(
+      debugPrint(
         '[RemoteLogout]  After ${waitCount * 100}ms - still logged in? $stillLoggedIn',
       );
 
       // Final check - ensure we're actually logged out
       if (_authService.currentUser != null) {
-        print(
+        debugPrint(
           '[RemoteLogout]  WARNING: currentUser is still not null after wait, forcing immediate signOut...',
         );
         await _authService.firebaseAuth.signOut();
         await Future.delayed(const Duration(milliseconds: 300));
-        print('[RemoteLogout]  Force sign out completed');
+        debugPrint('[RemoteLogout]  Force sign out completed');
       }
 
       // Now trigger rebuild - this will cause StreamBuilder to rebuild and show login
       if (mounted) {
-        print(
+        debugPrint(
           '[RemoteLogout]  Widget is mounted - triggering setState to rebuild...',
         );
         setState(() {
-          print('[RemoteLogout] setState callback executing');
+          debugPrint('[RemoteLogout] setState callback executing');
           // This causes build() to be called
           // build() will check currentUser and show OnboardingScreen if null
         });
 
         // Give Flutter a chance to process the rebuild
         await Future.delayed(const Duration(milliseconds: 100));
-        print('[RemoteLogout] setState completed and Flutter processing done');
+        debugPrint('[RemoteLogout] setState completed and Flutter processing done');
 
         // CRITICAL: Double-check that Firebase signOut actually completed
         // Sometimes the stream doesn't update immediately
         await Future.delayed(const Duration(milliseconds: 200));
         final stillLoggedIn = _authService.currentUser != null;
         if (stillLoggedIn) {
-          print(
+          debugPrint(
             '[RemoteLogout]  WARNING: Still logged in after setState delay, forcing immediate rebuild...',
           );
           setState(() {
-            print('[RemoteLogout] Force setState executed');
+            debugPrint('[RemoteLogout] Force setState executed');
           });
         }
       } else {
-        print('[RemoteLogout]  Widget is NOT mounted - cannot rebuild UI');
+        debugPrint('[RemoteLogout]  Widget is NOT mounted - cannot rebuild UI');
       }
 
       _isPerformingLogout = false; // Reset at the very end
-      print('[RemoteLogout]  Remote logout completed successfully');
+      debugPrint('[RemoteLogout]  Remote logout completed successfully');
     } catch (e) {
-      print('[RemoteLogout]  Error in logout: $e');
+      debugPrint('[RemoteLogout]  Error in logout: $e');
       _isPerformingLogout = false;
 
       // Force logout anyway
       try {
-        print('[RemoteLogout] FORCE LOGOUT via firebaseAuth...');
+        debugPrint('[RemoteLogout] FORCE LOGOUT via firebaseAuth...');
         await _authService.firebaseAuth.signOut();
 
         _hasInitializedServices = false;
@@ -892,28 +892,28 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
         if (mounted) {
           setState(() {});
-          print('[RemoteLogout]  Emergency rebuild done');
+          debugPrint('[RemoteLogout]  Emergency rebuild done');
         }
       } catch (e2) {
-        print('[RemoteLogout]  Emergency logout failed: $e2');
+        debugPrint('[RemoteLogout]  Emergency logout failed: $e2');
       }
     }
 
-    print('[RemoteLogout] ========== END OF LOGOUT FUNCTION ==========');
+    debugPrint('[RemoteLogout] ========== END OF LOGOUT FUNCTION ==========');
   }
 
   @override
   Widget build(BuildContext context) {
-    print('[BUILD] >>>>>>>>>> AuthWrapper.build() called');
+    debugPrint('[BUILD] >>>>>>>>>> AuthWrapper.build() called');
 
     // CRITICAL CHECK FIRST - before even building StreamBuilder
     final currentUser = _authService.currentUser;
-    print(
+    debugPrint(
       '[BUILD] CRITICAL FIRST CHECK - currentUser: ${currentUser?.uid ?? "null"}',
     );
 
     if (currentUser == null) {
-      print(
+      debugPrint(
         '[BUILD] currentUser is NULL - IMMEDIATELY showing login screen (before StreamBuilder)',
       );
       _hasInitializedServices = false;
@@ -924,46 +924,46 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       return const OnboardingScreen();
     }
 
-    print(
+    debugPrint(
       '[BUILD] currentUser exists: ${currentUser.uid} - proceeding with StreamBuilder',
     );
 
     return StreamBuilder<User?>(
       stream: _authService.authStateChanges,
       builder: (context, snapshot) {
-        print(
+        debugPrint(
           '[BUILD] StreamBuilder fired - connectionState: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, data: ${snapshot.data?.uid ?? "null"}',
         );
 
         // CRITICAL: Always check currentUser directly again in case snapshot is stale or delayed
         final currentUserAgain = _authService.currentUser;
-        print(
+        debugPrint(
           '[BUILD] Direct auth check AGAIN - currentUser: ${currentUserAgain?.uid ?? "null"}',
         );
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          print(
+          debugPrint(
             '[BUILD] connectionState is waiting - checking if we should show login instead...',
           );
           // Even if waiting, if currentUser is null, show login
           if (currentUserAgain == null) {
-            print(
+            debugPrint(
               '[BUILD]  During WAITING state, currentUser is null - show login screen',
             );
             return const OnboardingScreen();
           }
           // User already logged in, skip loading and go directly to home
-          print('[BUILD] User exists during waiting, skipping loading screen');
+          debugPrint('[BUILD] User exists during waiting, skipping loading screen');
         }
 
         if (snapshot.hasError) {
-          print('[BUILD] Has error: ${snapshot.error}');
+          debugPrint('[BUILD] Has error: ${snapshot.error}');
           return _buildErrorScreen(snapshot.error.toString());
         }
 
         // CRITICAL FIX: If currentUser is null, ALWAYS show login regardless of snapshot state
         if (currentUserAgain == null) {
-          print(
+          debugPrint(
             '[BUILD]  currentUser is null in StreamBuilder builder - showing login screen',
           );
           _hasInitializedServices = false;
@@ -978,14 +978,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         final userFromSnapshot = snapshot.data;
 
         if (userFromSnapshot != null) {
-          print('[BUILD] User logged in: ${userFromSnapshot.uid}');
+          debugPrint('[BUILD] User logged in: ${userFromSnapshot.uid}');
           String uid = userFromSnapshot.uid;
 
           // Only start device session monitoring ONCE per user login
           // Starting on every build() causes race conditions and false logouts
           if (_lastInitializedUserId != uid ||
               _deviceSessionSubscription == null) {
-            print(
+            debugPrint(
               '[BUILD] Starting device session monitoring for NEW user or first time...',
             );
 
@@ -1004,10 +1004,10 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                     'firebaseUid': uid,
                     'updatedAt': FieldValue.serverTimestamp(),
                   }, SetOptions(merge: true)).catchError((_) {});
-                  print('[BUILD] Stored user_uuid for $uid');
+                  debugPrint('[BUILD] Stored user_uuid for $uid');
                 }
               } catch (e) {
-                print('[BUILD] ERROR starting device session monitoring: $e');
+                debugPrint('[BUILD] ERROR starting device session monitoring: $e');
               }
             });
           }
@@ -1028,7 +1028,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           // CRITICAL: Wrap MainNavigationScreen with periodic validation
           // This ensures we ALWAYS check if session is still valid
-          print('[BUILD] Showing MainNavigationScreen');
+          debugPrint('[BUILD] Showing MainNavigationScreen');
           return _buildMainScreenWithValidation();
         }
 
@@ -1038,7 +1038,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         _isInitializing = false;
         _isPerformingLogout = false; // Reset flag on logout
 
-        print('[BUILD] No user in snapshot - showing OnboardingScreen');
+        debugPrint('[BUILD] No user in snapshot - showing OnboardingScreen');
         return const OnboardingScreen();
       },
     );
@@ -1124,9 +1124,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   }
 
   Future<void> _initializeUserServices() async {
-    print('[Init]   _initializeUserServices() CALLED  ');
+    debugPrint('[Init]   _initializeUserServices() CALLED  ');
     try {
-      print('[Init] Starting user services initialization');
+      debugPrint('[Init] Starting user services initialization');
 
       // Clean up old timers (NOT device session listener - it's managed separately)
       _sessionCheckTimer?.cancel();

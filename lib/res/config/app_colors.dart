@@ -142,4 +142,75 @@ class AppColors {
   /// Black with alpha
   static Color blackAlpha({double alpha = 0.5}) =>
       Colors.black.withValues(alpha: alpha);
+
+  // ============ FIGMA DESIGN SYSTEM TOKENS (Dark Mode) ============
+
+  // ── Primary Palette (Blue) ──
+  static const Color primaryBrand = Color(0xFF016CFF);
+  static const Color primaryHover = Color(0xFF1D4ED8);
+  static const Color primaryActive = Color(0xFF016CFF);
+  static const Color primaryDisabled = Color(0x66016CFF);
+  static const Color primary900 = Color(0xFF002D6B);
+  static const Color primary800 = Color(0xFF013B8C);
+  static const Color primary700 = Color(0xFF014DB5);
+  static const Color primary600 = Color(0xFF0162E8);
+  static const Color primary500 = Color(0xFF016CFF);
+  static const Color primary400 = Color(0xFF3489FF);
+  static const Color primary300 = Color(0xFF559DFF);
+  static const Color primary200 = Color(0xFF8ABBFF);
+  static const Color primary100 = Color(0xFFB0D1FF);
+  static const Color primary50 = Color(0xFFE6F0FF);
+
+  // ── Secondary Palette (Orange) ──
+  static const Color secondaryBrand = Color(0xFFFFAB35);
+  static const Color secondaryHover = Color(0xFFF59E0B);
+  static const Color secondaryActive = Color(0xFFFFC05C);
+  static const Color secondaryDisabled = Color(0x66FFAB35);
+  static const Color secondary900 = Color(0xFF6B4816);
+  static const Color secondary800 = Color(0xFF8C5E1D);
+  static const Color secondary700 = Color(0xFFB57926);
+  static const Color secondary600 = Color(0xFFE89C30);
+  static const Color secondary500 = Color(0xFFFFAB35);
+  static const Color secondary400 = Color(0xFFFFBC5D);
+  static const Color secondary300 = Color(0xFFFFC778);
+  static const Color secondary200 = Color(0xFFFFD8A2);
+  static const Color secondary100 = Color(0xFFFFE5C0);
+  static const Color secondary50 = Color(0xFFFFF7EB);
+
+  // ── Background Tokens ──
+  static const Color bgPrimary = Color(0xFF212121);
+  static const Color bgCard = Color(0xFF1A1D21);
+  static const Color bgOverlay = Color(0xFF242830);
+  static const Color bgDisabled = Color(0xFF1E2228);
+  static const Color bgOther = Color(0xFF161A1E);
+  static const Color bgScreenHalfFill = Color(0x800F1114);
+  static const Color bgCardBlack = Color(0xFF000000);
+
+  // ── Text Tokens ──
+  static const Color textWhite = Color(0xFFFFFFFF);
+  static const Color textSecondaryGray = Color(0xFF717171);
+  static const Color textDisabledGray = Color(0xFF9CA3AF);
+  static const Color textButtonWhite = Color(0xFFFFFFFF);
+  static const Color textPrimaryBlack = Color(0xFF212121);
+  static const Color textSecondary2 = Color(0xFFC0C0C0);
+  static const Color textButtonGrey = Color(0xFF898989);
+
+  // ── Border Tokens ──
+  static const Color borderDefault = Color(0xFF9CA3AB);
+  static const Color borderSubtle = Color(0xFF1E2228);
+  static const Color borderDivider = Color(0xFF3B424D);
+  static const Color borderFocus = Color(0xFF3B8AFF);
+  static const Color borderDisabled = Color(0xFF2D3239);
+  static const Color borderDefaultLow = Color(0x809CA3AB);
+
+  // ── Semantic Status Tokens ──
+  static const Color semanticSuccess = Color(0xFF00AC40);
+  static const Color semanticError = Color(0xFFD92D20);
+  static const Color semanticErrorHover = Color(0xFFDC2626);
+  static const Color semanticWarning = Color(0xFFFBBF24);
+  static const Color semanticInfo = Color(0xFF60A5FA);
+
+  // ── Card Fill Tokens ──
+  static const Color cardWhiteFill = Color(0x0AFFFFFF);
+  static const Color cardWhiteFill2 = Color(0x29FFFFFF);
 }

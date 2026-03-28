@@ -162,16 +162,16 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
         // Filter for images and exclude deleted messages
         final allDocs = snapshot.data!.docs;
 
-        print('  TOTAL MESSAGES: ${allDocs.length}');
+        debugPrint('  TOTAL MESSAGES: ${allDocs.length}');
 
         // Check first few messages to see their structure
         for (var i = 0; i < (allDocs.length > 3 ? 3 : allDocs.length); i++) {
           final data = allDocs[i].data() as Map<String, dynamic>;
-          print('  MESSAGE $i FIELDS: ${data.keys.toList()}');
-          print('   - imageUrl: ${data['imageUrl']}');
-          print('   - videoUrl: ${data['videoUrl']}');
+          debugPrint('  MESSAGE $i FIELDS: ${data.keys.toList()}');
+          debugPrint('   - imageUrl: ${data['imageUrl']}');
+          debugPrint('   - videoUrl: ${data['videoUrl']}');
           final text = data['text']?.toString() ?? '';
-          print(
+          debugPrint(
             '   - text: ${text.length > 30 ? text.substring(0, 30) : text}',
           );
         }
@@ -203,7 +203,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('  PHOTOS FOUND: ${photos.length}');
+        debugPrint('  PHOTOS FOUND: ${photos.length}');
 
         if (photos.isEmpty) {
           return _buildEmptyState(
@@ -422,7 +422,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen>
           return false;
         }).toList();
 
-        print('  VIDEOS FOUND: ${videos.length}');
+        debugPrint('  VIDEOS FOUND: ${videos.length}');
 
         if (videos.isEmpty) {
           return _buildEmptyState(

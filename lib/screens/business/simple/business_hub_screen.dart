@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../services/catalog_service.dart';
@@ -60,12 +61,12 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      backgroundColor: AppTheme.cardColor(isDark),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        final textColor = isDark ? Colors.white : Colors.black;
+        final textColor = AppTheme.textPrimary(isDark);
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -109,16 +110,15 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                leading: Icon(Icons.delete_outline, color: AppTheme.errorStatus),
                 title:
-                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                    Text('Delete', style: TextStyle(color: AppTheme.errorStatus)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      backgroundColor: AppTheme.cardColor(isDark),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -134,8 +134,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Delete',
-                              style: TextStyle(color: Colors.red)),
+                          child: Text('Delete',
+                              style: TextStyle(color: AppTheme.errorStatus)),
                         ),
                       ],
                     ),
@@ -155,9 +155,9 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   @override
   Widget build(BuildContext context) {
     if (_userId == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor(true),
+        body: const Center(
           child:
               Text('Please sign in', style: TextStyle(color: Colors.white)),
         ),
@@ -171,9 +171,9 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           .snapshots(),
       builder: (context, userSnapshot) {
         if (userSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: AppTheme.backgroundColor(true),
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -202,7 +202,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   Widget _buildEnableBusinessView() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
+      backgroundColor: AppTheme.backgroundColor(isDark),
       appBar: AppBar(
         title: const Text('Business'),
         backgroundColor: Colors.transparent,
@@ -219,17 +219,17 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                  color: AppTheme.primaryAction.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.storefront_rounded,
-                    size: 40, color: Color(0xFF22C55E)),
+                child: Icon(Icons.storefront_rounded,
+                    size: 40, color: AppTheme.primaryAction),
               ),
               const SizedBox(height: 24),
               Text(
                 'Enable Business Mode',
                 style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black,
+                  color: AppTheme.textPrimary(isDark),
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
@@ -239,9 +239,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                 'Add products, services, and a catalog to your profile. Customers can browse and enquire directly.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : Colors.black.withValues(alpha: 0.5),
+                  color: AppTheme.secondaryText(isDark),
                   fontSize: 15,
                   height: 1.4,
                 ),
@@ -259,7 +257,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF22C55E),
+                    backgroundColor: AppTheme.primaryAction,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -283,7 +281,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   Widget _buildBusinessDashboard(BusinessProfile bp, String? location) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : const Color(0xFFF5F5F7),
+      backgroundColor: AppTheme.backgroundColor(isDark),
       body: Stack(
         children: [
           CustomScrollView(
@@ -308,7 +306,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                       Text(
                         'My Catalog',
                         style: TextStyle(
-                          color: isDark ? Colors.white : Colors.black,
+                          color: AppTheme.textPrimary(isDark),
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
@@ -332,9 +330,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                                 Text(
                                   '$count items',
                                   style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.5)
-                                        : Colors.black.withValues(alpha: 0.4),
+                                    color: AppTheme.secondaryText(isDark),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -342,9 +338,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                                 Icon(
                                   Icons.chevron_right,
                                   size: 18,
-                                  color: isDark
-                                      ? Colors.white.withValues(alpha: 0.4)
-                                      : Colors.black.withValues(alpha: 0.3),
+                                  color: AppTheme.secondaryText(isDark),
                                 ),
                               ],
                             ),
@@ -373,7 +367,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
             right: 16,
             bottom: MediaQuery.of(context).padding.bottom + 76,
             child: Material(
-              color: const Color(0xFF22C55E),
+              color: AppTheme.primaryAction,
               borderRadius: BorderRadius.circular(16),
               elevation: 4,
               child: InkWell(
@@ -410,7 +404,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
       expandedHeight: 200,
       pinned: true,
       automaticallyImplyLeading: false,
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: AppTheme.backgroundColor(isDark),
       surfaceTintColor: Colors.transparent,
       title: const Text('My Business',
           style: TextStyle(fontWeight: FontWeight.w600)),
@@ -549,11 +543,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   Widget _coverGradient() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
-        ),
+        gradient: AppTheme.coverGradient,
       ),
     );
   }
@@ -565,12 +555,12 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: bp.isLive
-              ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+              ? AppTheme.successStatus.withValues(alpha: 0.2)
               : Colors.white.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(16),
           border: bp.isLive
               ? Border.all(
-                  color: const Color(0xFF22C55E).withValues(alpha: 0.5))
+                  color: AppTheme.successStatus.withValues(alpha: 0.5))
               : null,
         ),
         child: Row(
@@ -580,16 +570,16 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
               Container(
                 width: 7,
                 height: 7,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF22C55E),
+                decoration: BoxDecoration(
+                  color: AppTheme.successStatus,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 5),
-              const Text(
+              Text(
                 'Live',
                 style: TextStyle(
-                  color: Color(0xFF22C55E),
+                  color: AppTheme.successStatus,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -639,8 +629,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
   // ── Quick Actions ──
 
   Widget _buildQuickActions(BusinessProfile bp, bool isDark) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -649,7 +639,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           _quickAction(
             icon: Icons.storefront_outlined,
             label: 'Catalog',
-            color: const Color(0xFF22C55E),
+            color: AppTheme.quickActionCatalog,
             cardBg: cardBg,
             textColor: textColor,
             onTap: () {
@@ -668,7 +658,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
               return _quickAction(
                 icon: Icons.calendar_month_outlined,
                 label: 'Bookings',
-                color: const Color(0xFF3B82F6),
+                color: AppTheme.quickActionBookings,
                 cardBg: cardBg,
                 textColor: textColor,
                 badge: count > 0 ? count.toString() : null,
@@ -686,7 +676,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           _quickAction(
             icon: Icons.star_outline_rounded,
             label: 'Reviews',
-            color: const Color(0xFFF59E0B),
+            color: AppTheme.quickActionReviews,
             cardBg: cardBg,
             textColor: textColor,
             onTap: () {
@@ -701,7 +691,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
           _quickAction(
             icon: Icons.visibility_outlined,
             label: 'Views',
-            color: const Color(0xFF8B5CF6),
+            color: AppTheme.quickActionViews,
             cardBg: cardBg,
             textColor: textColor,
             onTap: () {
@@ -806,8 +796,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
     if (score >= 100) return const SizedBox.shrink();
 
     final missing = checks.where((c) => !c.$1).map((c) => c.$2).toList();
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -816,7 +806,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF22C55E).withValues(alpha: 0.35),
+          color: AppTheme.primaryAction.withValues(alpha: 0.35),
         ),
       ),
       child: Column(
@@ -824,8 +814,8 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.task_alt_outlined,
-                  size: 15, color: Color(0xFF22C55E)),
+              Icon(Icons.task_alt_outlined,
+                  size: 15, color: AppTheme.primaryAction),
               const SizedBox(width: 6),
               Text(
                 'Profile $score% complete',
@@ -843,10 +833,10 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                         BusinessInfoEdit(businessProfile: bp),
                   ),
                 ),
-                child: const Text(
-                  'Complete profile →',
+                child: Text(
+                  'Complete profile \u2192',
                   style: TextStyle(
-                    color: Color(0xFF22C55E),
+                    color: AppTheme.primaryAction,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -863,14 +853,14 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                   ? Colors.white.withValues(alpha: 0.1)
                   : Colors.black.withValues(alpha: 0.06),
               valueColor:
-                  const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+                  AlwaysStoppedAnimation(AppTheme.primaryAction),
               minHeight: 6,
             ),
           ),
           if (missing.isNotEmpty) ...[
             const SizedBox(height: 7),
             Text(
-              'Missing: ${missing.take(3).join(', ')}${missing.length > 3 ? '…' : ''}',
+              'Missing: ${missing.take(3).join(', ')}${missing.length > 3 ? '\u2026' : ''}',
               style: TextStyle(
                 color: isDark ? Colors.white54 : Colors.black45,
                 fontSize: 12,
@@ -889,7 +879,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = AppTheme.textPrimary(isDark);
 
     return StreamBuilder<List<CatalogItem>>(
       stream: _catalogStream,
@@ -946,7 +936,7 @@ class _BusinessHubScreenState extends State<BusinessHubScreen> {
                   Text(
                     'Tap + Add Item to get started',
                     style: TextStyle(
-                      color: const Color(0xFF22C55E).withValues(alpha: 0.7),
+                      color: AppTheme.primaryAction.withValues(alpha: 0.7),
                       fontSize: 13,
                     ),
                   ),

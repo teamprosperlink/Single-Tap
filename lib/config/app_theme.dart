@@ -1,34 +1,63 @@
 import 'package:flutter/material.dart';
+import '../res/config/app_colors.dart';
 
 /// Centralized theme constants for business UI screens.
 class AppTheme {
   AppTheme._();
 
-  // ============ COLORS ============
+  // ============ PRIMARY DESIGN SYSTEM COLORS ============
 
-  static const Color primaryGreen = Color(0xFF22C55E);
-  static const Color successGreen = Color(0xFF22C55E);
-  static const Color errorRed = Color(0xFFEF4444);
-  static const Color infoBlue = Color(0xFF3B82F6);
+  /// Primary action color (Blue) — buttons, CTAs, FABs, links
+  static const Color primaryAction = AppColors.primaryBrand;
+
+  /// Secondary accent color (Orange) — highlights, product badges
+  static const Color secondaryAccent = AppColors.secondaryBrand;
+
+  /// Success status (Green) — Live, Open, Available, Confirmed
+  static const Color successStatus = AppColors.semanticSuccess;
+
+  /// Warning status (Yellow) — stars, pending, reviews accent
+  static const Color warningStatus = AppColors.semanticWarning;
+
+  /// Error status (Red) — error, declined, delete
+  static const Color errorStatus = AppColors.semanticError;
+
+  /// Info status (Blue) — information, views
+  static const Color infoStatus = AppColors.semanticInfo;
+
+  // ============ QUICK ACTION COLORS ============
+
+  static const Color quickActionCatalog = AppColors.primaryBrand;
+  static const Color quickActionBookings = AppColors.secondaryBrand;
+  static const Color quickActionReviews = AppColors.semanticWarning;
+  static const Color quickActionViews = AppColors.semanticInfo;
+
+  // ============ LEGACY ALIASES (for non-business code) ============
+
+  static const Color primaryGreen = primaryAction;
+  static const Color successGreen = successStatus;
+  static const Color errorRed = AppColors.semanticError;
+  static const Color infoBlue = AppColors.semanticInfo;
   static const Color purpleAccent = Color(0xFF8B5CF6);
 
-  // Archetype accent colors
-  static const Color retailGreen = Color(0xFF22C55E);
-  static const Color menuAmber = Color(0xFFF59E0B);
-  static const Color appointmentBlue = Color(0xFF3B82F6);
-  static const Color hospitalityTeal = Color(0xFF14B8A6);
-  static const Color portfolioPurple = Color(0xFF8B5CF6);
-
   // Status colors
-  static const Color statusSuccess = Color(0xFF22C55E);
-  static const Color statusWarning = Color(0xFFF59E0B);
-  static const Color statusError = Color(0xFFEF4444);
-  static const Color warningOrange = Color(0xFFF59E0B);
-  static const Color hospitalityIndigo = Color(0xFF6366F1);
+  static const Color statusSuccess = successStatus;
+  static const Color statusWarning = warningStatus;
+  static const Color statusError = errorStatus;
+  static const Color warningOrange = AppColors.secondaryBrand;
 
   // Card colors
-  static const Color darkCard = Color(0xFF1C1C1E);
+  static const Color darkCard = AppColors.bgCard;
   static const Color lightCard = Color(0xFFFFFFFF);
+
+  // ============ GRADIENTS ============
+
+  /// Cover image placeholder gradient (dark palette)
+  static const LinearGradient coverGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0F1114), Color(0xFF161A1E), Color(0xFF1A1D21)],
+  );
 
   // ============ DYNAMIC COLORS ============
 
@@ -36,18 +65,16 @@ class AppTheme {
       isDarkMode ? darkCard : lightCard;
 
   static Color backgroundColor(bool isDarkMode) =>
-      isDarkMode ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
+      isDarkMode ? AppColors.bgCardBlack : const Color(0xFFF5F5F7);
 
   static Color textPrimary(bool isDarkMode) =>
-      isDarkMode ? Colors.white : Colors.black;
+      isDarkMode ? AppColors.textWhite : AppColors.textPrimaryBlack;
 
   static Color darkText(bool isDarkMode) =>
-      isDarkMode ? Colors.white : Colors.black;
+      isDarkMode ? AppColors.textWhite : AppColors.textPrimaryBlack;
 
   static Color secondaryText(bool isDarkMode) =>
-      isDarkMode
-          ? Colors.white.withValues(alpha: 0.7)
-          : Colors.black.withValues(alpha: 0.6);
+      isDarkMode ? AppColors.textSecondary2 : Colors.black.withValues(alpha: 0.6);
 
   // ============ SPACING ============
 

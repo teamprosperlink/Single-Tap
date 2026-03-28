@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/catalog_item.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/catalog_service.dart';
@@ -47,8 +48,8 @@ class CatalogItemDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
@@ -102,8 +103,8 @@ class CatalogItemDetail extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: item.type == CatalogItemType.service
-                            ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
-                            : const Color(0xFF22C55E).withValues(alpha: 0.15),
+                            ? AppTheme.primaryAction.withValues(alpha: 0.15)
+                            : AppTheme.secondaryAccent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -112,8 +113,8 @@ class CatalogItemDetail extends StatelessWidget {
                             : 'Product',
                         style: TextStyle(
                           color: item.type == CatalogItemType.service
-                              ? const Color(0xFF3B82F6)
-                              : const Color(0xFF22C55E),
+                              ? AppTheme.primaryAction
+                              : AppTheme.secondaryAccent,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -127,13 +128,13 @@ class CatalogItemDetail extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.15),
+                          color: AppTheme.errorStatus.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Currently Unavailable',
                           style: TextStyle(
-                            color: Colors.red,
+                            color: AppTheme.errorStatus,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -161,7 +162,7 @@ class CatalogItemDetail extends StatelessWidget {
                   item.formattedPrice,
                   style: TextStyle(
                     color: item.price != null
-                        ? const Color(0xFF22C55E)
+                        ? AppTheme.primaryAction
                         : subtitleColor,
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -206,7 +207,7 @@ class CatalogItemDetail extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF2C2C2E)
-                        : const Color(0xFFF5F5F7),
+                        : AppTheme.backgroundColor(false),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -303,8 +304,8 @@ class CatalogItemDetail extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor:
                                 item.type == CatalogItemType.service
-                                ? const Color(0xFF3B82F6)
-                                : const Color(0xFF22C55E),
+                                ? AppTheme.primaryAction
+                                : AppTheme.secondaryAccent,
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: isDark
                                 ? const Color(0xFF2C2C2E)
@@ -530,7 +531,7 @@ class _FullScreenGalleryState extends State<_FullScreenGallery> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.backgroundColor(true),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

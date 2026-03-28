@@ -112,7 +112,7 @@ class BusinessProfileComponents {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppTheme.primaryGreen),
+          Icon(icon, size: 20, color: AppTheme.primaryAction),
           const SizedBox(width: 8),
           Text(
             title,
@@ -127,7 +127,7 @@ class BusinessProfileComponents {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                color: AppTheme.primaryAction.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -135,7 +135,7 @@ class BusinessProfileComponents {
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryGreen,
+                  color: AppTheme.primaryAction,
                 ),
               ),
             ),
@@ -147,7 +147,7 @@ class BusinessProfileComponents {
               child: Text(
                 actionLabel,
                 style: const TextStyle(
-                  color: AppTheme.primaryGreen,
+                  color: AppTheme.primaryAction,
                   fontSize: 13,
                 ),
               ),
@@ -167,8 +167,8 @@ class BusinessProfileComponents {
         gradient ??
         LinearGradient(
           colors: [
-            AppTheme.primaryGreen,
-            AppTheme.primaryGreen.withValues(alpha: 0.7),
+            AppTheme.primaryAction,
+            AppTheme.primaryAction.withValues(alpha: 0.7),
           ],
         );
     return Container(

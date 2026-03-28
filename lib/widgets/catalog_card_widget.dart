@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_theme.dart';
 import '../models/catalog_item.dart';
 
 class CatalogCardWidget extends StatelessWidget {
@@ -20,7 +21,7 @@ class CatalogCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardColor = AppTheme.cardColor(isDark);
     final textColor = isDark ? Colors.white : Colors.black;
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
@@ -167,7 +168,7 @@ class CatalogCardWidget extends StatelessWidget {
                     item.formattedPrice,
                     style: TextStyle(
                       color: item.price != null
-                          ? const Color(0xFF22C55E)
+                          ? AppTheme.primaryAction
                           : subtitleColor,
                       fontSize: compact ? 13 : 15,
                       fontWeight: FontWeight.w700,
@@ -185,9 +186,9 @@ class CatalogCardWidget extends StatelessWidget {
   Color _badgeColor(CatalogItemType type) {
     switch (type) {
       case CatalogItemType.service:
-        return const Color(0xFF3B82F6).withValues(alpha: 0.9);
+        return AppTheme.primaryAction.withValues(alpha: 0.9);
       case CatalogItemType.product:
-        return const Color(0xFF22C55E).withValues(alpha: 0.9);
+        return AppTheme.secondaryAccent.withValues(alpha: 0.9);
     }
   }
 

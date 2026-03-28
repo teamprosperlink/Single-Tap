@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/review_model.dart';
 import '../../../services/review_service.dart';
 
@@ -19,8 +20,8 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -104,7 +105,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        color: AppTheme.cardColor(isDark),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -127,7 +128,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
                     size: 16,
-                    color: const Color(0xFFF59E0B),
+                    color: AppTheme.warningStatus,
                   );
                 }),
               ),
@@ -163,7 +164,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                                 ? Colors.white.withValues(alpha: 0.08)
                                 : Colors.black.withValues(alpha: 0.06),
                             valueColor: const AlwaysStoppedAnimation(
-                                Color(0xFFF59E0B)),
+                                AppTheme.warningStatus),
                           ),
                         ),
                       ),
@@ -188,7 +189,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
 
   Widget _buildReviewCard(ReviewModel review, bool isDark, Color textColor,
       Color subtitleColor) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardBg = AppTheme.cardColor(isDark);
 
     // Look up real reviewer profile from Firestore
     return FutureBuilder<DocumentSnapshot>(
@@ -230,7 +231,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                                 ? reviewerName[0].toUpperCase()
                                 : '?',
                             style: const TextStyle(
-                                color: Color(0xFFF59E0B),
+                                color: AppTheme.warningStatus,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14),
                           )
@@ -260,7 +261,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                             ? Icons.star_rounded
                             : Icons.star_outline_rounded,
                         size: 16,
-                        color: const Color(0xFFF59E0B),
+                        color: AppTheme.warningStatus,
                       );
                     }),
                   ),
@@ -310,7 +311,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                   onTap: () => _showReplySheet(review),
                   child: const Text('Reply',
                       style: TextStyle(
-                          color: Color(0xFF3B82F6),
+                          color: AppTheme.primaryAction,
                           fontSize: 13,
                           fontWeight: FontWeight.w600)),
                 ),
@@ -325,12 +326,12 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
   void _showReplySheet(ReviewModel review) {
     final controller = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = AppTheme.textPrimary(isDark);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      backgroundColor: AppTheme.cardColor(isDark),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -374,7 +375,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                         review.id, controller.text.trim());
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6),
+                    backgroundColor: AppTheme.primaryAction,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(

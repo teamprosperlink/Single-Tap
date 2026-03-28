@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/booking_model.dart';
 import '../../../services/booking_service.dart';
 
@@ -31,8 +32,8 @@ class _BookingsScreenState extends State<BookingsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     if (_userId == null) {
       return Scaffold(
@@ -51,10 +52,10 @@ class _BookingsScreenState extends State<BookingsScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF3B82F6),
+          labelColor: AppTheme.primaryAction,
           unselectedLabelColor:
               isDark ? Colors.white60 : Colors.black54,
-          indicatorColor: const Color(0xFF3B82F6),
+          indicatorColor: AppTheme.primaryAction,
           labelStyle: const TextStyle(
               fontSize: 14, fontWeight: FontWeight.w600),
           tabs: const [
@@ -136,7 +137,7 @@ class _BookingsScreenState extends State<BookingsScreen>
 
   Widget _buildBookingCard(
       BookingModel booking, bool isDark, Color textColor) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardBg = AppTheme.cardColor(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -155,13 +156,13 @@ class _BookingsScreenState extends State<BookingsScreen>
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                backgroundColor: AppTheme.primaryAction.withValues(alpha: 0.12),
                 child: Text(
                   booking.customerName.isNotEmpty
                       ? booking.customerName[0].toUpperCase()
                       : '?',
                   style: const TextStyle(
-                    color: Color(0xFF3B82F6),
+                    color: AppTheme.primaryAction,
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
@@ -216,7 +217,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                       Text(
                         '₹${booking.servicePrice!.toStringAsFixed(0)}',
                         style: const TextStyle(
-                            color: Color(0xFF22C55E),
+                            color: AppTheme.primaryAction,
                             fontSize: 13,
                             fontWeight: FontWeight.w600),
                       ),
@@ -273,17 +274,17 @@ class _BookingsScreenState extends State<BookingsScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
+                color: AppTheme.errorStatus.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Colors.red, size: 16),
+                  const Icon(Icons.info_outline, color: AppTheme.errorStatus, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(booking.cancelReason!,
                         style:
-                            const TextStyle(color: Colors.red, fontSize: 12)),
+                            const TextStyle(color: AppTheme.errorStatus, fontSize: 12)),
                   ),
                 ],
               ),
@@ -301,8 +302,8 @@ class _BookingsScreenState extends State<BookingsScreen>
                     child: OutlinedButton(
                       onPressed: () => _declineBooking(booking),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
+                        foregroundColor: AppTheme.errorStatus,
+                        side: const BorderSide(color: AppTheme.errorStatus),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
@@ -318,7 +319,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                     child: ElevatedButton(
                       onPressed: () => _confirmBooking(booking),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF22C55E),
+                        backgroundColor: AppTheme.primaryAction,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -341,7 +342,7 @@ class _BookingsScreenState extends State<BookingsScreen>
               child: ElevatedButton(
                 onPressed: () => _completeBooking(booking),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
+                  backgroundColor: AppTheme.primaryAction,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -370,16 +371,16 @@ class _BookingsScreenState extends State<BookingsScreen>
     String label;
     switch (status) {
       case BookingStatus.pending:
-        color = const Color(0xFFF59E0B);
+        color = AppTheme.warningStatus;
         label = 'Pending';
       case BookingStatus.confirmed:
-        color = const Color(0xFF22C55E);
+        color = AppTheme.successStatus;
         label = 'Confirmed';
       case BookingStatus.completed:
-        color = const Color(0xFF3B82F6);
+        color = AppTheme.primaryAction;
         label = 'Completed';
       case BookingStatus.cancelled:
-        color = Colors.red;
+        color = AppTheme.errorStatus;
         label = 'Cancelled';
     }
 
@@ -420,15 +421,15 @@ class _BookingsScreenState extends State<BookingsScreen>
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        backgroundColor: AppTheme.cardColor(isDark),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Decline Reason',
             style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
+                color: AppTheme.textPrimary(isDark),
                 fontWeight: FontWeight.w600)),
         content: TextField(
           controller: controller,
-          style: TextStyle(color: isDark ? Colors.white : Colors.black),
+          style: TextStyle(color: AppTheme.textPrimary(isDark)),
           maxLines: 3,
           decoration: InputDecoration(
             hintText: 'Optional: reason for declining...',
@@ -450,7 +451,7 @@ class _BookingsScreenState extends State<BookingsScreen>
                   controller.text.trim().isEmpty ? 'Declined' : controller.text.trim());
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorStatus,
               foregroundColor: Colors.white,
             ),
             child: const Text('Decline'),

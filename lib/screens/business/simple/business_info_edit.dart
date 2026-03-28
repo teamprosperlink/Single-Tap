@@ -11,6 +11,7 @@ import '../../../services/account_type_service.dart';
 import '../../../services/catalog_service.dart';
 import '../../../services/location_services/gemini_service.dart';
 import 'business_hours_edit.dart';
+import '../../../config/app_theme.dart';
 
 class BusinessInfoEdit extends StatefulWidget {
   final BusinessProfile? businessProfile;
@@ -194,7 +195,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Business profile created!'),
-              backgroundColor: Color(0xFF22C55E),
+              backgroundColor: AppTheme.successStatus,
             ),
           );
           Navigator.of(context).pop(true);
@@ -202,7 +203,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to create business profile'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorStatus,
             ),
           );
         }
@@ -241,7 +242,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Business info updated'),
-              backgroundColor: Color(0xFF22C55E),
+              backgroundColor: AppTheme.successStatus,
             ),
           );
           Navigator.of(context).pop(true);
@@ -249,7 +250,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to update'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorStatus,
             ),
           );
         }
@@ -257,7 +258,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorStatus),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -352,9 +353,9 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardColor = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.5)
         : Colors.black.withValues(alpha: 0.4);
@@ -378,7 +379,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                         )
                       : const Text('Save',
                           style: TextStyle(
-                              color: Color(0xFF22C55E),
+                              color: AppTheme.primaryAction,
                               fontWeight: FontWeight.w600)),
                 ),
               ],
@@ -439,14 +440,14 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                               horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF22C55E)
+                                ? AppTheme.primaryAction
                                     .withValues(alpha: 0.15)
                                 : (isDark
                                     ? const Color(0xFF2C2C2E)
                                     : const Color(0xFFF0F0F0)),
                             borderRadius: BorderRadius.circular(20),
                             border: isSelected
-                                ? Border.all(color: const Color(0xFF22C55E))
+                                ? Border.all(color: AppTheme.primaryAction)
                                 : Border.all(
                                     color: isDark
                                         ? Colors.white
@@ -458,7 +459,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                             type,
                             style: TextStyle(
                               color: isSelected
-                                  ? const Color(0xFF22C55E)
+                                  ? AppTheme.primaryAction
                                   : (isDark ? Colors.white70 : Colors.black54),
                               fontWeight: isSelected
                                   ? FontWeight.w600
@@ -522,7 +523,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                 ),
                 child: ListTile(
                   leading:
-                      const Icon(Icons.access_time, color: Color(0xFF3B82F6)),
+                      const Icon(Icons.access_time, color: AppTheme.primaryAction),
                   title: Text('Business Hours',
                       style: TextStyle(color: textColor)),
                   subtitle: Text(
@@ -533,8 +534,8 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                         : 'Not set',
                     style: TextStyle(
                       color: widget.businessProfile!.isCurrentlyOpen
-                          ? const Color(0xFF22C55E)
-                          : Colors.red,
+                          ? AppTheme.successStatus
+                          : AppTheme.errorStatus,
                       fontSize: 13,
                     ),
                   ),
@@ -610,7 +611,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF22C55E),
+                    backgroundColor: AppTheme.primaryAction,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -729,7 +730,7 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
               Container(
                 color: Colors.black.withValues(alpha: 0.5),
                 child: const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF22C55E)),
+                  child: CircularProgressIndicator(color: AppTheme.primaryAction),
                 ),
               ),
           ],
@@ -741,13 +742,13 @@ class _BusinessInfoEditState extends State<BusinessInfoEdit> {
   Widget _coverPlaceholder(bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF1a1a2e), const Color(0xFF16213e)]
-              : [const Color(0xFFe0e7ff), const Color(0xFFdbeafe)],
-        ),
+        gradient: isDark
+            ? AppTheme.coverGradient
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFe0e7ff), Color(0xFFdbeafe)],
+              ),
       ),
       child: Center(
         child: Icon(

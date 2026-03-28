@@ -2,7 +2,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/conversation_model.dart';
 import '../../models/user_profile.dart';
-import '../../models/business_model.dart';
 
 class ConversationService {
   static final ConversationService _instance = ConversationService._internal();
@@ -632,7 +631,7 @@ class ConversationService {
   /// Get or create a conversation between a business and a user
   /// The business owner initiates the chat as the business identity
   Future<String> getOrCreateBusinessConversation({
-    required BusinessModel business,
+    required UserProfile businessUser,
     required UserProfile otherUser,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
@@ -641,12 +640,12 @@ class ConversationService {
     }
 
     // Verify current user owns this business
-    if (business.userId != currentUserId) {
+    if (businessUser.uid != currentUserId) {
       throw Exception('User does not own this business');
     }
 
     // Generate business conversation ID
-    final conversationId = generateBusinessConversationId(business.id, otherUser.uid);
+    final conversationId = generateBusinessConversationId(businessUser.uid, otherUser.uid);
 
     try {
       // Check if conversation exists
@@ -658,13 +657,13 @@ class ConversationService {
       if (conversationDoc.exists) {
         // Update business info in case it changed
         Future.microtask(() async {
-          await _updateBusinessConversationInfo(conversationId, business, otherUser);
+          await _updateBusinessConversationInfo(conversationId, businessUser, otherUser);
         });
         return conversationId;
       }
 
       // Create new business conversation
-      await _createBusinessConversation(conversationId, business, otherUser);
+      await _createBusinessConversation(conversationId, businessUser, otherUser);
       return conversationId;
     } catch (e) {
       rethrow;
@@ -674,13 +673,16 @@ class ConversationService {
   /// Create a new business conversation
   Future<void> _createBusinessConversation(
     String conversationId,
-    BusinessModel business,
+    UserProfile businessUser,
     UserProfile otherUser,
   ) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
       throw Exception('No authenticated user');
     }
+
+    final businessName = businessUser.businessProfile?.businessName ?? businessUser.name;
+    final businessLogo = businessUser.profileImageUrl;
 
     // Participants: business owner (using business identity) and the other user
     final participantsArray = [currentUserId, otherUser.uid];
@@ -689,11 +691,11 @@ class ConversationService {
       'id': conversationId,
       'participants': participantsArray,
       'participantNames': {
-        currentUserId: business.businessName, // Show business name instead of owner name
+        currentUserId: businessName, // Show business name instead of owner name
         otherUser.uid: otherUser.name,
       },
       'participantPhotos': {
-        currentUserId: business.logo, // Show business logo instead of owner photo
+        currentUserId: businessLogo, // Show business logo instead of owner photo
         otherUser.uid: otherUser.profileImageUrl,
       },
       'createdAt': FieldValue.serverTimestamp(),
@@ -712,11 +714,11 @@ class ConversationService {
       // Business-specific metadata
       'metadata': {
         'isBusinessChat': true,
-        'businessId': business.id,
-        'businessName': business.businessName,
-        'businessLogo': business.logo,
+        'businessId': businessUser.uid,
+        'businessName': businessName,
+        'businessLogo': businessLogo,
         'businessSenderId': currentUserId,
-        'businessOwnerId': business.userId,
+        'businessOwnerId': businessUser.uid,
         'source': 'Business',
       },
     };
@@ -730,19 +732,22 @@ class ConversationService {
   /// Update business conversation info
   Future<void> _updateBusinessConversationInfo(
     String conversationId,
-    BusinessModel business,
+    UserProfile businessUser,
     UserProfile otherUser,
   ) async {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return;
 
+    final businessName = businessUser.businessProfile?.businessName ?? businessUser.name;
+    final businessLogo = businessUser.profileImageUrl;
+
     await _firestore.collection('conversations').doc(conversationId).update({
-      'participantNames.$currentUserId': business.businessName,
+      'participantNames.$currentUserId': businessName,
       'participantNames.${otherUser.uid}': otherUser.name,
-      'participantPhotos.$currentUserId': business.logo,
+      'participantPhotos.$currentUserId': businessLogo,
       'participantPhotos.${otherUser.uid}': otherUser.profileImageUrl,
-      'metadata.businessName': business.businessName,
-      'metadata.businessLogo': business.logo,
+      'metadata.businessName': businessName,
+      'metadata.businessLogo': businessLogo,
       'lastSeen.$currentUserId': FieldValue.serverTimestamp(),
     });
   }
@@ -751,7 +756,7 @@ class ConversationService {
   Future<void> sendBusinessMessage({
     required String conversationId,
     required String text,
-    required BusinessModel business,
+    required UserProfile businessUser,
     String? imageUrl,
   }) async {
     final currentUserId = _auth.currentUser?.uid;
@@ -760,9 +765,11 @@ class ConversationService {
     }
 
     // Verify current user owns this business
-    if (business.userId != currentUserId) {
+    if (businessUser.uid != currentUserId) {
       throw Exception('User does not own this business');
     }
+
+    final businessName = businessUser.businessProfile?.businessName ?? businessUser.name;
 
     try {
       // Create message with business sender info
@@ -779,8 +786,8 @@ class ConversationService {
             'isEdited': false,
             // Business message metadata
             'isBusinessMessage': true,
-            'businessId': business.id,
-            'businessName': business.businessName,
+            'businessId': businessUser.uid,
+            'businessName': businessName,
           });
 
       // Update conversation with last message

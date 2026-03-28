@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../../../models/user_profile.dart';
+import '../../../config/app_theme.dart';
 import 'public_business_profile_screen.dart';
 
 class NearbyBusinessesScreen extends StatefulWidget {
@@ -103,9 +104,9 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardColor = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
@@ -274,9 +275,9 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
                                     horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: isOpen
-                                      ? const Color(0xFF22C55E)
+                                      ? AppTheme.successStatus
                                           .withValues(alpha: 0.15)
-                                      : Colors.red
+                                      : AppTheme.errorStatus
                                           .withValues(alpha: 0.15),
                                   borderRadius:
                                       BorderRadius.circular(6),
@@ -285,8 +286,8 @@ class _NearbyBusinessesScreenState extends State<NearbyBusinessesScreen> {
                                   isOpen ? 'Open' : 'Closed',
                                   style: TextStyle(
                                     color: isOpen
-                                        ? const Color(0xFF22C55E)
-                                        : Colors.red,
+                                        ? AppTheme.successStatus
+                                        : AppTheme.errorStatus,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),

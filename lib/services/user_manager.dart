@@ -14,6 +14,7 @@ class UserManager {
 
   // User profile cache
   Map<String, dynamic>? _cachedProfile;
+  StreamSubscription<User?>? _authSubscription;
   final StreamController<Map<String, dynamic>?> _profileController =
       StreamController<Map<String, dynamic>?>.broadcast();
 
@@ -22,8 +23,9 @@ class UserManager {
 
   // Initialize and listen to auth changes
   void initialize() {
+    _authSubscription?.cancel();
     // Listen to auth changes - don't try to access Firestore immediately
-    _auth.authStateChanges().listen((User? user) {
+    _authSubscription = _auth.authStateChanges().listen((User? user) {
       if (user != null) {
         // Add a small delay to ensure Firestore auth is ready
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -67,7 +69,7 @@ class UserManager {
       String? photoUrl = user.photoURL;
 
       // If it's a Google photo, ensure it's high quality
-      if (photoUrl!.contains('googleusercontent.com')) {
+      if (photoUrl != null && photoUrl.contains('googleusercontent.com')) {
         // Remove size parameters and set to higher quality
         final baseUrl = photoUrl.split('=')[0];
         photoUrl = '$baseUrl=s400-c'; // 400x400 cropped
@@ -149,6 +151,7 @@ class UserManager {
   }
 
   void dispose() {
+    _authSubscription?.cancel();
     _profileController.close();
   }
 }

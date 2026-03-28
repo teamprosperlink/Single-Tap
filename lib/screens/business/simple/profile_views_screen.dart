@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../config/app_theme.dart';
 
 class ProfileViewsScreen extends StatelessWidget {
   const ProfileViewsScreen({super.key});
@@ -11,8 +12,8 @@ class ProfileViewsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.6)
         : Colors.black.withValues(alpha: 0.5);
@@ -112,7 +113,7 @@ class ProfileViewsScreen extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        color: AppTheme.cardColor(isDark),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -121,11 +122,11 @@ class ProfileViewsScreen extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+              color: AppTheme.infoStatus.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.visibility_outlined,
-                color: Color(0xFF8B5CF6), size: 24),
+                color: AppTheme.infoStatus, size: 24),
           ),
           const SizedBox(width: 14),
           Column(
@@ -208,7 +209,7 @@ class ProfileViewsScreen extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+            color: AppTheme.cardColor(isDark),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -229,7 +230,7 @@ class ProfileViewsScreen extends StatelessWidget {
                             ? viewerName[0].toUpperCase()
                             : '?',
                         style: const TextStyle(
-                          color: Color(0xFF8B5CF6),
+                          color: AppTheme.infoStatus,
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
                         ),

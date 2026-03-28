@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/account_type_service.dart';
+import '../../../config/app_theme.dart';
 
 class BusinessHoursEdit extends StatefulWidget {
   final BusinessHours hours;
@@ -57,7 +58,7 @@ class _BusinessHoursEditState extends State<BusinessHoursEdit> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Hours updated'),
-            backgroundColor: Color(0xFF22C55E),
+            backgroundColor: AppTheme.successStatus,
           ),
         );
         Navigator.pop(context, true);
@@ -104,9 +105,9 @@ class _BusinessHoursEditState extends State<BusinessHoursEdit> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF000000) : const Color(0xFFF5F5F7);
-    final cardColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final bgColor = AppTheme.backgroundColor(isDark);
+    final cardColor = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.7)
         : Colors.black.withValues(alpha: 0.6);
@@ -128,7 +129,7 @@ class _BusinessHoursEditState extends State<BusinessHoursEdit> {
                   )
                 : const Text('Save',
                     style: TextStyle(
-                        color: Color(0xFF22C55E), fontWeight: FontWeight.w600)),
+                        color: AppTheme.primaryAction, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -170,7 +171,7 @@ class _BusinessHoursEditState extends State<BusinessHoursEdit> {
                           : DayHours(isClosed: true);
                     });
                   },
-                  activeThumbColor: const Color(0xFF22C55E),
+                  activeThumbColor: AppTheme.primaryAction,
                 ),
                 const SizedBox(width: 8),
                 // Time display
@@ -213,7 +214,7 @@ class _BusinessHoursEditState extends State<BusinessHoursEdit> {
         child: Text(
           time,
           style: TextStyle(
-            color: isDark ? Colors.white : Colors.black,
+            color: AppTheme.textPrimary(isDark),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),

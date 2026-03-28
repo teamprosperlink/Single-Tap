@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../config/app_theme.dart';
 import '../../../models/user_profile.dart';
 import '../../../models/catalog_item.dart';
 import '../../../models/review_model.dart';
@@ -88,7 +89,7 @@ class _PublicBusinessProfileScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? Colors.black : const Color(0xFFF5F5F7);
+    final bgColor = AppTheme.backgroundColor(isDark);
 
     if (_isLoading) {
       return Scaffold(
@@ -144,7 +145,7 @@ class _PublicBusinessProfileScreenState
     return SliverAppBar(
       expandedHeight: 220,
       pinned: true,
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: AppTheme.backgroundColor(isDark),
       surfaceTintColor: Colors.transparent,
       leading: IconButton(
         icon: Container(
@@ -215,7 +216,7 @@ class _PublicBusinessProfileScreenState
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: isOpen
-                              ? const Color(0xFF22C55E).withValues(alpha: 0.9)
+                              ? AppTheme.successStatus.withValues(alpha: 0.9)
                               : Colors.red.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -252,7 +253,7 @@ class _PublicBusinessProfileScreenState
                         const SizedBox(width: 10),
                       ],
                       if (bp.averageRating > 0) ...[
-                        const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
+                        const Icon(Icons.star, size: 14, color: AppTheme.warningStatus),
                         const SizedBox(width: 3),
                         Text(
                           bp.averageRating.toStringAsFixed(1),
@@ -307,11 +308,7 @@ class _PublicBusinessProfileScreenState
   Widget _coverGradient() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
-        ),
+        gradient: AppTheme.coverGradient,
       ),
     );
   }
@@ -319,7 +316,7 @@ class _PublicBusinessProfileScreenState
   // ── Action Row ──
 
   Widget _buildActionRow(BusinessProfile bp, bool isDark) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final cardBg = AppTheme.cardColor(isDark);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -333,14 +330,14 @@ class _PublicBusinessProfileScreenState
           _actionButton(
             icon: Icons.chat_bubble_outline,
             label: 'Message',
-            color: const Color(0xFF3B82F6),
+            color: AppTheme.primaryAction,
             isDark: isDark,
             onTap: _openChat,
           ),
           _actionButton(
             icon: Icons.calendar_month_outlined,
             label: 'Book',
-            color: const Color(0xFF22C55E),
+            color: AppTheme.successStatus,
             isDark: isDark,
             onTap: _bookService,
           ),
@@ -348,7 +345,7 @@ class _PublicBusinessProfileScreenState
             _actionButton(
               icon: Icons.phone_outlined,
               label: 'Call',
-              color: const Color(0xFFF59E0B),
+              color: AppTheme.warningStatus,
               isDark: isDark,
               onTap: () => _callBusiness(bp.contactPhone!),
             ),
@@ -447,8 +444,8 @@ class _PublicBusinessProfileScreenState
   // ── About Section ──
 
   Widget _buildAboutSection(BusinessProfile bp, bool isDark) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -485,7 +482,7 @@ class _PublicBusinessProfileScreenState
   // ── Section Header ──
 
   Widget _buildSectionHeader(String title, String? trailing, bool isDark) {
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = AppTheme.textPrimary(isDark);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -551,8 +548,8 @@ class _PublicBusinessProfileScreenState
   Widget _buildBusinessHours(BusinessProfile bp, bool isDark) {
     if (bp.hours == null) return const SizedBox.shrink();
 
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor =
         isDark ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.5);
 
@@ -586,7 +583,7 @@ class _PublicBusinessProfileScreenState
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: bp.isCurrentlyOpen
-                      ? const Color(0xFF22C55E).withValues(alpha: 0.12)
+                      ? AppTheme.successStatus.withValues(alpha: 0.12)
                       : Colors.red.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -594,7 +591,7 @@ class _PublicBusinessProfileScreenState
                   bp.isCurrentlyOpen ? 'Open Now' : 'Closed',
                   style: TextStyle(
                     color: bp.isCurrentlyOpen
-                        ? const Color(0xFF22C55E)
+                        ? AppTheme.successStatus
                         : Colors.red,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -617,7 +614,7 @@ class _PublicBusinessProfileScreenState
                     child: Text(
                       dayLabels[i],
                       style: TextStyle(
-                        color: isToday ? const Color(0xFF22C55E) : subtitleColor,
+                        color: isToday ? AppTheme.primaryAction : subtitleColor,
                         fontSize: 13,
                         fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
                       ),
@@ -630,7 +627,7 @@ class _PublicBusinessProfileScreenState
                         : 'Closed',
                     style: TextStyle(
                       color: dayHours != null && !dayHours.isClosed
-                          ? (isToday ? const Color(0xFF22C55E) : textColor)
+                          ? (isToday ? AppTheme.primaryAction : textColor)
                           : subtitleColor,
                       fontSize: 13,
                       fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
@@ -642,7 +639,7 @@ class _PublicBusinessProfileScreenState
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                        color: Color(0xFF22C55E),
+                        color: AppTheme.primaryAction,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -659,8 +656,8 @@ class _PublicBusinessProfileScreenState
   // ── Reviews Section ──
 
   Widget _buildReviewsSection(bool isDark) {
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final cardBg = AppTheme.cardColor(isDark);
+    final textColor = AppTheme.textPrimary(isDark);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -684,7 +681,7 @@ class _PublicBusinessProfileScreenState
               ),
               if (_ratingSummary.totalReviews > 0) ...[
                 const SizedBox(width: 8),
-                const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
+                const Icon(Icons.star, size: 14, color: AppTheme.warningStatus),
                 const SizedBox(width: 3),
                 Text(
                   '${_ratingSummary.averageRating.toStringAsFixed(1)} (${_ratingSummary.totalReviews})',
@@ -705,7 +702,7 @@ class _PublicBusinessProfileScreenState
                   child: const Text(
                     'See All',
                     style: TextStyle(
-                      color: Color(0xFF3B82F6),
+                      color: AppTheme.primaryAction,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -751,7 +748,7 @@ class _PublicBusinessProfileScreenState
                       child: Text(
                         'View all ${reviews.length} reviews',
                         style: const TextStyle(
-                          color: Color(0xFF3B82F6),
+                          color: AppTheme.primaryAction,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -770,7 +767,7 @@ class _PublicBusinessProfileScreenState
   }
 
   Widget _buildReviewCard(ReviewModel review, bool isDark) {
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = AppTheme.textPrimary(isDark);
     final subtitleColor =
         isDark ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.5);
 
@@ -783,7 +780,7 @@ class _PublicBusinessProfileScreenState
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundColor: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                backgroundColor: AppTheme.primaryAction.withValues(alpha: 0.15),
                 backgroundImage: review.reviewerPhoto != null
                     ? NetworkImage(review.reviewerPhoto!)
                     : null,
@@ -793,7 +790,7 @@ class _PublicBusinessProfileScreenState
                             ? review.reviewerName[0].toUpperCase()
                             : '?',
                         style: const TextStyle(
-                          color: Color(0xFF3B82F6),
+                          color: AppTheme.primaryAction,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -826,7 +823,7 @@ class _PublicBusinessProfileScreenState
                   (i) => Icon(
                     i < review.rating.round() ? Icons.star : Icons.star_border,
                     size: 14,
-                    color: const Color(0xFFF59E0B),
+                    color: AppTheme.warningStatus,
                   ),
                 ),
               ),
@@ -944,9 +941,9 @@ class _PublicBusinessProfileScreenState
         icon: const Icon(Icons.edit_outlined, size: 16),
         label: const Text('Write a Review'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFF59E0B),
+          foregroundColor: AppTheme.warningStatus,
           side: BorderSide(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+            color: AppTheme.warningStatus.withValues(alpha: 0.5),
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),

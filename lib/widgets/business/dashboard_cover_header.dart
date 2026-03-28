@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:single_tap/models/business_model.dart';
+import 'package:single_tap/models/user_profile.dart';
 import 'package:single_tap/res/config/app_colors.dart';
 
 /// Dashboard cover image header widget (LinkedIn-style)
 /// Displays business cover image with logo, name, and category badge
 class DashboardCoverHeader extends StatelessWidget {
-  final BusinessModel business;
+  final UserProfile business;
   final Color categoryColor;
   final IconData categoryIcon;
   final String categoryLabel;
@@ -68,9 +68,10 @@ class DashboardCoverHeader extends StatelessWidget {
   }
 
   Widget _buildCoverImage() {
-    if (business.coverImage != null && business.coverImage!.isNotEmpty) {
+    final coverImage = business.businessProfile?.coverImageUrl;
+    if (coverImage != null && coverImage.isNotEmpty) {
       return CachedNetworkImage(
-        imageUrl: business.coverImage!,
+        imageUrl: coverImage,
         fit: BoxFit.cover,
         placeholder: (context, url) => _buildPlaceholderCover(),
         errorWidget: (context, url, error) => _buildPlaceholderCover(),
@@ -135,7 +136,7 @@ class DashboardCoverHeader extends StatelessWidget {
             children: [
               // Business name
               Text(
-                business.businessName,
+                (business.businessProfile?.businessName ?? business.name),
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -227,6 +228,7 @@ class DashboardCoverHeader extends StatelessWidget {
   }
 
   Widget _buildLogo() {
+    final logo = business.profileImageUrl;
     return Container(
       width: 56,
       height: 56,
@@ -243,9 +245,9 @@ class DashboardCoverHeader extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: business.logo != null && business.logo!.isNotEmpty
+        child: logo != null && logo.isNotEmpty
             ? CachedNetworkImage(
-                imageUrl: business.logo!,
+                imageUrl: logo,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => _buildLogoPlaceholder(),
                 errorWidget: (context, url, error) => _buildLogoPlaceholder(),
@@ -260,8 +262,8 @@ class DashboardCoverHeader extends StatelessWidget {
       color: categoryColor.withValues(alpha: 0.1),
       child: Center(
         child: Text(
-          business.businessName.isNotEmpty
-              ? business.businessName[0].toUpperCase()
+          (business.businessProfile?.businessName ?? business.name).isNotEmpty
+              ? (business.businessProfile?.businessName ?? business.name)[0].toUpperCase()
               : 'B',
           style: TextStyle(
             fontSize: 24,
